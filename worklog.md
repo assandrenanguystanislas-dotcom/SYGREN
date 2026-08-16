@@ -570,3 +570,50 @@ Stage Summary:
 - Validation des valeurs (0-20) + RBAC admin uniquement
 - Bouton réinitialisation aux valeurs par défaut
 - Push GitHub : commit 0d78c97
+
+---
+Task ID: Deploy-Render
+Agent: Main (tutor mode)
+Task: Déploiement backend sur Render + redéploiement frontend Vercel
+
+Work Log:
+- Récupéré l'URL publique du backend Render via l'API Render :
+  - Service : SYGREN (srv-da0t6lnlk1mc738nvvf0)
+  - URL : https://sygren.onrender.com
+  - Région : frankfurt (Europe centrale - conforme à la demande)
+  - Runtime : Go, rootDir: backend/, plan: free
+  - Auto-deploy activé depuis GitHub (main branch)
+- Testé backend Render end-to-end :
+  - GET /api/health → 200 OK
+  - POST /api/auth/login → token JWT obtenu (admin@sygren.ci)
+  - GET /api/subjects → 8 matières seedées
+- Configuré NEXT_PUBLIC_API_URL sur Vercel (via API) :
+  - Key : NEXT_PUBLIC_API_URL
+  - Value : https://sygren.onrender.com
+  - Type : plain (public, visible côté client)
+  - Targets : production, preview, development
+- Redéployé le frontend sur Vercel (vercel --prod) :
+  - Build Next.js Turbopack réussi en 23s
+  - Alias sygren.vercel.app reconfiguré sur le nouveau déploiement
+- Créé données de test en production via Render (Neon) :
+  - IEP "IEP Abidjan 1" (Abidjan)
+  - École "École Test Abidjan" (Plateau)
+  - Classe CP1
+  - Élève "Awa Konan" avec matricule SYG-2026-CP1-001
+- Vérification end-to-end via Agent Browser :
+  - https://sygren.vercel.app → page de login ✓
+  - Login admin@sygren.ci → dashboard "SYGREN — Vue globale" ✓
+  - Vue Élèves → Awa Konan visible avec matricule SYG-2026-CP1-001 ✓
+  - Données circulent : Vercel → Render → Neon ✓
+
+Stage Summary:
+- Architecture de production complète et fonctionnelle :
+  - Frontend : Vercel (sygren.vercel.app) — Next.js 16
+  - Backend : Render (sygren.onrender.com) — Go 1.25, Frankfurt EU
+  - Base de données : Neon (PostgreSQL, eu-central-1)
+  - Repo GitHub : assandrenanguystanislas-dotcom/SYGREN (auto-deploy)
+- Conforme au cahier des charges §4 :
+  - Frontend sur Vercel ✓
+  - Backend sur Render ✓ (Golang)
+  - Base PostgreSQL sur Neon.tech ✓
+  - Région Europe centrale (Frankfurt) ✓
