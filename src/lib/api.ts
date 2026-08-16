@@ -21,6 +21,10 @@ import type {
   Student,
   StudentWithClass,
   TeacherWithDetails,
+  EvaluationSession,
+  SessionWithDetails,
+  Grade,
+  SessionStatus,
 } from "./types";
 
 const API_PORT = "8080";
@@ -285,6 +289,78 @@ export const teachersApi = {
     }),
 };
 
+// === Sessions de saisie mensuelle (Module 2 — cahier des charges §3) ===
+
+export const sessionsApi = {
+  list: (params?: { year?: number; month?: number; class_id?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.year) qs.set("year", String(params.year));
+    if (params?.month) qs.set("month", String(params.month));
+    if (params?.class_id) qs.set("class_id", params.class_id);
+    const q = qs.toString();
+    return apiFetch<{ sessions: SessionWithDetails[]; count: number }>(
+      q ? `/api/sessions?${q}` : "/api/sessions",
+    );
+  },
+  create: (data: {
+    class_id: string;
+    month: number;
+    year: number;
+    status?: SessionStatus;
+  }) =>
+    apiFetch<EvaluationSession>("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateStatus: (id: string, status: SessionStatus) =>
+    apiFetch<EvaluationSession>(`/api/sessions/${id}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/sessions/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Notes (Module 2 — saisie des notes) ===
+
+export const gradesApi = {
+  list: (sessionId: string) =>
+    apiFetch<{ grades: Grade[]; count: number }>(
+      `/api/grades?session_id=${sessionId}`,
+    ),
+  upsert: (data: {
+    student_id: string;
+    subject_id: string;
+    session_id: string;
+    value: number;
+  }) =>
+    apiFetch<Grade>("/api/grades", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  bulkUpsert: (data: {
+    session_id: string;
+    grades: { student_id: string; subject_id: string; value: number }[];
+  }) =>
+    apiFetch<{
+      status: string;
+      session_id: string;
+      total_received: number;
+      created: number;
+      updated: number;
+      skipped: number;
+    }>("/api/grades/bulk", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/grades/${id}`, {
+      method: "DELETE",
+    }),
+};
+
 // Export par défaut groupé
 export const api = {
   auth: authApi,
@@ -295,4 +371,6 @@ export const api = {
   classes: classesApi,
   students: studentsApi,
   teachers: teachersApi,
+  sessions: sessionsApi,
+  grades: gradesApi,
 };

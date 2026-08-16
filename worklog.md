@@ -129,3 +129,77 @@ Stage Summary:
 - Dashboard dynamique : statistiques calculées en temps réel depuis le backend Go
 - Données de test : 2 IEP (Abidjan 1, Bouaké), 1 école (École Plateau), 1 classe (CP1),
   1 enseignant (marie.konan@sygren.ci / passer123), 2 élèves (SYG-2026-CP1-001/002)
+
+---
+Task ID: 3-A à 3-I
+Agent: Main (tutor mode)
+Task: Phase 3 — Module 2 : Saisie des notes mensuelles
+
+Work Log:
+- Backend : créé handlers/sessions.go (CRUD sessions + transitions statut + enrichissement stats)
+  - Cycle : draft → open → closed → validated (transitions strictes, pas de retour arrière)
+  - Unicité : 1 session par classe/mois/année (409 Conflict si doublon)
+  - Stats enrichies : student_count, subject_count, graded_count, draft_count, completion_rate
+  - Validation auto : notes marquées non-brouillon après validation
+- Backend : créé handlers/grades.go (CRUD notes + bulk save + brouillon auto)
+  - getSessionForUser() : vérifie le périmètre RBAC (classe/école/IEP)
+  - UpsertGrade : création ou mise à jour selon existence (student+subject+session)
+  - BulkUpsertGrades : transaction ACID pour grille tableur (auto-save)
+  - Validation : 0 ≤ value ≤ 20, sinon 400
+  - Statut session vérifié : saisie bloquée si statut != open (sauf admin)
+- Backend : router mis à jour avec RBAC :
+  - Sessions : lecture tous rôles, gestion admin+director
+  - Grades : lecture tous rôles, saisie teacher+director+admin
+- Backend : tests curl validés :
+  - Création session + unicité + transitions + verrouillage
+  - Saisie individuelle + bulk (4 notes en 1 requête) + validation 0-20
+  - RBAC : enseignant bloqué sur session fermée (403)
+- Frontend : étendu lib/types.ts (SessionWithDetails)
+- Frontend : étendu lib/api.ts (sessionsApi + gradesApi avec bulkUpsert)
+- Frontend : créé lib/session-utils.ts (MONTHS_FR, SESSION_STATUS_CONFIG, nextStatus)
+- Frontend : créé lib/use-autosave.ts (hook debounce 800ms + bulk save + indicateurs)
+  - Stratégie : modifications stockées en local → debounce → bulk save → invalidation
+  - Flush avant changement de session/démontage du composant
+  - États : idle, pending, saving, saved, error
+- Frontend : créé views/sessions-view.tsx (gestion directeur/admin)
+  - Cartes par session avec stats + barre de complétion
+  - Bouton de transition de statut (Ouvrir → Fermer → Valider)
+  - Dialogue de confirmation avec avertissement (verrouillage définitif si validation)
+- Frontend : créé views/grades-view.tsx (grille tableur pour enseignants)
+  - Table HTML avec colonnes élèves/matières + colonne Moyenne
+  - Inputs type text avec validation 0-20
+  - Navigation clavier : Tab horizontal, Entrée descend d'une ligne
+  - Indicateur de sauvegarde visuel (À jour / Sauvegarde / Enregistré ✓ / Erreur)
+  - Cellule jaune si note en brouillon
+  - Auto-sélection de la session ouverte
+  - Bandeau d'avertissement si saisie fermée/validée
+  - Légende avec raccourcis clavier
+- Frontend : dashboard-shell.tsx mis à jour (ajout Sessions + Grades dans nav RBAC)
+- Frontend : page.tsx mis à jour (ajout SessionsView + GradesGrid)
+- Frontend : corrigé 3 erreurs lint :
+  - GradeInput : remplacé useState+useEffect par key+defaultValue (anti set-state-in-effect)
+  - selectedSessionId : dérivation au lieu de setState dans useEffect
+  - use-autosave : retiré eslint-disable inutile
+- Vérification Agent Browser :
+  - Login admin → vue Sessions avec 1 session Août 2026 (statut open)
+  - Stats affichées : 2 élèves, 3/16 notes, 19% complétion, 3 en brouillon
+  - Aller sur Saisie des notes → grille affichée avec 8 matières + 2 élèves
+  - Saisie de 3 notes (15, 12.5, 8) → auto-save → "Enregistré ✓"
+  - Vérification API : 3 notes en base (brouillon=true)
+  - Test note invalide (25) → toast "Note invalide" (0-20)
+  - Connexion enseignant (marie.konan) → voit sa classe CP1 + ses 2 élèves
+  - Enseignant saisit une 4e note (17) → auto-save → 4 notes en base
+  - Responsive mobile (375px) testé
+  - 0 erreur console
+
+Stage Summary:
+- Module 2 (Saisie des notes mensuelles) COMPLET et fonctionnel
+- Sessions mensuelles avec cycle de vie strict (draft→open→closed→validated)
+- Grille tableur type Excel avec navigation clavier (Tab, Entrée)
+- Auto-save brouillon toutes les 800ms (prévention perte de données)
+- Validation des notes (0-20) avec toast d'erreur
+- RBAC : enseignant saisit si session=open, bloqué sinon (sauf admin)
+- Indicateur de sauvegarde visuel (5 états)
+- Compteur de complétion en temps réel (notes saisies / attendues)
+- Stats dynamiques : élèves, matières, notes saisies, brouillons, taux %
+- Données de test : 1 session Août 2026 (statut open), 4 notes saisies (15, 12.5, 8, 17)

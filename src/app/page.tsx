@@ -14,12 +14,10 @@ import { ClassesView } from "@/components/views/classes-view";
 import { StudentsView } from "@/components/views/students-view";
 import { TeachersView } from "@/components/views/teachers-view";
 import { SubjectsView } from "@/components/views/subjects-view";
+import { SessionsView } from "@/components/views/sessions-view";
+import { GradesGrid } from "@/components/views/grades-view";
 import { PlaceholderView } from "@/components/views/placeholder-view";
-import {
-  ClipboardList,
-  FileText,
-  Settings,
-} from "lucide-react";
+import { FileText, Settings } from "lucide-react";
 
 /** Écran de chargement pendant la vérification de l'auth. */
 function FullScreenLoader() {
@@ -92,14 +90,8 @@ function AppContent() {
       {view === "students" && <StudentsView />}
       {view === "teachers" && <TeachersView />}
       {view === "subjects" && <SubjectsView />}
-      {view === "grades" && (
-        <PlaceholderView
-          title="Saisie des Notes Mensuelles"
-          description="Grille de saisie type tableur pour une saisie fluide au clavier. Brouillon automatique pour prévenir la perte de données."
-          icon={ClipboardList}
-          phase="Phase 3 — Module 2"
-        />
-      )}
+      {view === "sessions" && <SessionsView />}
+      {view === "grades" && <GradesGrid />}
       {view === "bulletins" && (
         <PlaceholderView
           title="Édition des Bulletins"

@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   Menu,
+  Calendar,
   ChevronRight,
 } from "lucide-react";
 
@@ -82,10 +83,16 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["admin", "director", "teacher", "inspector"],
   },
   {
+    id: "sessions",
+    label: "Sessions",
+    icon: <Calendar className="w-4 h-4" />,
+    roles: ["admin", "director", "inspector", "teacher"],
+  },
+  {
     id: "grades",
     label: "Saisie des notes",
     icon: <ClipboardList className="w-4 h-4" />,
-    roles: ["teacher"],
+    roles: ["teacher", "director", "admin"],
   },
   {
     id: "bulletins",

@@ -136,6 +136,17 @@ export interface TeacherWithDetails extends User {
   class_name?: string | null;
 }
 
+export interface SessionWithDetails extends EvaluationSession {
+  class_name?: string;
+  school_name?: string;
+  teacher_name?: string | null;
+  student_count: number;
+  subject_count: number;
+  graded_count: number;
+  draft_count: number;
+  completion_rate: number;
+}
+
 // Réponses API
 export interface LoginResponse {
   token: string;
