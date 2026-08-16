@@ -52,3 +52,21 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# === SYGREN Backend Go (mini-services/sygren-api) ===
+# Binaire Go compilé
+mini-services/sygren-api/sygren-api
+mini-services/sygren-api/sygren-api.exe
+# Base de données SQLite locale (dev)
+mini-services/sygren-api/data/
+# Bulletins PDF générés (stockage runtime) — on garde le code source storage.go
+mini-services/sygren-api/storage/bulletins/
+mini-services/sygren-api/storage/*.pdf
+# Cache Go
+mini-services/sygren-api/.go-cache/
+
+# === Uploads utilisateur ===
+/upload/
+
+# === Captures d'écran de test ===
+/screenshot-*.png
