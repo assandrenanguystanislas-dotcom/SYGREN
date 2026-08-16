@@ -416,3 +416,59 @@ Stage Summary:
 - RBAC UX : enseignant voit le WelcomeDashboard (orienté tâche), 
   les cadres voient l'AnalyticsDashboard (orienté données)
 - Toutes les 5 phases du cahier des charges sont maintenant implémentées
+
+---
+Task ID: Migr-A à Migr-E
+Agent: Main (tutor mode)
+Task: Migration base de données SQLite → PostgreSQL (Neon)
+
+Work Log:
+- Ajouté driver gorm.io/driver/postgres au go.mod
+- Modifié config.go : ajout DatabaseURL (PostgreSQL), auto-détection env=prod si DATABASE_URL présent
+- Modifié database.go : choix dynamique du driver (SQLite ou PostgreSQL selon config)
+  - Mode dev : SQLite local (data/sygren.db)
+  - Mode prod : PostgreSQL (Neon) via DATABASE_URL
+- Modifié main.go : bannière affiche dynamiquement "PostgreSQL (Neon)" ou "SQLite (path)"
+- Créé scripts/migrate_sqlite_to_neon.go : script de migration des données SQLite → Neon
+  - Lit toutes les tables de SQLite (IEP, School, Class, Student, Subject, Session, Grade, ReportCard, User)
+  - Insère record par record dans Neon avec gestion des doublons (FirstOrCreate)
+  - Préserve les UUIDs (cohérence des clés étrangères)
+  - Gestion spéciale pour Subjects (vérification par nom, déjà seedés)
+  - Gestion spéciale pour Teachers (vérification par email/phone)
+- Testé connexion à Neon (eu-central-1.aws.neon.tech) :
+  - Connexion réussie avec sslmode=require
+  - AutoMigrate créé toutes les 9 tables (users, ieps, schools, classes, students,
+    subjects, evaluation_sessions, grades, report_cards)
+  - Seed : super-admin créé + 8 matières par défaut
+- Migration des données SQLite → Neon :
+  - IEPs : 1/1 (IEP Abidjan 1)
+  - Schools : 1/1 (École Plateau)
+  - Classes : 1/1 (CP1)
+  - Students : 2/2 (Élève1 Test, Élève2 Test)
+  - Subjects : 1/8 (7 déjà seedés par défaut sur Neon)
+  - EvaluationSessions : 2/2 (Août, Septembre 2026)
+  - Grades : 16/16
+  - ReportCards : 2/2 (bulletins PDF générés)
+  - Teachers : 1/1 (Konan Marie)
+- Tests API end-to-end sur Neon :
+  - Login admin : OK (token JWT obtenu)
+  - Sessions : 2 sessions visibles (1 open, 1 validated)
+  - Élèves : 2 élèves avec matricules SYG-2026-CP1-001/002
+  - Dashboard : KPIs calculés (perf 13.50, réussite 100%, 2 sessions)
+  - RBAC : enseignant voit sa classe + ses 2 élèves uniquement
+- Vérification Agent Browser :
+  - Login OK sur Neon
+  - Dashboard analytique affiche "SYGREN — Vue globale"
+  - KPIs visibles (ÉCOLES, PERFORMANCE, 100%)
+  - Tendance mensuelle (Août 2026)
+  - 0 erreur console
+
+Stage Summary:
+- Migration SQLite → Neon PostgreSQL réussie
+- Conforme au cahier des charges §4 : PostgreSQL sur Neon.tech en production
+- Configuration via DATABASE_URL (variable d'environnement)
+- Auto-détection : SQLite en dev (si DATABASE_URL absent), PostgreSQL en prod (si présent)
+- Script de migration réutilisable (scripts/migrate_sqlite_to_neon.go)
+- Toutes les données de test migrées (1 IEP, 1 école, 1 classe, 2 élèves, 1 enseignant,
+  9 matières, 2 sessions, 16 notes, 2 bulletins PDF)
+- Application 100% fonctionnelle sur Neon

@@ -9,32 +9,48 @@ import (
         "sygren-api/models"
         "sygren-api/utils"
 
+        "gorm.io/driver/postgres"
         "gorm.io/driver/sqlite"
         "gorm.io/gorm"
         "gorm.io/gorm/logger"
 )
 
 // DB is the global GORM database instance.
-// En dev : SQLite (fichier local). En prod : remplacer le driver par gorm.io/driver/postgres.
+// En dev : SQLite (fichier local). En prod : PostgreSQL (Neon).
 var DB *gorm.DB
 
 // Init opens the database, runs migrations, and seeds initial data.
 func Init(cfg *config.Config) error {
-        // Ensure data directory exists
-        if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0755); err != nil {
-                return err
-        }
-
         gormLogLevel := logger.Warn
         if cfg.Env == "dev" {
                 gormLogLevel = logger.Info
         }
 
-        db, err := gorm.Open(sqlite.Open(cfg.DBPath), &gorm.Config{
-                Logger: logger.Default.LogMode(gormLogLevel),
-        })
-        if err != nil {
-                return err
+        var db *gorm.DB
+        var err error
+
+        if cfg.DatabaseURL != "" {
+                // Mode production : PostgreSQL (Neon.tech)
+                log.Println("[DB] Connexion à PostgreSQL (Neon)…")
+                db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+                        Logger: logger.Default.LogMode(gormLogLevel),
+                })
+                if err != nil {
+                        return err
+                }
+                log.Println("[DB] Connecté à PostgreSQL (Neon)")
+        } else {
+                // Mode dev : SQLite local
+                if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0755); err != nil {
+                        return err
+                }
+                db, err = gorm.Open(sqlite.Open(cfg.DBPath), &gorm.Config{
+                        Logger: logger.Default.LogMode(gormLogLevel),
+                })
+                if err != nil {
+                        return err
+                }
+                log.Println("[DB] Connecté à SQLite :", cfg.DBPath)
         }
         DB = db
 
@@ -43,7 +59,7 @@ func Init(cfg *config.Config) error {
                 return err
         }
 
-        log.Println("[DB] Migrations terminées — SQLite prêt:", cfg.DBPath)
+        log.Println("[DB] Migrations terminées")
 
         // Seed initial data (super-admin + matières par défaut)
         if err := seedDefaults(db); err != nil {
