@@ -29,6 +29,7 @@ import type {
   AnnualResult,
   ReportCard,
   ReportCardWithStudent,
+  DashboardData,
 } from "./types";
 
 const API_PORT = "8080";
@@ -420,6 +421,13 @@ export const reportCardsApi = {
   },
 };
 
+// === Module 5 — Tableaux de bord analytiques ===
+
+export const dashboardApi = {
+  /** Récupère les KPIs agrégés selon le scope de l'utilisateur (RBAC backend) */
+  get: () => apiFetch<DashboardData>("/api/dashboard"),
+};
+
 // Export par défaut groupé
 export const api = {
   auth: authApi,
@@ -434,4 +442,5 @@ export const api = {
   grades: gradesApi,
   computation: computationApi,
   reportCards: reportCardsApi,
+  dashboard: dashboardApi,
 };

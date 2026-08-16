@@ -96,11 +96,6 @@ func New(cfg *config.Config) http.Handler {
                         r.Delete("/api/subjects/{id}", handlers.DeleteSubject)
                 })
 
-                // === Modules 2-5 — stubs (à implémenter dans les phases suivantes) ===
-                notImpl := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-                        middleware.JSONError(w, "endpoint en cours d'implémentation", http.StatusNotImplemented)
-                })
-
                 // === Module 2 — Sessions de saisie mensuelle (cahier des charges §3) ===
                 // Lecture : tous les rôles (filtré par scope dans le handler)
                 // Création/Modification/Suppression : admin + director
@@ -140,8 +135,9 @@ func New(cfg *config.Config) http.Handler {
                         r.Post("/api/report-cards/generate-batch/{sessionId}", handlers.GenerateBatchReportCards)
                 })
 
-                // Module 5 — stub (à implémenter dans la phase suivante)
-                r.Get("/api/dashboard", notImpl)
+                // === Module 5 — Tableaux de bord analytiques ===
+                // GET /api/dashboard : renvoie des KPIs agrégés selon le rôle/scope
+                r.Get("/api/dashboard", handlers.GetDashboard)
         })
 
         return r

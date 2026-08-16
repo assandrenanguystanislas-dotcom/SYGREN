@@ -347,3 +347,72 @@ Stage Summary:
 - RBAC par périmètre : chaque rôle ne voit/télécharge que ses bulletins
 - Accents français parfaitement gérés (CP1252 translator)
 - Données de test : 2 bulletins générés (Septembre 2026, session validée)
+
+---
+Task ID: 6-A à 6-E
+Agent: Main (tutor mode)
+Task: Phase 6 — Module 5 : Tableaux de Bord analytiques
+
+Work Log:
+- Backend : créé handlers/dashboard.go complet (~600 lignes)
+  - GetDashboard : dispatch selon le rôle (admin/inspector/director/teacher)
+  - 4 fonctions spécialisées par scope :
+    * getAdminDashboard : vue globale (toutes IEP/écoles)
+    * getInspectorDashboard : vue circonscription (son IEP)
+    * getDirectorDashboard : vue établissement (son école)
+    * getTeacherDashboard : vue classe (sa classe)
+  - KPIs agrégés : écoles, classes, élèves, enseignants, sessions
+  - SessionStats : total/draft/open/closed/validated
+  - completionRate() : (closed+validated) / (open+closed+validated) × 100
+  - computeSchoolsPerformance : KPIs par école (filtrées par IEP)
+  - computeClassesPerformance : KPIs par classe (d'une école)
+  - computeGlobalMentions / IEP / School / Class : distribution des mentions
+  - computeMonthlyTrend : évolution perf + complétion par mois
+  - aggregateSessionsPerformance : moyenne + taux réussite (réutilise computeSessionResults)
+  - RBAC par périmètre : JOINs SQL pour filtrer selon scope
+- Backend : router mis à jour avec GET /api/dashboard (tous rôles authentifiés)
+- Backend : tests curl validés :
+  - Dashboard admin : 1 école, 1 classe, 2 élèves, 1 enseignant, perf 13.42, réussite 100%
+  - SessionStats : 2 total (1 open, 1 validated), complétion 50%
+  - Mentions : Très Bien 1, Assez Bien 2, Passable 1
+  - Tendance : Août (perf 13.83), Septembre (perf 13.00)
+  - Dashboard enseignant : scope "class", voit UNIQUEMENT CP1 + École Plateau
+- Frontend : étendu lib/types.ts (SessionStats, MentionDistribution, 
+  EntityPerformance, MonthlyTrend, DashboardData)
+- Frontend : étendu lib/api.ts (dashboardApi.get)
+- Frontend : créé views/analytics-dashboard.tsx (vue complète avec recharts)
+  - Bandeau d'en-tête avec scope (Vue globale / IEP / École / Classe)
+  - 6 KPI cards : écoles, classes, élèves, enseignants, performance, taux réussite
+  - Jauge de complétion globale (Progress bar colorée)
+  - 4 cartes statut sessions (Brouillon/Ouverte/Fermée/Validée)
+  - LineChart tendance mensuelle (perf + complétion, double axe Y)
+  - PieChart distribution des mentions (7 couleurs, légende avec %)
+  - BarChart comparatif multi-entités (écoles ou classes)
+  - Tableau récapitulatif détaillé par entité
+  - Charte couleur Côte d'Ivoire (orange + vert + neutres)
+  - Responsive (grid adaptatif sm/lg)
+- Frontend : page.tsx mis à jour :
+  - admin/inspector/director → AnalyticsDashboard (vue orientée données)
+  - teacher → WelcomeDashboard (vue orientée tâche — cahier des charges §5.3)
+- Frontend : lint 0 erreur
+- Vérification Agent Browser :
+  - Login admin → AnalyticsDashboard affiché avec tous les KPIs et graphiques
+  - 6 KPIs : 1 école, 1 classe, 2 élèves, 1 enseignant, perf 13.42/20, réussite 100%
+  - Jauge complétion : 50% (1/2 sessions clôturées)
+  - 4 cartes statut : Brouillon 0, Ouverte 1, Fermée 0, Validée 1 (sur 2)
+  - 3 graphiques recharts : LineChart + BarChart + PieChart (vérifiés via DOM)
+  - Distribution mentions : Très Bien 1 (25%), Assez Bien 2, Passable 1
+  - Tendance : Août + Septembre visibles
+  - Login enseignant → WelcomeDashboard (RBAC UX respecté)
+  - Responsive mobile (375px) : footer poussé naturellement (bodyH 2793, footerBottom 2792)
+  - 0 erreur console
+
+Stage Summary:
+- Module 5 (Tableaux de bord analytiques) COMPLET et fonctionnel
+- Vue macroscopique selon 4 périmètres (global/IEP/école/classe)
+- KPIs agrégés en temps réel depuis le backend Go
+- 3 types de graphiques recharts : LineChart (tendance), BarChart (comparatif), PieChart (mentions)
+- Jauges de complétion conformes au cahier des charges §3 Module 5
+- RBAC UX : enseignant voit le WelcomeDashboard (orienté tâche), 
+  les cadres voient l'AnalyticsDashboard (orienté données)
+- Toutes les 5 phases du cahier des charges sont maintenant implémentées

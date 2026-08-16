@@ -18,6 +18,7 @@ import { SessionsView } from "@/components/views/sessions-view";
 import { GradesGrid } from "@/components/views/grades-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
+import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
 import { PlaceholderView } from "@/components/views/placeholder-view";
 import { Settings } from "lucide-react";
 
@@ -83,9 +84,12 @@ function AppContent() {
 
   return (
     <DashboardShell activeView={view} onViewChange={setActiveView}>
-      {view === "dashboard" && (
-        <WelcomeDashboard onNavigate={setActiveView} />
-      )}
+      {view === "dashboard" &&
+        (user.role === "teacher" ? (
+          <WelcomeDashboard onNavigate={setActiveView} />
+        ) : (
+          <AnalyticsDashboard />
+        ))}
       {view === "iep" && <IepView />}
       {view === "schools" && <SchoolsView />}
       {view === "classes" && <ClassesView />}

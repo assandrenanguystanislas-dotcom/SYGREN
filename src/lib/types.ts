@@ -234,6 +234,57 @@ export interface ReportCardWithStudent extends ReportCard {
   year: number;
 }
 
+// === Module 5 — Tableaux de bord analytiques ===
+
+export interface SessionStats {
+  total: number;
+  draft: number;
+  open: number;
+  closed: number;
+  validated: number;
+}
+
+export interface MentionDistribution {
+  labels: string[];
+  values: number[];
+}
+
+export interface EntityPerformance {
+  id: string;
+  name: string;
+  student_count: number;
+  class_count?: number;
+  completion_rate: number;
+  avg_performance: number;
+  session_count: number;
+}
+
+export interface MonthlyTrend {
+  month: number;
+  year: number;
+  label: string;
+  completion_rate: number;
+  avg_performance: number;
+  student_count: number;
+}
+
+export interface DashboardData {
+  scope: "global" | "iep" | "school" | "class";
+  scope_name: string;
+  school_count?: number;
+  class_count: number;
+  student_count: number;
+  teacher_count: number;
+  session_stats: SessionStats;
+  completion_rate: number;
+  avg_performance: number;
+  pass_rate: number;
+  schools?: EntityPerformance[];
+  classes?: EntityPerformance[];
+  mentions: MentionDistribution;
+  monthly_trend: MonthlyTrend[];
+}
+
 // Map couleur mention → classes Tailwind
 export const MENTION_COLOR_CLASSES: Record<string, string> = {
   emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
