@@ -129,9 +129,19 @@ func New(cfg *config.Config) http.Handler {
                 r.Get("/api/computation/session/{id}", handlers.GetSessionResults)
                 r.Get("/api/computation/student/{id}/annual", handlers.GetStudentAnnualResults)
 
-                // Modules 4-5 — stubs (à implémenter dans les phases suivantes)
+                // === Module 4 — Bulletins PDF (cahier des charges §3) ===
+                // Lecture + téléchargement : tous les rôles (RBAC par périmètre)
+                // Génération (unitaire + lot) : admin + director
+                r.Get("/api/report-cards/session/{sessionId}", handlers.ListReportCards)
+                r.Get("/api/report-cards/{id}/download", handlers.DownloadReportCard)
+                r.Group(func(r chi.Router) {
+                        r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+                        r.Post("/api/report-cards/generate/{sessionId}/{studentId}", handlers.GenerateReportCard)
+                        r.Post("/api/report-cards/generate-batch/{sessionId}", handlers.GenerateBatchReportCards)
+                })
+
+                // Module 5 — stub (à implémenter dans la phase suivante)
                 r.Get("/api/dashboard", notImpl)
-                r.Get("/api/report-cards", notImpl)
         })
 
         return r

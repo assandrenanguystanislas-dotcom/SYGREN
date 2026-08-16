@@ -268,3 +268,82 @@ Stage Summary:
   - Session Août : Élève1 1er (16.50, Très Bien), Élève2 2ème (11.17, Passable)
   - Session Septembre : Élève1 + Élève2 ex-aequo (13.00, Assez Bien)
   - Bilan annuel Élève1 : 14.75, mention "Bien"
+
+---
+Task ID: 5-A à 5-F
+Agent: Main (tutor mode)
+Task: Phase 5 — Module 4 : Bulletins PDF (génération + stockage + impression)
+
+Work Log:
+- Backend : globalisé storage (storage.Global) accessible aux handlers
+- Backend : créé handlers/report_cards.go complet avec :
+  - generateBulletinPDF() : génération PDF professionnelle avec fpdf
+    * En-tête institutionnel (République de Côte d'Ivoire, Ministère, SYGREN, École)
+    * Cadre informations élève (nom, matricule, classe, effectif, sexe, année scolaire)
+    * Tableau des notes par matière (coef, note/20, appréciation)
+    * Notes colorées (vert si ≥10, rouge si <10, orange si brouillon)
+    * Cadre récapitulatif (moyenne, rang, mention)
+    * Appréciation générale automatique selon moyenne
+    * Statistiques de classe (moyenne, min, max, médiane, taux réussite/distinction)
+    * Zones de signature (Directeur + Enseignant)
+    * Pied de page avec date de génération
+  - Gestion des accents français via UnicodeTranslatorFromDescriptor("cp1252")
+  - Correction : remplacé "—" (non CP1252) par "-" (hyphen)
+  - GenerateReportCard : génère un bulletin individuel (PDF + DB record)
+  - GenerateBatchReportCards : génère tous les bulletins d'une session
+  - ListReportCards : liste avec enrichissement (nom élève, classe, école, mois/année)
+  - DownloadReportCard : sert le fichier PDF avec Content-Disposition attachment
+  - upsertReportCardRecord : create/update du record ReportCard
+- Backend : router mis à jour avec 5 endpoints :
+  - GET  /api/report-cards/session/{sessionId}          (tous rôles)
+  - GET  /api/report-cards/{id}/download                 (tous rôles)
+  - POST /api/report-cards/generate/{sessionId}/{studentId}   (admin, director)
+  - POST /api/report-cards/generate-batch/{sessionId}         (admin, director)
+  - RBAC par périmètre via getSessionForUser() réutilisé
+- Backend : tests curl validés :
+  - Génération individuelle : PDF 3.0K, 1 page, "PDF document version 1.3"
+  - Génération par lot : 2/2 générés, 0 échec
+  - Téléchargement : HTTP 200, fichier PDF valide
+  - Liste : 2 bulletins avec moyennes, rangs, mentions
+  - Extraction texte pdftotext : accents parfaits (RÉPUBLIQUE, CÔTE, Élève, etc.)
+- Frontend : étendu lib/types.ts (ReportCardWithStudent)
+- Frontend : étendu lib/api.ts (reportCardsApi : list, generate, generateBatch, download)
+  - download() retourne un Blob (fetch avec auth header, pas JSON)
+- Frontend : créé views/bulletins-view.tsx (vue complète)
+  - Sélecteur de session avec auto-sélection
+  - Carte de progression (générés/total + barre %)
+  - Bouton "Générer tous les bulletins" (admin/director)
+  - Tableau avec fusion computation + report-cards :
+    * Rang (Trophy pour 1er), élève, moyenne, mention (badge coloré)
+    * Statut : Généré (vert) / Non généré (gris)
+    * Actions : Générer / Régénérer / Télécharger PDF
+  - Avertissement si notes en brouillon
+  - Téléchargement via Blob → URL.createObjectURL → download link
+  - Légende avec icônes
+- Frontend : page.tsx mis à jour (BulletinsView remplace le placeholder)
+- Frontend : lint 0 erreur
+- Vérification Agent Browser :
+  - Login admin → vue Bulletins avec 2 bulletins déjà générés (100%)
+  - Stats affichées : 2 générés / 2 élèves, barre de progression 100%
+  - Tableau : Élève1 + Élève2, mention "Assez Bien", statut "Généré"
+  - Boutons : Régénérer + PDF visibles pour chaque élève
+  - Clic sur "PDF" → toast "Bulletin téléchargé" ✓
+  - Clic sur "Générer tous les bulletins" → batch exécuté ✓
+  - 0 erreur console
+
+Stage Summary:
+- Module 4 (Bulletins PDF) COMPLET et fonctionnel
+- Génération PDF professionnelle avec go-pdf/fpdf
+  - En-tête institutionnel Côte d'Ivoire
+  - Tableau des notes par matière avec coefficients et appréciations
+  - Notes colorées (vert/orange/rouge)
+  - Cadre récapitulatif (moyenne, rang, mention)
+  - Appréciation générale automatique (7 niveaux)
+  - Statistiques de classe intégrées
+  - Zones de signature
+- Stockage : filesystem local (dev) → Cloudflare R2 (prod, interface prête)
+- Génération unitaire + par lot (batch)
+- Téléchargement PDF via Blob
+- RBAC par périmètre : chaque rôle ne voit/télécharge que ses bulletins
+- Accents français parfaitement gérés (CP1252 translator)
+- Données de test : 2 bulletins générés (Septembre 2026, session validée)

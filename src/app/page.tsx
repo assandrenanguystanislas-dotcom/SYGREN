@@ -17,8 +17,9 @@ import { SubjectsView } from "@/components/views/subjects-view";
 import { SessionsView } from "@/components/views/sessions-view";
 import { GradesGrid } from "@/components/views/grades-view";
 import { ResultsView } from "@/components/views/results-view";
+import { BulletinsView } from "@/components/views/bulletins-view";
 import { PlaceholderView } from "@/components/views/placeholder-view";
-import { FileText, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 /** Écran de chargement pendant la vérification de l'auth. */
 function FullScreenLoader() {
@@ -94,14 +95,7 @@ function AppContent() {
       {view === "sessions" && <SessionsView />}
       {view === "grades" && <GradesGrid />}
       {view === "results" && <ResultsView />}
-      {view === "bulletins" && (
-        <PlaceholderView
-          title="Édition des Bulletins"
-          description="Génération PDF automatisée des bulletins officiels. Impression par lot (classe/école) ou individuelle."
-          icon={FileText}
-          phase="Phase 5 — Module 4"
-        />
-      )}
+      {view === "bulletins" && <BulletinsView />}
       {view === "settings" && (
         <PlaceholderView
           title="Paramètres Système"

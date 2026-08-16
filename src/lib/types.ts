@@ -223,6 +223,17 @@ export interface AnnualResult {
   sessions: SessionSummary[];
 }
 
+// === Module 4 — Bulletins PDF ===
+
+export interface ReportCardWithStudent extends ReportCard {
+  student_name: string;
+  student_matricule: string;
+  class_name: string;
+  school_name: string;
+  month: number;
+  year: number;
+}
+
 // Map couleur mention → classes Tailwind
 export const MENTION_COLOR_CLASSES: Record<string, string> = {
   emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
