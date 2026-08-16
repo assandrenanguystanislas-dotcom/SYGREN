@@ -1,8 +1,12 @@
-// Client API SYGREN — encapsule tous les appels vers le backend Go (port 8080).
+// Client API SYGREN — encapsule tous les appels vers le backend Go.
 //
-// Architecture : le frontend Next.js (port 3000) appelle le backend Go (port 8080)
-// via le gateway Caddy (port 81). Le routing se fait grâce au paramètre
-// ?XTransformPort=8080 ajouté à chaque URL.
+// Architecture :
+//   - En dev (sandbox) : le frontend Next.js (port 3000) appelle le backend Go
+//     (port 8080) via le gateway Caddy (port 81). Le routing se fait grâce au
+//     paramètre ?XTransformPort=8080 ajouté à chaque URL relative.
+//   - En prod (Vercel) : le frontend utilise NEXT_PUBLIC_API_URL pour appeler
+//     directement le backend Go déployé (Render, Railway, etc.). Les requêtes
+//     sont en CORS cross-origin.
 //
 // Le token JWT est stocké par le store Zustand (auth-store.ts) et injecté
 // automatiquement dans l'en-tête Authorization de chaque requête.
@@ -34,12 +38,26 @@ import type {
   SettingsByCategory,
 } from "./types";
 
+// En production (Vercel), NEXT_PUBLIC_API_URL pointe vers le backend déployé.
+// En dev (sandbox), on utilise les chemins relatifs avec ?XTransformPort=8080.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const API_PORT = "8080";
+const IS_PRODUCTION = !!API_BASE_URL;
 
-/** Ajoute ?XTransformPort=8080 à un path relatif. */
-function withPort(path: string): string {
+/** Construit l'URL complète pour un appel API. */
+function buildUrl(path: string): string {
+  if (IS_PRODUCTION) {
+    // Mode production : URL absolue vers le backend déployé
+    return `${API_BASE_URL}${path}`;
+  }
+  // Mode dev (sandbox) : chemin relatif + ?XTransformPort=8080
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}XTransformPort=${API_PORT}`;
+}
+
+/** Alias rétro-compatible. */
+function withPort(path: string): string {
+  return buildUrl(path);
 }
 
 /** Erreur API typée. */
