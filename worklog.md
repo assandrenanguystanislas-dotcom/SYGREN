@@ -519,3 +519,54 @@ Stage Summary:
 - README.md professionnel avec architecture, installation, modules
 - Tous les serveurs fonctionnels depuis la nouvelle structure
 - Push GitHub : commit 50c8bf7
+
+---
+Task ID: Settings-A à Settings-F
+Agent: Main (tutor mode)
+Task: Implémentation de la vue Paramètres système (active)
+
+Work Log:
+- Backend : créé modèle Setting (key-value) dans models/models.go
+  - Champs : ID, Key (unique), Value (string), Category, Label, UpdatedAt
+  - DefaultSettings() : 10 paramètres par défaut (6 seuils mentions + 3 système + 1 coef)
+- Backend : créé handlers/settings.go
+  - ListSettings : liste groupée par catégorie
+  - GetSetting : récupère un paramètre par clé
+  - UpdateSetting : met à jour un paramètre (avec validation 0-20)
+  - GetMentionThresholds() : utilitaire pour computation.go
+  - GetSystemSettings() : utilitaire pour les seuils système
+- Backend : intégré seuils dynamiques dans computation.go
+  - getMention() lit maintenant les seuils depuis Settings (remplace hardcoded 16/14/12/10/8/5)
+  - computeClassStatistics utilise les seuils dynamiques (pass_rate_threshold, distinction_threshold)
+- Backend : seed des paramètres par défaut dans database.go
+- Backend : router mis à jour avec endpoints /api/settings (admin uniquement)
+- Backend : tests curl validés :
+  - 10 paramètres seedés et listés par catégorie
+  - PUT modifie la valeur + timestamp
+  - Validation 0-20 (rejette 25 avec 400)
+  - RBAC : teacher obtient 403 sur GET /api/settings
+  - Impact réel : seuil Très Bien 16→13 transforme moyenne 13 de "Assez Bien" à "Très Bien"
+- Frontend : étendu lib/types.ts (Setting, SettingsByCategory)
+- Frontend : étendu lib/api.ts (settingsApi : list, get, update)
+- Frontend : créé views/settings-view.tsx
+  - Carte statut système (backend, API, nb paramètres actifs)
+  - Avertissement impact sur les calculs (rétroactif)
+  - 3 catégories avec icônes : Seuils de mentions, Configuration système, Coefficients
+  - Édition inline (Input + bouton Sauvegarder)
+  - Bouton réinitialisation (si valeur ≠ défaut)
+  - Invalidation cache React Query (settings + computation + dashboard)
+- Frontend : page.tsx : SettingsView remplace le placeholder
+- Frontend : lint 0 erreur
+- Vérification Agent Browser :
+  - Navigation vers Paramètres ✓
+  - Vue affiche 3 catégories avec tous les paramètres ✓
+  - Avertissement impact visible ✓
+  - 0 erreur console
+
+Stage Summary:
+- Vue Paramètres système COMPLÈTE et ACTIVE (plus un placeholder)
+- 10 paramètres configurables (seuils mentions, année scolaire, coefs)
+- Modification dynamique : impact immédiat sur calculs, classements, bulletins, dashboard
+- Validation des valeurs (0-20) + RBAC admin uniquement
+- Bouton réinitialisation aux valeurs par défaut
+- Push GitHub : commit 0d78c97
