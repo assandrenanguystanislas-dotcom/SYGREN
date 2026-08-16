@@ -472,3 +472,50 @@ Stage Summary:
 - Toutes les données de test migrées (1 IEP, 1 école, 1 classe, 2 élèves, 1 enseignant,
   9 matières, 2 sessions, 16 notes, 2 bulletins PDF)
 - Application 100% fonctionnelle sur Neon
+
+---
+Task ID: Mono-A à Mono-F
+Agent: Main (tutor mode)
+Task: Réorganisation en monorepo (frontend/ + backend/)
+
+Work Log:
+- Arrêté tous les serveurs (frontend + backend)
+- Créé structure monorepo : frontend/ et backend/
+- Déplacé le backend Go : mini-services/sygren-api/ → backend/
+  - Tous les dossiers (config, database, handlers, models, router, middleware, utils, storage, scripts)
+  - go.mod, go.sum, package.json
+  - data/ (SQLite runtime) + storage/ (PDFs runtime) + binaire compilé
+- Déplacé le frontend Next.js : racine → frontend/
+  - src/, public/, package.json, bun.lock, tsconfig.json, next.config.ts
+  - postcss.config.mjs, tailwind.config.ts, eslint.config.mjs, components.json
+  - prisma/, db/, .env (legacy Prisma)
+- Supprimé mini-services/ (vide après déplacement)
+- Supprimé node_modules racine (réinstallé dans frontend/)
+- Supprimé .next/ (cache build, régénéré)
+- Supprimé screenshots de test (gitignored)
+- Créé package.json racine (orchestrateur monorepo) :
+  - bun run dev → cd frontend && bun run dev (Next.js port 3000)
+  - bun run dev:backend → cd backend && bun run dev (Go port 8080)
+  - bun run dev:all → les deux
+  - bun run build → build frontend + backend
+  - bun run migrate:db → migration SQLite → PostgreSQL
+- Mis à jour .gitignore pour les nouveaux chemins (backend/ au lieu de mini-services/sygren-api/)
+- Ajouté @types/node au frontend (requis par Next.js 16)
+- Rebuildé le binaire backend (go build -o sygren-api main.go depuis backend/)
+- Mis à jour README.md complet (architecture monorepo, installation, modules)
+- Tests end-to-end :
+  - Backend : SQLite depuis backend/data/sygren.db, health OK ✓
+  - Frontend : HTTP 200 depuis frontend/, compile OK ✓
+  - Gateway Caddy : routing port 81 → 3000 et 8080 ✓
+  - Login admin → dashboard analytique "SYGREN — Vue globale" ✓
+  - 0 erreur console
+- Commit + push GitHub : 148 fichiers modifiés, push réussi
+
+Stage Summary:
+- Monorepo créé avec succès : frontend/ + backend/ à la racine
+- Package.json orchestrateur à la racine (bun run dev lance tout)
+- Structure propre et conforme aux bonnes pratiques
+- Backend et frontend indépendants mais orchestrés depuis la racine
+- README.md professionnel avec architecture, installation, modules
+- Tous les serveurs fonctionnels depuis la nouvelle structure
+- Push GitHub : commit 50c8bf7
