@@ -8,17 +8,17 @@ import { useAuthStore } from "@/lib/auth-store";
 import { LoginView } from "@/components/login-view";
 import { DashboardShell, NAV_ITEMS } from "@/components/dashboard-shell";
 import { WelcomeDashboard } from "@/components/dashboards/welcome-dashboard";
+import { IepView } from "@/components/views/iep-view";
+import { SchoolsView } from "@/components/views/schools-view";
+import { ClassesView } from "@/components/views/classes-view";
+import { StudentsView } from "@/components/views/students-view";
+import { TeachersView } from "@/components/views/teachers-view";
 import { SubjectsView } from "@/components/views/subjects-view";
 import { PlaceholderView } from "@/components/views/placeholder-view";
 import {
-  School,
-  Users,
-  BookOpen,
   ClipboardList,
   FileText,
-  TrendingUp,
   Settings,
-  BarChart3,
 } from "lucide-react";
 
 /** Écran de chargement pendant la vérification de l'auth. */
@@ -86,47 +86,12 @@ function AppContent() {
       {view === "dashboard" && (
         <WelcomeDashboard onNavigate={setActiveView} />
       )}
+      {view === "iep" && <IepView />}
+      {view === "schools" && <SchoolsView />}
+      {view === "classes" && <ClassesView />}
+      {view === "students" && <StudentsView />}
+      {view === "teachers" && <TeachersView />}
       {view === "subjects" && <SubjectsView />}
-      {view === "iep" && (
-        <PlaceholderView
-          title="Gestion des Inspections (IEP)"
-          description="Création et configuration des circonscriptions scolaires. Chaque IEP regroupe plusieurs écoles et est supervisée par un inspecteur."
-          icon={BarChart3}
-          phase="Phase 2 — Module 1"
-        />
-      )}
-      {view === "schools" && (
-        <PlaceholderView
-          title="Gestion des Écoles"
-          description="Configuration des établissements scolaires rattachés à une IEP. Adresse, directeurs, classes associées."
-          icon={School}
-          phase="Phase 2 — Module 1"
-        />
-      )}
-      {view === "classes" && (
-        <PlaceholderView
-          title="Gestion des Classes"
-          description="Création des classes (CP1, CP2, CE1, CE2, CM1, CM2) et affectation dynamique des enseignants."
-          icon={BookOpen}
-          phase="Phase 2 — Module 1"
-        />
-      )}
-      {view === "students" && (
-        <PlaceholderView
-          title="Gestion des Élèves"
-          description="Enregistrement des élèves avec attribution d'un matricule unique. Inscription dans une classe."
-          icon={Users}
-          phase="Phase 2 — Module 1"
-        />
-      )}
-      {view === "teachers" && (
-        <PlaceholderView
-          title="Gestion des Enseignants"
-          description="Création des comptes enseignants et affectation dynamique aux classes de l'établissement."
-          icon={Users}
-          phase="Phase 2 — Module 1"
-        />
-      )}
       {view === "grades" && (
         <PlaceholderView
           title="Saisie des Notes Mensuelles"
@@ -148,7 +113,7 @@ function AppContent() {
           title="Paramètres Système"
           description="Configuration globale du système SYGREN. Seuils de mentions, coefficients, sauvegarde des données."
           icon={Settings}
-          phase="Phase 2 — Module 1"
+          phase="Phase à venir"
         />
       )}
     </DashboardShell>

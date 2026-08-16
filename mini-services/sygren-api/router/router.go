@@ -8,6 +8,7 @@ import (
 	"sygren-api/config"
 	"sygren-api/handlers"
 	"sygren-api/middleware"
+	"sygren-api/models"
 )
 
 // New builds the main HTTP router with all SYGREN routes.
@@ -19,18 +20,15 @@ import (
 //   /api/students      → gestion des élèves (Module 1)
 //   /api/teachers      → gestion des enseignants (Module 1)
 //   /api/subjects       → gestion des matières (Module 1)
-//   /api/sessions       → sessions de saisie mensuelle (Module 2)
-//   /api/grades         → saisie des notes (Module 2)
-//   /api/computation    → calculs moyennes + classement (Module 3)
-//   /api/report-cards   → bulletins PDF (Module 4)
-//   /api/dashboard      → tableaux de bord (Module 5)
+//   /api/sessions       → sessions de saisie mensuelle (Module 2 — à venir)
+//   /api/grades         → saisie des notes (Module 2 — à venir)
+//   /api/dashboard      → tableaux de bord (Module 5 — à venir)
 //   /api/me             → profil utilisateur connecté
 func New(cfg *config.Config) http.Handler {
 	r := chi.NewRouter()
 
 	// Global middleware
 	r.Use(middleware.CORSMiddleware)
-	r.Use(RequestLogger)
 
 	// Public routes
 	r.Get("/api/health", handlers.Health)
@@ -42,24 +40,66 @@ func New(cfg *config.Config) http.Handler {
 
 		r.Get("/api/me", handlers.Me)
 
-		// === Phase 1 stubs — seront implémentés dans les phases suivantes ===
-		// Pour l'instant, seules les routes d'auth et de santé sont actives.
-		// Les handlers CRUD seront ajoutés phase par phase.
+		// === Module 1 — Gestion Administrative ===
 
-		// Stub: renvoie 501 Not Implemented pour signaler les routes à venir
+		// IEP — Super-Admin uniquement (cahier des charges §2)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(models.RoleAdmin))
+			r.Get("/api/iep", handlers.ListIEP)
+			r.Post("/api/iep", handlers.CreateIEP)
+			r.Put("/api/iep/{id}", handlers.UpdateIEP)
+			r.Delete("/api/iep/{id}", handlers.DeleteIEP)
+		})
+
+		// Écoles — admin (CRUD), inspector (lecture), director/teacher (lecture son école)
+		r.Get("/api/schools", handlers.ListSchools)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(models.RoleAdmin))
+			r.Post("/api/schools", handlers.CreateSchool)
+			r.Put("/api/schools/{id}", handlers.UpdateSchool)
+			r.Delete("/api/schools/{id}", handlers.DeleteSchool)
+		})
+
+		// Classes — admin+director (CRUD), inspector+teacher (lecture)
+		r.Get("/api/classes", handlers.ListClasses)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+			r.Post("/api/classes", handlers.CreateClass)
+			r.Put("/api/classes/{id}", handlers.UpdateClass)
+			r.Delete("/api/classes/{id}", handlers.DeleteClass)
+		})
+
+		// Élèves — admin+director (CRUD), inspector+teacher (lecture)
+		r.Get("/api/students", handlers.ListStudents)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+			r.Post("/api/students", handlers.CreateStudent)
+			r.Put("/api/students/{id}", handlers.UpdateStudent)
+			r.Delete("/api/students/{id}", handlers.DeleteStudent)
+		})
+
+		// Enseignants — admin (CRUD), director (CRUD limité son école), inspector (lecture)
+		r.Get("/api/teachers", handlers.ListTeachers)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+			r.Post("/api/teachers", handlers.CreateTeacher)
+			r.Put("/api/teachers/{id}", handlers.UpdateTeacher)
+			r.Delete("/api/teachers/{id}", handlers.DeleteTeacher)
+		})
+
+		// Matières — admin (CRUD), director (CRUD), teacher+inspector (lecture)
+		r.Get("/api/subjects", handlers.ListSubjects)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+			r.Post("/api/subjects", handlers.CreateSubject)
+			r.Put("/api/subjects/{id}", handlers.UpdateSubject)
+			r.Delete("/api/subjects/{id}", handlers.DeleteSubject)
+		})
+
+		// === Modules 2-5 — stubs (à implémenter dans les phases suivantes) ===
 		notImpl := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			middleware.JSONError(w, "endpoint en cours d'implémentation", http.StatusNotImplemented)
 		})
-
-		// Module 1 — Gestion Administrative
-		r.Get("/api/iep", notImpl)                    // liste IEP (admin)
-		r.Get("/api/schools", notImpl)                // liste écoles
-		r.Get("/api/classes", notImpl)                // liste classes
-		r.Get("/api/students", notImpl)               // liste élèves
-		r.Get("/api/teachers", notImpl)               // liste enseignants
-		r.Get("/api/subjects", handlers.ListSubjects) // liste matières (déjà fonctionnel)
-
-		// Modules 2-5 stubs
 		r.Get("/api/sessions", notImpl)
 		r.Get("/api/grades", notImpl)
 		r.Get("/api/dashboard", notImpl)
@@ -67,13 +107,4 @@ func New(cfg *config.Config) http.Handler {
 	})
 
 	return r
-}
-
-// RequestLogger logs each incoming request (dev only).
-func RequestLogger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Comment out for quieter logs in production
-		// log.Printf("[%s] %s %s", r.Method, r.URL.Path, r.URL.Query().Get("XTransformPort"))
-		next.ServeHTTP(w, r)
-	})
 }

@@ -12,6 +12,15 @@ import type {
   Subject,
   User,
   ApiError,
+  IEP,
+  IEPWithStats,
+  School,
+  SchoolWithStats,
+  SchoolClass,
+  ClassWithDetails,
+  Student,
+  StudentWithClass,
+  TeacherWithDetails,
 } from "./types";
 
 const API_PORT = "8080";
@@ -114,6 +123,166 @@ export const healthApi = {
 export const subjectsApi = {
   list: () =>
     apiFetch<{ subjects: Subject[]; count: number }>("/api/subjects"),
+  create: (data: { name: string; coefficient?: number }) =>
+    apiFetch<Subject>("/api/subjects", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: { name?: string; coefficient?: number }) =>
+    apiFetch<Subject>(`/api/subjects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/subjects/${id}`, { method: "DELETE" }),
+};
+
+// === IEP — Inspection de l'Enseignement Primaire ===
+
+export const iepApi = {
+  list: () =>
+    apiFetch<{ ieps: IEPWithStats[]; count: number }>("/api/iep"),
+  create: (data: { name: string; region: string }) =>
+    apiFetch<IEP>("/api/iep", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: { name?: string; region?: string }) =>
+    apiFetch<IEP>(`/api/iep/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/iep/${id}`, { method: "DELETE" }),
+};
+
+// === Écoles ===
+
+export const schoolsApi = {
+  list: () =>
+    apiFetch<{ schools: SchoolWithStats[]; count: number }>("/api/schools"),
+  create: (data: { iep_id: string; name: string; address: string }) =>
+    apiFetch<School>("/api/schools", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: { iep_id?: string; name?: string; address?: string },
+  ) =>
+    apiFetch<School>(`/api/schools/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/schools/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Classes ===
+
+export const classesApi = {
+  list: () =>
+    apiFetch<{ classes: ClassWithDetails[]; count: number }>("/api/classes"),
+  create: (data: {
+    school_id: string;
+    name: string;
+    teacher_id?: string | null;
+  }) =>
+    apiFetch<SchoolClass>("/api/classes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: { name?: string; teacher_id?: string | null },
+  ) =>
+    apiFetch<SchoolClass>(`/api/classes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/classes/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Élèves ===
+
+export const studentsApi = {
+  list: (classId?: string) =>
+    apiFetch<{ students: StudentWithClass[]; count: number }>(
+      classId ? `/api/students?class_id=${classId}` : "/api/students",
+    ),
+  create: (data: {
+    class_id: string;
+    first_name: string;
+    last_name: string;
+    gender: "M" | "F";
+    birth_date?: string;
+  }) =>
+    apiFetch<Student>("/api/students", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: Partial<{
+      class_id: string;
+      first_name: string;
+      last_name: string;
+      gender: "M" | "F";
+      birth_date: string;
+    }>,
+  ) =>
+    apiFetch<Student>(`/api/students/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/students/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Enseignants ===
+
+export const teachersApi = {
+  list: () =>
+    apiFetch<{ teachers: TeacherWithDetails[]; count: number }>(
+      "/api/teachers",
+    ),
+  create: (data: {
+    full_name: string;
+    phone?: string;
+    email?: string;
+    password: string;
+    school_id?: string;
+  }) =>
+    apiFetch<User>("/api/teachers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: Partial<{
+      full_name: string;
+      phone: string | null;
+      email: string | null;
+      password: string;
+      school_id: string | null;
+      active: boolean;
+    }>,
+  ) =>
+    apiFetch<User>(`/api/teachers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/teachers/${id}`, {
+      method: "DELETE",
+    }),
 };
 
 // Export par défaut groupé
@@ -121,4 +290,9 @@ export const api = {
   auth: authApi,
   health: healthApi,
   subjects: subjectsApi,
+  iep: iepApi,
+  schools: schoolsApi,
+  classes: classesApi,
+  students: studentsApi,
+  teachers: teachersApi,
 };

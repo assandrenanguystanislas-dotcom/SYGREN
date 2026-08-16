@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   School,
   Users,
@@ -12,9 +13,11 @@ import {
   Clock,
   ArrowRight,
   Sparkles,
+  BarChart3,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
+import { iepApi, schoolsApi, studentsApi, subjectsApi, teachersApi } from "@/lib/api";
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,42 +30,10 @@ interface StatCard {
   tone: "orange" | "green" | "neutral";
 }
 
-const STATS_BY_ROLE: Record<Role, StatCard[]> = {
-  admin: [
-    { label: "Inspections (IEP)", value: "0", hint: "à configurer", icon: <TrendingUp className="w-5 h-5" />, tone: "orange" },
-    { label: "Écoles enregistrées", value: "0", hint: "à configurer", icon: <School className="w-5 h-5" />, tone: "green" },
-    { label: "Utilisateurs", value: "1", hint: "admin actif", icon: <Users className="w-5 h-5" />, tone: "neutral" },
-    { label: "Matières configurées", value: "8", hint: "par défaut", icon: <BookOpen className="w-5 h-5" />, tone: "orange" },
-  ],
-  director: [
-    { label: "Classes de l'école", value: "—", hint: "à créer", icon: <BookOpen className="w-5 h-5" />, tone: "green" },
-    { label: "Élèves inscrits", value: "—", hint: "à inscrire", icon: <Users className="w-5 h-5" />, tone: "orange" },
-    { label: "Enseignants", value: "—", hint: "à affecter", icon: <Users className="w-5 h-5" />, tone: "neutral" },
-    { label: "Bulletins émis", value: "0", hint: "cette année", icon: <FileText className="w-5 h-5" />, tone: "green" },
-  ],
-  inspector: [
-    { label: "Écoles supervisées", value: "—", hint: "circonscription", icon: <School className="w-5 h-5" />, tone: "orange" },
-    { label: "Taux de complétion", value: "—", hint: "saisies du mois", icon: <ClipboardList className="w-5 h-5" />, tone: "green" },
-    { label: "Moyenne circonscription", value: "—", hint: "calcul auto", icon: <TrendingUp className="w-5 h-5" />, tone: "neutral" },
-    { label: "Bulletins émis", value: "0", hint: "ce mois", icon: <FileText className="w-5 h-5" />, tone: "orange" },
-  ],
-  teacher: [
-    { label: "Ma classe", value: "—", hint: "à affecter", icon: <BookOpen className="w-5 h-5" />, tone: "green" },
-    { label: "Mes élèves", value: "—", hint: "à inscrire", icon: <Users className="w-5 h-5" />, tone: "orange" },
-    { label: "Saisie en cours", value: "Aucune", hint: "session fermée", icon: <Clock className="w-5 h-5" />, tone: "neutral" },
-    { label: "Moyenne de classe", value: "—", hint: "auto-calculée", icon: <TrendingUp className="w-5 h-5" />, tone: "green" },
-  ],
-};
-
-interface WelcomeDashboardProps {
-  onNavigate: (view: string) => void;
-}
-
-export function WelcomeDashboard({ onNavigate }: WelcomeDashboardProps) {
+export function WelcomeDashboard({ onNavigate }: { onNavigate: (view: string) => void }) {
   const user = useAuthStore((s) => s.user);
 
-  // Lecture de la date côté client uniquement (évite le mismatch SSR/hydratation)
-  // via useSyncExternalStore, le pattern React recommandé.
+  // Lecture de la date côté client (évite le mismatch SSR/hydratation)
   const now = useSyncExternalStore(
     () => () => {},
     () =>
@@ -75,9 +46,46 @@ export function WelcomeDashboard({ onNavigate }: WelcomeDashboardProps) {
     () => "",
   );
 
+  // Statistiques dynamiques — chargées en parallèle, seulement si l'utilisateur a le droit
+  const { data: iepData } = useQuery({
+    queryKey: ["iep"],
+    queryFn: iepApi.list,
+    enabled: user?.role === "admin",
+  });
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools"],
+    queryFn: schoolsApi.list,
+    enabled: !!user,
+  });
+  const { data: studentsData } = useQuery({
+    queryKey: ["students"],
+    queryFn: () => studentsApi.list(),
+    enabled: !!user && user.role !== "inspector",
+  });
+  const { data: subjectsData } = useQuery({
+    queryKey: ["subjects"],
+    queryFn: subjectsApi.list,
+    enabled: !!user,
+  });
+  const { data: teachersData } = useQuery({
+    queryKey: ["teachers"],
+    queryFn: teachersApi.list,
+    enabled: !!user && (user.role === "admin" || user.role === "director"),
+  });
+
   if (!user) return null;
 
-  const stats = STATS_BY_ROLE[user.role];
+  const stats = buildStats(
+    user.role,
+    {
+      iepCount: iepData?.count ?? 0,
+      schoolCount: schoolsData?.count ?? 0,
+      studentCount: studentsData?.count ?? 0,
+      subjectCount: subjectsData?.count ?? 0,
+      teacherCount: teachersData?.count ?? 0,
+    },
+  );
+
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
@@ -182,13 +190,12 @@ export function WelcomeDashboard({ onNavigate }: WelcomeDashboardProps) {
           </div>
           <div className="text-sm space-y-1">
             <p className="font-medium text-foreground">
-              Phase 1 en cours — Fondations posées
+              Phase 2 — Module 1 opérationnel
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              L'authentification JWT et le RBAC (4 rôles) sont opérationnels.
-              Le backend Go tourne sur le port 8080 et le frontend Next.js sur
-              le port 3000. Les modules de gestion (écoles, classes, élèves)
-              seront implémentés dans la Phase 2.
+              La gestion administrative est complète : IEP, écoles, classes,
+              élèves (matricule unique), enseignants et matières. Les statistiques
+              ci-dessus sont calculées en temps réel depuis le backend Go.
             </p>
           </div>
         </CardContent>
@@ -197,19 +204,60 @@ export function WelcomeDashboard({ onNavigate }: WelcomeDashboardProps) {
   );
 }
 
+interface StatsData {
+  iepCount: number;
+  schoolCount: number;
+  studentCount: number;
+  subjectCount: number;
+  teacherCount: number;
+}
+
+function buildStats(role: Role, d: StatsData): StatCard[] {
+  switch (role) {
+    case "admin":
+      return [
+        { label: "Inspections (IEP)", value: String(d.iepCount), hint: "circonscriptions", icon: <BarChart3 className="w-5 h-5" />, tone: "orange" },
+        { label: "Écoles enregistrées", value: String(d.schoolCount), hint: "toutes IEP confondues", icon: <School className="w-5 h-5" />, tone: "green" },
+        { label: "Élèves inscrits", value: String(d.studentCount), hint: "matricules uniques", icon: <Users className="w-5 h-5" />, tone: "neutral" },
+        { label: "Enseignants", value: String(d.teacherCount), hint: "comptes actifs", icon: <Users className="w-5 h-5" />, tone: "orange" },
+      ];
+    case "director":
+      return [
+        { label: "Classes de l'école", value: "—", hint: "voir l'onglet Classes", icon: <BookOpen className="w-5 h-5" />, tone: "green" },
+        { label: "Élèves inscrits", value: String(d.studentCount), hint: "dans mon école", icon: <Users className="w-5 h-5" />, tone: "orange" },
+        { label: "Enseignants", value: String(d.teacherCount), hint: "comptes actifs", icon: <Users className="w-5 h-5" />, tone: "neutral" },
+        { label: "Matières", value: String(d.subjectCount), hint: "disciplines", icon: <BookOpen className="w-5 h-5" />, tone: "green" },
+      ];
+    case "inspector":
+      return [
+        { label: "Écoles supervisées", value: String(d.schoolCount), hint: "ma circonscription", icon: <School className="w-5 h-5" />, tone: "orange" },
+        { label: "Enseignants", value: String(d.teacherCount), hint: "dans mon IEP", icon: <Users className="w-5 h-5" />, tone: "green" },
+        { label: "Matières configurées", value: String(d.subjectCount), hint: "disciplines", icon: <BookOpen className="w-5 h-5" />, tone: "neutral" },
+        { label: "Tableaux de bord", value: "—", hint: "à venir (Phase 6)", icon: <TrendingUp className="w-5 h-5" />, tone: "orange" },
+      ];
+    case "teacher":
+      return [
+        { label: "Mes élèves", value: String(d.studentCount), hint: "dans ma classe", icon: <Users className="w-5 h-5" />, tone: "green" },
+        { label: "Matières", value: String(d.subjectCount), hint: "disciplines à noter", icon: <BookOpen className="w-5 h-5" />, tone: "orange" },
+        { label: "Saisie en cours", value: "Aucune", hint: "session fermée", icon: <Clock className="w-5 h-5" />, tone: "neutral" },
+        { label: "Bulletins", value: "0", hint: "à venir (Phase 5)", icon: <FileText className="w-5 h-5" />, tone: "green" },
+      ];
+  }
+}
+
 const QUICK_ACTIONS: Record<
   Role,
   { label: string; hint: string; view: string; icon: React.ReactNode }[]
 > = {
   admin: [
-    { label: "Gérer les matières", hint: "8 matières configurées", view: "subjects", icon: <BookOpen className="w-4 h-4" /> },
-    { label: "Créer une IEP", hint: "Inspection de circonscription", view: "iep", icon: <TrendingUp className="w-4 h-4" /> },
-    { label: "Gérer les écoles", hint: "Établissements scolaires", view: "schools", icon: <School className="w-4 h-4" /> },
+    { label: "Gérer les IEP", hint: "Circonscriptions scolaires", view: "iep", icon: <BarChart3 className="w-4 h-4" /> },
+    { label: "Gérer les écoles", hint: "Établissements", view: "schools", icon: <School className="w-4 h-4" /> },
+    { label: "Inscrire un élève", hint: "Matricule auto", view: "students", icon: <Users className="w-4 h-4" /> },
   ],
   director: [
     { label: "Mes classes", hint: "CP1 → CM2", view: "classes", icon: <BookOpen className="w-4 h-4" /> },
     { label: "Inscrire un élève", hint: "Matricule unique", view: "students", icon: <Users className="w-4 h-4" /> },
-    { label: "Gérer les matières", hint: "Disciplines", view: "subjects", icon: <BookOpen className="w-4 h-4" /> },
+    { label: "Gérer les enseignants", hint: "Comptes", view: "teachers", icon: <Users className="w-4 h-4" /> },
   ],
   inspector: [
     { label: "Vue analytique", hint: "Multi-écoles", view: "dashboard", icon: <TrendingUp className="w-4 h-4" /> },
@@ -218,7 +266,7 @@ const QUICK_ACTIONS: Record<
   ],
   teacher: [
     { label: "Saisir les notes", hint: "Grille mensuelle", view: "grades", icon: <ClipboardList className="w-4 h-4" /> },
-    { label: "Ma classe", hint: "Mes élèves", view: "classes", icon: <BookOpen className="w-4 h-4" /> },
+    { label: "Mes élèves", hint: "Ma classe", view: "students", icon: <Users className="w-4 h-4" /> },
     { label: "Matières", hint: "Disciplines", view: "subjects", icon: <BookOpen className="w-4 h-4" /> },
   ],
 };

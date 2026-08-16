@@ -79,3 +79,53 @@ Stage Summary:
 - Vérification Agent Browser : login OK, dashboard OK, navigation OK, données API OK, 0 erreur console
 - Sticky footer : validé sur le dashboard (poussé naturellement sur contenu long)
 
+
+---
+Task ID: 2-A à 2-J
+Agent: Main (tutor mode)
+Task: Phase 2 — Module 1 : Gestion Administrative (CRUD complet)
+
+Work Log:
+- Backend Go : créé handlers/helpers.go (jsonResponse, pagination, ctx helpers)
+- Backend : handlers/iep.go (CRUD IEP + compteur écoles par IEP)
+- Backend : handlers/schools.go (CRUD écoles + enrichissement IEP/classes/élèves)
+- Backend : handlers/classes.go (CRUD classes + validation CP1-CM2 + affectation enseignant)
+- Backend : handlers/students.go (CRUD élèves + génération matricule unique SYG-AAAA-CLASSE-SEQ)
+- Backend : handlers/teachers.go (CRUD enseignants + comptes utilisateurs + hashage bcrypt)
+- Backend : handlers/subjects.go enrichi (Create/Update/Delete + coefficient par défaut)
+- Backend : router/router.go mis à jour avec routes RBAC par périmètre :
+  - IEP : admin uniquement
+  - Écoles : admin (CRUD), inspector/director/teacher (lecture filtrée par scope)
+  - Classes/Élèves/Enseignants : admin+director (CRUD), inspector+teacher (lecture)
+  - Matières : admin+director (CRUD), teacher+inspector (lecture)
+- Backend : testé via curl le CRUD complet (création IEP→école→classe→enseignant→2 élèves)
+- Backend : testé le RBAC (enseignant connecté → voit sa classe + ses élèves, ne peut pas créer)
+- Backend : validé la génération de matricule (SYG-2026-CP1-001, SYG-2026-CP1-002)
+- Backend : validé les protections cascade (suppression IEP avec écoles → 409 Conflict)
+- Frontend : étendu lib/types.ts avec types enrichis (IEPWithStats, SchoolWithStats, etc.)
+- Frontend : étendu lib/api.ts avec méthodes CRUD pour iep, schools, classes, students, teachers
+- Frontend : créé lib/use-crud-mutation.ts (hook générique mutations + toasts + invalidation)
+- Frontend : créé components/confirm-dialog.tsx (dialogue suppression destructif)
+- Frontend : créé components/entity-dialog.tsx (dialogue générique création/modification)
+- Frontend : créé views/iep-view.tsx (CRUD IEP admin avec stats écoles)
+- Frontend : créé views/schools-view.tsx (CRUD écoles + liaison IEP)
+- Frontend : créé views/classes-view.tsx (CRUD classes + affectation enseignant dynamique)
+- Frontend : créé views/students-view.tsx (table avec recherche, filtre classe, matricule visible)
+- Frontend : créé views/teachers-view.tsx (CRUD comptes + email/téléphone)
+- Frontend : enrichi views/subjects-view.tsx (CRUD complet avec coefficient)
+- Frontend : dashboard rendu dynamique via React Query (stats temps réel depuis API Go)
+- Frontend : lint 0 erreur (corrigé imports inutilisés)
+- Vérification Agent Browser : login OK, navigation 6 vues OK, données API chargées,
+  création IEP "IEP Bouaké" réussie via UI, matière "Lecture" créée via API apparaît instantanément,
+  footer sticky validé sur desktop + mobile, 0 erreur console
+
+Stage Summary:
+- Module 1 (Gestion Administrative) COMPLET et fonctionnel
+- 6 entités gérées : IEP, Écoles, Classes, Élèves, Enseignants, Matières
+- RBAC backend par périmètre : admin (tout), inspector (son IEP), director (son école), teacher (sa classe)
+- Matricule élève auto-généré : SYG-AAAA-CLASSE-SEQ (unique)
+- Validation des classes (CP1-CM2 uniquement)
+- Protection cascade : suppression bloquée si dépendances existent
+- Dashboard dynamique : statistiques calculées en temps réel depuis le backend Go
+- Données de test : 2 IEP (Abidjan 1, Bouaké), 1 école (École Plateau), 1 classe (CP1),
+  1 enseignant (marie.konan@sygren.ci / passer123), 2 élèves (SYG-2026-CP1-001/002)

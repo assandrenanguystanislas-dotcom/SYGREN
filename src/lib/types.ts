@@ -108,6 +108,34 @@ export interface ReportCard {
   generated_at: string;
 }
 
+// Types enrichis (avec relations jointes par le backend)
+
+export interface IEPWithStats extends IEP {
+  school_count: number;
+}
+
+export interface SchoolWithStats extends School {
+  iep_name?: string;
+  class_count: number;
+  student_count: number;
+}
+
+export interface ClassWithDetails extends SchoolClass {
+  school_name?: string;
+  teacher_name?: string | null;
+  student_count: number;
+}
+
+export interface StudentWithClass extends Student {
+  class_name?: string;
+  school_name?: string;
+}
+
+export interface TeacherWithDetails extends User {
+  school_name?: string;
+  class_name?: string | null;
+}
+
 // Réponses API
 export interface LoginResponse {
   token: string;
@@ -117,3 +145,7 @@ export interface LoginResponse {
 export interface ApiError {
   error: string;
 }
+
+// Listes valides (cahier des charges §3 — école primaire ivoirienne)
+export const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
+export const CLASS_LEVELS = ["CP", "CE", "CM"] as const;
