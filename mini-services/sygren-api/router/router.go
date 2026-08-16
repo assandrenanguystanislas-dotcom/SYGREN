@@ -123,7 +123,13 @@ func New(cfg *config.Config) http.Handler {
                         r.Delete("/api/grades/{id}", handlers.DeleteGrade)
                 })
 
-                // Modules 3-5 — stubs (à implémenter dans les phases suivantes)
+                // === Module 3 — Traitement mathématique (cahier des charges §3) ===
+                // Calcul des moyennes, classement, mentions — accessible à tous les rôles
+                // (RBAC par périmètre vérifié dans getSessionForUser)
+                r.Get("/api/computation/session/{id}", handlers.GetSessionResults)
+                r.Get("/api/computation/student/{id}/annual", handlers.GetStudentAnnualResults)
+
+                // Modules 4-5 — stubs (à implémenter dans les phases suivantes)
                 r.Get("/api/dashboard", notImpl)
                 r.Get("/api/report-cards", notImpl)
         })

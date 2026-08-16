@@ -203,3 +203,68 @@ Stage Summary:
 - Compteur de complétion en temps réel (notes saisies / attendues)
 - Stats dynamiques : élèves, matières, notes saisies, brouillons, taux %
 - Données de test : 1 session Août 2026 (statut open), 4 notes saisies (15, 12.5, 8, 17)
+
+---
+Task ID: 4-A à 4-F
+Agent: Main (tutor mode)
+Task: Phase 4 — Module 3 : Calcul des moyennes + classement + mentions
+
+Work Log:
+- Backend : créé handlers/computation.go (service de calcul complet)
+  - computeSessionResults() : charge session + élèves + matières + notes, calcule par élève
+  - Moyenne pondérée : Somme(note × coef) / Somme(coefs) (correct si coef ≠ 1)
+  - Classement : standard competition ranking ("1224") avec gestion ex-aequo
+    - Same moyenne → même rang, label "ex-aequo"
+    - Rang suivant saute (ex: 1er, 1er ex-aequo, 3ème)
+  - Mentions automatiques (système français/ivoirien) :
+    - <5 Très Insuffisant | 5-8 Insuffisant | 8-10 Faible
+    - 10-12 Passable | 12-14 Assez Bien | 14-16 Bien | 16-20 Très Bien
+  - getMention() : retourne label + couleur (emerald/green/lime/amber/orange/red/rose/slate)
+  - computeClassStatistics() : moyenne/min/max/médiane/taux réussite/distinction/complétion
+  - GetStudentAnnualResults() : bilan annuel (moyenne des sessions de l'année)
+- Backend : router mis à jour avec 2 endpoints :
+  - GET /api/computation/session/{id} → résultats complets d'une session
+  - GET /api/computation/student/{id}/annual?year=YYYY → bilan annuel élève
+  - RBAC par périmètre via getSessionForUser() (réutilisé du Module 2)
+- Backend : tests curl validés :
+  - Calcul session Août : Élève1 1er (16.50, Très Bien), Élève2 2ème (10.50, Passable)
+  - Stats : moyenne classe 13.50, taux réussite 100%, distinction 50%, complétion 75%
+  - TEST EX-AEQUO : créé session Septembre avec mêmes notes → "1er" + "1er ex-aequo" ✅
+  - Bilan annuel : 2 sessions, moyenne annuelle 14.75, mention "Bien"
+  - RBAC : enseignant accède à sa session (200), session inexistante → 403
+- Frontend : étendu lib/types.ts (SubjectGrade, StudentResult, ClassStatistics, 
+  SessionResults, SessionSummary, AnnualResult, MENTION_COLOR_CLASSES)
+- Frontend : étendu lib/api.ts (computationApi.getSessionResults + getStudentAnnual)
+- Frontend : créé views/results-view.tsx (vue complète résultats)
+  - Sélecteur de session avec auto-sélection
+  - 6 cartes statistiques (moyenne/min/max/médiane/réussite/distinction)
+  - Tableau de classement avec : rang (label ex-aequo), élève, moyenne, mention, nb notes
+  - Icônes : Trophy pour 1er, Medal pour top 3
+  - Lignes cliquables → détail expandable des notes par matière
+  - Badge mention coloré selon mention_color
+  - Avertissement si notes en brouillon
+  - Cellules jaunes pour notes en brouillon dans le détail
+- Frontend : dashboard-shell.tsx : ajout nav "Résultats" (Trophy icon) pour 4 rôles
+- Frontend : page.tsx : ajout ResultsView
+- Frontend : lint 0 erreur
+- Vérification Agent Browser :
+  - Login admin → navigation Résultats OK
+  - Session Septembre : 1er + 1er ex-aequo, moyenne classe 13.00, taux réussite 100%
+  - Switch vers session Août : 1er (Très Bien) + 2ème (Passable)
+  - Détail expandable : affiche coef + "brouillon" pour notes en draft
+  - Avertissement brouillon affiché
+  - 6 stats visibles avec valeurs correctes
+  - Responsive mobile (375px) : footer poussé naturellement (bodyH 1998, footerBottom 1997)
+  - 0 erreur console
+
+Stage Summary:
+- Module 3 (Traitement mathématique) COMPLET et fonctionnel
+- Calculs : moyennes pondérées par coefficient, classement avec ex-aequo, mentions automatiques
+- 7 mentions : Très Insuffisant → Très Bien (selon seuils 5/8/10/12/14/16)
+- Statistiques de classe : moyenne, min, max, médiane, taux réussite (≥10), distinction (≥14), complétion
+- Bilan annuel : agrégation des sessions d'une année pour un élève
+- RBAC par périmètre : chaque rôle ne voit que ses données (classe/école/IEP)
+- Données de test : 
+  - Session Août : Élève1 1er (16.50, Très Bien), Élève2 2ème (11.17, Passable)
+  - Session Septembre : Élève1 + Élève2 ex-aequo (13.00, Assez Bien)
+  - Bilan annuel Élève1 : 14.75, mention "Bien"

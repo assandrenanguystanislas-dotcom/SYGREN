@@ -25,6 +25,8 @@ import type {
   SessionWithDetails,
   Grade,
   SessionStatus,
+  SessionResults,
+  AnnualResult,
 } from "./types";
 
 const API_PORT = "8080";
@@ -361,6 +363,19 @@ export const gradesApi = {
     }),
 };
 
+// === Module 3 — Calcul des moyennes + classement + mentions ===
+
+export const computationApi = {
+  /** Résultats complets d'une session (moyennes, classement, mentions, stats) */
+  getSessionResults: (sessionId: string) =>
+    apiFetch<SessionResults>(`/api/computation/session/${sessionId}`),
+  /** Bilan annuel d'un élève (agrégation des sessions de l'année) */
+  getStudentAnnual: (studentId: string, year?: number) =>
+    apiFetch<AnnualResult>(
+      `/api/computation/student/${studentId}/annual${year ? `?year=${year}` : ""}`,
+    ),
+};
+
 // Export par défaut groupé
 export const api = {
   auth: authApi,
@@ -373,4 +388,5 @@ export const api = {
   teachers: teachersApi,
   sessions: sessionsApi,
   grades: gradesApi,
+  computation: computationApi,
 };

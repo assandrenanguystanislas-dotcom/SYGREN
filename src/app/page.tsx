@@ -16,6 +16,7 @@ import { TeachersView } from "@/components/views/teachers-view";
 import { SubjectsView } from "@/components/views/subjects-view";
 import { SessionsView } from "@/components/views/sessions-view";
 import { GradesGrid } from "@/components/views/grades-view";
+import { ResultsView } from "@/components/views/results-view";
 import { PlaceholderView } from "@/components/views/placeholder-view";
 import { FileText, Settings } from "lucide-react";
 
@@ -92,6 +93,7 @@ function AppContent() {
       {view === "subjects" && <SubjectsView />}
       {view === "sessions" && <SessionsView />}
       {view === "grades" && <GradesGrid />}
+      {view === "results" && <ResultsView />}
       {view === "bulletins" && (
         <PlaceholderView
           title="Édition des Bulletins"

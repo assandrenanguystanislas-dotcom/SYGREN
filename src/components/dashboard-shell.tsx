@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   Calendar,
+  Trophy,
   ChevronRight,
 } from "lucide-react";
 
@@ -93,6 +94,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Saisie des notes",
     icon: <ClipboardList className="w-4 h-4" />,
     roles: ["teacher", "director", "admin"],
+  },
+  {
+    id: "results",
+    label: "Résultats",
+    icon: <Trophy className="w-4 h-4" />,
+    roles: ["teacher", "director", "admin", "inspector"],
   },
   {
     id: "bulletins",
