@@ -1,0 +1,9 @@
+{
+  "name": "sygren-api",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "./sygren-api",
+    "build": "export PATH=$PATH:/home/z/.local/go/bin && go build -o sygren-api main.go",
+    "tidy": "export PATH=$PATH:/home/z/.local/go/bin && go mod tidy"
+  }
+}

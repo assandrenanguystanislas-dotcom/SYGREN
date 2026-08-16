@@ -45,37 +45,43 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Blanc dominant (cahier des charges §5.1 — Côte d'Ivoire) */
+  --background: oklch(0.995 0 0);
+  --foreground: oklch(0.18 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.18 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.18 0 0);
+  /* Orange — accentuation, Call-to-Action (cahier des charges §5.1) */
+  --primary: oklch(0.646 0.222 41.116);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.968 0.005 95);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.965 0.02 95);
+  --accent-foreground: oklch(0.35 0.12 50);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Vert institution — succès, validation (cahier des charges §5.1) */
+  --success: oklch(0.548 0.154 150);
+  --success-foreground: oklch(0.985 0 0);
+  --border: oklch(0.918 0.005 95);
+  --input: oklch(0.918 0.005 95);
+  --ring: oklch(0.646 0.222 41.116);
   --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-2: oklch(0.548 0.154 150);
+  --chart-3: oklch(0.577 0.245 27.325);
   --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --chart-5: oklch(0.7 0.15 200);
+  /* Sidebar verte — barre de navigation institutionnelle */
+  --sidebar: oklch(0.548 0.154 150);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.646 0.222 41.116);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.48 0.14 150);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.45 0.12 150 / 30%);
+  --sidebar-ring: oklch(0.646 0.222 41.116);
 }
 
 .dark {
@@ -118,5 +124,64 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
+
+@layer utilities {
+  /* Glassmorphism léger (cahier des charges §5.2) */
+  .glass {
+    background: color-mix(in oklch, var(--card) 75%, transparent);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+  }
+  .glass-green {
+    background: color-mix(in oklch, var(--sidebar) 78%, transparent);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+  }
+
+  /* Bande tricolore Côte d'Ivoire (décorative) */
+  .ci-flag-stripe {
+    background: linear-gradient(
+      to right,
+      oklch(0.985 0 0) 0 33.33%,
+      oklch(0.646 0.222 41.116) 33.33% 66.66%,
+      oklch(0.548 0.154 150) 66.66% 100%
+    );
+  }
+
+  /* Scrollbar personnalisée pour les longues listes */
+  .scroll-sygren::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-sygren::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-sygren::-webkit-scrollbar-thumb {
+    background: oklch(0.7 0.02 95);
+    border-radius: 999px;
+  }
+  .scroll-sygren::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.55 0.05 95);
+  }
+
+  /* Animations micro (cahier des charges §5.2) */
+  .animate-in-up {
+    animation: sygren-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes sygren-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
