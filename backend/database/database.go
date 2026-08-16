@@ -112,5 +112,18 @@ func seedDefaults(db *gorm.DB) error {
                 log.Printf("[DB] %d matières par défaut créées", len(defaultSubjects))
         }
 
+        // 3. Paramètres système par défaut (cahier des charges §3 Module 5)
+        var settingCount int64
+        db.Model(&models.Setting{}).Count(&settingCount)
+        if settingCount == 0 {
+                defaults := models.DefaultSettings()
+                for _, s := range defaults {
+                        if err := db.Create(&s).Error; err != nil {
+                                log.Println("[DB] seed setting:", s.Key, err)
+                        }
+                }
+                log.Printf("[DB] %d paramètres par défaut créés", len(defaults))
+        }
+
         return nil
 }

@@ -138,6 +138,17 @@ func New(cfg *config.Config) http.Handler {
                 // === Module 5 — Tableaux de bord analytiques ===
                 // GET /api/dashboard : renvoie des KPIs agrégés selon le rôle/scope
                 r.Get("/api/dashboard", handlers.GetDashboard)
+
+                // === Paramètres système (admin uniquement) ===
+                // GET /api/settings         → liste tous les paramètres groupés
+                // GET /api/settings/{key}  → récupère un paramètre
+                // PUT /api/settings/{key}  → met à jour un paramètre
+                r.Group(func(r chi.Router) {
+                        r.Use(middleware.RequireRole(models.RoleAdmin))
+                        r.Get("/api/settings", handlers.ListSettings)
+                        r.Get("/api/settings/{key}", handlers.GetSetting)
+                        r.Put("/api/settings/{key}", handlers.UpdateSetting)
+                })
         })
 
         return r

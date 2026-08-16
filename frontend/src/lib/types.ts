@@ -234,6 +234,19 @@ export interface ReportCardWithStudent extends ReportCard {
   year: number;
 }
 
+// === Paramètres système (Settings) ===
+
+export interface Setting {
+  id: string;
+  key: string;
+  value: string;
+  category: string;
+  label: string;
+  updated_at: string;
+}
+
+export type SettingsByCategory = Record<string, Setting[]>;
+
 // === Module 5 — Tableaux de bord analytiques ===
 
 export interface SessionStats {

@@ -30,6 +30,8 @@ import type {
   ReportCard,
   ReportCardWithStudent,
   DashboardData,
+  Setting,
+  SettingsByCategory,
 } from "./types";
 
 const API_PORT = "8080";
@@ -428,6 +430,22 @@ export const dashboardApi = {
   get: () => apiFetch<DashboardData>("/api/dashboard"),
 };
 
+// === Paramètres système (admin uniquement) ===
+
+export const settingsApi = {
+  /** Liste tous les paramètres, groupés par catégorie */
+  list: () =>
+    apiFetch<{ settings: SettingsByCategory; count: number }>("/api/settings"),
+  /** Récupère un paramètre précis */
+  get: (key: string) => apiFetch<Setting>(`/api/settings/${key}`),
+  /** Met à jour un paramètre */
+  update: (key: string, value: string) =>
+    apiFetch<Setting>(`/api/settings/${key}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+};
+
 // Export par défaut groupé
 export const api = {
   auth: authApi,
@@ -443,4 +461,5 @@ export const api = {
   computation: computationApi,
   reportCards: reportCardsApi,
   dashboard: dashboardApi,
+  settings: settingsApi,
 };

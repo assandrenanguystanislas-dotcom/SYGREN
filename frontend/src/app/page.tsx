@@ -19,8 +19,8 @@ import { GradesGrid } from "@/components/views/grades-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
+import { SettingsView } from "@/components/views/settings-view";
 import { PlaceholderView } from "@/components/views/placeholder-view";
-import { Settings } from "lucide-react";
 
 /** Écran de chargement pendant la vérification de l'auth. */
 function FullScreenLoader() {
@@ -100,14 +100,7 @@ function AppContent() {
       {view === "grades" && <GradesGrid />}
       {view === "results" && <ResultsView />}
       {view === "bulletins" && <BulletinsView />}
-      {view === "settings" && (
-        <PlaceholderView
-          title="Paramètres Système"
-          description="Configuration globale du système SYGREN. Seuils de mentions, coefficients, sauvegarde des données."
-          icon={Settings}
-          phase="Phase à venir"
-        />
-      )}
+      {view === "settings" && <SettingsView />}
     </DashboardShell>
   );
 }
