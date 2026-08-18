@@ -25,6 +25,8 @@ import type {
   Student,
   StudentWithClass,
   TeacherWithDetails,
+  DirectorWithDetails,
+  InspectorWithDetails,
   EvaluationSession,
   SessionWithDetails,
   Grade,
@@ -315,6 +317,84 @@ export const teachersApi = {
     }),
 };
 
+// === Directeurs d'école (role=director) ===
+
+export const directorsApi = {
+  list: () =>
+    apiFetch<{ directors: DirectorWithDetails[]; count: number }>(
+      "/api/directors",
+    ),
+  create: (data: {
+    full_name: string;
+    phone?: string;
+    email?: string;
+    password: string;
+    school_id?: string;
+  }) =>
+    apiFetch<User>("/api/directors", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: Partial<{
+      full_name: string;
+      phone: string | null;
+      email: string | null;
+      password: string;
+      school_id: string | null;
+      active: boolean;
+    }>,
+  ) =>
+    apiFetch<User>(`/api/directors/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/directors/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Inspecteurs IEP (role=inspector) ===
+
+export const inspectorsApi = {
+  list: () =>
+    apiFetch<{ inspectors: InspectorWithDetails[]; count: number }>(
+      "/api/inspectors",
+    ),
+  create: (data: {
+    full_name: string;
+    phone?: string;
+    email?: string;
+    password: string;
+    iep_id?: string;
+  }) =>
+    apiFetch<User>("/api/inspectors", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: Partial<{
+      full_name: string;
+      phone: string | null;
+      email: string | null;
+      password: string;
+      iep_id: string | null;
+      active: boolean;
+    }>,
+  ) =>
+    apiFetch<User>(`/api/inspectors/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/inspectors/${id}`, {
+      method: "DELETE",
+    }),
+};
+
 // === Sessions de saisie mensuelle (Module 2 — cahier des charges §3) ===
 
 export const sessionsApi = {
@@ -475,6 +555,8 @@ export const api = {
   classes: classesApi,
   students: studentsApi,
   teachers: teachersApi,
+  directors: directorsApi,
+  inspectors: inspectorsApi,
   sessions: sessionsApi,
   grades: gradesApi,
   computation: computationApi,

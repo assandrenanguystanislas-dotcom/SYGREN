@@ -136,6 +136,17 @@ export interface TeacherWithDetails extends User {
   class_name?: string | null;
 }
 
+// Directeur d'école (User avec role=director + school_id)
+export interface DirectorWithDetails extends User {
+  school_name?: string;
+  iep_name?: string;
+}
+
+// Inspecteur IEP (User avec role=inspector + iep_id)
+export interface InspectorWithDetails extends User {
+  iep_name?: string;
+}
+
 export interface SessionWithDetails extends EvaluationSession {
   class_name?: string;
   school_name?: string;

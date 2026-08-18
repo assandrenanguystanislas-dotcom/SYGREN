@@ -16,6 +16,8 @@ import {
   Calendar,
   Trophy,
   ChevronRight,
+  Building2,
+  ShieldCheck,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -76,6 +78,18 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Enseignants",
     icon: <Users className="w-4 h-4" />,
     roles: ["admin", "director"],
+  },
+  {
+    id: "directors",
+    label: "Directeurs",
+    icon: <Building2 className="w-4 h-4" />,
+    roles: ["admin"],
+  },
+  {
+    id: "inspectors",
+    label: "Inspecteurs",
+    icon: <ShieldCheck className="w-4 h-4" />,
+    roles: ["admin"],
   },
   {
     id: "subjects",

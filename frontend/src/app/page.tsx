@@ -13,6 +13,8 @@ import { SchoolsView } from "@/components/views/schools-view";
 import { ClassesView } from "@/components/views/classes-view";
 import { StudentsView } from "@/components/views/students-view";
 import { TeachersView } from "@/components/views/teachers-view";
+import { DirectorsView } from "@/components/views/directors-view";
+import { InspectorsView } from "@/components/views/inspectors-view";
 import { SubjectsView } from "@/components/views/subjects-view";
 import { SessionsView } from "@/components/views/sessions-view";
 import { GradesGrid } from "@/components/views/grades-view";
@@ -95,6 +97,8 @@ function AppContent() {
       {view === "classes" && <ClassesView />}
       {view === "students" && <StudentsView />}
       {view === "teachers" && <TeachersView />}
+      {view === "directors" && <DirectorsView />}
+      {view === "inspectors" && <InspectorsView />}
       {view === "subjects" && <SubjectsView />}
       {view === "sessions" && <SessionsView />}
       {view === "grades" && <GradesGrid />}

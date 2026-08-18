@@ -838,3 +838,56 @@ Stage Summary:
 - Hiérarchie IEP→École→Classe→Élève désormais strictement validée côté backend
 - Plus aucun risque d'entité orpheline si un user tente de créer sans parent valide
 - Base Neon nettoyée des orphelins résiduels (20 enregistrements supprimés)
+
+---
+Task ID: RBAC-Directors-Inspectors
+Agent: Main (tutor mode)
+Task: Ajout gestion Directeurs d'école + Inspecteurs IEP (gap RBAC)
+
+Work Log:
+- Constat : système a 4 rôles (admin/director/inspector/teacher) mais seuls admin + teacher
+  avaient des interfaces de gestion. Aucune vue pour créer/gérer les directeurs ni inspecteurs.
+- Plan A validé par utilisateur : créer les deux (directeurs + inspecteurs).
+
+Backend (Go) :
+- handlers/directors.go (nouveau, ~220 lignes) :
+  * ListDirectors (admin tous, inspector ceux de son IEP)
+  * CreateDirector (validation email/téléphone unique, vérifie école existe si school_id,
+    empêche 2 directeurs actifs sur la même école)
+  * UpdateDirector (idem + permet désactivation)
+  * DeleteDirector
+- handlers/inspectors.go (nouveau, ~210 lignes) :
+  * ListInspectors (admin tous)
+  * CreateInspector (validation email/téléphone unique, vérifie IEP existe si iep_id,
+    empêche 2 inspecteurs actifs sur la même IEP)
+  * UpdateInspector + DeleteInspector
+- router/router.go : ajout routes /api/directors (admin CRUD, inspector lecture)
+  et /api/inspectors (admin CRUD uniquement)
+- Cohérent avec le pattern handlers/teachers.go existant
+
+Frontend (React) :
+- types.ts : ajout DirectorWithDetails, InspectorWithDetails (extends User)
+- api.ts : ajout directorsApi + inspectorsApi (CRUD complet) + ajout dans l'export api
+- views/directors-view.tsx (nouveau, ~440 lignes) :
+  * Carte en-tête + compteur
+  * Grille de cartes directeur (nom, actif, email, téléphone, école dirigée, IEP)
+  * Dialog création/édition (nom, email, téléphone, password, école select)
+  * ConfirmDialog suppression
+  * États : loading, error, empty
+- views/inspectors-view.tsx (nouveau, ~445 lignes) : pattern identique mais avec IEP
+- dashboard-shell.tsx : ajout imports Building2 + ShieldCheck, 2 nouveaux NAV_ITEMS
+  (directors roles:["admin"], inspectors roles:["admin"]) placés après "Enseignants"
+- page.tsx : import DirectorsView + InspectorsView, 2 routes ajoutées au switch
+
+Vérifications locales :
+- backend : go build OK (24M) + go vet OK (0 warning)
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0, bunx next build OK
+- 0 impact sur les vues existantes (pattern identique, indépendant)
+
+Stage Summary:
+- Gap RBAC comblé : admin peut désormais créer/gérer directeurs (affectation école)
+  et inspecteurs (affectation IEP) depuis le frontend
+- 2 nouvelles entrées sidebar (Directeurs, Inspecteurs) visibles admin uniquement
+- Règles métier ajoutées : 1 directeur actif max par école, 1 inspecteur actif max par IEP
+- Validation hiérarchique : créer un directeur vérifie l'existence de l'école,
+  créer un inspecteur vérifie l'existence de l'IEP
