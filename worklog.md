@@ -891,3 +891,60 @@ Stage Summary:
 - Règles métier ajoutées : 1 directeur actif max par école, 1 inspecteur actif max par IEP
 - Validation hiérarchique : créer un directeur vérifie l'existence de l'école,
   créer un inspecteur vérifie l'existence de l'IEP
+
+---
+Task ID: UX-Fusion-Users-Evaluations
+Agent: Main (tutor mode)
+Task: Simplification UX — fusion vues Enseignants/Directeurs/Inspecteurs + Sessions/Saisie
+
+Work Log:
+- Objectif : réduire la sidebar de 14 à 11 entrées pour l'admin, simplifier la navigation
+- Option A+B validée par utilisateur : fusion Utilisateurs + fusion Évaluations
+
+Approche : composition (pattern wrapper)
+- Les vues existantes (teachers-view, directors-view, inspectors-view, sessions-view, grades-view)
+  sont conservées telles quelles et composées dans de nouvelles vues parent avec onglets
+- Avantage : 0 risque de régression, 0 modification du backend, gain UX immédiat
+- Les sous-vues gardent leur Card header + bouton de création (double info acceptable)
+
+Vue 1 : users-view.tsx (nouveau, ~80 lignes)
+- 3 onglets : Enseignants | Directeurs | Inspecteurs (icônes Users, Building2, ShieldCheck)
+- RBAC : admin voit 3 onglets, director voit 1 onglet (rendu direct sans tab bar)
+- Onglet par défaut : "teachers"
+- Si 1 seul onglet visible → rendu direct (pas de TabsList)
+- activeTab calculé sans useEffect (évite warning react-hooks/set-state-in-effect)
+
+Vue 2 : evaluations-view.tsx (nouveau, ~65 lignes)
+- 2 onglets : Sessions | Saisie des notes (icônes Calendar, ClipboardList)
+- RBAC : admin/director/teacher voient 2 onglets, inspector voit 1 onglet (rendu direct)
+- Onglet par défaut : "grades" pour teacher (saisie = tâche quotidienne), "sessions" pour autres
+- Même pattern : activeTab sans useEffect
+
+dashboard-shell.tsx :
+- Imports lucide : retrait Calendar, Building2, ShieldCheck (plus utilisés dans le shell)
+- Ajout UserCog (pour "Utilisateurs")
+- NAV_ITEMS : suppression 5 entrées (teachers, directors, inspectors, sessions, grades)
+  → ajout 2 entrées : "Utilisateurs" (admin+director), "Évaluations" (tous rôles)
+- Sidebar admin : 14 → 11 entrées
+- Sidebar director : 9 → 8 entrées
+- Sidebar teacher : 7 → 6 entrées
+- Sidebar inspector : 6 → 5 entrées
+
+page.tsx :
+- Imports : retrait TeachersView, DirectorsView, InspectorsView, SessionsView, GradesGrid
+- Ajout UsersView, EvaluationsView
+- Router : 5 routes individuelles → 2 routes unifiées (users, evaluations)
+
+Vérifications locales :
+- bun run lint → exit 0 (0 erreur)
+- bunx tsc --noEmit → exit 0
+- bunx next build → succès, 4 routes générées
+- 0 modification backend (endpoints /api/teachers, /api/directors, /api/inspectors,
+  /api/sessions, /api/grades inchangés — les sous-vues les consomment directement)
+
+Stage Summary:
+- Sidebar simplifiée pour tous les rôles (admin : -3 entrées, director : -1, teacher : -1, inspector : -1)
+- 2 nouvelles vues unifiées avec onglets (composition pattern, 0 régression)
+- UX teacher améliorée : onglet par défaut = "Saisie des notes" (tâche quotidienne)
+- UX inspector améliorée : "Évaluations" = vue Sessions directement (sans tab bar inutile)
+- Backend 0 modification (les 5 endpoints existants sont consommés tels quels)

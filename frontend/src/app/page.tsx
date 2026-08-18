@@ -12,12 +12,9 @@ import { IepView } from "@/components/views/iep-view";
 import { SchoolsView } from "@/components/views/schools-view";
 import { ClassesView } from "@/components/views/classes-view";
 import { StudentsView } from "@/components/views/students-view";
-import { TeachersView } from "@/components/views/teachers-view";
-import { DirectorsView } from "@/components/views/directors-view";
-import { InspectorsView } from "@/components/views/inspectors-view";
+import { UsersView } from "@/components/views/users-view";
 import { SubjectsView } from "@/components/views/subjects-view";
-import { SessionsView } from "@/components/views/sessions-view";
-import { GradesGrid } from "@/components/views/grades-view";
+import { EvaluationsView } from "@/components/views/evaluations-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
@@ -96,12 +93,9 @@ function AppContent() {
       {view === "schools" && <SchoolsView />}
       {view === "classes" && <ClassesView />}
       {view === "students" && <StudentsView />}
-      {view === "teachers" && <TeachersView />}
-      {view === "directors" && <DirectorsView />}
-      {view === "inspectors" && <InspectorsView />}
+      {view === "users" && <UsersView />}
       {view === "subjects" && <SubjectsView />}
-      {view === "sessions" && <SessionsView />}
-      {view === "grades" && <GradesGrid />}
+      {view === "evaluations" && <EvaluationsView />}
       {view === "results" && <ResultsView />}
       {view === "bulletins" && <BulletinsView />}
       {view === "settings" && <SettingsView />}

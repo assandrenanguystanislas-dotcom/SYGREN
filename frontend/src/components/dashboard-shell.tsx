@@ -13,11 +13,9 @@ import {
   Settings,
   LogOut,
   Menu,
-  Calendar,
   Trophy,
   ChevronRight,
-  Building2,
-  ShieldCheck,
+  UserCog,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -74,22 +72,10 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["admin", "director", "teacher"],
   },
   {
-    id: "teachers",
-    label: "Enseignants",
-    icon: <Users className="w-4 h-4" />,
+    id: "users",
+    label: "Utilisateurs",
+    icon: <UserCog className="w-4 h-4" />,
     roles: ["admin", "director"],
-  },
-  {
-    id: "directors",
-    label: "Directeurs",
-    icon: <Building2 className="w-4 h-4" />,
-    roles: ["admin"],
-  },
-  {
-    id: "inspectors",
-    label: "Inspecteurs",
-    icon: <ShieldCheck className="w-4 h-4" />,
-    roles: ["admin"],
   },
   {
     id: "subjects",
@@ -98,16 +84,10 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["admin", "director", "teacher", "inspector"],
   },
   {
-    id: "sessions",
-    label: "Sessions",
-    icon: <Calendar className="w-4 h-4" />,
-    roles: ["admin", "director", "inspector", "teacher"],
-  },
-  {
-    id: "grades",
-    label: "Saisie des notes",
+    id: "evaluations",
+    label: "Évaluations",
     icon: <ClipboardList className="w-4 h-4" />,
-    roles: ["teacher", "director", "admin"],
+    roles: ["admin", "director", "inspector", "teacher"],
   },
   {
     id: "results",
