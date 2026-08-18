@@ -77,12 +77,17 @@ func (s *School) BeforeCreate(tx *gorm.DB) error {
 }
 
 // === Class (CP1, CP2, CE1, CE2, CM1, CM2) ===
+// Auto-créées à la création d'une école (cahier des charges §3 Module 1).
+// Le directeur peut désactiver une classe (soft-delete) — l'historique
+// (notes, bulletins) est conservé, mais la classe n'apparaît plus dans les
+// selects de saisie/élèves tant qu'elle est inactive.
 type Class struct {
         ID        string    `gorm:"primaryKey;type:text" json:"id"`
         SchoolID  string    `gorm:"type:text;index" json:"school_id"`
         Name      string    `gorm:"type:text" json:"name"`  // "CP1", "CP2"...
         Level     string    `gorm:"type:text" json:"level"` // "CP", "CE", "CM"
         TeacherID *string   `gorm:"type:text;index" json:"teacher_id,omitempty"`
+        Active    bool      `gorm:"default:true" json:"active"`
         CreatedAt time.Time `json:"created_at"`
 }
 

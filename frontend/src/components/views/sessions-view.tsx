@@ -69,7 +69,7 @@ export function SessionsView() {
   });
   const { data: classesData } = useQuery({
     queryKey: ["classes"],
-    queryFn: classesApi.list,
+    queryFn: () => classesApi.list(),
     enabled: canManage,
   });
 

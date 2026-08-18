@@ -57,13 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "schools",
     label: "Écoles",
     icon: <School className="w-4 h-4" />,
-    roles: ["admin", "inspector"],
-  },
-  {
-    id: "classes",
-    label: "Classes",
-    icon: <BookOpen className="w-4 h-4" />,
-    roles: ["admin", "director", "teacher"],
+    roles: ["admin", "inspector", "director"],
   },
   {
     id: "students",

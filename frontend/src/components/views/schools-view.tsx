@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   School as SchoolIcon,
   Plus,
@@ -11,12 +11,22 @@ import {
   Users,
   BookOpen,
   Loader2,
+  ChevronDown,
+  ChevronRight,
+  Check,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 
-import { schoolsApi, iepApi } from "@/lib/api";
+import { schoolsApi, iepApi, classesApi, teachersApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { SchoolWithStats, IEPWithStats } from "@/lib/types";
+import type {
+  SchoolWithStats,
+  IEPWithStats,
+  ClassWithDetails,
+  TeacherWithDetails,
+} from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +39,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -145,60 +161,81 @@ export function SchoolsView() {
       {schools.length === 0 ? (
         <EmptyState onCreate={canEdit ? openCreate : undefined} />
       ) : (
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-3">
           {schools.map((s, i) => (
-            <Card
-              key={s.id}
-              className="border-border/60 hover:shadow-md transition-shadow animate-in-up"
-              style={{ animationDelay: `${i * 40}ms` }}
-            >
-              <CardContent className="py-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{s.name}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3" />
-                      {s.address || "Adresse non renseignée"}
-                    </p>
-                    {s.iep_name && (
-                      <Badge variant="outline" className="mt-2 text-[10px]">
-                        {s.iep_name}
-                      </Badge>
+            <Collapsible key={s.id}>
+              <Card
+                className="border-border/60 hover:shadow-md transition-shadow animate-in-up"
+                style={{ animationDelay: `${i * 40}ms` }}
+              >
+                <CardContent className="py-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold truncate">{s.name}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3" />
+                        {s.address || "Adresse non renseignée"}
+                      </p>
+                      {s.iep_name && (
+                        <Badge variant="outline" className="mt-2 text-[10px]">
+                          {s.iep_name}
+                        </Badge>
+                      )}
+                    </div>
+                    {canEdit && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEdit(s)}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(s)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  {canEdit && (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => openEdit(s)}
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(s)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                  <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <BookOpen className="w-3 h-3" />
+                      {s.class_count} classe(s)
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      {s.student_count} élève(s)
+                    </span>
+                  </div>
+
+                  {/* Panneau dépliable : gestion des classes de cette école */}
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-3 justify-between text-xs h-8"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5" />
+                        Classes (CP1 → CM2)
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 group-data-[state=open]:rotate-180 transition-transform" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="mt-2 pt-3 border-t border-border/60">
+                      <SchoolClassesPanel schoolId={s.id} canEdit={canEdit} />
                     </div>
-                  )}
-                </div>
-                <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <BookOpen className="w-3 h-3" />
-                    {s.class_count} classe(s)
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    {s.student_count} élève(s)
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+                  </CollapsibleContent>
+                </CardContent>
+              </Card>
+            </Collapsible>
           ))}
         </div>
       )}
@@ -338,5 +375,180 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * SchoolClassesPanel — panneau de gestion des classes d'une école.
+ *
+ * Affiche les 6 classes standard (CP1, CP2, CE1, CE2, CM1, CM2) avec :
+ *   - checkbox Active/Désactivée (toggle soft-delete)
+ *   - select enseignant (affectation)
+ *   - compteur d'élèves par classe
+ *
+ * Le directeur ne voit que son école (backend filtre par school_id du director).
+ * L'admin voit toutes les écoles.
+ */
+function SchoolClassesPanel({
+  schoolId,
+  canEdit,
+}: {
+  schoolId: string;
+  canEdit: boolean;
+}) {
+  const queryClient = useQueryClient();
+
+  // Récupère TOUTES les classes (y compris inactives) de cette école
+  const { data, isLoading } = useQuery({
+    queryKey: ["classes", schoolId],
+    queryFn: async () => classesApi.list({ includeInactive: true, schoolId }),
+  });
+
+  // Récupère la liste des enseignants pour l'affectation (limité au scope du directeur)
+  const { data: teachersData } = useQuery({
+    queryKey: ["teachers"],
+    queryFn: teachersApi.list,
+    enabled: canEdit,
+  });
+
+  const classes = data?.classes ?? [];
+  const teachers = teachersData?.teachers ?? [];
+
+  // Trier par ordre standard : CP1, CP2, CE1, CE2, CM1, CM2
+  const CLASS_ORDER = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"];
+  const sortedClasses = [...classes].sort(
+    (a, b) =>
+      CLASS_ORDER.indexOf(a.name) - CLASS_ORDER.indexOf(b.name),
+  );
+
+  async function toggleActive(cls: ClassWithDetails, newActive: boolean) {
+    try {
+      await classesApi.update(cls.id, { active: newActive });
+      toast.success(
+        newActive ? "Classe activée" : "Classe désactivée",
+        { description: `${cls.name} — ${cls.school_name ?? ""}` },
+      );
+      await queryClient.invalidateQueries({ queryKey: ["classes", schoolId] });
+      await queryClient.invalidateQueries({ queryKey: ["schools"] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur";
+      toast.error("Échec du changement de statut", { description: msg });
+    }
+  }
+
+  async function updateTeacher(cls: ClassWithDetails, teacherId: string) {
+    try {
+      const tid = teacherId === "__none__" ? null : teacherId;
+      await classesApi.update(cls.id, { teacher_id: tid });
+      toast.success("Enseignant affecté", {
+        description: `${cls.name} — ${cls.school_name ?? ""}`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["classes", schoolId] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur";
+      toast.error("Échec de l'affectation", { description: msg });
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6 text-muted-foreground">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+        Chargement des classes…
+      </div>
+    );
+  }
+
+  if (classes.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground italic py-4">
+        Aucune classe. Les classes sont normalement auto-créées à la création de
+        l&apos;école.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-[auto_1fr_auto] gap-3 items-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
+        <span>Active</span>
+        <span>Classe · Enseignant</span>
+        <span className="text-right">Élèves</span>
+      </div>
+      {sortedClasses.map((cls) => (
+        <div
+          key={cls.id}
+          className={`grid grid-cols-[auto_1fr_auto] gap-3 items-center px-3 py-2 rounded-md border ${
+            cls.active
+              ? "border-border/60 bg-card"
+              : "border-dashed border-border/40 bg-muted/30 opacity-75"
+          }`}
+        >
+          {/* Checkbox Active */}
+          {canEdit ? (
+            <Checkbox
+              checked={cls.active}
+              onCheckedChange={(v) => toggleActive(cls, v === true)}
+              aria-label={`Classe ${cls.name} ${cls.active ? "active" : "inactive"}`}
+            />
+          ) : (
+            <span className="text-muted-foreground">
+              {cls.active ? (
+                <Check className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <X className="w-4 h-4" />
+              )}
+            </span>
+          )}
+
+          {/* Classe + Enseignant */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm font-semibold">{cls.name}</span>
+              <Badge variant="outline" className="text-[9px] uppercase">
+                {cls.level}
+              </Badge>
+              {!cls.active && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] border-amber-300 bg-amber-50 text-amber-700"
+                >
+                  Désactivée
+                </Badge>
+              )}
+            </div>
+            {canEdit ? (
+              <Select
+                value={cls.teacher_id ?? "__none__"}
+                onValueChange={(v) => updateTeacher(cls, v)}
+              >
+                <SelectTrigger className="h-7 mt-1 text-xs">
+                  <SelectValue placeholder="Aucun enseignant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Aucun —</SelectItem>
+                  {teachers.map((t: TeacherWithDetails) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.full_name}
+                      {t.school_name ? ` · ${t.school_name}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                {cls.teacher_name ?? "— Aucun enseignant —"}
+              </p>
+            )}
+          </div>
+
+          {/* Compteur élèves */}
+          <div className="text-right">
+            <span className="text-sm font-semibold">{cls.student_count}</span>
+            <p className="text-[10px] text-muted-foreground">élève(s)</p>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

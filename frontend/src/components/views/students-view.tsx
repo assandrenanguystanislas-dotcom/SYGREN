@@ -74,7 +74,7 @@ export function StudentsView() {
   });
   const { data: classesData } = useQuery({
     queryKey: ["classes"],
-    queryFn: classesApi.list,
+    queryFn: () => classesApi.list(),
   });
 
   const createMut = useCrudMutation(studentsApi.create, {

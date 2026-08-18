@@ -54,6 +54,7 @@ export interface SchoolClass {
   name: ClassName | string;
   level: ClassLevel | string;
   teacher_id?: string | null;
+  active: boolean;
   created_at: string;
 }
 

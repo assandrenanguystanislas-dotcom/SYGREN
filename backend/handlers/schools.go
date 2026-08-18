@@ -2,6 +2,7 @@ package handlers
 
 import (
         "encoding/json"
+        "log"
         "net/http"
 
         "sygren-api/database"
@@ -86,6 +87,8 @@ type CreateSchoolRequest struct {
 }
 
 // CreateSchool creates a new school (admin only).
+// Auto-crée les 6 classes standard du primaire ivoirien (CP1, CP2, CE1, CE2, CM1, CM2)
+// — cahier des charges §3 Module 1. Toutes actives par défaut.
 func CreateSchool(w http.ResponseWriter, r *http.Request) {
         var req CreateSchoolRequest
         if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -111,6 +114,21 @@ func CreateSchool(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, "erreur création école", http.StatusInternalServerError)
                 return
         }
+
+        // Auto-création des 6 classes standard (actives par défaut)
+        for name, level := range ValidClassNames {
+                cls := models.Class{
+                        SchoolID: school.ID,
+                        Name:     name,
+                        Level:    level,
+                        Active:   true,
+                }
+                if err := database.DB.Create(&cls).Error; err != nil {
+                        log.Printf("[DB] auto-create class %s for school %s: %v", name, school.ID, err)
+                }
+        }
+        log.Printf("[DB] 6 classes auto-créées pour l'école %s", school.ID)
+
         jsonResponse(w, http.StatusCreated, school)
 }
 

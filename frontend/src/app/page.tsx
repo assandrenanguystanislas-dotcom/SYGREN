@@ -10,7 +10,6 @@ import { DashboardShell, NAV_ITEMS } from "@/components/dashboard-shell";
 import { WelcomeDashboard } from "@/components/dashboards/welcome-dashboard";
 import { IepView } from "@/components/views/iep-view";
 import { SchoolsView } from "@/components/views/schools-view";
-import { ClassesView } from "@/components/views/classes-view";
 import { StudentsView } from "@/components/views/students-view";
 import { UsersView } from "@/components/views/users-view";
 import { SubjectsView } from "@/components/views/subjects-view";
@@ -91,7 +90,6 @@ function AppContent() {
         ))}
       {view === "iep" && <IepView />}
       {view === "schools" && <SchoolsView />}
-      {view === "classes" && <ClassesView />}
       {view === "students" && <StudentsView />}
       {view === "users" && <UsersView />}
       {view === "subjects" && <SubjectsView />}

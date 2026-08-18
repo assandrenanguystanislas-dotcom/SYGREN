@@ -948,3 +948,62 @@ Stage Summary:
 - UX teacher améliorée : onglet par défaut = "Saisie des notes" (tâche quotidienne)
 - UX inspector améliorée : "Évaluations" = vue Sessions directement (sans tab bar inutile)
 - Backend 0 modification (les 5 endpoints existants sont consommés tels quels)
+
+---
+Task ID: Simplify-Classes-AutoCreate
+Agent: Main (tutor mode)
+Task: Auto-création 6 classes par école + toggle active + retrait vue Classes de sidebar
+
+Work Log:
+- Idée utilisateur : chaque école a 6 classes par défaut (CP1-CP2-CE1-CE2-CM1-CM2),
+  le directeur peut activer/désactiver une classe (checkbox), supprimer la vue Classes
+  de la sidebar. Validé + ajustement : directeur ne voit que son école.
+
+Backend (Go) :
+- models.go : ajout champ Active bool (default:true) sur Class
+- handlers/schools.go :
+  * CreateSchool : après création école, auto-crée les 6 classes standard
+    (itération sur ValidClassNames) avec Active=true
+  * Ajout import "log" pour tracer l'auto-création
+- handlers/classes.go :
+  * ListClasses : filtre active=true par défaut, ?include_inactive=true pour tout voir
+  * UpdateClass : accepte champ active (toggle soft-delete)
+  * Garde-fou : on ne peut pas désactiver une classe avec élèves actifs (409)
+  * CreateClassRequest : ajout champ Active *bool
+- Backend ListSchools filtre déjà director par school_id (vérifié, inchangé)
+
+Frontend (React) :
+- types.ts : SchoolClass.active: boolean ajouté
+- api.ts : classesApi.list accepte {includeInactive, schoolId}, classesApi.update accepte active
+- dashboard-shell.tsx : retrait de l'entrée "Classes" de la sidebar
+  + ajout de "director" aux rôles de "Écoles" (pour qu'il voie son école)
+  → sidebar admin : 11 → 10 entrées, director : 8 → 8 (Classes remplacé par Écoles)
+- page.tsx : retrait de la route "classes" + import ClassesView
+- schools-view.tsx :
+  * Chaque card école → panneau dépliable (Collapsible) avec bouton "Classes (CP1 → CM2)"
+  * Nouveau composant SchoolClassesPanel (~180 lignes) :
+    - Grille des 6 classes triées par ordre standard
+    - Checkbox Active/Désactivée par classe (toggle)
+    - Select enseignant par classe (affectation directe)
+    - Compteur d'élèves par classe
+    - Badge "Désactivée" si inactive
+- Corrections TS : wrap queryFn: classesApi.list en arrow function (3 fichiers impactés
+  : students-view, sessions-view, classes-view — signature a changé)
+
+Vérifications locales :
+- backend : go build OK (24M) + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0, bunx next build OK
+- 0 impact sur backend (ListSchools filtre déjà director par school_id)
+
+Migration données :
+- AutoMigrate va ajouter colonne active (default true) sur classes existantes
+- Les écoles existantes sans classes resteront vides jusqu'à création manuelle
+  (pas de rétro-migration auto, car on ne sait pas quelles écoles existent sans classes)
+
+Stage Summary:
+- Sidebar simplifiée : admin 11→10 entrées
+- Auto-création 6 classes à la création d'école (plus de création manuelle fastidieuse)
+- Toggle active/désactivée par classe (soft-delete, garde l'historique)
+- Garde-fou : désactivation interdite si élèves actifs dans la classe
+- Affectation enseignant directement dans le panneau Classes de l'école
+- Directeur voit UNIQUEMENT son école (backend filtre par school_id du director)

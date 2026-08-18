@@ -214,8 +214,15 @@ export const schoolsApi = {
 // === Classes ===
 
 export const classesApi = {
-  list: () =>
-    apiFetch<{ classes: ClassWithDetails[]; count: number }>("/api/classes"),
+  list: (params?: { includeInactive?: boolean; schoolId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.includeInactive) qs.set("include_inactive", "true");
+    if (params?.schoolId) qs.set("school_id", params.schoolId);
+    const q = qs.toString();
+    return apiFetch<{ classes: ClassWithDetails[]; count: number }>(
+      q ? `/api/classes?${q}` : "/api/classes",
+    );
+  },
   create: (data: {
     school_id: string;
     name: string;
@@ -227,7 +234,11 @@ export const classesApi = {
     }),
   update: (
     id: string,
-    data: { name?: string; teacher_id?: string | null },
+    data: Partial<{
+      name?: string;
+      teacher_id?: string | null;
+      active?: boolean;
+    }>,
   ) =>
     apiFetch<SchoolClass>(`/api/classes/${id}`, {
       method: "PUT",

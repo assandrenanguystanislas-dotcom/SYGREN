@@ -27,9 +27,17 @@ type ClassWithDetails struct {
 }
 
 // ListClasses returns classes filtered by scope.
+// Par défaut, ne retourne que les classes actives. Passer ?include_inactive=true
+// pour inclure les classes désactivées (utile à l'admin/directeur pour la gestion).
 func ListClasses(w http.ResponseWriter, r *http.Request) {
         role := ctxRole(r)
         query := database.DB.Model(&models.Class{})
+
+        // Filtre active par défaut (sauf si ?include_inactive=true)
+        includeInactive := r.URL.Query().Get("include_inactive") == "true"
+        if !includeInactive {
+                query = query.Where("active = ?", true)
+        }
 
         switch role {
         case "inspector":
@@ -91,8 +99,9 @@ func ListClasses(w http.ResponseWriter, r *http.Request) {
 type CreateClassRequest struct {
         SchoolID  string  `json:"school_id"`
         Name      string  `json:"name"`      // CP1, CP2, CE1, CE2, CM1, CM2
-        Level     string  `json:"level"`     // CP, CE, CM
+        Level     string  `json:"level"`    // CP, CE, CM
         TeacherID *string `json:"teacher_id"`
+        Active    *bool   `json:"active,omitempty"` // soft-delete toggle
 }
 
 // ValidClassNames — classes autorisées (cahier des charges §3 Module 1)
@@ -141,7 +150,9 @@ func CreateClass(w http.ResponseWriter, r *http.Request) {
         jsonResponse(w, http.StatusCreated, cls)
 }
 
-// UpdateClass updates a class (notamment affectation enseignant).
+// UpdateClass updates a class (notamment affectation enseignant + toggle active).
+// Garde-fou : on ne peut pas désactiver une classe qui a des élèves actifs
+// (il faut d'abord déplacer les élèves vers une autre classe active).
 func UpdateClass(w http.ResponseWriter, r *http.Request) {
         id := chi.URLParam(r, "id")
         var req CreateClassRequest
@@ -164,6 +175,19 @@ func UpdateClass(w http.ResponseWriter, r *http.Request) {
         }
         // Affectation dynamique enseignant (cahier des charges §3 Module 1)
         cls.TeacherID = req.TeacherID
+        // Toggle active (soft-delete) avec garde-fou élèves
+        if req.Active != nil {
+                // Si on tente de désactiver (active=false) alors qu'il y a des élèves
+                if !*req.Active {
+                        var studentCount int64
+                        database.DB.Model(&models.Student{}).Where("class_id = ?", id).Count(&studentCount)
+                        if studentCount > 0 {
+                                middleware.JSONError(w, "impossible de désactiver : déplacez d'abord les élèves vers une autre classe active", http.StatusConflict)
+                                return
+                        }
+                }
+                cls.Active = *req.Active
+        }
         if err := database.DB.Save(&cls).Error; err != nil {
                 middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
                 return
