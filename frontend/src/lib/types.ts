@@ -59,7 +59,7 @@ export interface SchoolClass {
 
 export interface Student {
   id: string;
-  matricule: string;
+  matricule: string | null;
   class_id: string;
   first_name: string;
   last_name: string;

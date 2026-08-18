@@ -44,6 +44,7 @@ interface FormData {
   first_name: string;
   last_name: string;
   gender: "M" | "F";
+  matricule: string; // fourni par le Ministère de l'Éducation (optionnel)
 }
 
 const EMPTY: FormData = {
@@ -51,6 +52,7 @@ const EMPTY: FormData = {
   first_name: "",
   last_name: "",
   gender: "M",
+  matricule: "",
 };
 
 export function StudentsView() {
@@ -105,6 +107,7 @@ export function StudentsView() {
       first_name: s.first_name,
       last_name: s.last_name,
       gender: s.gender as "M" | "F",
+      matricule: s.matricule ?? "",
     });
     setEditing(s);
     setDialogOpen(true);
@@ -144,11 +147,12 @@ export function StudentsView() {
 
   // Filtrage local
   const filtered = allStudents.filter((s) => {
+    const mat = s.matricule ?? "";
     const matchSearch =
       !search ||
       s.first_name.toLowerCase().includes(search.toLowerCase()) ||
       s.last_name.toLowerCase().includes(search.toLowerCase()) ||
-      s.matricule.toLowerCase().includes(search.toLowerCase());
+      mat.toLowerCase().includes(search.toLowerCase());
     const matchClass =
       classFilter === "all" || s.class_id === classFilter;
     return matchSearch && matchClass;
@@ -167,8 +171,7 @@ export function StudentsView() {
               <div>
                 <h2 className="font-semibold text-base">Élèves</h2>
                 <p className="text-xs text-muted-foreground">
-                  {allStudents.length} élève(s) inscrit(s) · matricule unique
-                  attribué automatiquement
+                  {allStudents.length} élève(s) inscrit(s) · matricule fourni par le Ministère de l'Éducation
                 </p>
               </div>
             </div>
@@ -237,8 +240,14 @@ export function StudentsView() {
                   {filtered.map((s) => (
                     <TableRow key={s.id} className="hover:bg-muted/40">
                       <TableCell>
-                        <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
-                          {s.matricule}
+                        <span
+                          className={`font-mono text-xs px-2 py-1 rounded ${
+                            s.matricule
+                              ? "bg-muted"
+                              : "bg-muted/40 text-muted-foreground italic"
+                          }`}
+                        >
+                          {s.matricule || "N/A"}
                         </span>
                       </TableCell>
                       <TableCell className="font-medium">{s.last_name}</TableCell>
@@ -298,12 +307,26 @@ export function StudentsView() {
           description={
             editing
               ? "Modifiez les informations de l'élève."
-              : "Le matricule unique sera généré automatiquement à la création."
+              : "Le matricule est fourni par le Ministère de l'Éducation. Laissez vide si non disponible."
           }
           icon={Users}
           loading={createMut.isPending || updateMut.isPending}
         >
           <form onSubmit={onSubmit} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="student-matricule">Matricule (Ministère)</Label>
+              <Input
+                id="student-matricule"
+                value={form.matricule}
+                onChange={(e) =>
+                  setForm({ ...form, matricule: e.target.value })
+                }
+                placeholder="Laisser vide si non disponible — affiché « N/A »"
+              />
+              <p className="text-xs text-muted-foreground">
+                Numéro administratif fourni par le Ministère de l'Éducation. Optionnel.
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="student-class">Classe</Label>
               <Select
@@ -436,7 +459,7 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         <p className="text-sm font-medium">Aucun élève inscrit</p>
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           {onCreate
-            ? "Inscrivez vos premiers élèves. Le matricule sera généré automatiquement."
+            ? "Inscrivez vos premiers élèves. Le matricule est optionnel (fourni par le Ministère)."
             : "Les élèves inscrits apparaîtront ici."}
         </p>
         {onCreate && (

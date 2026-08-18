@@ -94,10 +94,13 @@ func (c *Class) BeforeCreate(tx *gorm.DB) error {
 }
 
 // === Student ===
-// Matricule unique attribué à l'inscription (cahier des charges §3 Module 1)
+// Matricule fourni par le Ministère de l'Éducation (optionnel).
+// Si absent à la saisie → NULL en base + affichage "N/A" côté frontend.
+// (PostgreSQL autorise plusieurs NULL dans un unique index, donc plusieurs
+// élèves sans matricule peuvent coexister sans conflit.)
 type Student struct {
         ID        string     `gorm:"primaryKey;type:text" json:"id"`
-        Matricule string     `gorm:"uniqueIndex;type:text" json:"matricule"`
+        Matricule *string    `gorm:"uniqueIndex;type:text" json:"matricule,omitempty"`
         ClassID   string     `gorm:"type:text;index" json:"class_id"`
         FirstName string     `gorm:"type:text" json:"first_name"`
         LastName  string     `gorm:"type:text" json:"last_name"`

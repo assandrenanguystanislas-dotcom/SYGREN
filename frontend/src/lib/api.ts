@@ -249,7 +249,7 @@ export const studentsApi = {
     first_name: string;
     last_name: string;
     gender: "M" | "F";
-    birth_date?: string;
+    matricule?: string; // fourni par le Ministère de l'Éducation (optionnel)
   }) =>
     apiFetch<Student>("/api/students", {
       method: "POST",
@@ -263,6 +263,7 @@ export const studentsApi = {
       last_name: string;
       gender: "M" | "F";
       birth_date: string;
+      matricule: string; // string vide = effacer le matricule
     }>,
   ) =>
     apiFetch<Student>(`/api/students/${id}`, {

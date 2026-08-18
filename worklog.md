@@ -757,3 +757,50 @@ Stage Summary:
 - Fix : 1 fichier modifié (frontend/src/lib/use-crud-mutation.ts), ~5 lignes effectives
 - 8 vues corrigées d'un seul coup grâce à la centralisation
 - 0 impact backend (le code backend était correct dès le départ)
+
+---
+Task ID: Matricule-Optionnel
+Agent: Main (tutor mode)
+Task: Matricule élève fourni par le Ministère de l'Éducation (optionnel, "N/A" si absent)
+
+Work Log:
+- Cadrage : matricule doit être saisi par l'utilisateur (fourni par le Ministère), plus d'attribution automatique. Affichage "N/A" si vide.
+- Modifications backend :
+  - models.go : Student.Matricule string → *string (nullable). uniqueIndex conservé (PostgreSQL autorise plusieurs NULL dans un unique index).
+  - handlers/students.go :
+    * Supprimé generateMatricule() (n'est plus appelé)
+    * CreateStudentRequest : ajout champ Matricule *string
+    * Ajout helper normalizeMatricule(s string) *string (trim + nil si vide)
+    * CreateStudent : utilise req.Matricule si fourni, sinon nil. Vérifie unicité si non vide (409 si déjà pris).
+    * UpdateStudent : permet modification/effacement du matricule (string vide = NULL)
+    * Import : retrait "fmt" (plus utilisé), ajout "strings"
+  - handlers/helpers.go : ajout helper matriculeOrNA(m *string) string (retourne "N/A" si nil ou vide)
+  - handlers/computation.go : StudentResult.Matricule et AnnualResult.Matricule utilisent matriculeOrNA() (2 usages)
+  - handlers/report_cards.go : ReportCardWithStudent.StudentMatricule + DownloadReportCard filename + PDF header utilisent matriculeOrNA() (3 usages)
+- Modifications frontend :
+  - types.ts : Student.matricule string → string | null
+  - api.ts : studentsApi.create accepte matricule?: string ; update accepte matricule: string (vide = effacer)
+  - views/students-view.tsx :
+    * FormData : ajout matricule string
+    * EMPTY : matricule: ""
+    * openEdit : matricule: s.matricule ?? ""
+    * Filtrage search : gère s.matricule null
+    * Header : "matricule fourni par le Ministère de l'Éducation" (au lieu de "attribué automatiquement")
+    * Table : span avec classes conditionnelles (italic si N/A) + affiche s.matricule || "N/A"
+    * Formulaire : nouveau champ "Matricule (Ministère)" optionnel + description
+    * Description dialog : "Le matricule est fourni par le Ministère de l'Éducation. Laissez vide si non disponible."
+    * EmptyState : "Le matricule est optionnel (fourni par le Ministère)."
+- Vérifications locales :
+  - backend : go build OK (24M) + go vet OK (0 warning)
+  - frontend : bun run lint OK + bunx tsc --noEmit OK
+- Données existantes : les 2 élèves (SYG-2026-CP1-001/002) gardent leur matricule — AutoMigrate ne touche pas aux valeurs, seulement à la structure. Le type change de NOT NULL → NULL autorisé.
+- Schéma DB : AutoMigrate va automatiquement ALTER COLUMN matricule DROP NOT NULL sur Neon au prochain redéploiement Render.
+
+Stage Summary:
+- Matricule n'est plus généré automatiquement (supprimé generateMatricule)
+- Matricule est nullable en base (PostgreSQL + GORM)
+- Backend valide l'unicité quand non vide (409 Conflict si déjà pris)
+- Frontend : champ matricule optionnel dans le formulaire + affichage "N/A" stylé italique si vide
+- 4 fichiers backend modifiés (models, students, helpers, computation, report_cards)
+- 3 fichiers frontend modifiés (types, api, students-view)
+- Cohérent avec les autres vues (résultats computation, bulletins PDF, report cards affichent tous "N/A")

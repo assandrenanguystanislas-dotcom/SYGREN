@@ -169,7 +169,7 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
         for _, st := range students {
                 sr := StudentResult{
                         StudentID: st.ID,
-                        Matricule: st.Matricule,
+                        Matricule: matriculeOrNA(st.Matricule),
                         FirstName: st.FirstName,
                         LastName:  st.LastName,
                         SubjectGrades: make([]SubjectGrade, 0, len(subjects)),
@@ -481,7 +481,7 @@ func GetStudentAnnualResults(w http.ResponseWriter, r *http.Request) {
 
         annual := AnnualResult{
                 StudentID:    student.ID,
-                Matricule:    student.Matricule,
+                Matricule:    matriculeOrNA(student.Matricule),
                 FirstName:    student.FirstName,
                 LastName:     student.LastName,
                 ClassName:    cls.Name,

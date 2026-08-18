@@ -194,7 +194,7 @@ func ListReportCards(w http.ResponseWriter, r *http.Request) {
                 result = append(result, ReportCardWithStudent{
                         ReportCard:       c,
                         StudentName:      s.LastName + " " + s.FirstName,
-                        StudentMatricule: s.Matricule,
+                        StudentMatricule: matriculeOrNA(s.Matricule),
                         ClassName:        cls.Name,
                         SchoolName:       school.Name,
                         Month:            session.Month,
@@ -241,7 +241,7 @@ func DownloadReportCard(w http.ResponseWriter, r *http.Request) {
         var student models.Student
         studentName := rc.StudentID
         if err := database.DB.First(&student, "id = ?", rc.StudentID).Error; err == nil {
-                studentName = student.Matricule
+                studentName = matriculeOrNA(student.Matricule)
         }
         filename := fmt.Sprintf("bulletin_%s.pdf", studentName)
 
@@ -332,7 +332,7 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
         pdf.SetXY(18, boxY+2)
         pdf.CellFormat(0, 5, tr(fmt.Sprintf("Élève: %s %s", student.LastName, student.FirstName)), "", 0, "L", false, 0, "")
         pdf.SetXY(110, boxY+2)
-        pdf.CellFormat(0, 5, tr(fmt.Sprintf("Matricule: %s", student.Matricule)), "", 0, "L", false, 0, "")
+        pdf.CellFormat(0, 5, tr(fmt.Sprintf("Matricule: %s", matriculeOrNA(student.Matricule))), "", 0, "L", false, 0, "")
 
         pdf.SetXY(18, boxY+9)
         pdf.CellFormat(0, 5, tr(fmt.Sprintf("Classe: %s", session.ClassName)), "", 0, "L", false, 0, "")
