@@ -647,3 +647,113 @@ Stage Summary:
 - bun.lock régénéré (66 lignes retirées)
 - Lint frontend OK + build backend OK → prêt pour push
 - Pas de changement fonctionnel : 0 impact sur l'architecture, 0 impact sur la prod (le backend Go et le frontend Next.js n'utilisaient pas Prisma)
+
+---
+Task ID: Forensic-DB-Switch
+Agent: Main (tutor mode)
+Task: Diagnose données invisibles + re-pointer Render vers la bonne base Neon + supprimer Base B
+
+Work Log:
+- Symptôme : frontend n'affiche pas les données (alors qu'elles devraient exister)
+- Diagnostic API Render : tous les endpoints métier renvoyaient count=0 sauf /api/subjects (8)
+- Diagnostic code : seedDefaults() et AutoMigrate GORM non destructifs (aucun drop)
+- Diagnostic forensic via script Go direct sur Neon (DATABASE_URL fournie par utilisateur) :
+  - Base "A" (URL utilisateur, host ep-still-haze-b272s0fu-pooler) contient :
+    * 1 IEP, 1 école, 1 classe, 2 élèves (dont Awa Konan)
+    * 1 enseignant (marie.konan@sygren.ci)
+    * 2 sessions, 16 grades, 2 report_cards
+    * 9 subjects (8 seed + 1 "Lecture" custom)
+    * 2 users (admin + teacher)
+    * Table "settings" INEXISTANTE (créée par commit 0d78c97, jamais migrée sur cette base)
+  - Base "B" (URL utilisée par Render, inconnue) ne contenait que 8 subjects seed
+- Preuve forensique : UUIDs subjects complètement différents entre les deux bases
+  - Exemple : Anglais = 4705390f côté Render vs 60aad268 côté Neon direct
+  - Matière "Lecture" présente dans Base A mais absente côté Render (= Base B)
+  - Table "settings" absente dans Base A mais remplie (10 lignes) dans Base B
+
+Re-pointage Render vers Base A :
+- API Render : PUT /v1/services/{id}/env-vars avec DATABASE_URL=Base A
+  - Endpoint correct trouvé après tentative infructueuse sur PATCH /v1/services/{id}
+  - Token rnd_ accepte la modification (le test préalable a confirmé le scope)
+- Déclenchement nouveau déploiement : POST /v1/services/{id}/deploys avec clearCache=clear
+- Déploiement dep-da2bcprjan9c73a84j0g : build_in_progress → update_in_progress → live en 90s
+
+Vérifications post-déploiement (Render parle maintenant Base A) :
+- /api/health → OK
+- Login admin → OK (hash bcrypt de Base A reconnu)
+- UUIDs subjects via API Render = UUIDs Base A (60aad268 pour Anglais, etc.) ✓
+- Données métier désormais visibles via Render :
+  * IEP=1, Schools=1, Classes=1, Students=2, Teachers=1, Sessions=2, Grades=16, ReportCards=2
+- Dashboard KPIs réels : 1 école / 1 classe / 2 élèves / 1 enseignant
+  * Performance moyenne 13.50/20, Taux réussite 100%, Completion 50% (1/2 sessions)
+- Settings : AutoMigrate a créé la table settings manquante + seed a ajouté les 10 paramètres
+- Distribution mentions : 1 "Bien" + 1 "Assez Bien"
+
+Vérification visuelle frontend (Agent Browser) :
+- Login admin@sygren.ci sur sygren.vercel.app → dashboard
+- Dashboard affiche : "1 ÉCOLES, 1 CLASSES, 2 ÉLÈVES, 1 ENSEIGNANTS, 13.50/20, 100%"
+- Vue Élèves : 2 lignes avec matricules SYG-2026-CP1-001 et SYG-2026-CP1-002 ✓
+- Vue comparatif écoles : "École Plateau" visible ✓
+
+Suppression Base B :
+- Pas automatisable : token Neon fourni = token de connexion DB (pas API Neon)
+- Procédure transmise à l'utilisateur (dashboard Neon → Settings → Delete project)
+- Condition de sécurité : vérifier que Base B ne contient que 8 subjects seed avant suppression
+- État : en attente de confirmation utilisateur
+
+Stage Summary:
+- CAUSE RACINE IDENTIFIÉE : Render parlait à Base B (vide) au lieu de Base A (avec données)
+- FIX APPLIQUÉ : DATABASE_URL Render mis à jour vers Base A via API + redéploiement
+- AutoMigrate + seedDefaults ont créé table settings + 10 paramètres manquants sur Base A
+- Toutes les données de test sont désormais visibles en production
+- ATTENTION : aucune modification de code, aucun commit/push pour cette tâche (uniquement config Render)
+- TODO utilisateur : supprimer Base B sur dashboard Neon (procédure fournie)
+
+---
+Task ID: Fix-CRUD-Frontend
+Agent: Main (tutor mode)
+Task: Correction du bug "impossible de créer IEP/École/Classe/Élève depuis le frontend"
+
+Work Log:
+- Symptôme utilisateur : impossible de créer IEP/École/Classe/Élève depuis le frontend (toast "payload invalide")
+- Diagnostic préalable API Render direct (curl) :
+  - POST /api/iep → 201 OK (création réussie en direct)
+  - POST /api/students → 201 OK
+  - POST /api/classes avec nom invalide → 400 "nom de classe invalide" (validation backend normale)
+  - Conclusion : backend OK, le bug est frontend
+- Reproduction via Agent Browser :
+  - Login admin → vue IEP → "Nouvelle IEP" → remplir form → soumettre
+  - Toast affiché : "Création échoué(e) payload invalide"
+  - Capture réseau : POST /api/iep → HTTP 400
+  - Capture du body envoyé par fetch (via wrapper window.fetch) :
+    body envoyé = [{"name":"IEP Debug Test","region":"Cocody"}] (ARRAY au lieu d'OBJET)
+- Cause racine identifiée :
+  - Hook useCrudMutation déclaré avec `mutationFn: (...args: TArgs) => Promise<TResult>`
+  - React Query passe `variables` comme un SEUL argument (son API standard)
+  - Donc quand la vue appelle `createMut.mutateAsync([form])`, React Query appelle
+    `mutationFn(variables)` où `variables = [form]` → la spread reçoit `args[0] = [form]`
+  - iepApi.create(data) reçoit `data = [form]` (un array) au lieu de `form` (un objet)
+  - JSON.stringify([form]) = '[{"name":"...","region":"..."}]' (array stringifié)
+  - Le backend tente json.Decode vers une struct → échoue car c'est un array → "payload invalide"
+- Fix appliqué (frontend/src/lib/use-crud-mutation.ts) :
+  - Ajout wrapper `mutationFn: (variables) => mutationFn(...variables)` qui spread correctement
+  - Typage explicite `useMutation<TResult, Error, TArgs>` pour cohérence TS
+  - Documentation du contrat dans le commentaire (les vues passent [args...], le hook spread)
+- Vues impactées (8, toutes utilisent le pattern `mutateAsync([args...])`) :
+  iep, schools, classes, students, teachers, subjects, sessions (createMut)
+  → toutes corrigées automatiquement par le fix centralisé
+- settings-view : utilise useMutation direct (pas useCrudMutation), non impacté
+- sessions-view.statusMut : utilise useMutation direct, non impacté
+- Vérifications locales :
+  - bun run lint → exit 0, 0 erreur
+  - bunx tsc --noEmit → exit 0, 0 erreur
+  - bunx next build → succès, 4 routes générées
+- Nettoyage données de test créées pendant le diagnostic (curl) : IEP "IEP Test Debug" + élève "Test Debug" supprimés
+- Aucune modification backend nécessaire
+
+Stage Summary:
+- BUG FRONTEND CRITIQUE corrigé : toutes les opérations de création/update/delete étaient cassées
+- Cause : inadéquation entre l'API spread-args du hook et l'API variables-unique de React Query
+- Fix : 1 fichier modifié (frontend/src/lib/use-crud-mutation.ts), ~5 lignes effectives
+- 8 vues corrigées d'un seul coup grâce à la centralisation
+- 0 impact backend (le code backend était correct dès le départ)
