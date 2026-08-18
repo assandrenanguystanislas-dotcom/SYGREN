@@ -804,3 +804,37 @@ Stage Summary:
 - 4 fichiers backend modifiés (models, students, helpers, computation, report_cards)
 - 3 fichiers frontend modifiés (types, api, students-view)
 - Cohérent avec les autres vues (résultats computation, bulletins PDF, report cards affichent tous "N/A")
+
+---
+Task ID: Fix-Orphan-Validation
+Agent: Main (tutor mode)
+Task: Corriger bug élèves orphelins + valider hiérarchie IEP→École→Classe→Élève
+
+Work Log:
+- Découverte pendant tests fonctionnels du commit e14ad69 : élèves créés avec class_id invalide
+  (j'ai testé en prod sans classe existante, et le backend a accepté un élève avec class_id
+  qui ne pointait vers aucune classe réelle)
+- Cause racine : handlers create vérifiaient seulement que le champ était non vide, pas que
+  l'entité parent existait réellement en base
+- Correctifs appliqués :
+  - handlers/students.go (CreateStudent) : ajout vérification existence classe
+    → 400 "classe introuvable — créez la classe avant d'y inscrire un élève" si class_id invalide
+  - handlers/classes.go (CreateClass) : ajout vérification existence école
+    → 400 "école introuvable — créez l'école avant d'y ajouter une classe" si school_id invalide
+  - handlers/schools.go (CreateSchool) : ajout vérification existence IEP
+    → 400 "IEP introuvable — créez l'inspection avant d'y ajouter une école" si iep_id invalide
+- Nettoyage base Neon (orphelins) :
+  - 2 evaluation_sessions supprimés (class_id orphelin)
+  - 16 grades supprimés (session_id/student_id orphelins)
+  - 2 report_cards supprimés (session_id/student_id orphelins)
+- Vérifications locales :
+  - go build OK (24M) + go vet OK (0 warning)
+- État final base Neon après nettoyage :
+  - ieps=1, schools=0, classes=0, students=0 (utilisateur a tout nettoyé sauf IEP)
+  - subjects=8 (seed), users=2 (admin + teacher), settings=10 (seed)
+  - evaluation_sessions=0, grades=0, report_cards=0 (orphelins nettoyés)
+
+Stage Summary:
+- Hiérarchie IEP→École→Classe→Élève désormais strictement validée côté backend
+- Plus aucun risque d'entité orpheline si un user tente de créer sans parent valide
+- Base Neon nettoyée des orphelins résiduels (20 enregistrements supprimés)

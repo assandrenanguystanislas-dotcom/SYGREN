@@ -129,6 +129,12 @@ func CreateStudent(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, "gender doit être 'M' ou 'F'", http.StatusBadRequest)
                 return
         }
+        // Vérifier que la classe existe réellement en base (évite les élèves orphelins)
+        var cls models.Class
+        if err := database.DB.First(&cls, "id = ?", req.ClassID).Error; err != nil {
+                middleware.JSONError(w, "classe introuvable — créez la classe avant d'y inscrire un élève", http.StatusBadRequest)
+                return
+        }
 
         // Si le matricule est fourni dans le body, on l'utilise ; sinon nil (NULL).
         var matricule *string
