@@ -617,3 +617,33 @@ Stage Summary:
   - Backend sur Render ✓ (Golang)
   - Base PostgreSQL sur Neon.tech ✓
   - Région Europe centrale (Frankfurt) ✓
+
+---
+Task ID: Cleanup-1
+Agent: Main (tutor mode)
+Task: Nettoyage scaffolding Prisma résiduel (frontend) + build script backend portable
+
+Work Log:
+- Audit : frontend/prisma/schema.prisma était le placeholder par défaut (User/Post, provider sqlite). Les vrais modèles vivent côté Go (GORM, backend/models/). frontend/src/lib/db.ts était le SEUL fichier du frontend à importer @prisma/client — aucun autre fichier ne l'importait (grep vérifié). Code mort confirmé.
+- Suppressions côté frontend :
+  - frontend/prisma/schema.prisma (+ dossier frontend/prisma/)
+  - frontend/db/custom.db  (fichier SQLite résiduel 24 Ko, + dossier frontend/db/)
+  - frontend/src/lib/db.ts  (client Prisma non utilisé)
+- frontend/package.json : retrait des dépendances @prisma/client (^6.11.1) et prisma (^6.11.1), retrait des 4 scripts db:push / db:generate / db:migrate / db:reset
+- backend/package.json : rendu portable le build script
+  - Avant : "build": "export PATH=$PATH:/home/z/.local/go/bin && go build -o sygren-api main.go"
+  - Après : "build": "go build -o sygren-api main.go"
+  - Idem pour "tidy" (retrait du export PATH sandbox-spécifique)
+- Régénération bun.lock : bun install → 797 packages, 2 retirés (prisma + @prisma/client)
+- Vérifications locales :
+  - frontend : bun run lint → exit 0, 0 erreur
+  - backend : go build -o /tmp/sygren-api-v2 main.go → BUILD OK (24M) ; go vet ./... → clean
+  - grep prisma dans frontend/src → aucune référence restante
+- Décision utilisateur explicite : réécriture d'historique git (point 3) → NON. Historique préservé tel quel.
+
+Stage Summary:
+- Scaffolding Prisma entièrement retiré du frontend (3 fichiers + 2 dossiers + 2 deps + 4 scripts)
+- Build script backend portable (ne dépend plus du PATH sandbox)
+- bun.lock régénéré (66 lignes retirées)
+- Lint frontend OK + build backend OK → prêt pour push
+- Pas de changement fonctionnel : 0 impact sur l'architecture, 0 impact sur la prod (le backend Go et le frontend Next.js n'utilisaient pas Prisma)
