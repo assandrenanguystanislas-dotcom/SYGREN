@@ -96,6 +96,9 @@ export function ResultsView() {
     return <SyntheseDocument sessionId={autoSessionId} onClose={() => setShowSynthese(false)} />;
   }
 
+  // Si pas de session sélectionnée, ne pas afficher le bouton
+  const canShowSynthese = !!autoSessionId;
+
   return (
     <div className="space-y-4">
       {/* En-tête + sélecteur */}
@@ -114,7 +117,7 @@ export function ResultsView() {
                 </p>
               </div>
             </div>
-            {sessionCfg && selectedSession && (
+            {sessionCfg && selectedSession && canShowSynthese && (
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className={cn("text-xs", sessionCfg.color)}>
                   {sessionCfg.label}
@@ -122,7 +125,10 @@ export function ResultsView() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setShowSynthese(true)}
+                  onClick={() => {
+                    console.log("Synthèse clicked, sessionId:", autoSessionId);
+                    setShowSynthese(true);
+                  }}
                 >
                   <FileText className="w-4 h-4 mr-1.5" />
                   Synthèse PDF
