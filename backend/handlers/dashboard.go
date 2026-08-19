@@ -2,6 +2,7 @@ package handlers
 
 import (
         "net/http"
+        "strconv"
 
         "sygren-api/database"
         "sygren-api/middleware"
@@ -16,12 +17,18 @@ import (
 //   - director : vue de son école (ses classes)
 //   - teacher  : vue de sa classe (redirigé vers la grille de saisie)
 //
+// Filtres supportés (query params) :
+//   - year : année scolaire (défaut : année courante)
+//   - gender : "M" | "F" | "" (tous)
+//   - level : "CP" | "CE" | "CM" | "" (tous)
+//
 // Contenu :
 //   - KPIs : écoles, classes, élèves, enseignants, sessions
 //   - Jauges de complétion : % de saisie clôturée par période
 //   - Comparatif multi-entités (écoles ou classes) avec moyennes
 //   - Distribution des mentions (Très Bien → Très Insuffisant)
 //   - Tendance mensuelle (évolution des moyennes)
+//   - Comparaison inter-annuelle (year vs year-1)
 
 // === Types de réponse ===
 
@@ -62,6 +69,11 @@ type DashboardData struct {
         Scope       string `json:"scope"`        // global | iep | school
         ScopeName   string `json:"scope_name"`
 
+        // Filtres actifs
+        YearFilter   int    `json:"year_filter"`
+        GenderFilter string `json:"gender_filter"` // "" | "M" | "F"
+        LevelFilter  string `json:"level_filter"`  // "" | "CP" | "CE" | "CM"
+
         // KPIs globaux
         SchoolCount    int `json:"school_count"`
         ClassCount     int `json:"class_count"`
@@ -79,12 +91,49 @@ type DashboardData struct {
         Classes       []EntityPerformance  `json:"classes,omitempty"`        // director
         Mentions      MentionDistribution  `json:"mentions"`
         MonthlyTrend  []MonthlyTrend        `json:"monthly_trend"`
+
+        // Comparaison inter-annuelle
+        YearComparison *YearComparison `json:"year_comparison,omitempty"`
+}
+
+// YearComparison : comparaison année courante vs année précédente
+type YearComparison struct {
+        CurrentYear  int     `json:"current_year"`
+        PreviousYear int     `json:"previous_year"`
+        CurrentPerf  float64 `json:"current_perf"`
+        PreviousPerf float64 `json:"previous_perf"`
+        PerfDelta    float64 `json:"perf_delta"` // current - previous
+        CurrentPass  float64 `json:"current_pass_rate"`
+        PreviousPass float64 `json:"previous_pass_rate"`
+        PassDelta    float64 `json:"pass_delta"` // current - previous
 }
 
 // GetDashboard returns aggregated data based on the user's scope.
-// Endpoint : GET /api/dashboard
+// Endpoint : GET /api/dashboard?year=2026&gender=M&level=CP
+// Filtres optionnels : year (défaut: année courante), gender (M/F), level (CP/CE/CM)
 func GetDashboard(w http.ResponseWriter, r *http.Request) {
         role := ctxRole(r)
+
+        // Lire les filtres
+        year := 0
+        if v := r.URL.Query().Get("year"); v != "" {
+                if n, err := strconv.Atoi(v); err == nil {
+                        year = n
+                }
+        }
+        if year == 0 {
+                year = 2026 // défaut
+        }
+        gender := r.URL.Query().Get("gender") // "" | "M" | "F"
+        level := r.URL.Query().Get("level")    // "" | "CP" | "CE" | "CM"
+
+        // Stocker les filtres dans le context pour les sous-fonctions
+        // On utilise des variables globales temporaires (simple, pas idéal mais efficace)
+        dashboardFilters = DashboardFilters{
+                Year:   year,
+                Gender: gender,
+                Level:  level,
+        }
 
         switch role {
         case "admin":
@@ -100,33 +149,70 @@ func GetDashboard(w http.ResponseWriter, r *http.Request) {
         }
 }
 
+// DashboardFilters stocke les filtres actifs pour la requête courante
+type DashboardFilters struct {
+        Year   int
+        Gender string
+        Level  string
+}
+
+var dashboardFilters DashboardFilters
+
 // === Admin Dashboard : vue globale (toutes les IEP/écoles) ===
 func getAdminDashboard(w http.ResponseWriter, r *http.Request) {
-        // KPIs globaux
+        f := dashboardFilters
+
+        // KPIs globaux (filtrés par level si applicable)
+        classQuery := database.DB.Model(&models.Class{})
+        studentQuery := database.DB.Model(&models.Student{})
+        if f.Level != "" {
+                classQuery = classQuery.Where("level = ?", f.Level).
+                        Joins("JOIN classes c ON c.id = students.class_id").
+                        Where("c.level = ?", f.Level)
+        }
         var schoolCount, classCount, studentCount, teacherCount int64
         database.DB.Model(&models.School{}).Count(&schoolCount)
-        database.DB.Model(&models.Class{}).Count(&classCount)
-        database.DB.Model(&models.Student{}).Count(&studentCount)
+        classQuery.Count(&classCount)
+        studentQuery.Count(&studentCount)
         database.DB.Model(&models.User{}).Where("role = ?", models.RoleTeacher).Count(&teacherCount)
 
-        // Stats sessions
+        // Stats sessions (filtrées par année)
         sessionStats := computeSessionStats("")
 
         // Performance par école
         schools := computeSchoolsPerformance("")
 
-        // Distribution mentions globale
+        // Distribution mentions globale (filtrée)
         mentions := computeGlobalMentions()
 
-        // Tendance mensuelle (toutes classes confondues)
+        // Tendance mensuelle
         trend := computeMonthlyTrend("")
 
         // Moyenne performance globale + taux de réussite
         avgPerf, passRate := computeOverallPerformance("")
 
+        // Comparaison inter-annuelle
+        var yearComp *YearComparison
+        prevPerf, prevPass := computeYearComparison(f.Year - 1)
+        if prevPerf > 0 || prevPass > 0 || avgPerf > 0 {
+                yearComp = &YearComparison{
+                        CurrentYear:  f.Year,
+                        PreviousYear: f.Year - 1,
+                        CurrentPerf:  avgPerf,
+                        PreviousPerf: prevPerf,
+                        PerfDelta:    avgPerf - prevPerf,
+                        CurrentPass:  passRate,
+                        PreviousPass: prevPass,
+                        PassDelta:    passRate - prevPass,
+                }
+        }
+
         dashboard := DashboardData{
                 Scope:         "global",
                 ScopeName:     "SYGREN — Vue globale",
+                YearFilter:    f.Year,
+                GenderFilter:  f.Gender,
+                LevelFilter:   f.Level,
                 SchoolCount:   int(schoolCount),
                 ClassCount:    int(classCount),
                 StudentCount:  int(studentCount),
@@ -138,9 +224,17 @@ func getAdminDashboard(w http.ResponseWriter, r *http.Request) {
                 Schools:       schools,
                 Mentions:      mentions,
                 MonthlyTrend:  trend,
+                YearComparison: yearComp,
         }
 
         jsonResponse(w, http.StatusOK, dashboard)
+}
+
+// computeYearComparison calcule perf + pass rate pour une année donnée
+func computeYearComparison(year int) (avgPerf, passRate float64) {
+        var sessions []models.EvaluationSession
+        database.DB.Where("year = ?", year).Find(&sessions)
+        return aggregateSessionsPerformance(sessions)
 }
 
 // === Inspector Dashboard : vue de son IEP ===
@@ -448,34 +542,54 @@ func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf,
         if len(sessions) == 0 {
                 return 0, 0
         }
+        f := dashboardFilters
         totalAvg := 0.0
         totalPass := 0
         totalStudents := 0
         _, passThreshold, _ := GetSystemSettings()
         for _, s := range sessions {
+                // Filtre par année
+                if f.Year > 0 && s.Year != f.Year {
+                        continue
+                }
                 results, err := computeSessionResults(s.ID)
                 if err != nil {
                         continue
                 }
-                // Récupérer le niveau de la classe pour convertir le seuil de réussite
+                // Récupérer le niveau de la classe
                 var cls models.Class
-                level := "CM" // défaut /20
+                level := "CM"
                 if err := database.DB.First(&cls, "id = ?", s.ClassID).Error; err == nil {
                         level = cls.Level
                 }
-                // Seuil effectif selon l'échelle du niveau (CP/CE → /10, CM → /20)
+                // Filtre par niveau
+                if f.Level != "" && level != f.Level {
+                        continue
+                }
+                // Seuil effectif selon l'échelle du niveau
                 ratio := 20.0
                 if level == "CP" || level == "CE" {
                         ratio = 10.0
                 }
                 effectivePassThreshold := passThreshold * ratio / 20.0
                 for _, r := range results.Results {
-                        if r.HasAverage {
-                                totalAvg += r.Average
-                                totalStudents++
-                                if r.Average >= effectivePassThreshold {
-                                        totalPass++
+                        if !r.HasAverage {
+                                continue
+                        }
+                        // Filtre par genre
+                        if f.Gender != "" {
+                                var stu models.Student
+                                if err := database.DB.First(&stu, "id = ?", r.StudentID).Error; err != nil {
+                                        continue
                                 }
+                                if stu.Gender != f.Gender {
+                                        continue
+                                }
+                        }
+                        totalAvg += r.Average
+                        totalStudents++
+                        if r.Average >= effectivePassThreshold {
+                                totalPass++
                         }
                 }
         }

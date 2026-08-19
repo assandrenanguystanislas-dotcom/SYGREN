@@ -615,7 +615,14 @@ export const reportCardsApi = {
 
 export const dashboardApi = {
   /** Récupère les KPIs agrégés selon le scope de l'utilisateur (RBAC backend) */
-  get: () => apiFetch<DashboardData>("/api/dashboard"),
+  get: (params?: { year?: string; gender?: string; level?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.year) qs.set("year", params.year);
+    if (params?.gender) qs.set("gender", params.gender);
+    if (params?.level) qs.set("level", params.level);
+    const q = qs.toString();
+    return apiFetch<DashboardData>(q ? `/api/dashboard?${q}` : "/api/dashboard");
+  },
 };
 
 // === Synthèse des Résultats (document officiel) ===

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
@@ -23,6 +24,7 @@ import {
   PieChart as PieChartIcon,
   School as SchoolIcon,
   TrendingUp,
+  TrendingDown,
   Users,
   Award,
   Target,
@@ -32,10 +34,18 @@ import {
 
 import { dashboardApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import type { DashboardData, EntityPerformance } from "@/lib/types";
+import type { DashboardData, EntityPerformance, YearComparison } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   ChartContainer,
   ChartTooltip,
@@ -76,10 +86,18 @@ const SCOPE_LABELS: Record<string, string> = {
 
 export function AnalyticsDashboard() {
   const user = useAuthStore((s) => s.user);
+  const [yearFilter, setYearFilter] = useState("2026");
+  const [genderFilter, setGenderFilter] = useState("");
+  const [levelFilter, setLevelFilter] = useState("");
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: dashboardApi.get,
+    queryKey: ["dashboard", yearFilter, genderFilter, levelFilter],
+    queryFn: () =>
+      dashboardApi.get({
+        year: yearFilter,
+        gender: genderFilter || undefined,
+        level: levelFilter || undefined,
+      }),
   });
 
   if (isLoading) return <LoadingState />;
@@ -124,6 +142,39 @@ export function AnalyticsDashboard() {
             <Badge variant="secondary" className="capitalize">
               {SCOPE_LABELS[data.scope]}
             </Badge>
+          </div>
+
+          {/* Filtres : Année + Sexe + Niveau */}
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Année :</span>
+              <Select value={yearFilter} onValueChange={setYearFilter}>
+                <SelectTrigger className="h-7 w-[90px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                  <SelectItem value="2027">2027</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Sexe :</span>
+              <FilterChip label="Tous" active={genderFilter === ""} onClick={() => setGenderFilter("")} />
+              <FilterChip label="G" active={genderFilter === "M"} onClick={() => setGenderFilter("M")} />
+              <FilterChip label="F" active={genderFilter === "F"} onClick={() => setGenderFilter("F")} />
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Niveau :</span>
+              <FilterChip label="Tous" active={levelFilter === ""} onClick={() => setLevelFilter("")} />
+              <FilterChip label="CP" active={levelFilter === "CP"} onClick={() => setLevelFilter("CP")} />
+              <FilterChip label="CE" active={levelFilter === "CE"} onClick={() => setLevelFilter("CE")} />
+              <FilterChip label="CM" active={levelFilter === "CM"} onClick={() => setLevelFilter("CM")} />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -171,6 +222,11 @@ export function AnalyticsDashboard() {
           tone="success"
         />
       </div>
+
+      {/* Comparaison inter-annuelle */}
+      {data.year_comparison && (
+        <YearComparisonCard data={data.year_comparison} />
+      )}
 
       {/* Jauges de complétion (cahier des charges §3 Module 5) */}
       <Card className="border-border/60">
@@ -631,6 +687,93 @@ function LoadingState() {
       <CardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
         <p className="text-sm">Calcul des indicateurs de performance…</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Filtre chip (bouton toggle)
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center h-7 px-2.5 rounded-md border text-xs font-medium transition-colors ${
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-card text-muted-foreground hover:bg-muted"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// Carte comparaison inter-annuelle
+function YearComparisonCard({ data }: { data: YearComparison }) {
+  const perfUp = data.perf_delta >= 0;
+  const passUp = data.pass_delta >= 0;
+
+  const chartData = [
+    { name: String(data.previous_year), perf: data.previous_perf, pass: data.previous_pass_rate },
+    { name: String(data.current_year), perf: data.current_perf, pass: data.current_pass_rate },
+  ];
+
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          Comparaison {data.previous_year} vs {data.current_year}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Performance moyenne</p>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold">{data.current_perf.toFixed(2)}</span>
+              <span className={`text-xs flex items-center gap-0.5 ${perfUp ? "text-emerald-600" : "text-red-600"}`}>
+                {perfUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {perfUp ? "+" : ""}{data.perf_delta.toFixed(2)}
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {data.previous_year}: {data.previous_perf.toFixed(2)} → {data.current_year}: {data.current_perf.toFixed(2)}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Taux de réussite</p>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold">{data.current_pass_rate.toFixed(1)}%</span>
+              <span className={`text-xs flex items-center gap-0.5 ${passUp ? "text-emerald-600" : "text-red-600"}`}>
+                {passUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {passUp ? "+" : ""}{data.pass_delta.toFixed(1)}pts
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {data.previous_year}: {data.previous_pass_rate.toFixed(1)}% → {data.current_year}: {data.current_pass_rate.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+        <ChartContainer config={{ perf: { label: "Performance" }, pass: { label: "Réussite %" } }} className="h-[150px]">
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} />
+            <YAxis tickLine={false} axisLine={false} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="perf" fill={COLORS.primary} radius={[4, 4, 0, 0]} name="Performance" />
+            <Bar dataKey="pass" fill={COLORS.success} radius={[4, 4, 0, 0]} name="Réussite %" />
+          </BarChart>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

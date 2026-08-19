@@ -377,9 +377,23 @@ export interface MonthlyTrend {
   student_count: number;
 }
 
+export interface YearComparison {
+  current_year: number;
+  previous_year: number;
+  current_perf: number;
+  previous_perf: number;
+  perf_delta: number;
+  current_pass_rate: number;
+  previous_pass_rate: number;
+  pass_delta: number;
+}
+
 export interface DashboardData {
   scope: "global" | "iep" | "school" | "class";
   scope_name: string;
+  year_filter?: number;
+  gender_filter?: string;
+  level_filter?: string;
   school_count?: number;
   class_count: number;
   student_count: number;
@@ -392,6 +406,7 @@ export interface DashboardData {
   classes?: EntityPerformance[];
   mentions: MentionDistribution;
   monthly_trend: MonthlyTrend[];
+  year_comparison?: YearComparison;
 }
 
 // Map couleur mention → classes Tailwind
