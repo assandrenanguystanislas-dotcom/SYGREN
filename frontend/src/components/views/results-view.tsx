@@ -139,10 +139,14 @@ export function ResultsView() {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    // Nouveau : envoyer school_code + eval info (synthèse par école)
-                    const schoolCode = selectedSession?.school_name ? "" : ""; // pas disponible directement
-                    // Utiliser session_id en rétrocompatibilité — le backend retrouve l'école
-                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}`;
+                    // Récupérer le token depuis localStorage
+                    let token = "";
+                    try {
+                      const raw = localStorage.getItem("sygren-auth");
+                      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+                    } catch {}
+                    // Envoyer session_id + token dans l'URL
+                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}&t=${encodeURIComponent(token)}`;
                     window.open(url, "_blank");
                   }}
                 >

@@ -43,12 +43,19 @@ export default function SynthesePage() {
     const sessionId = params.get("session_id");
 
     let token = "";
-    try {
-      const raw = localStorage.getItem("sygren-auth");
-      if (raw) {
-        token = JSON.parse(raw)?.state?.token ?? "";
-      }
-    } catch {}
+    // D'abord essayer le token dans l'URL (t=...)
+    const urlToken = params.get("t");
+    if (urlToken) {
+      token = urlToken;
+    } else {
+      // Sinon, essayer localStorage
+      try {
+        const raw = localStorage.getItem("sygren-auth");
+        if (raw) {
+          token = JSON.parse(raw)?.state?.token ?? "";
+        }
+      } catch {}
+    }
 
     if (!sessionId) {
       Promise.resolve().then(() => {
