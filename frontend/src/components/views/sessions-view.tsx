@@ -29,6 +29,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -47,6 +48,24 @@ interface FormData {
   year: string;
   eval_type: "composition" | "exam_blanc";
   eval_number: string;
+  open_at: string; // datetime-local format : "2026-01-15T08:00"
+  close_at: string;
+  auto_open: boolean;
+}
+
+function toLocalDatetime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function nowPlusDays(days: number): string {
+  return toLocalDatetime(new Date(Date.now() + days * 86400000));
+}
+
+function toISO(localDt: string): string {
+  // Convert "2026-01-15T08:00" → "2026-01-15T08:00:00Z"
+  if (!localDt) return "";
+  return new Date(localDt).toISOString();
 }
 
 const EMPTY: FormData = {
@@ -55,6 +74,9 @@ const EMPTY: FormData = {
   year: String(new Date().getFullYear()),
   eval_type: "composition",
   eval_number: "1",
+  open_at: nowPlusDays(0),
+  close_at: nowPlusDays(7),
+  auto_open: false,
 };
 
 export function SessionsView() {
@@ -67,6 +89,8 @@ export function SessionsView() {
   const [statusTarget, setStatusTarget] = useState<SessionWithDetails | null>(
     null,
   );
+  const [extendTarget, setExtendTarget] = useState<SessionWithDetails | null>(null);
+  const [extendDate, setExtendDate] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["sessions"],
@@ -110,11 +134,30 @@ export function SessionsView() {
           status: "open",
           eval_type: form.eval_type,
           eval_number: parseInt(form.eval_number, 10) || 1,
+          open_at: toISO(form.open_at),
+          close_at: toISO(form.close_at),
+          auto_open: form.auto_open,
         },
       ]);
       setDialogOpen(false);
     } catch {
       /* toastée */
+    }
+  }
+
+  async function onExtend() {
+    if (!extendTarget || !extendDate) return;
+    try {
+      await sessionsApi.extend(extendTarget.id, toISO(extendDate));
+      toast.success("Session prolongée", {
+        description: `Nouvelle clôture : ${new Date(extendDate).toLocaleDateString("fr-FR")}`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      setExtendTarget(null);
+      setExtendDate("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur";
+      toast.error("Prolongation échouée", { description: msg });
     }
   }
 
@@ -197,6 +240,12 @@ export function SessionsView() {
                         {monthLabel(s.month)} {s.year} · {s.class_name ?? "Classe inconnue"}
                         {s.school_name && ` · ${s.school_name}`}
                       </p>
+                      {s.open_at && s.close_at && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          📅 {new Date(s.open_at).toLocaleDateString("fr-FR")} → {new Date(s.close_at).toLocaleDateString("fr-FR")}
+                          {s.auto_open && " · ⏰ ouverture auto"}
+                        </p>
+                      )}
                     </div>
                     <Badge variant="outline" className={`text-[10px] ${cfg.color}`}>
                       {cfg.label}
@@ -258,6 +307,22 @@ export function SessionsView() {
                         {next.label}
                       </span>
                       <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </Button>
+                  )}
+
+                  {/* Prolongation (visible si session open ou closed) */}
+                  {canManage && (s.status === "open" || s.status === "closed") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-1.5 text-xs"
+                      onClick={() => {
+                        setExtendTarget(s);
+                        setExtendDate(s.close_at ? toLocalDatetime(new Date(s.close_at)) : nowPlusDays(7));
+                      }}
+                    >
+                      <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                      Prolonger la clôture
                     </Button>
                   )}
                 </CardContent>
@@ -378,8 +443,49 @@ export function SessionsView() {
               </div>
             </div>
 
+            {/* Dates d'ouverture et de clôture */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="session-open-at">Date d&apos;ouverture</Label>
+                <Input
+                  id="session-open-at"
+                  type="datetime-local"
+                  value={form.open_at}
+                  onChange={(e) => setForm({ ...form, open_at: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="session-close-at">Date de clôture</Label>
+                <Input
+                  id="session-close-at"
+                  type="datetime-local"
+                  value={form.close_at}
+                  onChange={(e) => setForm({ ...form, close_at: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground -mt-2">
+              Les dates sont obligatoires. La clôture doit être après l&apos;ouverture.
+            </p>
+
+            {/* Ouverture automatique */}
+            <label className="flex items-center gap-2 cursor-pointer text-sm">
+              <Checkbox
+                checked={form.auto_open}
+                onCheckedChange={(v) => setForm({ ...form, auto_open: v === true })}
+              />
+              <span>Ouverture automatique à la date programmée</span>
+            </label>
+            {form.auto_open && (
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                La session restera en statut « Brouillon » jusqu&apos;à la date d&apos;ouverture, puis passera automatiquement à « Saisie ouverte ».
+              </p>
+            )}
+
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] text-emerald-700">
-              ℹ️ La session sera créée avec le statut « Saisie ouverte ». Les enseignants pourront saisir leurs notes immédiatement.
+              ℹ️ La session sera créée avec le statut « Saisie ouverte » (ou « Brouillon » si ouverture automatique). Les enseignants pourront saisir leurs notes.
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
@@ -428,6 +534,65 @@ export function SessionsView() {
         onConfirm={onStatusChange}
         loading={statusMut.isPending}
       />
+
+      {/* Modal de prolongation */}
+      {extendTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="py-6 space-y-4">
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Prolonger la session
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {extendTarget.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{extendTarget.eval_number}
+                {" — "}
+                {extendTarget.class_name}
+              </p>
+              {extendTarget.close_at && (
+                <p className="text-xs text-muted-foreground">
+                  Clôture actuelle :{" "}
+                  <span className="font-medium">
+                    {new Date(extendTarget.close_at).toLocaleString("fr-FR")}
+                  </span>
+                </p>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="extend-date">Nouvelle date de clôture</Label>
+                <Input
+                  id="extend-date"
+                  type="datetime-local"
+                  value={extendDate}
+                  onChange={(e) => setExtendDate(e.target.value)}
+                  required
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  La nouvelle date doit être dans le futur et après la clôture actuelle.
+                </p>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setExtendTarget(null);
+                    setExtendDate("");
+                  }}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="button"
+                  onClick={onExtend}
+                  disabled={!extendDate}
+                >
+                  Prolonger
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

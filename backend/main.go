@@ -7,6 +7,7 @@ import (
 
         "sygren-api/config"
         "sygren-api/database"
+        "sygren-api/models"
         "sygren-api/router"
         "sygren-api/storage"
 )
@@ -47,8 +48,42 @@ func main() {
         log.Printf("╚════════════════════════════════════════════╝")
         log.Printf("[HTTP] Serveur démarré sur le port %s", cfg.Port)
 
+        // Goroutine : planification automatique des sessions
+        // Toutes les 60 secondes :
+        //   1. Sessions draft avec AutoOpen=true et OpenAt ≤ now → statut = open
+        //   2. Sessions open avec CloseAt ≤ now → statut = closed
+        go startSessionScheduler()
+
         if err := server.ListenAndServe(); err != nil {
                 log.Fatalf("[FATAL] Serveur: %v", err)
+        }
+}
+
+// startSessionScheduler gère l'ouverture et la clôture automatique des sessions.
+// Tourne en boucle toutes les 60 secondes.
+func startSessionScheduler() {
+        ticker := time.NewTicker(60 * time.Second)
+        defer ticker.Stop()
+        for range ticker.C {
+                now := time.Now()
+
+                // 1. Ouvrir automatiquement les sessions draft dont OpenAt est passé
+                result1 := database.DB.Model(&models.EvaluationSession{}).
+                        Where("status = ? AND auto_open = ? AND open_at IS NOT NULL AND open_at <= ?",
+                                "draft", true, now).
+                        Updates(map[string]interface{}{"status": "open", "updated_at": now})
+                if result1.RowsAffected > 0 {
+                        log.Printf("[SCHEDULER] %d session(s) ouverte(s) automatiquement", result1.RowsAffected)
+                }
+
+                // 2. Clôturer automatiquement les sessions open dont CloseAt est passé
+                result2 := database.DB.Model(&models.EvaluationSession{}).
+                        Where("status = ? AND close_at IS NOT NULL AND close_at <= ?",
+                                "open", now).
+                        Updates(map[string]interface{}{"status": "closed", "updated_at": now})
+                if result2.RowsAffected > 0 {
+                        log.Printf("[SCHEDULER] %d session(s) clôturée(s) automatiquement", result2.RowsAffected)
+                }
         }
 }
 

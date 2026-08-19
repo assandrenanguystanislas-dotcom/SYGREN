@@ -441,6 +441,9 @@ export const sessionsApi = {
     status?: SessionStatus;
     eval_type?: "composition" | "exam_blanc";
     eval_number?: number;
+    open_at: string;
+    close_at: string;
+    auto_open?: boolean;
   }) =>
     apiFetch<EvaluationSession>("/api/sessions", {
       method: "POST",
@@ -450,6 +453,11 @@ export const sessionsApi = {
     apiFetch<EvaluationSession>(`/api/sessions/${id}/status`, {
       method: "PUT",
       body: JSON.stringify({ status }),
+    }),
+  extend: (id: string, newCloseAt: string) =>
+    apiFetch<EvaluationSession>(`/api/sessions/${id}/extend`, {
+      method: "PUT",
+      body: JSON.stringify({ new_close_at: newCloseAt }),
     }),
   delete: (id: string) =>
     apiFetch<{ status: string }>(`/api/sessions/${id}`, {

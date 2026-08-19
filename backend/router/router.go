@@ -116,12 +116,13 @@ func New(cfg *config.Config) http.Handler {
 
                 // === Module 2 — Sessions de saisie mensuelle (cahier des charges §3) ===
                 // Lecture : tous les rôles (filtré par scope dans le handler)
-                // Création/Modification/Suppression : admin + director
+                // Création/Modification/Suppression : admin + director (RBAC director = son école)
                 r.Get("/api/sessions", handlers.ListSessions)
                 r.Group(func(r chi.Router) {
                         r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
                         r.Post("/api/sessions", handlers.CreateSession)
                         r.Put("/api/sessions/{id}/status", handlers.UpdateSessionStatus)
+                        r.Put("/api/sessions/{id}/extend", handlers.ExtendSession)
                         r.Delete("/api/sessions/{id}", handlers.DeleteSession)
                 })
 

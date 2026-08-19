@@ -128,18 +128,21 @@ func ListSessions(w http.ResponseWriter, r *http.Request) {
 // CreateSessionRequest — payload pour créer une session
 type CreateSessionRequest struct {
         ClassID    string `json:"class_id"`
-        Month      int    `json:"month"`  // 1-12
+        Month      int    `json:"month"`
         Year       int    `json:"year"`
-        Status     string `json:"status"` // draft | open | closed | validated
-        EvalType   string `json:"eval_type"`   // composition | exam_blanc
-        EvalNumber int    `json:"eval_number"`  // 1, 2, 3...
+        Status     string `json:"status"`
+        EvalType   string `json:"eval_type"`
+        EvalNumber int    `json:"eval_number"`
+        OpenAt     string `json:"open_at"`   // ISO 8601 : "2026-01-15T08:00:00Z"
+        CloseAt    string `json:"close_at"`  // ISO 8601
+        AutoOpen   bool   `json:"auto_open"`
 }
 
 // CreateSession creates a new evaluation session.
-// Règles :
-//   - "composition" : autorisé pour toutes les classes (CP, CE, CM)
-//   - "exam_blanc"  : réservé au CM2 (inclut automatiquement la matière EPS)
-//   - Unicité : une seule session du même type+numéro par classe+année
+// RBAC :
+//   - admin : toutes les classes
+//   - director : uniquement les classes de son école
+//   - inspector/teacher : pas de création (403)
 func CreateSession(w http.ResponseWriter, r *http.Request) {
         var req CreateSessionRequest
         if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -150,15 +153,6 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, "class_id, month (1-12) et year requis", http.StatusBadRequest)
                 return
         }
-        if req.Status == "" {
-                req.Status = "open" // par défaut ouverte à la saisie
-        }
-        if req.Status != "draft" && req.Status != "open" && req.Status != "closed" && req.Status != "validated" {
-                middleware.JSONError(w, "statut invalide (draft|open|closed|validated)", http.StatusBadRequest)
-                return
-        }
-
-        // Type d'évaluation (défaut: composition)
         if req.EvalType == "" {
                 req.EvalType = "composition"
         }
@@ -169,6 +163,24 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
         if req.EvalNumber < 1 {
                 req.EvalNumber = 1
         }
+        if req.OpenAt == "" || req.CloseAt == "" {
+                middleware.JSONError(w, "open_at et close_at sont obligatoires (format ISO 8601)", http.StatusBadRequest)
+                return
+        }
+        openAt, err := time.Parse(time.RFC3339, req.OpenAt)
+        if err != nil {
+                middleware.JSONError(w, "open_at invalide (format ISO 8601 attendu, ex: 2026-01-15T08:00:00Z)", http.StatusBadRequest)
+                return
+        }
+        closeAt, err := time.Parse(time.RFC3339, req.CloseAt)
+        if err != nil {
+                middleware.JSONError(w, "close_at invalide (format ISO 8601 attendu)", http.StatusBadRequest)
+                return
+        }
+        if !closeAt.After(openAt) {
+                middleware.JSONError(w, "close_at doit être après open_at", http.StatusBadRequest)
+                return
+        }
 
         // Vérifier que la classe existe + récupérer son niveau
         var cls models.Class
@@ -177,13 +189,23 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // Examen Blanc réservé au CM2
+        // RBAC : director ne peut créer que pour son école
+        role := ctxRole(r)
+        if role == "director" {
+                schoolID := ctxSchoolID(r)
+                if schoolID == "" || cls.SchoolID != schoolID {
+                        middleware.JSONError(w, "vous ne pouvez créer des sessions que pour les classes de votre école", http.StatusForbidden)
+                        return
+                }
+        }
+
+        // Examen Blanc réservé au CM
         if req.EvalType == "exam_blanc" && cls.Level != "CM" {
                 middleware.JSONError(w, "les examens blancs sont réservés aux classes de CM (CM1, CM2)", http.StatusBadRequest)
                 return
         }
 
-        // Vérifier l'unicité (une session du même type+numéro par classe+année)
+        // Unicité
         var count int64
         database.DB.Model(&models.EvaluationSession{}).
                 Where("class_id = ? AND year = ? AND eval_type = ? AND eval_number = ?",
@@ -195,19 +217,91 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
+        // Statut : si AutoOpen et openAt dans le futur → draft, sinon open
+        status := "open"
+        if req.AutoOpen && openAt.After(time.Now()) {
+                status = "draft"
+        }
+        if req.Status != "" {
+                status = req.Status
+        }
+
         session := models.EvaluationSession{
                 ClassID:    req.ClassID,
                 Month:      req.Month,
                 Year:       req.Year,
-                Status:     req.Status,
+                Status:     status,
                 EvalType:   req.EvalType,
                 EvalNumber: req.EvalNumber,
+                OpenAt:     &openAt,
+                CloseAt:    &closeAt,
+                AutoOpen:   req.AutoOpen,
         }
         if err := database.DB.Create(&session).Error; err != nil {
                 middleware.JSONError(w, "erreur création session", http.StatusInternalServerError)
                 return
         }
         jsonResponse(w, http.StatusCreated, session)
+}
+
+// ExtendSessionRequest — payload pour prolonger une session
+type ExtendSessionRequest struct {
+        NewCloseAt string `json:"new_close_at"` // ISO 8601
+}
+
+// ExtendSession prolonge la date de clôture d'une session.
+// RBAC : admin + director (son école uniquement).
+func ExtendSession(w http.ResponseWriter, r *http.Request) {
+        id := chi.URLParam(r, "id")
+        var req ExtendSessionRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
+                return
+        }
+        newCloseAt, err := time.Parse(time.RFC3339, req.NewCloseAt)
+        if err != nil {
+                middleware.JSONError(w, "new_close_at invalide (format ISO 8601)", http.StatusBadRequest)
+                return
+        }
+
+        var session models.EvaluationSession
+        if err := database.DB.First(&session, "id = ?", id).Error; err != nil {
+                middleware.JSONError(w, "session introuvable", http.StatusNotFound)
+                return
+        }
+
+        // RBAC : director ne peut prolonger que les sessions de son école
+        role := ctxRole(r)
+        if role == "director" {
+                schoolID := ctxSchoolID(r)
+                var cls models.Class
+                if err := database.DB.First(&cls, "id = ?", session.ClassID).Error; err != nil {
+                        middleware.JSONError(w, "classe introuvable", http.StatusInternalServerError)
+                        return
+                }
+                if schoolID == "" || cls.SchoolID != schoolID {
+                        middleware.JSONError(w, "accès refusé : vous ne pouvez prolonger que les sessions de votre école", http.StatusForbidden)
+                        return
+                }
+        }
+
+        // Validation : la nouvelle date doit être dans le futur ET après l'actuelle
+        if !newCloseAt.After(time.Now()) {
+                middleware.JSONError(w, "la nouvelle date de clôture doit être dans le futur", http.StatusBadRequest)
+                return
+        }
+        if session.CloseAt != nil && !newCloseAt.After(*session.CloseAt) {
+                middleware.JSONError(w, "la nouvelle date doit être après la date de clôture actuelle", http.StatusBadRequest)
+                return
+        }
+
+        session.CloseAt = &newCloseAt
+        session.UpdatedAt = time.Now()
+        if err := database.DB.Save(&session).Error; err != nil {
+                middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
+                return
+        }
+        jsonResponse(w, http.StatusOK, session)
 }
 
 // evalTypeLabel retourne le label lisible d'un type d'évaluation

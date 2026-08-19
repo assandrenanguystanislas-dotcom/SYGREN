@@ -142,11 +142,14 @@ export const EVAL_TYPE_LABELS: Record<EvalType, string> = {
 export interface EvaluationSession {
   id: string;
   class_id: string;
-  month: number; // 1-12
+  month: number;
   year: number;
   status: SessionStatus;
   eval_type: EvalType;
-  eval_number: number; // 1, 2, 3...
+  eval_number: number;
+  open_at: string | null;
+  close_at: string | null;
+  auto_open: boolean;
   created_at: string;
   updated_at: string;
 }

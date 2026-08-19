@@ -1417,3 +1417,63 @@ Stage Summary:
 - EPS automatiquement incluse pour Examen Blanc CM2
 - Numéro d'évaluation libre (1, 2, 3...)
 - Affichage liste clair : "Composition N°1", "Examen Blanc N°2"
+
+---
+Task ID: Session-RBAC-Dates-Scheduling
+Agent: Main (tutor mode)
+Task: RBAC sessions (director=son école) + dates obligatoires + planification auto + prolongation
+
+Work Log:
+- Demande : director peut lancer session pour son école uniquement, admin pour tous
+  + dates ouverture/clôture obligatoires + planification auto + prolongation
+- Option A validée : goroutine dans main.go + ISO 8601 + endpoint /extend
+
+Backend (Go) :
+- models.go : EvaluationSession ajout OpenAt, CloseAt (*time.Time), AutoOpen (bool)
+- handlers/sessions.go :
+  * CreateSessionRequest : ajout OpenAt, CloseAt, AutoOpen
+  * Validation dates : OpenAt + CloseAt obligatoires, CloseAt > OpenAt
+  * RBAC : director ne peut créer que pour les classes de son école (vérif cls.SchoolID)
+  * Auto statut : si AutoOpen + OpenAt futur → draft, sinon open
+  * ExtendSession (nouveau) : PUT /api/sessions/{id}/extend
+    - Body : { new_close_at: "ISO 8601" }
+    - Validation : nouvelle date > now ET > close_at actuel
+    - RBAC : admin + director (son école)
+- main.go : goroutine startSessionScheduler()
+  * Toutes les 60 secondes :
+    1. Sessions draft + AutoOpen=true + OpenAt ≤ now → statut = open
+    2. Sessions open + CloseAt ≤ now → statut = closed
+  * Log des transitions automatiques
+- router.go : ajout route PUT /api/sessions/{id}/extend (admin+director)
+
+Frontend (React) :
+- types.ts : EvaluationSession ajout open_at, close_at, auto_open
+- api.ts : sessionsApi.create accepte dates + auto_open ; sessionsApi.extend(id, newCloseAt)
+- sessions-view.tsx :
+  * FormData : ajout open_at, close_at, auto_open + helpers toLocalDatetime/nowPlusDays/toISO
+  * EMPTY : open_at = maintenant, close_at = +7 jours, auto_open = false
+  * onSubmit : convertit dates locales → ISO 8601
+  * Formulaire : 2 champs datetime-local + checkbox AutoOpen + descriptions dynamiques
+  * Card session : affichage dates (📅 ouverture → clôture) + badge ⏰ si auto
+  * Bouton "Prolonger la clôture" sur sessions open/closed
+  * Modal prolongation : datepicker + info clôture actuelle + validation
+- Import Checkbox
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+
+RBAC final pour les sessions :
+| Rôle     | Créer                | Prolonger            | Valider              |
+|----------|---------------------|---------------------|---------------------|
+| admin    | Toutes écoles       | Toutes sessions     | Toutes              |
+| director | SON école seulement | SON école seulement | SON école           |
+| inspector| ❌                  | ❌                  | ❌                  |
+| teacher  | ❌                  | ❌                  | ❌                  |
+
+Stage Summary:
+- RBAC director restreint à son école (création + prolongation)
+- Dates OpenAt + CloseAt obligatoires (validation ISO 8601)
+- Planification auto : goroutine 60s ouvre/clôture automatiquement
+- Prolongation : endpoint /extend + modal frontend
+- AutoMigrate ajoutera colonnes open_at, close_at, auto_open sur Neon
