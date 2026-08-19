@@ -150,7 +150,7 @@ export default function SynthesePage() {
       </div>
 
       {/* === DOCUMENT (modèle exact fourni par l'utilisateur) === */}
-      <div id="synthese-doc" className="w-[297mm] min-h-[210mm] p-8 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none">
+      <div id="synthese-doc" className="w-[297mm] p-6 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none">
         {/* En-tête supérieur */}
         <div className="flex justify-between items-start mb-2">
           {/* Alignement Gauche */}

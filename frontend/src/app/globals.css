@@ -186,30 +186,18 @@
 }
 
 
-/* === Synthèse des Résultats — Print CSS (paysage A4) === */
+/* === Synthèse des Résultats — Print CSS (paysage A4, 1 page) === */
 @media print {
   @page {
     size: A4 landscape;
-    margin: 10mm;
+    margin: 8mm;
   }
-  body * {
-    visibility: hidden;
-  }
-  #synthese-doc, #synthese-doc * {
-    visibility: visible;
-  }
-  #synthese-doc {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    box-shadow: none !important;
+  html, body {
+    margin: 0 !important;
     padding: 0 !important;
+    height: auto !important;
+    overflow: hidden !important;
   }
-}
-
-/* === Synthèse — Print CSS (correction page blanche) === */
-@media print {
   body * {
     visibility: hidden !important;
   }
@@ -222,8 +210,22 @@
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
+    height: auto !important;
+    max-height: 100vh !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 10mm !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  /* Masquer la barre d'outils et le fond */
+  .print\:hidden {
+    display: none !important;
+  }
+  .min-h-screen {
+    min-height: auto !important;
+    background: white !important;
   }
 }
