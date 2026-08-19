@@ -177,11 +177,11 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 
         // 3. Charger les matières applicables à cette session + classe
         //    Filtrage par Subject.levels : la matière doit contenir le nom de la classe
-        //    (ex: "CP1,CP2" pour une matière CP-only, "CP1,CP2,CE1,CE2,CM1,CM2" pour toutes)
+        //    (ex: "CP1") OU le niveau (ex: "CP" — ancien format rétrocompatible)
         //    + exclusion EPS pour les compositions (sauf si EPS configurée pour cette classe)
         var subjects []models.Subject
         subjectQuery := database.DB.Order("name ASC").
-                Where("levels LIKE ?", "%"+cls.Name+"%")
+                Where("levels LIKE ? OR levels LIKE ?", "%"+cls.Name+"%", "%"+cls.Level+"%")
         if session.EvalType != "exam_blanc" {
                 // Composition : exclure EPS sauf si configurée pour cette classe
                 subjectQuery = subjectQuery.Where("name != ? OR levels LIKE ?", "EPS", "%"+cls.Name+"%")
