@@ -7,8 +7,6 @@ import (
         "sygren-api/database"
         "sygren-api/middleware"
         "sygren-api/models"
-
-        "github.com/go-chi/chi/v5"
 )
 
 // === Synthèse des Résultats — Données JSON pour rendu HTML frontend ===

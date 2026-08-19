@@ -39,6 +39,11 @@ func ListClasses(w http.ResponseWriter, r *http.Request) {
                 query = query.Where("active = ?", true)
         }
 
+        // Filtre optionnel par school_id (query param)
+        if schoolID := r.URL.Query().Get("school_id"); schoolID != "" {
+                query = query.Where("classes.school_id = ?", schoolID)
+        }
+
         switch role {
         case "inspector":
                 iepID := ctxIEPID(r)
