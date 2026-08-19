@@ -138,10 +138,10 @@ func New(cfg *config.Config) http.Handler {
 
                 // === Barèmes de notation (cahier des charges §3 Module 2) ===
                 // Lecture : tous les rôles (pour afficher les placeholders /max)
-                // Création/Modification/Suppression : admin + director
+                // Création/Modification/Suppression : admin uniquement
                 r.Get("/api/grade-scales", handlers.ListGradeScales)
                 r.Group(func(r chi.Router) {
-                        r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+                        r.Use(middleware.RequireRole(models.RoleAdmin))
                         r.Post("/api/grade-scales", handlers.CreateGradeScale)
                         r.Put("/api/grade-scales/{id}", handlers.UpdateGradeScale)
                         r.Delete("/api/grade-scales/{id}", handlers.DeleteGradeScale)

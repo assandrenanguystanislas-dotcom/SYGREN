@@ -39,9 +39,12 @@ const LEVEL_COLORS: Record<Level, string> = {
   CM: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
-export function GradeScalesView() {
+// GradeScalesPanel — panneau de gestion des barèmes de notation.
+// Intégré dans la vue Paramètres (admin uniquement).
+// Export nommé pour usage direct dans settings-view.tsx.
+export function GradeScalesPanel() {
   const user = useAuthStore((s) => s.user);
-  const canEdit = user?.role === "admin" || user?.role === "director";
+  const canEdit = user?.role === "admin"; // seul l'admin peut modifier les barèmes
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -155,27 +158,26 @@ export function GradeScalesView() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-border/60">
-        <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Gauge className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-base">Barèmes de notation</h2>
-              <p className="text-xs text-muted-foreground">
-                {scales.length} barème(s) · CP /10 · CE /30 (Dictée /20) · CM /50 (Dictée /20)
-              </p>
-            </div>
+      {/* En-tête inline (pas de Card externe, intégré dans Paramètres) */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Gauge className="w-4 h-4" />
           </div>
-          {canEdit && (
-            <Button onClick={() => setDialogOpen(true)} size="sm" className="shadow-sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Nouveau barème
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+          <div>
+            <h3 className="font-semibold text-base">Barèmes de notation</h3>
+            <p className="text-xs text-muted-foreground">
+              {scales.length} barème(s) · CP /10 · CE /30 (Dictée /20) · CM /50 (Dictée /20)
+            </p>
+          </div>
+        </div>
+        {canEdit && (
+          <Button onClick={() => setDialogOpen(true)} size="sm" className="shadow-sm">
+            <Plus className="w-4 h-4 mr-1.5" />
+            Nouveau barème
+          </Button>
+        )}
+      </div>
 
       {LEVELS.map((level) => (
         <Card key={level} className="border-border/60">

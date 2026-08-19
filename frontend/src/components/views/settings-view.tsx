@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { GradeScalesPanel } from "./grade-scales-view";
 
 // Labels lisibles pour les catégories
 const CATEGORY_LABELS: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
@@ -307,6 +308,9 @@ export function SettingsView() {
           </Card>
         );
       })}
+
+      {/* Section Barèmes de notation (admin uniquement, cahier des charges §3 Module 2) */}
+      <GradeScalesPanel />
     </div>
   );
 }

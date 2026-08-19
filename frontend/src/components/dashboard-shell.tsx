@@ -16,7 +16,6 @@ import {
   Trophy,
   ChevronRight,
   UserCog,
-  Gauge,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -83,12 +82,6 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Évaluations",
     icon: <ClipboardList className="w-4 h-4" />,
     roles: ["admin", "director", "inspector", "teacher"],
-  },
-  {
-    id: "grade-scales",
-    label: "Barèmes",
-    icon: <Gauge className="w-4 h-4" />,
-    roles: ["admin", "director"],
   },
   {
     id: "results",

@@ -1329,3 +1329,39 @@ Stage Summary:
 - Seuils de mentions proportionnels automatiquement (Option A validée)
 - Affichage frontend adapté : value/max pour notes, average/scale pour moyennes
 - Dashboard : pass rate calculé correctement selon l'échelle du niveau
+
+---
+Task ID: Move-GradeScales-To-Settings
+Agent: Main (tutor mode)
+Task: Déplacer la gestion des barèmes vers la vue Paramètres + admin uniquement
+
+Work Log:
+- Demande utilisateur : déplacer "Barèmes" vers Paramètres + seul admin peut modifier
+
+Backend (Go) :
+- router.go : RequireRole(RoleAdmin) pour CRUD /api/grade-scales
+  (auparavant admin+director → maintenant admin seul)
+- Lecture /api/grade-scales reste ouverte à tous (pour afficher les placeholders /max)
+
+Frontend (React) :
+- dashboard-shell.tsx : retrait entrée "Barèmes" de la sidebar
+  + retrait import Gauge (plus utilisé dans le shell)
+  → sidebar admin : 12 → 11 entrées
+- page.tsx : retrait import GradeScalesView + route grade-scales
+- grade-scales-view.tsx :
+  * Renommé GradeScalesView → GradeScalesPanel (composant réutilisable)
+  * Retrait du Card header externe (intégré dans Paramètres maintenant)
+  * canEdit : admin seulement (plus director)
+- settings-view.tsx :
+  * Import GradeScalesPanel depuis grade-scales-view
+  * Ajout <GradeScalesPanel /> après la liste des paramètres par catégorie
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0, next build OK
+
+Stage Summary:
+- Vue "Barèmes" supprimée de la sidebar (12→11 entrées admin)
+- Barèmes intégrés dans la vue Paramètres (admin uniquement)
+- RBAC backend : CRUD admin seul (lecture ouverte à tous)
+- Plus cohérent : tous les réglages système centralisés dans Paramètres
