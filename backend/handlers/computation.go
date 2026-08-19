@@ -175,9 +175,23 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 return nil, err
         }
 
-        // 3. Charger toutes les matières
+        // 3. Charger les matières applicables à cette session
+        //    - Composition : toutes les matières SAUF EPS (sauf si EPS est configurée
+        //      pour le niveau de la classe via ses "levels")
+        //    - Examen Blanc (CM2 uniquement) : toutes les matières, EPS INCLUSE
         var subjects []models.Subject
-        if err := database.DB.Order("name ASC").Find(&subjects).Error; err != nil {
+        subjectQuery := database.DB.Order("name ASC")
+        if session.EvalType == "exam_blanc" {
+                // Examen Blanc : toutes les matières, EPS incluse (réservé CM2)
+                // Pas de filtre supplémentaire
+        } else {
+                // Composition : exclure EPS (qui est réservée aux examens blancs CM2)
+                // sauf si EPS est explicitement configurée pour une classe de ce niveau
+                // via Subject.levels (ex: "CM2" ou "CM1,CM2")
+                subjectQuery = subjectQuery.Where("name != ?", "EPS").
+                        Or("levels LIKE ?", "%"+cls.Name+"%")
+        }
+        if err := subjectQuery.Find(&subjects).Error; err != nil {
                 return nil, err
         }
 

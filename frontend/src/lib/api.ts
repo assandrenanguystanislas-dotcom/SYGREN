@@ -439,6 +439,8 @@ export const sessionsApi = {
     month: number;
     year: number;
     status?: SessionStatus;
+    eval_type?: "composition" | "exam_blanc";
+    eval_number?: number;
   }) =>
     apiFetch<EvaluationSession>("/api/sessions", {
       method: "POST",

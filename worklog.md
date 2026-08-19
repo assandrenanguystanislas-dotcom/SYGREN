@@ -1365,3 +1365,55 @@ Stage Summary:
 - Barèmes intégrés dans la vue Paramètres (admin uniquement)
 - RBAC backend : CRUD admin seul (lecture ouverte à tous)
 - Plus cohérent : tous les réglages système centralisés dans Paramètres
+
+---
+Task ID: Eval-Types-Composition-ExamBlanc
+Agent: Main (tutor mode)
+Task: Types d'évaluation (Composition N°X / Examen Blanc N°X) + exception EPS/CM2
+
+Work Log:
+- Besoin : différencier Composition (mensuelle) et Examen Blanc (CM2, inclut EPS)
+- Validation utilisateur : "Go" sur proposition A (champs EvalType + EvalNumber)
+
+Backend (Go) :
+- models.go : EvaluationSession ajout EvalType (composition|exam_blanc) + EvalNumber (int)
+- handlers/sessions.go :
+  * CreateSessionRequest : ajout EvalType + EvalNumber
+  * Validation : EvalType valide, EvalNumber ≥ 1
+  * Examen Blanc réservé CM (CM1/CM2) — 400 si classe non-CM
+  * Unicité : (class_id, year, eval_type, eval_number) au lieu de (class_id, month, year)
+  * evalTypeLabel() helper pour messages d'erreur clairs
+- handlers/computation.go :
+  * Filtrage matières selon EvalType :
+    - exam_blanc → toutes matières (EPS incluse, réservé CM2)
+    - composition → exclure EPS SAUF si EPS configurée pour la classe (levels LIKE %ClassName%)
+  * La moyenne ne prend en compte que les matières applicables au type de session
+
+Frontend (React) :
+- types.ts : EvalType + EVAL_TYPE_LABELS + EvaluationSession.eval_type/eval_number
+- api.ts : sessionsApi.create accepte eval_type + eval_number
+- sessions-view.tsx :
+  * FormData : ajout eval_type + eval_number
+  * EMPTY : eval_type="composition", eval_number="1"
+  * onSubmit : passe eval_type + eval_number à l'API
+  * Formulaire : 2 nouveaux champs (Select Type + Input Numéro)
+    + description dynamique selon le type (avertissement si Examen Blanc)
+  * Affichage liste : "Composition N°1" ou "Examen Blanc N°2" au lieu de juste "Mois Année"
+  * Import Input (manquant)
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+
+Règles métier implémentées :
+| Type          | Niveau  | EPS inclus ? | Unicité                    |
+|---------------|---------|--------------|----------------------------|
+| Composition   | Tous    | Non (sauf si configurée) | (class, year, type, num)  |
+| Examen Blanc  | CM seul | Oui          | (class, year, type, num)   |
+
+Stage Summary:
+- Types d'évaluation différenciés (Composition / Examen Blanc)
+- Examen Blanc réservé au CM (validation backend 400 si non-CM)
+- EPS automatiquement incluse pour Examen Blanc CM2
+- Numéro d'évaluation libre (1, 2, 3...)
+- Affichage liste clair : "Composition N°1", "Examen Blanc N°2"

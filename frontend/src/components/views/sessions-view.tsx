@@ -27,6 +27,7 @@ import {
 import type { SessionWithDetails, ClassWithDetails } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -44,12 +45,16 @@ interface FormData {
   class_id: string;
   month: string;
   year: string;
+  eval_type: "composition" | "exam_blanc";
+  eval_number: string;
 }
 
 const EMPTY: FormData = {
   class_id: "",
   month: String(new Date().getMonth() + 1),
   year: String(new Date().getFullYear()),
+  eval_type: "composition",
+  eval_number: "1",
 };
 
 export function SessionsView() {
@@ -103,6 +108,8 @@ export function SessionsView() {
           month: parseInt(form.month, 10),
           year: parseInt(form.year, 10),
           status: "open",
+          eval_type: form.eval_type,
+          eval_number: parseInt(form.eval_number, 10) || 1,
         },
       ]);
       setDialogOpen(false);
@@ -184,10 +191,10 @@ export function SessionsView() {
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div>
                       <p className="font-semibold text-base">
-                        {monthLabel(s.month)} {s.year}
+                        {s.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{s.eval_number}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {s.class_name ?? "Classe inconnue"}
+                        {monthLabel(s.month)} {s.year} · {s.class_name ?? "Classe inconnue"}
                         {s.school_name && ` · ${s.school_name}`}
                       </p>
                     </div>
@@ -327,6 +334,50 @@ export function SessionsView() {
                 </Select>
               </div>
             </div>
+
+            {/* Type d'évaluation + Numéro */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="session-eval-type">Type d&apos;évaluation</Label>
+                <Select
+                  value={form.eval_type}
+                  onValueChange={(v) =>
+                    setForm({ ...form, eval_type: v as "composition" | "exam_blanc" })
+                  }
+                >
+                  <SelectTrigger id="session-eval-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="composition">Composition</SelectItem>
+                    <SelectItem value="exam_blanc">Examen Blanc (CM2)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  {form.eval_type === "exam_blanc"
+                    ? "⚠️ Examen Blanc réservé au CM2 — inclut la matière EPS."
+                    : "Composition classique (sans EPS sauf si configurée pour la classe)."}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="session-eval-number">Numéro</Label>
+                <Input
+                  id="session-eval-number"
+                  type="number"
+                  min="1"
+                  value={form.eval_number}
+                  onChange={(e) =>
+                    setForm({ ...form, eval_number: e.target.value })
+                  }
+                  required
+                  className="font-mono"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  N° de l&apos;évaluation dans l&apos;année (1, 2, 3…).
+                </p>
+              </div>
+            </div>
+
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] text-emerald-700">
               ℹ️ La session sera créée avec le statut « Saisie ouverte ». Les enseignants pourront saisir leurs notes immédiatement.
             </div>

@@ -132,6 +132,12 @@ export function formatLevels(levels: SubjectClass[]): string {
 }
 
 export type SessionStatus = "draft" | "open" | "closed" | "validated";
+export type EvalType = "composition" | "exam_blanc";
+
+export const EVAL_TYPE_LABELS: Record<EvalType, string> = {
+  composition: "Composition",
+  exam_blanc: "Examen Blanc",
+};
 
 export interface EvaluationSession {
   id: string;
@@ -139,6 +145,8 @@ export interface EvaluationSession {
   month: number; // 1-12
   year: number;
   status: SessionStatus;
+  eval_type: EvalType;
+  eval_number: number; // 1, 2, 3...
   created_at: string;
   updated_at: string;
 }

@@ -143,15 +143,19 @@ func (s *Subject) BeforeCreate(tx *gorm.DB) error {
 }
 
 // === EvaluationSession ===
-// Session mensuelle de saisie. Statuts : draft → open → closed → validated
+// Session d'évaluation. Statuts : draft → open → closed → validated
+// Type : "composition" (défaut) ou "exam_blanc" (réservé au CM2, inclut EPS)
+// Number : numéro de l'évaluation dans l'année (Composition N°1, Examen Blanc N°2, etc.)
 type EvaluationSession struct {
-        ID        string    `gorm:"primaryKey;type:text" json:"id"`
-        ClassID   string    `gorm:"type:text;index" json:"class_id"`
-        Month     int       `json:"month"`  // 1-12
-        Year      int       `json:"year"`
-        Status    string    `gorm:"type:text;default:draft" json:"status"` // draft|open|closed|validated
-        CreatedAt time.Time `json:"created_at"`
-        UpdatedAt time.Time `json:"updated_at"`
+        ID         string    `gorm:"primaryKey;type:text" json:"id"`
+        ClassID    string    `gorm:"type:text;index" json:"class_id"`
+        Month      int       `json:"month"`  // 1-12 (mois de l'évaluation)
+        Year       int       `json:"year"`
+        Status     string    `gorm:"type:text;default:draft" json:"status"` // draft|open|closed|validated
+        EvalType   string    `gorm:"type:text;default:composition" json:"eval_type"` // composition|exam_blanc
+        EvalNumber int       `gorm:"default:1" json:"eval_number"` // 1, 2, 3... (Composition N°1, etc.)
+        CreatedAt  time.Time `json:"created_at"`
+        UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (e *EvaluationSession) BeforeCreate(tx *gorm.DB) error {
