@@ -192,14 +192,26 @@ export const iepApi = {
 export const schoolsApi = {
   list: () =>
     apiFetch<{ schools: SchoolWithStats[]; count: number }>("/api/schools"),
-  create: (data: { iep_id: string; name: string; address: string }) =>
+  create: (data: {
+    iep_id: string;
+    code: string;
+    name: string;
+    address: string;
+    status: "public" | "private" | "community";
+  }) =>
     apiFetch<School>("/api/schools", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   update: (
     id: string,
-    data: { iep_id?: string; name?: string; address?: string },
+    data: {
+      iep_id?: string;
+      code?: string;
+      name?: string;
+      address?: string;
+      status?: "public" | "private" | "community";
+    },
   ) =>
     apiFetch<School>(`/api/schools/${id}`, {
       method: "PUT",

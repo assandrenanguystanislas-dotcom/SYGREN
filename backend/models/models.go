@@ -64,8 +64,10 @@ func (i *IEP) BeforeCreate(tx *gorm.DB) error {
 type School struct {
         ID        string    `gorm:"primaryKey;type:text" json:"id"`
         IEPID     string    `gorm:"type:text;index" json:"iep_id"`
+        Code      string    `gorm:"uniqueIndex;type:text" json:"code"` // code unique identifiant l'école dans le système IEP
         Name      string    `gorm:"type:text" json:"name"`
         Address   string    `gorm:"type:text" json:"address"`
+        Status    string    `gorm:"type:text;default:public" json:"status"` // public | private | community
         CreatedAt time.Time `json:"created_at"`
 }
 

@@ -79,11 +79,20 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
         })
 }
 
+// ValidSchoolStatus — statuts autorisés pour une école
+var ValidSchoolStatus = map[string]string{
+        "public":    "Public",
+        "private":   "Privé",
+        "community": "Communautaire",
+}
+
 // CreateSchoolRequest — payload pour créer une école
 type CreateSchoolRequest struct {
         IEPID   string `json:"iep_id"`
+        Code    string `json:"code"`  // code unique identifiant l'école dans le système IEP
         Name    string `json:"name"`
         Address string `json:"address"`
+        Status  string `json:"status"` // public | private | community
 }
 
 // CreateSchool creates a new school (admin only).
@@ -95,8 +104,16 @@ func CreateSchool(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
                 return
         }
-        if req.Name == "" || req.IEPID == "" {
-                middleware.JSONError(w, "nom et iep_id requis", http.StatusBadRequest)
+        if req.Name == "" || req.IEPID == "" || req.Code == "" {
+                middleware.JSONError(w, "code, nom et iep_id requis", http.StatusBadRequest)
+                return
+        }
+        // Valider le statut (défaut: public)
+        if req.Status == "" {
+                req.Status = "public"
+        }
+        if _, ok := ValidSchoolStatus[req.Status]; !ok {
+                middleware.JSONError(w, "statut invalide (public, private, community)", http.StatusBadRequest)
                 return
         }
         // Vérifier que l'IEP existe réellement en base (évite les écoles orphelines)
@@ -105,10 +122,19 @@ func CreateSchool(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, "IEP introuvable — créez l'inspection avant d'y ajouter une école", http.StatusBadRequest)
                 return
         }
+        // Vérifier l'unicité du code école
+        var existing int64
+        database.DB.Model(&models.School{}).Where("code = ?", req.Code).Count(&existing)
+        if existing > 0 {
+                middleware.JSONError(w, "une école avec ce code existe déjà", http.StatusConflict)
+                return
+        }
         school := models.School{
                 IEPID:   req.IEPID,
+                Code:    req.Code,
                 Name:    req.Name,
                 Address: req.Address,
+                Status:  req.Status,
         }
         if err := database.DB.Create(&school).Error; err != nil {
                 middleware.JSONError(w, "erreur création école", http.StatusInternalServerError)
@@ -133,6 +159,7 @@ func CreateSchool(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateSchool updates an existing school.
+// Le code peut être modifié (avec vérification d'unicité) ainsi que le statut.
 func UpdateSchool(w http.ResponseWriter, r *http.Request) {
         id := chi.URLParam(r, "id")
         var req CreateSchoolRequest
@@ -153,6 +180,23 @@ func UpdateSchool(w http.ResponseWriter, r *http.Request) {
         }
         if req.IEPID != "" {
                 school.IEPID = req.IEPID
+        }
+        if req.Code != "" && req.Code != school.Code {
+                // Vérifier l'unicité du nouveau code
+                var existing int64
+                database.DB.Model(&models.School{}).Where("code = ? AND id != ?", req.Code, id).Count(&existing)
+                if existing > 0 {
+                        middleware.JSONError(w, "une école avec ce code existe déjà", http.StatusConflict)
+                        return
+                }
+                school.Code = req.Code
+        }
+        if req.Status != "" {
+                if _, ok := ValidSchoolStatus[req.Status]; !ok {
+                        middleware.JSONError(w, "statut invalide (public, private, community)", http.StatusBadRequest)
+                        return
+                }
+                school.Status = req.Status
         }
         if err := database.DB.Save(&school).Error; err != nil {
                 middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)

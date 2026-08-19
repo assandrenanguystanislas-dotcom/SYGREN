@@ -26,7 +26,9 @@ import type {
   IEPWithStats,
   ClassWithDetails,
   TeacherWithDetails,
+  SchoolStatus,
 } from "@/lib/types";
+import { SCHOOL_STATUS_LABELS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,11 +52,19 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface FormData {
   iep_id: string;
+  code: string;
   name: string;
   address: string;
+  status: SchoolStatus;
 }
 
-const EMPTY: FormData = { iep_id: "", name: "", address: "" };
+const EMPTY: FormData = {
+  iep_id: "",
+  code: "",
+  name: "",
+  address: "",
+  status: "public",
+};
 
 export function SchoolsView() {
   const user = useAuthStore((s) => s.user);
@@ -100,7 +110,13 @@ export function SchoolsView() {
     setDialogOpen(true);
   }
   function openEdit(s: SchoolWithStats) {
-    setForm({ iep_id: s.iep_id, name: s.name, address: s.address });
+    setForm({
+      iep_id: s.iep_id,
+      code: s.code ?? "",
+      name: s.name,
+      address: s.address,
+      status: (s.status as SchoolStatus) ?? "public",
+    });
     setEditing(s);
     setDialogOpen(true);
   }
@@ -171,17 +187,39 @@ export function SchoolsView() {
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold truncate">{s.name}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3" />
-                        {s.address || "Adresse non renseignée"}
-                      </p>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${
+                          s.status === "public"
+                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            : s.status === "private"
+                              ? "border-amber-200 bg-amber-50 text-amber-700"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {SCHOOL_STATUS_LABELS[(s.status as SchoolStatus) ?? "public"]}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3" />
+                      {s.address || "Adresse non renseignée"}
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      {s.code && (
+                        <Badge variant="secondary" className="text-[10px] font-mono">
+                          <span className="opacity-70 mr-1">Code:</span>
+                          {s.code}
+                        </Badge>
+                      )}
                       {s.iep_name && (
-                        <Badge variant="outline" className="mt-2 text-[10px]">
+                        <Badge variant="outline" className="text-[10px]">
                           {s.iep_name}
                         </Badge>
                       )}
                     </div>
+                  </div>
                     {canEdit && (
                       <div className="flex items-center gap-1">
                         <Button
@@ -277,6 +315,40 @@ export function SchoolsView() {
                 </p>
               )}
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="school-code">Code école</Label>
+                <Input
+                  id="school-code"
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  placeholder="Ex : IEP-ABJ-001"
+                  required
+                  className="font-mono"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Code unique identifiant l&apos;école dans le système IEP.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="school-status">Statut</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) =>
+                    setForm({ ...form, status: v as SchoolStatus })
+                  }
+                >
+                  <SelectTrigger id="school-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Public</SelectItem>
+                    <SelectItem value="private">Privé</SelectItem>
+                    <SelectItem value="community">Communautaire</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="school-name">Nom de l'école</Label>
               <Input
@@ -305,7 +377,10 @@ export function SchoolsView() {
               >
                 Annuler
               </Button>
-              <Button type="submit" disabled={!form.iep_id}>
+              <Button
+                type="submit"
+                disabled={!form.iep_id || !form.code || !form.name}
+              >
                 {editing ? "Enregistrer" : "Créer l'école"}
               </Button>
             </div>

@@ -40,10 +40,20 @@ export interface IEP {
 export interface School {
   id: string;
   iep_id: string;
+  code: string; // code unique identifiant l'école dans le système IEP
   name: string;
   address: string;
+  status: SchoolStatus; // public | private | community
   created_at: string;
 }
+
+export type SchoolStatus = "public" | "private" | "community";
+
+export const SCHOOL_STATUS_LABELS: Record<SchoolStatus, string> = {
+  public: "Public",
+  private: "Privé",
+  community: "Communautaire",
+};
 
 export type ClassLevel = "CP" | "CE" | "CM";
 export type ClassName = "CP1" | "CP2" | "CE1" | "CE2" | "CM1" | "CM2";

@@ -1007,3 +1007,52 @@ Stage Summary:
 - Garde-fou : désactivation interdite si élèves actifs dans la classe
 - Affectation enseignant directement dans le panneau Classes de l'école
 - Directeur voit UNIQUEMENT son école (backend filtre par school_id du director)
+
+---
+Task ID: School-Code-Status
+Agent: Main (tutor mode)
+Task: École — ajout Code unique (identifiant IEP) + Statut Public/Privé/Communautaire
+
+Work Log:
+- Besoin : chaque école a un code unique qui l'identifie dans le système IEP
+  + un statut administratif (Public, Privé, Communautaire)
+
+Backend (Go) :
+- models.go : School ajoute 2 champs
+  * Code string gorm:"uniqueIndex;type:text" — code unique identifiant l'école
+  * Status string gorm:"type:text;default:public" — public | private | community
+- handlers/schools.go :
+  * ValidSchoolStatus map (public/private/community → labels français)
+  * CreateSchoolRequest : ajout Code + Status
+  * CreateSchool : validation Code requis + unique (409 si déjà pris),
+    Status défaut "public", validation enum
+  * UpdateSchool : permet modification Code (avec vérif unicité) + Status
+- AutoMigrate ajoutera les 2 colonnes sur Neon au prochain redéploiement
+
+Frontend (React) :
+- types.ts : School.code + School.status + type SchoolStatus + SCHOOL_STATUS_LABELS
+- api.ts : schoolsApi.create/update acceptent code + status
+- schools-view.tsx :
+  * FormData : ajout code + status
+  * EMPTY : code="" status="public" (défaut)
+  * openEdit : récupère code + status
+  * Card école : badge statut coloré (bleu=public, ambre=privé, vert=communautaire)
+    + badge "Code: XXX" en mono
+  * Formulaire : 2 champs sur grid 2 colonnes (Code mono + Select Statut)
+  * Bouton submit disabled si !code || !name (en plus de !iep_id)
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+
+Migration données :
+- AutoMigrate va ajouter colonnes code (uniqueIndex) et status (default 'public')
+- L'école existante "EPP CÔTIÈRE PALMERAIE" aura code="" (vide) et status="public"
+  → il faudra l'éditer pour lui attribuer un code
+
+Stage Summary:
+- École : Code unique (requis, uniqueIndex DB, validation 409 si doublon)
+- École : Statut Public/Privé/Communautaire (enum, défaut public)
+- Affichage : badge statut coloré + badge code mono dans la card
+- Formulaire : 2 champs sur grid 2 colonnes (Code + Statut)
+- 0 impact sur les classes/élèves (champs indépendants)
