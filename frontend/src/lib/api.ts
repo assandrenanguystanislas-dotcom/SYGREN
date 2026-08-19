@@ -618,6 +618,23 @@ export const dashboardApi = {
   get: () => apiFetch<DashboardData>("/api/dashboard"),
 };
 
+// === Synthèse des Résultats (PDF officiel) ===
+
+export const reportsApi = {
+  /** Télécharge la synthèse des résultats (PDF) pour une session */
+  downloadSynthese: async (sessionId: string): Promise<Blob> => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(withPort(`/api/reports/synthese?session_id=${sessionId}`), { headers });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new ApiException(text || `Erreur ${res.status}`, res.status);
+    }
+    return res.blob();
+  },
+};
+
 // === Paramètres système (admin uniquement) ===
 
 export const settingsApi = {

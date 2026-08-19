@@ -166,6 +166,11 @@ func New(cfg *config.Config) http.Handler {
                         r.Post("/api/report-cards/generate-batch/{sessionId}", handlers.GenerateBatchReportCards)
                 })
 
+                // === Synthèse des Résultats (cahier des charges §3 Module 5) ===
+                // Document officiel récapitulatif par niveau/genre
+                // RBAC : admin (toutes), director (son école), inspector (son IEP)
+                r.Get("/api/reports/synthese", handlers.GenerateSynthesePDF)
+
                 // === Module 5 — Tableaux de bord analytiques ===
                 // GET /api/dashboard : renvoie des KPIs agrégés selon le rôle/scope
                 r.Get("/api/dashboard", handlers.GetDashboard)

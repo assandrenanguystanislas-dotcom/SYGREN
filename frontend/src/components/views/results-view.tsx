@@ -14,9 +14,11 @@ import {
   Calendar,
   Medal,
   AlertCircle,
+  FileText,
 } from "lucide-react";
+import { toast } from "sonner";
 
-import { sessionsApi, computationApi } from "@/lib/api";
+import { sessionsApi, computationApi, reportsApi } from "@/lib/api";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import {
   MENTION_COLOR_CLASSES,
@@ -106,9 +108,32 @@ export function ResultsView() {
               </div>
             </div>
             {sessionCfg && selectedSession && (
-              <Badge variant="outline" className={cn("text-xs", sessionCfg.color)}>
-                {sessionCfg.label}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={cn("text-xs", sessionCfg.color)}>
+                  {sessionCfg.label}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const blob = await reportsApi.downloadSynthese(autoSessionId!);
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `synthese_${selectedSession?.class_name ?? "classe"}_${selectedSession?.eval_type ?? "composition"}_N${selectedSession?.eval_number ?? 1}.pdf`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : "Erreur";
+                      toast.error("Téléchargement échoué", { description: msg });
+                    }
+                  }}
+                >
+                  <FileText className="w-4 h-4 mr-1.5" />
+                  Synthèse PDF
+                </Button>
+              </div>
             )}
           </div>
 
