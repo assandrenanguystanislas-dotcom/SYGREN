@@ -618,21 +618,35 @@ export const dashboardApi = {
   get: () => apiFetch<DashboardData>("/api/dashboard"),
 };
 
-// === Synthèse des Résultats (PDF officiel) ===
+// === Synthèse des Résultats (document officiel) ===
 
 export const reportsApi = {
-  /** Télécharge la synthèse des résultats (PDF) pour une session */
-  downloadSynthese: async (sessionId: string): Promise<Blob> => {
-    const token = getToken();
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(withPort(`/api/reports/synthese?session_id=${sessionId}`), { headers });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new ApiException(text || `Erreur ${res.status}`, res.status);
-    }
-    return res.blob();
-  },
+  /** Récupère les données JSON pour le document de synthèse */
+  getSyntheseData: (sessionId: string) =>
+    apiFetch<{
+      iep_name: string;
+      iep_region: string;
+      school_name: string;
+      school_code: string;
+      school_addr: string;
+      eval_label: string;
+      eval_number: number;
+      month: number;
+      year: number;
+      levels: Array<{
+        class_name: string;
+        inscrits: [number, number, number];
+        presents: [number, number, number];
+        admis: [number, number, number];
+        pct_admis: [number, number, number];
+      }>;
+      totals: {
+        inscrits_g: number; inscrits_f: number; inscrits_t: number;
+        presents_g: number; presents_f: number; presents_t: number;
+        admis_g: number; admis_f: number; admis_t: number;
+        pct_g: number; pct_f: number; pct_t: number;
+      };
+    }>(`/api/reports/synthese-data?session_id=${sessionId}`),
 };
 
 // === Paramètres système (admin uniquement) ===

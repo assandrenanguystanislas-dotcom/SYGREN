@@ -20,6 +20,7 @@ import { toast } from "sonner";
 
 import { sessionsApi, computationApi, reportsApi } from "@/lib/api";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
+import { SyntheseDocument } from "./synthese-document";
 import {
   MENTION_COLOR_CLASSES,
   type SessionResults,
@@ -48,6 +49,7 @@ import { cn } from "@/lib/utils";
 export function ResultsView() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
+  const [showSynthese, setShowSynthese] = useState(false);
 
   // Charger les sessions
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
@@ -89,6 +91,11 @@ export function ResultsView() {
     ? SESSION_STATUS_CONFIG[selectedSession.status as keyof typeof SESSION_STATUS_CONFIG]
     : null;
 
+  // Afficher le document de synthèse si demandé
+  if (showSynthese && autoSessionId) {
+    return <SyntheseDocument sessionId={autoSessionId} onClose={() => setShowSynthese(false)} />;
+  }
+
   return (
     <div className="space-y-4">
       {/* En-tête + sélecteur */}
@@ -115,20 +122,7 @@ export function ResultsView() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={async () => {
-                    try {
-                      const blob = await reportsApi.downloadSynthese(autoSessionId!);
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `synthese_${selectedSession?.class_name ?? "classe"}_${selectedSession?.eval_type ?? "composition"}_N${selectedSession?.eval_number ?? 1}.pdf`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : "Erreur";
-                      toast.error("Téléchargement échoué", { description: msg });
-                    }
-                  }}
+                  onClick={() => setShowSynthese(true)}
                 >
                   <FileText className="w-4 h-4 mr-1.5" />
                   Synthèse PDF

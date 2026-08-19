@@ -167,9 +167,9 @@ func New(cfg *config.Config) http.Handler {
                 })
 
                 // === Synthèse des Résultats (cahier des charges §3 Module 5) ===
-                // Document officiel récapitulatif par niveau/genre
+                // Données JSON pour rendu HTML frontend (document officiel paysage)
                 // RBAC : admin (toutes), director (son école), inspector (son IEP)
-                r.Get("/api/reports/synthese", handlers.GenerateSynthesePDF)
+                r.Get("/api/reports/synthese-data", handlers.GetSyntheseData)
 
                 // === Module 5 — Tableaux de bord analytiques ===
                 // GET /api/dashboard : renvoie des KPIs agrégés selon le rôle/scope
