@@ -284,23 +284,26 @@ export default function SynthesePage() {
           </table>
         </div>
 
-        {/* Zone des Signatures et Cachets (Espace réservé réajusté) */}
-        <div className="mt-6 pt-2">
+        {/* Date/lieu juste sous le tableau + signatures sur la même ligne */}
+        <div className="mt-4">
+          {/* Date/lieu alignée à droite */}
+          <p className="text-right font-bold mb-6">
+            Fait à {data.iep_region}, le ......................... {data.year}
+          </p>
+
+          {/* Signatures sur la même ligne */}
           <div className="flex justify-between items-start font-bold">
             {/* Côté Directeur */}
             <div className="text-left w-1/2">
-              <p className="underline mb-2">Le Directeur</p>
-              {/* Espace vide de ~96px pour le tampon circulaire et la signature manuscrite */}
-              <div className="h-24"></div>
+              <p className="underline mb-1">Le Directeur</p>
+              <div className="h-16"></div>
               <p className="text-xs uppercase">{data.school_name}</p>
             </div>
 
             {/* Côté Inspecteur */}
             <div className="text-right w-1/2">
-              <p className="mb-2">Fait à {data.iep_region}, le ......................... {data.year}</p>
-              <p className="underline pr-12">L&apos;Inspecteur</p>
-              {/* Espace identique réservé à la signature de l'inspecteur */}
-              <div className="h-24"></div>
+              <p className="underline mb-1">L&apos;Inspecteur</p>
+              <div className="h-16"></div>
             </div>
           </div>
         </div>
