@@ -96,12 +96,15 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
       {/* === DOCUMENT === */}
       <div
         id="synthese-doc"
-        className="bg-white mx-auto p-8 shadow-lg print:shadow-none print:p-0"
+        className="bg-white mx-auto shadow-lg print:shadow-none print:p-0"
         style={{
-          width: "297mm",
+          width: "100%",
+          maxWidth: "297mm",
           minHeight: "210mm",
+          padding: "20px",
           fontFamily: "Helvetica, Arial, sans-serif",
           color: NAVY,
+          overflowX: "auto",
         }}
       >
         {/* En-tête */}
