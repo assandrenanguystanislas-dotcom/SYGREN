@@ -166,11 +166,18 @@ export default function SynthesePage() {
 
           {/* Alignement Droite */}
           <div className="text-right space-y-1">
-            <p className="font-semibold">République de Côte d&apos;Ivoire</p>
-            <p className="text-[10px] tracking-wide">Union-Discipline-Travail</p>
-            <div className="flex justify-end my-1">
-              <img src="/ci-coat-of-arms.png" alt="Armoiries Côte d'Ivoire" className="h-14 object-contain" />
+            <p className="font-semibold text-sm">République de Côte d&apos;Ivoire</p>
+            <p className="text-[10px] tracking-wide uppercase italic">Union - Discipline - Travail</p>
+
+            {/* Armoiries officielles */}
+            <div className="flex justify-end my-2">
+              <img
+                src="/ci-coat-of-arms.png"
+                alt="Armoiries Côte d'Ivoire"
+                className="h-16 object-contain"
+              />
             </div>
+
             <p className="font-bold text-sm">ECOLE : {data.school_name}</p>
           </div>
         </div>

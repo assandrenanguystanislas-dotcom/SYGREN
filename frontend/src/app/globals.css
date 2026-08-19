@@ -186,17 +186,19 @@
 }
 
 
-/* === Synthèse des Résultats — Print CSS (paysage A4, 1 page) === */
+/* === Synthèse des Résultats — Print CSS (paysage A4, 1 page, sans en-têtes navigateur) === */
 @media print {
   @page {
     size: A4 landscape;
-    margin: 8mm;
+    margin: 0;
   }
   html, body {
     margin: 0 !important;
     padding: 0 !important;
     height: auto !important;
     overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   body * {
     visibility: hidden !important;
@@ -214,13 +216,12 @@
     max-height: 100vh !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 0 !important;
+    padding: 8mm !important;
     margin: 0 !important;
     overflow: visible !important;
     page-break-after: avoid !important;
     page-break-inside: avoid !important;
   }
-  /* Masquer la barre d'outils et le fond */
   .print\:hidden {
     display: none !important;
   }
