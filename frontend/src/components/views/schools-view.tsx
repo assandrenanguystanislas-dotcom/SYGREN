@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Check,
   X,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,6 +85,9 @@ export function SchoolsView() {
   const [editing, setEditing] = useState<SchoolWithStats | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<SchoolWithStats | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | SchoolStatus>("all");
+  const [expandedSchoolId, setExpandedSchoolId] = useState<string | null>(null);
 
   const createMut = useCrudMutation(schoolsApi.create, {
     invalidateKeys: [["schools"], ["iep"]],
@@ -147,39 +151,129 @@ export function SchoolsView() {
 
   if (error) return <ErrorState message={(error as Error).message} />;
 
-  const schools = data?.schools ?? [];
+  const allSchools = data?.schools ?? [];
   const ieps = iepData?.ieps ?? [];
+
+  // Filtrage local : recherche textuelle + filtre par statut
+  const schools = allSchools.filter((s) => {
+    const matchSearch =
+      !search ||
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      (s.code ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.address ?? "").toLowerCase().includes(search.toLowerCase());
+    const matchStatus =
+      statusFilter === "all" || s.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  // Compteurs par statut pour les badges du filtre
+  const statusCounts = {
+    all: allSchools.length,
+    public: allSchools.filter((s) => s.status === "public").length,
+    private: allSchools.filter((s) => s.status === "private").length,
+    community: allSchools.filter((s) => s.status === "community").length,
+  };
 
   return (
     <div className="space-y-4">
       <Card className="border-border/60">
-        <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <SchoolIcon className="w-4 h-4" />
+        <CardContent className="py-4 space-y-3">
+          {/* Ligne 1 : titre + bouton Nouvelle école */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <SchoolIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-base">Écoles</h2>
+                <p className="text-xs text-muted-foreground">
+                  {schools.length} / {allSchools.length} établissement(s)
+                  {statusFilter !== "all" && ` · filtré par ${SCHOOL_STATUS_LABELS[statusFilter]}`}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-semibold text-base">Écoles</h2>
-              <p className="text-xs text-muted-foreground">
-                {schools.length} établissement(s) · rattaché(s) aux IEP
-              </p>
-            </div>
+            {canEdit && (
+              <Button onClick={openCreate} size="sm" className="shadow-sm">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Nouvelle école
+              </Button>
+            )}
           </div>
-          {canEdit && (
-            <Button onClick={openCreate} size="sm" className="shadow-sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Nouvelle école
-            </Button>
+
+          {/* Ligne 2 : barre de recherche + filtres par statut */}
+          {allSchools.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Rechercher par nom, code ou adresse…"
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <FilterChip
+                  label="Tous"
+                  count={statusCounts.all}
+                  active={statusFilter === "all"}
+                  onClick={() => setStatusFilter("all")}
+                />
+                <FilterChip
+                  label="Public"
+                  count={statusCounts.public}
+                  active={statusFilter === "public"}
+                  onClick={() => setStatusFilter("public")}
+                  color="blue"
+                />
+                <FilterChip
+                  label="Privé"
+                  count={statusCounts.private}
+                  active={statusFilter === "private"}
+                  onClick={() => setStatusFilter("private")}
+                  color="amber"
+                />
+                <FilterChip
+                  label="Communautaire"
+                  count={statusCounts.community}
+                  active={statusFilter === "community"}
+                  onClick={() => setStatusFilter("community")}
+                  color="emerald"
+                />
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {schools.length === 0 ? (
+      {allSchools.length === 0 ? (
         <EmptyState onCreate={canEdit ? openCreate : undefined} />
+      ) : schools.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center text-muted-foreground">
+            <Search className="w-6 h-6 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">Aucune école ne correspond à votre recherche</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("all");
+              }}
+            >
+              Réinitialiser les filtres
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
           {schools.map((s, i) => (
-            <Collapsible key={s.id}>
+            <Collapsible
+              key={s.id}
+              open={expandedSchoolId === s.id}
+              onOpenChange={(open) => setExpandedSchoolId(open ? s.id : null)}
+            >
               <Card
                 className="border-border/60 hover:shadow-md transition-shadow animate-in-up"
                 style={{ animationDelay: `${i * 40}ms` }}
@@ -625,5 +719,53 @@ function SchoolClassesPanel({
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * FilterChip — bouton de filtre avec compteur.
+ * Utilisé pour filtrer les écoles par statut (Tous/Public/Privé/Communautaire).
+ */
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+  color,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  color?: "blue" | "amber" | "emerald";
+}) {
+  const colorClasses = {
+    blue: "border-blue-200 bg-blue-50 text-blue-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
+  const activeClass = color
+    ? colorClasses[color]
+    : "border-primary bg-primary text-primary-foreground";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-medium transition-colors ${
+        active
+          ? activeClass
+          : "border-border bg-card text-muted-foreground hover:bg-muted"
+      }`}
+    >
+      {label}
+      <span
+        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+          active ? "bg-black/10" : "bg-muted"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
   );
 }

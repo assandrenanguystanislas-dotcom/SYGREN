@@ -1056,3 +1056,52 @@ Stage Summary:
 - Affichage : badge statut coloré + badge code mono dans la card
 - Formulaire : 2 champs sur grid 2 colonnes (Code + Statut)
 - 0 impact sur les classes/élèves (champs indépendants)
+
+---
+Task ID: Import-Schools + Search-Filter
+Agent: Main (tutor mode)
+Task: Importer 96 écoles du PDF (IEP Dabou 1) + ajouter barre de recherche/filtre au module Écoles
+
+Work Log:
+IMPORT DES ÉCOLES (96 depuis PDF) :
+- PDF source : /home/z/my-project/upload/ECOLES (2).pdf (76 Ko)
+- Extraction via pdftotext -layout → /home/z/.cache/ecoles.txt (109 lignes)
+- Format : 3 colonnes (idecole, nomecole, statut)
+- Regex Python : ^(E\d+)\s+(.+?)\s+(PUBLIC|PRIVE|COMMUNAUTAIRE)$
+- Mapping statuts : PUBLIC→public, PRIVE→private, COMMUNAUTAIRE→community
+- Script : /home/z/.cache/import_schools.py (Python urllib + json)
+- IEP cible : IEP DABOU 1 (id c4aebda8-3e10-4b27-87c2-6c10db9cda1a)
+- Résultat import :
+  * 96/96 écoles créées ✓ (0 échec, 0 skip)
+  * 576 classes auto-créées (96 × 6 CP1-CM2)
+  * Répartition : 74 public + 10 private + 12 community
+  * Durée : ~3 min (cold-start Neon + 96 × 7 INSERT)
+- Codes uniques préservés depuis le PDF (ex: E19474745, E001103)
+- Vérification post-import : count=96, classes=576 ✓
+
+BARRE DE RECHERCHE + FILTRE STATUT (frontend) :
+- schools-view.tsx enrichi :
+  * États : search (string), statusFilter ("all"|SchoolStatus), expandedSchoolId (string|null)
+  * Filtrage local : recherche sur name + code + address (case-insensitive)
+  * Filtre statut : 4 boutons chips (Tous / Public / Privé / Communautaire) avec compteurs
+  * Compteurs dynamiques par statut (statusCounts)
+  * Header card : 2 lignes (titre+bouton / recherche+filtres)
+  * État "aucun résultat" : Card dashed avec bouton "Réinitialiser les filtres"
+  * Collapsible contrôlé : 1 seule école dépliée à la fois (expandedSchoolId)
+    → évite d'avoir 96 panneaux ouverts simultanément
+- Nouveau composant FilterChip (~35 lignes) :
+  * Bouton toggle avec label + badge compteur
+  * Couleurs conditionnelles (bleu/ambre/emerald selon statut)
+  * État actif/inactif
+- Import lucide-react : ajout icône Search
+
+Vérifications locales :
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+- 0 modification backend (l'API existante gère déjà tout)
+
+Stage Summary:
+- 96 écoles importées avec succès depuis le PDF vers IEP Dabou 1
+- 576 classes auto-créées (CP1-CM2 pour chaque école)
+- Module Écoles : barre de recherche + 4 filtres chips avec compteurs
+- UX améliorée : panneau Classes contrôlé (1 seul ouvert à la fois)
+- État "aucun résultat" avec bouton réinitialisation
