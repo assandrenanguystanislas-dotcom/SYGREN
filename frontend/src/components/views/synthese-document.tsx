@@ -71,7 +71,7 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 overflow-auto print:bg-white print:static print:overflow-visible">
+    <div className="min-h-screen bg-gray-100 print:bg-white">
       {/* Barre d'outils */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden">
         <h3 className="font-semibold text-sm">Document de Synthèse — Aperçu</h3>

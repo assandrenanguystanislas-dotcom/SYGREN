@@ -126,8 +126,8 @@ export function ResultsView() {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    console.log("Synthèse clicked, sessionId:", autoSessionId);
-                    setShowSynthese(true);
+                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}`;
+                    window.open(url, "_blank");
                   }}
                 >
                   <FileText className="w-4 h-4 mr-1.5" />
