@@ -121,6 +121,7 @@ func New(cfg *config.Config) http.Handler {
                 r.Group(func(r chi.Router) {
                         r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
                         r.Post("/api/sessions", handlers.CreateSession)
+                        r.Post("/api/sessions/bulk", handlers.BulkCreateSessions)
                         r.Put("/api/sessions/{id}/status", handlers.UpdateSessionStatus)
                         r.Put("/api/sessions/{id}/extend", handlers.ExtendSession)
                         r.Delete("/api/sessions/{id}", handlers.DeleteSession)

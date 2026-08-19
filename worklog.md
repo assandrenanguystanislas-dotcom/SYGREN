@@ -1477,3 +1477,63 @@ Stage Summary:
 - Planification auto : goroutine 60s ouvre/clôture automatiquement
 - Prolongation : endpoint /extend + modal frontend
 - AutoMigrate ajoutera colonnes open_at, close_at, auto_open sur Neon
+
+---
+Task ID: Simplify-Session-Form-Bulk
+Agent: Main (tutor mode)
+Task: Simplifier formulaire session : admin choisit périmètre (toutes/une école) + bulk create
+
+Work Log:
+- Demande : admin peut choisir toutes les écoles ou une école spécifique (par code)
+  + simplifier l'UX au maximum (plus de sélection de classe individuelle)
+
+Backend (Go) :
+- handlers/sessions.go : nouveau handler BulkCreateSessions
+  * Crée des sessions pour TOUTES les classes actives d'un scope
+  * Scope "all" : toutes les écoles (admin)
+  * Scope "school" : une école par code (lookup School.code)
+  * Director : scope forcé à "school" (son école, code ignoré)
+  * Examen Blanc : skip automatique des classes non-CM
+  * Unicité : skip si session existe déjà pour cette classe/type/numéro
+  * Retour : { created, skipped[], failed[], total_classes }
+- router.go : POST /api/sessions/bulk (admin+director)
+
+Frontend (React) :
+- api.ts : sessionsApi.bulkCreate (scope, school_code, ...)
+- sessions-view.tsx :
+  * FormData : remplacement class_id par scope + school_code
+  * Boutons visuels pour le périmètre (Toutes écoles / Une école)
+    + input code école (si scope=school, désactivé pour director)
+  * createMut : useMutation direct (pas useCrudMutation) pour gérer
+    la réponse bulk (created/skipped/failed)
+  * Toast de succès : "X session(s) créée(s) · Y ignorée(s)"
+  * Bouton "Programmer une session" (au lieu de "Ouvrir une session")
+  * Imports : Building2 + SchoolIcon
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+
+UX finale du formulaire :
+┌─ Programmer une session ──────────────────────┐
+│ La session sera créée pour toutes les classes │
+│ actives du périmètre choisi.                    │
+│                                                  │
+│ Périmètre :                                      │
+│ [🏠 Toutes les écoles]  [🏫 Une école]          │
+│   (si Une école) Code : [E19474745]            │
+│                                                  │
+│ Mois : [Septembre]  Année : [2026]              │
+│ Type : [Composition]  Numéro : [1]             │
+│ Ouverture : [2026-08-19T08:00]                  │
+│ Clôture : [2026-08-26T18:00]                    │
+│ ☐ Ouverture automatique                          │
+│                                                  │
+│ [Annuler]  [Programmer la session]              │
+└──────────────────────────────────────────────────┘
+
+Stage Summary:
+- Formulaire simplifié : 1 clic = sessions pour toutes les classes du périmètre
+- Admin : scope "all" (toutes écoles) ou "school" (code école)
+- Director : scope forcé à son école
+- Bulk create gère l'unicité + skip automatique (examen blanc non-CM)

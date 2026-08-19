@@ -13,6 +13,8 @@ import {
   TrendingUp,
   Clock,
   ChevronRight,
+  Building2,
+  School as SchoolIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,12 +45,13 @@ import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface FormData {
-  class_id: string;
+  scope: "all" | "school";
+  school_code: string;
   month: string;
   year: string;
   eval_type: "composition" | "exam_blanc";
   eval_number: string;
-  open_at: string; // datetime-local format : "2026-01-15T08:00"
+  open_at: string;
   close_at: string;
   auto_open: boolean;
 }
@@ -63,13 +66,13 @@ function nowPlusDays(days: number): string {
 }
 
 function toISO(localDt: string): string {
-  // Convert "2026-01-15T08:00" → "2026-01-15T08:00:00Z"
   if (!localDt) return "";
   return new Date(localDt).toISOString();
 }
 
 const EMPTY: FormData = {
-  class_id: "",
+  scope: "all",
+  school_code: "",
   month: String(new Date().getMonth() + 1),
   year: String(new Date().getFullYear()),
   eval_type: "composition",
@@ -102,10 +105,30 @@ export function SessionsView() {
     enabled: canManage,
   });
 
-  const createMut = useCrudMutation(sessionsApi.create, {
-    invalidateKeys: [["sessions"]],
-    successMessage: "Session créée avec succès",
-    actionLabel: "Création",
+  const createMut = useMutation({
+    mutationFn: async (data: FormData) => {
+      return sessionsApi.bulkCreate({
+        scope: data.scope,
+        school_code: data.scope === "school" ? data.school_code : undefined,
+        month: parseInt(data.month, 10),
+        year: parseInt(data.year, 10),
+        eval_type: data.eval_type,
+        eval_number: parseInt(data.eval_number, 10) || 1,
+        open_at: toISO(data.open_at),
+        close_at: toISO(data.close_at),
+        auto_open: data.auto_open,
+      });
+    },
+    onSuccess: async (result) => {
+      toast.success("Sessions créées", {
+        description: `${result.created} session(s) créée(s)${result.skipped.length > 0 ? ` · ${result.skipped.length} ignorée(s)` : ""}`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+    onError: (error) => {
+      const msg = error instanceof Error ? error.message : "Erreur";
+      toast.error("Création échouée", { description: msg });
+    },
   });
 
   const statusMut = useMutation({
@@ -126,19 +149,7 @@ export function SessionsView() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await createMut.mutateAsync([
-        {
-          class_id: form.class_id,
-          month: parseInt(form.month, 10),
-          year: parseInt(form.year, 10),
-          status: "open",
-          eval_type: form.eval_type,
-          eval_number: parseInt(form.eval_number, 10) || 1,
-          open_at: toISO(form.open_at),
-          close_at: toISO(form.close_at),
-          auto_open: form.auto_open,
-        },
-      ]);
+      await createMut.mutateAsync(form);
       setDialogOpen(false);
     } catch {
       /* toastée */
@@ -176,11 +187,8 @@ export function SessionsView() {
   function openCreate() {
     setForm({
       ...EMPTY,
-      // Pré-remplir avec la première classe si directeur (sa classe unique)
-      class_id:
-        user?.role === "director" && classesData?.classes[0]
-          ? classesData.classes[0].id
-          : "",
+      // Director : scope forcé à "school" (son école)
+      scope: user?.role === "director" ? "school" : "all",
     });
     setDialogOpen(true);
   }
@@ -210,7 +218,7 @@ export function SessionsView() {
           {canManage && (
             <Button onClick={openCreate} size="sm" className="shadow-sm">
               <Plus className="w-4 h-4 mr-1.5" />
-              Ouvrir une session
+              Programmer une session
             </Button>
           )}
         </CardContent>
@@ -337,30 +345,62 @@ export function SessionsView() {
         <EntityDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          title="Ouvrir une session de saisie"
-          description="Créez une session mensuelle pour permettre la saisie des notes."
+          title="Programmer une session"
+          description="La session sera créée pour toutes les classes actives du périmètre choisi."
           icon={Calendar}
           loading={createMut.isPending}
         >
           <form onSubmit={onSubmit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="session-class">Classe</Label>
-              <Select
-                value={form.class_id}
-                onValueChange={(v) => setForm({ ...form, class_id: v })}
-              >
-                <SelectTrigger id="session-class">
-                  <SelectValue placeholder="Choisir une classe…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((c: ClassWithDetails) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} — {c.school_name ?? "École"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Périmètre : toutes les écoles ou une école spécifique */}
+            <div className="space-y-2">
+              <Label>Périmètre</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, scope: "all" })}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm transition-colors ${
+                    form.scope === "all"
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-card text-muted-foreground"
+                  }`}
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span className="font-medium">Toutes les écoles</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, scope: "school" })}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm transition-colors ${
+                    form.scope === "school"
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-card text-muted-foreground"
+                  } ${user?.role === "director" ? "pointer-events-none opacity-60" : ""}`}
+                >
+                  <SchoolIcon className="w-4 h-4" />
+                  <span className="font-medium">Une école</span>
+                </button>
+              </div>
+              {form.scope === "school" && (
+                <div className="space-y-1.5 mt-2">
+                  <Label htmlFor="school-code">Code de l&apos;école</Label>
+                  <Input
+                    id="school-code"
+                    value={form.school_code}
+                    onChange={(e) => setForm({ ...form, school_code: e.target.value })}
+                    placeholder="Ex : E19474745"
+                    required
+                    className="font-mono"
+                    disabled={user?.role === "director"}
+                  />
+                  {user?.role === "director" && (
+                    <p className="text-[11px] text-muted-foreground">
+                      En tant que directeur, les sessions seront créées pour votre école uniquement.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="session-month">Mois</Label>
@@ -495,7 +535,7 @@ export function SessionsView() {
               >
                 Annuler
               </Button>
-              <Button type="submit" disabled={!form.class_id}>
+              <Button type="submit" disabled={form.scope === "school" && !form.school_code}>
                 Ouvrir la session
               </Button>
             </div>

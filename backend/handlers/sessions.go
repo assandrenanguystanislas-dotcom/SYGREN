@@ -304,6 +304,159 @@ func ExtendSession(w http.ResponseWriter, r *http.Request) {
         jsonResponse(w, http.StatusOK, session)
 }
 
+// BulkCreateSessionRequest — payload pour créer des sessions en masse
+// Scope : "all" (toutes les écoles) ou "school" (une école par code)
+// Pour "school", SchoolCode doit être fourni (lookup par code unique)
+type BulkCreateSessionRequest struct {
+        Scope       string `json:"scope"`        // "all" | "school"
+        SchoolCode  string `json:"school_code"` // requis si scope="school"
+        Month       int    `json:"month"`
+        Year        int    `json:"year"`
+        EvalType    string `json:"eval_type"`
+        EvalNumber  int    `json:"eval_number"`
+        OpenAt      string `json:"open_at"`
+        CloseAt     string `json:"close_at"`
+        AutoOpen    bool   `json:"auto_open"`
+}
+
+// BulkCreateSessions crée des sessions pour toutes les classes d'un scope.
+// admin : scope "all" (toutes écoles) ou "school" (une école par code)
+// director : scope forcé à "school" (son école, code ignoré)
+// Returns : nombre de sessions créées + liste des classes pour lesquelles une session existe déjà
+func BulkCreateSessions(w http.ResponseWriter, r *http.Request) {
+        var req BulkCreateSessionRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
+                return
+        }
+        if req.Month < 1 || req.Month > 12 || req.Year < 2020 {
+                middleware.JSONError(w, "month (1-12) et year requis", http.StatusBadRequest)
+                return
+        }
+        if req.EvalType == "" {
+                req.EvalType = "composition"
+        }
+        if req.EvalType != "composition" && req.EvalType != "exam_blanc" {
+                middleware.JSONError(w, "eval_type invalide (composition|exam_blanc)", http.StatusBadRequest)
+                return
+        }
+        if req.EvalNumber < 1 {
+                req.EvalNumber = 1
+        }
+        if req.OpenAt == "" || req.CloseAt == "" {
+                middleware.JSONError(w, "open_at et close_at sont obligatoires", http.StatusBadRequest)
+                return
+        }
+        openAt, err := time.Parse(time.RFC3339, req.OpenAt)
+        if err != nil {
+                middleware.JSONError(w, "open_at invalide (ISO 8601)", http.StatusBadRequest)
+                return
+        }
+        closeAt, err := time.Parse(time.RFC3339, req.CloseAt)
+        if err != nil {
+                middleware.JSONError(w, "close_at invalide (ISO 8601)", http.StatusBadRequest)
+                return
+        }
+        if !closeAt.After(openAt) {
+                middleware.JSONError(w, "close_at doit être après open_at", http.StatusBadRequest)
+                return
+        }
+
+        role := ctxRole(r)
+
+        // Déterminer le périmètre des classes
+        var classes []models.Class
+        query := database.DB.Where("active = ?", true)
+
+        switch role {
+        case "admin":
+                if req.Scope == "school" {
+                        if req.SchoolCode == "" {
+                                middleware.JSONError(w, "school_code requis quand scope=school", http.StatusBadRequest)
+                                return
+                        }
+                        // Lookup école par code
+                        var school models.School
+                        if err := database.DB.Where("code = ?", req.SchoolCode).First(&school).Error; err != nil {
+                                middleware.JSONError(w, "école introuvable avec ce code", http.StatusBadRequest)
+                                return
+                        }
+                        query = query.Where("school_id = ?", school.ID)
+                }
+                // scope="all" → pas de filtre supplémentaire
+        case "director":
+                // Director forcé à son école, scope ignoré
+                schoolID := ctxSchoolID(r)
+                if schoolID == "" {
+                        middleware.JSONError(w, "vous n'êtes rattaché à aucune école", http.StatusForbidden)
+                        return
+                }
+                query = query.Where("school_id = ?", schoolID)
+        default:
+                middleware.JSONError(w, "accès refusé", http.StatusForbidden)
+                return
+        }
+
+        if err := query.Find(&classes).Error; err != nil {
+                middleware.JSONError(w, "erreur récupération classes", http.StatusInternalServerError)
+                return
+        }
+
+        // Statut initial
+        status := "open"
+        if req.AutoOpen && openAt.After(time.Now()) {
+                status = "draft"
+        }
+
+        created := 0
+        skipped := []string{}
+        failed := []string{}
+
+        for _, cls := range classes {
+                // Examen Blanc réservé au CM
+                if req.EvalType == "exam_blanc" && cls.Level != "CM" {
+                        skipped = append(skipped, fmt.Sprintf("%s (non-CM)", cls.Name))
+                        continue
+                }
+
+                // Vérifier l'unicité
+                var count int64
+                database.DB.Model(&models.EvaluationSession{}).
+                        Where("class_id = ? AND year = ? AND eval_type = ? AND eval_number = ?",
+                                cls.ID, req.Year, req.EvalType, req.EvalNumber).
+                        Count(&count)
+                if count > 0 {
+                        skipped = append(skipped, cls.Name)
+                        continue
+                }
+
+                session := models.EvaluationSession{
+                        ClassID:    cls.ID,
+                        Month:      req.Month,
+                        Year:       req.Year,
+                        Status:     status,
+                        EvalType:   req.EvalType,
+                        EvalNumber: req.EvalNumber,
+                        OpenAt:     &openAt,
+                        CloseAt:    &closeAt,
+                        AutoOpen:   req.AutoOpen,
+                }
+                if err := database.DB.Create(&session).Error; err != nil {
+                        failed = append(failed, cls.Name)
+                        continue
+                }
+                created++
+        }
+
+        jsonResponse(w, http.StatusCreated, map[string]interface{}{
+                "status":       "ok",
+                "created":      created,
+                "skipped":      skipped,
+                "failed":       failed,
+                "total_classes": len(classes),
+        })
+}
+
 // evalTypeLabel retourne le label lisible d'un type d'évaluation
 func evalTypeLabel(t string) string {
         switch t {

@@ -449,6 +449,27 @@ export const sessionsApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  bulkCreate: (data: {
+    scope: "all" | "school";
+    school_code?: string;
+    month: number;
+    year: number;
+    eval_type?: "composition" | "exam_blanc";
+    eval_number?: number;
+    open_at: string;
+    close_at: string;
+    auto_open?: boolean;
+  }) =>
+    apiFetch<{
+      status: string;
+      created: number;
+      skipped: string[];
+      failed: string[];
+      total_classes: number;
+    }>("/api/sessions/bulk", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   updateStatus: (id: string, status: SessionStatus) =>
     apiFetch<EvaluationSession>(`/api/sessions/${id}/status`, {
       method: "PUT",
