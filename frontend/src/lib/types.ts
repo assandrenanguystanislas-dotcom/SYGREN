@@ -83,7 +83,26 @@ export interface Subject {
   id: string;
   name: string;
   coefficient: number;
+  levels: string; // "CP,CE,CM" | "CP" | "CP,CE" etc.
   created_at: string;
+}
+
+export type SubjectLevel = "CP" | "CE" | "CM";
+
+export const ALL_LEVELS: SubjectLevel[] = ["CP", "CE", "CM"];
+
+// Parse la string levels ("CP,CE,CM") en array
+export function parseLevels(levels: string | undefined | null): SubjectLevel[] {
+  if (!levels) return ALL_LEVELS;
+  return levels
+    .split(",")
+    .map((l) => l.trim().toUpperCase())
+    .filter((l): l is SubjectLevel => l === "CP" || l === "CE" || l === "CM");
+}
+
+// Formate un array de niveaux en string "CP,CE,CM"
+export function formatLevels(levels: SubjectLevel[]): string {
+  return levels.length === 0 ? "CP,CE,CM" : levels.join(",");
 }
 
 export type SessionStatus = "draft" | "open" | "closed" | "validated";

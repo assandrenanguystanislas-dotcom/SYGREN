@@ -1105,3 +1105,54 @@ Stage Summary:
 - Module Écoles : barre de recherche + 4 filtres chips avec compteurs
 - UX améliorée : panneau Classes contrôlé (1 seul ouvert à la fois)
 - État "aucun résultat" avec bouton réinitialisation
+
+---
+Task ID: Subject-Levels
+Agent: Main (tutor mode)
+Task: Matières — ajout niveaux (CP, CE, CM) pourassocier une matière à certains niveaux
+
+Work Log:
+- Besoin : certaines matières sont propres à certains niveaux
+  (ex: Chant/Dessin pour CP seulement, Mathématiques pour tous)
+- Niveaux : CP = CP1+CP2, CE = CE1+CE2, CM = CM1+CM2
+
+Backend (Go) :
+- models.go : Subject.Levels string (default "CP,CE,CM") — string séparée par virgules
+- handlers/subjects.go :
+  * ValidLevels map (CP/CE/CM)
+  * normalizeLevels(input) : valide + dédoublonne + trie, défaut "CP,CE,CM" si vide
+  * ListSubjects : filtre optionnel ?level=CP (LIKE '%CP%' sur colonne levels)
+  * CreateSubject : accepte levels, normalize avant insert
+  * UpdateSubject : accepte levels, normalize avant save
+- AutoMigrate va ajouter colonne levels (default "CP,CE,CM") sur Neon
+  → les 8 matières existantes auront "CP,CE,CM" (tous niveaux) par défaut
+
+Frontend (React) :
+- types.ts :
+  * Subject.levels: string
+  * SubjectLevel type ("CP" | "CE" | "CM")
+  * ALL_LEVELS constant
+  * parseLevels(str) → SubjectLevel[] (utilitaire)
+  * formatLevels(arr) → string (utilitaire)
+- api.ts : subjectsApi.list accepte {level?}, create/update acceptent levels
+- subjects-view.tsx :
+  * FormData : levels: SubjectLevel[] (array), EMPTY = tous
+  * openEdit : parseLevels(s.levels)
+  * onSubmit : formatLevels(form.levels) → string
+  * Card : badges niveaux (CP/CE/CM) + "(tous)" si 3 niveaux cochés
+  * Formulaire : 3 checkboxes CP/CE/CM avec labels (CP1,CP2 / CE1,CE2 / CM1,CM2)
+    + bouton "Tous les niveaux" (raccourci)
+    + warning si aucun niveau coché
+- Corrections TS : wrap queryFn: subjectsApi.list en arrow function (3 fichiers :
+  subjects-view, grades-view, welcome-dashboard — signature a changé)
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0, bunx next build OK
+
+Stage Summary:
+- Matières : champ Levels ajouté (CP/CE/CM, défaut tous)
+- Formulaire : 3 checkboxes + bouton "Tous les niveaux"
+- Liste : badges par niveau + "(tous)" si 3 niveaux
+- API : filtre ?level=CP disponible (pour grades-view futur)
+- AutoMigrate met à jour les 8 matières existantes avec "CP,CE,CM"

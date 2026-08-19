@@ -71,7 +71,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
   });
   const { data: subjectsData } = useQuery({
     queryKey: ["subjects"],
-    queryFn: subjectsApi.list,
+    queryFn: () => subjectsApi.list(),
     enabled: !!selectedSessionId,
   });
   const { data: gradesData, isLoading: gradesLoading } = useQuery({

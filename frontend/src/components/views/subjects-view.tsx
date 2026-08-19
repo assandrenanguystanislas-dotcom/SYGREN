@@ -7,21 +7,28 @@ import { BookOpen, Plus, Pencil, Trash2, Search, Loader2 } from "lucide-react";
 import { subjectsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { Subject } from "@/lib/types";
+import type { Subject, SubjectLevel } from "@/lib/types";
+import { ALL_LEVELS, parseLevels } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface FormData {
   name: string;
   coefficient: string;
+  levels: SubjectLevel[]; // niveaux cochés
 }
 
-const EMPTY: FormData = { name: "", coefficient: "1" };
+const EMPTY: FormData = {
+  name: "",
+  coefficient: "1",
+  levels: [...ALL_LEVELS], // tous par défaut
+};
 
 export function SubjectsView() {
   const user = useAuthStore((s) => s.user);
@@ -36,7 +43,7 @@ export function SubjectsView() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["subjects"],
-    queryFn: subjectsApi.list,
+    queryFn: () => subjectsApi.list(),
   });
 
   const createMut = useCrudMutation(subjectsApi.create, {
@@ -45,7 +52,7 @@ export function SubjectsView() {
     actionLabel: "Création",
   });
   const updateMut = useCrudMutation(
-    (id: string, data: { name: string; coefficient: number }) =>
+    (id: string, data: { name: string; coefficient: number; levels: string }) =>
       subjectsApi.update(id, data),
     {
       invalidateKeys: [["subjects"]],
@@ -65,18 +72,28 @@ export function SubjectsView() {
     setDialogOpen(true);
   }
   function openEdit(s: Subject) {
-    setForm({ name: s.name, coefficient: String(s.coefficient) });
+    setForm({
+      name: s.name,
+      coefficient: String(s.coefficient),
+      levels: parseLevels(s.levels),
+    });
     setEditing(s);
     setDialogOpen(true);
   }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const coef = parseFloat(form.coefficient) || 1;
+    const levelsStr = form.levels.length === 0 ? "CP,CE,CM" : form.levels.join(",");
     try {
       if (editing) {
-        await updateMut.mutateAsync([editing.id, { name: form.name, coefficient: coef }]);
+        await updateMut.mutateAsync([
+          editing.id,
+          { name: form.name, coefficient: coef, levels: levelsStr },
+        ]);
       } else {
-        await createMut.mutateAsync([{ name: form.name, coefficient: coef }]);
+        await createMut.mutateAsync([
+          { name: form.name, coefficient: coef, levels: levelsStr },
+        ]);
       }
       setDialogOpen(false);
     } catch {
@@ -158,7 +175,23 @@ export function SubjectsView() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">{subject.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-1 mt-1">
+                      {parseLevels(subject.levels).map((lvl) => (
+                        <Badge
+                          key={lvl}
+                          variant="outline"
+                          className="text-[9px] font-mono px-1.5 py-0"
+                        >
+                          {lvl}
+                        </Badge>
+                      ))}
+                      {parseLevels(subject.levels).length === 3 && (
+                        <span className="text-[10px] text-muted-foreground ml-1">
+                          (tous)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
                       Créée le{" "}
                       {new Date(subject.created_at).toLocaleDateString("fr-FR")}
                     </p>
@@ -235,6 +268,57 @@ export function SubjectsView() {
               <p className="text-[11px] text-muted-foreground">
                 Coefficient par défaut = 1 pour les compositions mensuelles
               </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Niveaux enseignés</Label>
+              <div className="flex items-center gap-4">
+                {ALL_LEVELS.map((lvl) => {
+                  const checked = form.levels.includes(lvl);
+                  return (
+                    <label
+                      key={lvl}
+                      className="flex items-center gap-2 cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          if (v) {
+                            setForm({
+                              ...form,
+                              levels: [...form.levels, lvl],
+                            });
+                          } else {
+                            setForm({
+                              ...form,
+                              levels: form.levels.filter((l) => l !== lvl),
+                            });
+                          }
+                        }}
+                      />
+                      <span className="font-mono font-medium">{lvl}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        ({lvl === "CP" ? "CP1, CP2" : lvl === "CE" ? "CE1, CE2" : "CM1, CM2"})
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setForm({ ...form, levels: [...ALL_LEVELS] })}
+                >
+                  Tous les niveaux
+                </Button>
+                {form.levels.length === 0 && (
+                  <p className="text-[11px] text-amber-600">
+                    Au moins un niveau requis (sera « tous » si vide)
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button

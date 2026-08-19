@@ -125,10 +125,13 @@ func (s *Student) BeforeCreate(tx *gorm.DB) error {
 
 // === Subject (Matière) ===
 // Coefficient par défaut = 1 pour les compositions mensuelles (cahier des charges §3)
+// Levels : niveaux où la matière est enseignée (CP, CE, CM) — string séparée par virgules.
+// Ex: "CP,CE,CM" = tous niveaux ; "CP" = CP uniquement (CP1+CP2).
 type Subject struct {
         ID          string    `gorm:"primaryKey;type:text" json:"id"`
         Name        string    `gorm:"uniqueIndex;type:text" json:"name"`
         Coefficient float64   `gorm:"default:1" json:"coefficient"`
+        Levels      string    `gorm:"type:text;default:CP,CE,CM" json:"levels"` // "CP,CE,CM" | "CP" | "CP,CE" etc.
         CreatedAt   time.Time `json:"created_at"`
 }
 

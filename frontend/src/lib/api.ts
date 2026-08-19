@@ -152,14 +152,16 @@ export const healthApi = {
 // === Matières (Module 1) ===
 
 export const subjectsApi = {
-  list: () =>
-    apiFetch<{ subjects: Subject[]; count: number }>("/api/subjects"),
-  create: (data: { name: string; coefficient?: number }) =>
+  list: (params?: { level?: string }) => {
+    const q = params?.level ? `?level=${params.level}` : "";
+    return apiFetch<{ subjects: Subject[]; count: number }>(`/api/subjects${q}`);
+  },
+  create: (data: { name: string; coefficient?: number; levels?: string }) =>
     apiFetch<Subject>("/api/subjects", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  update: (id: string, data: { name?: string; coefficient?: number }) =>
+  update: (id: string, data: Partial<{ name: string; coefficient: number; levels: string }>) =>
     apiFetch<Subject>(`/api/subjects/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),

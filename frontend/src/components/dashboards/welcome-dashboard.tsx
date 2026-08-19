@@ -64,7 +64,7 @@ export function WelcomeDashboard({ onNavigate }: { onNavigate: (view: string) =>
   });
   const { data: subjectsData } = useQuery({
     queryKey: ["subjects"],
-    queryFn: subjectsApi.list,
+    queryFn: () => subjectsApi.list(),
     enabled: !!user,
   });
   const { data: teachersData } = useQuery({
