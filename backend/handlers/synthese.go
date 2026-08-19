@@ -183,8 +183,8 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
         if totF[1] > 0 { pctF = float64(totF[2]) / float64(totF[1]) * 100 }
         if totT[1] > 0 { pctT = float64(totT[2]) / float64(totT[1]) * 100 }
 
-        // === Génération PDF (modèle officiel) ===
-        pdf := fpdf.New("P", "mm", "A4", "")
+        // === Génération PDF (modèle officiel — PAYSAGE) ===
+        pdf := fpdf.New("L", "mm", "A4", "") // L = Landscape
         pdf.AddPage()
         pdf.SetMargins(15, 15, 15)
         pdf.SetAutoPageBreak(true, 20)
@@ -201,24 +201,24 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
         leftText += "Et de l'Alphabétisation\n"
         leftText += fmt.Sprintf("Direction Régionale de %s\n", iep.Region)
         leftText += fmt.Sprintf("Inspection de l'Enseignement\nPréscolaire et Primaire de %s\n", iep.Name)
-        leftText += fmt.Sprintf("BP : %s\n", school.Address)
-        pdf.MultiCell(95, 4.5, tr(leftText), "", "L", false)
+        leftText += fmt.Sprintf("BP : %s / Tél : ............\n", school.Address)
+        pdf.MultiCell(120, 4.5, tr(leftText), "", "L", false)
 
         // Colonne droite : République + École
-        pdf.SetXY(110, 15)
+        pdf.SetXY(155, 15)
         rightText := "Union - Discipline - Travail\n\n\n"
         rightText += fmt.Sprintf("ÉCOLE : %s\n", school.Name)
-        pdf.MultiCell(85, 4.5, tr(rightText), "", "R", false)
+        pdf.MultiCell(130, 4.5, tr(rightText), "", "R", false)
 
         // Trait de séparation bleu
         pdf.Ln(2)
         setNavyBlueDraw(pdf)
         pdf.SetLineWidth(0.5)
-        pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
+        pdf.Line(15, pdf.GetY(), 282, pdf.GetY())
         pdf.Ln(5)
 
         // === Titre central (cadre arrondi bleu) ===
-        pdf.SetFont("Helvetica", "B", 14)
+        pdf.SetFont("Helvetica", "B", 16)
         setNavyBlue(pdf)
         titleText := "SYNTHÈSE DES RESULTATS"
         evalLabel := "COMPOSITION"
@@ -228,63 +228,70 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
         subtitleText := fmt.Sprintf("%s DU MOIS DE %s %d", evalLabel, monthLabelFR(session.Month), session.Year)
 
         // Cadre avec coins arrondis
-        titleW := 120.0
-        titleH := 14.0
-        titleX := (210 - titleW) / 2
+        titleW := 150.0
+        titleH := 16.0
+        titleX := (297 - titleW) / 2 // centré en paysage (297mm de large)
         titleY := pdf.GetY()
         setNavyBlueDraw(pdf)
         pdf.SetLineWidth(1.0)
         pdf.RoundedRect(titleX, titleY, titleW, titleH, 3, "1111", "D")
         pdf.SetXY(titleX, titleY+2)
-        pdf.CellFormat(titleW, 5, tr(titleText), "", 0, "C", false, 0, "")
-        pdf.SetXY(titleX, titleY+7)
-        pdf.SetFont("Helvetica", "B", 11)
-        pdf.CellFormat(titleW, 5, tr(subtitleText), "", 0, "C", false, 0, "")
-        pdf.Ln(titleH + 5)
+        pdf.CellFormat(titleW, 6, tr(titleText), "", 0, "C", false, 0, "")
+        pdf.SetXY(titleX, titleY+8)
+        pdf.SetFont("Helvetica", "B", 12)
+        pdf.CellFormat(titleW, 6, tr(subtitleText), "", 0, "C", false, 0, "")
+        pdf.Ln(titleH + 6)
 
         // === Tableau ===
         setNavyBlue(pdf)
         setNavyBlueDraw(pdf)
         pdf.SetLineWidth(0.3)
 
-        // Calcul des largeurs de colonnes
-        // Première colonne (libellé) : 25mm
-        // 5 niveaux × 3 sous-colonnes : chaque sous-colonne = (195-25-15) / 15 = ~10.3mm
-        colLabel := 25.0
-        colSub := 10.3 // mm par sous-colonne
+        // Calcul des largeurs de colonnes en paysage (297mm - 30mm marges = 267mm utilisables)
+        // Première colonne (libellé) : 30mm
+        // 5 niveaux × 3 sous-colonnes = 15 sous-colonnes → (267-30) / 15 = ~15.8mm chacune
+        colLabel := 30.0
+        colSub := 15.8
         tableStartX := 15.0
+        tableW := colLabel + colSub*3*5 // largeur totale du tableau
 
         // Ligne 1 : En-têtes des niveaux (CP1, CP2, CE1, CE2, CM1)
-        pdf.SetFont("Helvetica", "B", 9)
+        pdf.SetFont("Helvetica", "B", 10)
         setNavyBlueFill(pdf)
-        pdf.SetTextColor(255, 255, 255) // texte blanc sur fond bleu
+        pdf.SetTextColor(255, 255, 255) // texte blanc sur fond bleu marine
 
         pdf.SetX(tableStartX)
-        pdf.CellFormat(colLabel, 7, "", "1", 0, "C", true, 0, "")
+        pdf.CellFormat(colLabel, 8, "", "1", 0, "C", true, 0, "")
         for _, cn := range classNames {
-                pdf.CellFormat(colSub*3, 7, tr(cn), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub*3, 8, tr(cn), "1", 0, "C", true, 0, "")
         }
         pdf.Ln(-1)
 
         // Ligne 2 : Sous-en-têtes G, F, T
-        pdf.SetFont("Helvetica", "B", 8)
+        pdf.SetFont("Helvetica", "B", 9)
         pdf.SetX(tableStartX)
-        pdf.CellFormat(colLabel, 5, "", "1", 0, "C", true, 0, "")
+        pdf.CellFormat(colLabel, 6, "", "1", 0, "C", true, 0, "")
         for range classNames {
-                pdf.CellFormat(colSub, 5, tr("G"), "1", 0, "C", true, 0, "")
-                pdf.CellFormat(colSub, 5, tr("F"), "1", 0, "C", true, 0, "")
-                pdf.CellFormat(colSub, 5, tr("T"), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub, 6, tr("G"), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub, 6, tr("F"), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub, 6, tr("T"), "1", 0, "C", true, 0, "")
         }
         pdf.Ln(-1)
 
         // Lignes de données : INSCRITS, PRÉSENTS, ADMIS, % ADMIS
         pdf.SetTextColor(nvR, nvG, nvB) // retour au bleu marine
-        pdf.SetFont("Helvetica", "B", 8)
+        pdf.SetFont("Helvetica", "B", 9)
 
-        rowLabels := []string{"INSCRITS", "PRESENTS", "ADMIS", "% ADMIS"}
+        rowLabels := []string{"INSCRITS", "PRÉSENTS", "ADMIS", "% ADMIS"}
         for rowIdx, label := range rowLabels {
                 pdf.SetX(tableStartX)
-                pdf.CellFormat(colLabel, 8, tr(label), "1", 0, "L", false, 0, "")
+                // Fond légèrement coloré pour les lignes paires
+                if rowIdx%2 == 0 {
+                        pdf.SetFillColor(245, 245, 248)
+                        pdf.CellFormat(colLabel, 9, tr(label), "1", 0, "L", true, 0, "")
+                } else {
+                        pdf.CellFormat(colLabel, 9, tr(label), "1", 0, "L", false, 0, "")
+                }
 
                 for _, s := range allStats {
                         var vals [3]string
@@ -303,37 +310,34 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                                 }
                         }
                         for i := 0; i < 3; i++ {
-                                pdf.CellFormat(colSub, 8, vals[i], "1", 0, "C", false, 0, "")
+                                if rowIdx%2 == 0 {
+                                        pdf.CellFormat(colSub, 9, vals[i], "1", 0, "C", true, 0, "")
+                                } else {
+                                        pdf.CellFormat(colSub, 9, vals[i], "1", 0, "C", false, 0, "")
+                                }
                         }
                 }
                 pdf.Ln(-1)
         }
 
-        // === Ligne récapitulative : FILLES + GARÇONS ===
-        pdf.Ln(2)
+        // === Ligne récapitulative : FILLES + GARÇONS (cellule fusionnée) ===
+        pdf.SetX(tableStartX)
         pdf.SetFont("Helvetica", "B", 10)
         setNavyBlue(pdf)
         setNavyBlueDraw(pdf)
-
-        recapW := 180.0
-        recapX := tableStartX
-        recapY1 := pdf.GetY()
         pdf.SetLineWidth(0.5)
-        pdf.RoundedRect(recapX, recapY1, recapW, 8, 2, "1111", "D")
-        pdf.SetXY(recapX, recapY1+1)
-        pdf.CellFormat(recapW/2, 6, tr(fmt.Sprintf("FILLES : %.2f %%", pctF)), "", 0, "C", false, 0, "")
-        pdf.CellFormat(recapW/2, 6, tr(fmt.Sprintf("GARÇONS : %.2f %%", pctG)), "", 1, "C", false, 0, "")
+
+        // Cellule fusionnée : largeur = tableW
+        pdf.CellFormat(tableW/2, 8, tr(fmt.Sprintf("FILLES : %.2f %%", pctF)), "1", 0, "C", false, 0, "")
+        pdf.CellFormat(tableW/2, 8, tr(fmt.Sprintf("GARÇONS : %.2f %%", pctG)), "1", 1, "C", false, 0, "")
 
         // === Ligne totale global ===
-        pdf.Ln(2)
-        recapY2 := pdf.GetY()
-        pdf.RoundedRect(recapX, recapY2, recapW, 10, 2, "1111", "D")
-        pdf.SetXY(recapX, recapY2+2)
+        pdf.SetX(tableStartX)
         pdf.SetFont("Helvetica", "B", 14)
-        pdf.CellFormat(recapW, 6, tr(fmt.Sprintf("%.2f %%", pctT)), "", 0, "C", false, 0, "")
+        pdf.CellFormat(tableW, 10, tr(fmt.Sprintf("%.2f %%", pctT)), "1", 1, "C", false, 0, "")
 
         // === Pied de page : Signatures ===
-        pdf.Ln(20)
+        pdf.Ln(15)
         pdf.SetFont("Helvetica", "", 10)
         setNavyBlue(pdf)
 
@@ -346,8 +350,8 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
         // Labels signatures
         pdf.SetFont("Helvetica", "B", 10)
         pdf.SetX(tableStartX)
-        pdf.CellFormat(85, 5, tr("Le Directeur"), "", 0, "C", false, 0, "")
-        pdf.CellFormat(85, 5, tr("L'Inspecteur"), "", 1, "C", false, 0, "")
+        pdf.CellFormat(120, 5, tr("Le Directeur"), "", 0, "C", false, 0, "")
+        pdf.CellFormat(120, 5, tr("L'Inspecteur"), "", 1, "C", false, 0, "")
 
         // === Output PDF ===
         var buf bytes.Buffer
