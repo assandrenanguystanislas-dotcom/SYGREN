@@ -1156,3 +1156,63 @@ Stage Summary:
 - Liste : badges par niveau + "(tous)" si 3 niveaux
 - API : filtre ?level=CP disponible (pour grades-view futur)
 - AutoMigrate met à jour les 8 matières existantes avec "CP,CE,CM"
+
+---
+Task ID: Subject-Classes-Granularity
+Agent: Main (tutor mode)
+Task: Matières — granularité par classe (CP1/CP2/CE1/CE2/CM1/CM2) au lieu de niveau (CP/CE/CM)
+
+Work Log:
+- Besoin : exception EPS uniquement pour CM2 (classe spécifique, pas tout le niveau CM)
+- Le système précédent (levels = CP/CE/CM) ne permettait pas ce cas
+- Nouveau système : levels stocke des noms de classes (CP1, CP2, CE1, CE2, CM1, CM2)
+  → permet la granularité maximale (1 à 6 classes par matière)
+
+Backend (Go) :
+- handlers/subjects.go :
+  * ValidClasses map (CP1, CP2, CE1, CE2, CM1, CM2)
+  * levelToClasses map (CP→[CP1,CP2], CE→[CE1,CE2], CM→[CM1,CM2]) pour rétrocompat
+  * normalizeClasses(input) : accepte classes ET anciens niveaux (convertit)
+    ex: "CP,CE,CM" → "CP1,CP2,CE1,CE2,CM1,CM2" ; "CM2" → "CM2"
+  * ListSubjects : filtre ?class=CM2 (LIKE '%CM2%' sur colonne levels)
+  * Create/Update : normalizeClasses avant save
+- Rétrocompatibilité : les anciennes données "CP,CE,CM" sont converties à la volée
+  par normalizeClasses lors d'une update. Aucune migration obligatoire.
+
+Frontend (React) :
+- types.ts :
+  * SubjectClass type ("CP1"|"CP2"|"CE1"|"CE2"|"CM1"|"CM2")
+  * ALL_CLASSES constant (6 classes)
+  * parseLevels : gère ancien format ("CP" → ["CP1","CP2"]) ET nouveau ("CP1,CM2")
+  * formatLevels : array → string
+- subjects-view.tsx :
+  * FormData.levels: SubjectClass[] (6 classes possibles)
+  * EMPTY : toutes les 6 classes cochées par défaut
+  * Formulaire : 6 checkboxes en grille (3 colonnes desktop, 6 sur mobile)
+    + 4 raccourcis : Tout CP / Tout CE / Tout CM / Toutes
+    + compteur dynamique "X classe(s) sélectionnée(s)"
+    + exemple d'usage affiché (EPS → CM2 uniquement)
+  * Card : badges par classe (jusqu'à 6) + "(toutes)" si 6 cochées
+- Aucune modification de api.ts (levels est toujours une string)
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+
+Cas d'usage gérés :
+- Mathématiques pour toutes les classes → 6 checkboxes cochées → "CP1,CP2,CE1,CE2,CM1,CM2"
+- Chant pour CP uniquement → Tout CP → "CP1,CP2"
+- EPS pour CM2 uniquement → décocher tout sauf CM2 → "CM2"
+- Lecture pour CP1 + CM2 → cocher CP1 + CM2 → "CP1,CM2"
+
+Migration données :
+- Aucune migration obligatoire (rétrocompat à la volée via parseLevels/normalizeClasses)
+- Les 12 matières existantes ont levels="CP,CE,CM" → affichées comme 6 classes cochées
+  → si l'utilisateur édite une matière, elle sera sauvegardée au nouveau format
+
+Stage Summary:
+- Granularité par classe (CP1-CM2) au lieu de niveau (CP/CE/CM)
+- Support des exceptions type "EPS uniquement pour CM2"
+- 6 checkboxes + 4 raccourcis niveau dans le formulaire
+- Rétrocompatible : anciennes données "CP,CE,CM" converties à la volée
+- Aucune migration de schéma (champ levels inchangé, juste sémantique étendue)

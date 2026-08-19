@@ -83,26 +83,52 @@ export interface Subject {
   id: string;
   name: string;
   coefficient: number;
-  levels: string; // "CP,CE,CM" | "CP" | "CP,CE" etc.
+  levels: string; // "CP1,CP2,CE1,CE2,CM1,CM2" | "CM2" | "CP1,CM2" etc.
   created_at: string;
 }
 
-export type SubjectLevel = "CP" | "CE" | "CM";
+export type SubjectClass = "CP1" | "CP2" | "CE1" | "CE2" | "CM1" | "CM2";
 
-export const ALL_LEVELS: SubjectLevel[] = ["CP", "CE", "CM"];
+export const ALL_CLASSES: SubjectClass[] = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"];
 
-// Parse la string levels ("CP,CE,CM") en array
-export function parseLevels(levels: string | undefined | null): SubjectLevel[] {
-  if (!levels) return ALL_LEVELS;
-  return levels
-    .split(",")
-    .map((l) => l.trim().toUpperCase())
-    .filter((l): l is SubjectLevel => l === "CP" || l === "CE" || l === "CM");
+// Map niveau → classes composantes (pour rétrocompat ancien format "CP,CE,CM")
+const LEVEL_TO_CLASSES: Record<string, SubjectClass[]> = {
+  CP: ["CP1", "CP2"],
+  CE: ["CE1", "CE2"],
+  CM: ["CM1", "CM2"],
+};
+
+// Parse la string levels ("CP1,CP2,CM2" ou ancien "CP,CE,CM") en array de classes.
+// Gère la rétrocompat : "CP" est étendu en ["CP1","CP2"].
+export function parseLevels(levels: string | undefined | null): SubjectClass[] {
+  if (!levels) return ALL_CLASSES;
+  const result: SubjectClass[] = [];
+  const seen = new Set<string>();
+  for (const raw of levels.split(",")) {
+    const token = raw.trim().toUpperCase();
+    // Si c'est un ancien niveau (CP/CE/CM), l'étendre en classes
+    if (LEVEL_TO_CLASSES[token]) {
+      for (const c of LEVEL_TO_CLASSES[token]) {
+        if (!seen.has(c)) {
+          seen.add(c);
+          result.push(c);
+        }
+      }
+    } else if (
+      (token === "CP1" || token === "CP2" || token === "CE1" ||
+       token === "CE2" || token === "CM1" || token === "CM2") &&
+      !seen.has(token)
+    ) {
+      seen.add(token);
+      result.push(token);
+    }
+  }
+  return result.length === 0 ? ALL_CLASSES : result;
 }
 
-// Formate un array de niveaux en string "CP,CE,CM"
-export function formatLevels(levels: SubjectLevel[]): string {
-  return levels.length === 0 ? "CP,CE,CM" : levels.join(",");
+// Formate un array de classes en string "CP1,CP2,CM2"
+export function formatLevels(levels: SubjectClass[]): string {
+  return levels.length === 0 ? "CP1,CP2,CE1,CE2,CM1,CM2" : levels.join(",");
 }
 
 export type SessionStatus = "draft" | "open" | "closed" | "validated";

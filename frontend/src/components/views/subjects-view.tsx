@@ -7,8 +7,8 @@ import { BookOpen, Plus, Pencil, Trash2, Search, Loader2 } from "lucide-react";
 import { subjectsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { Subject, SubjectLevel } from "@/lib/types";
-import { ALL_LEVELS, parseLevels } from "@/lib/types";
+import type { Subject, SubjectClass } from "@/lib/types";
+import { ALL_CLASSES, parseLevels } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,13 +21,13 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 interface FormData {
   name: string;
   coefficient: string;
-  levels: SubjectLevel[]; // niveaux cochés
+  levels: SubjectClass[]; // classes cochées (CP1, CP2, CE1, CE2, CM1, CM2)
 }
 
 const EMPTY: FormData = {
   name: "",
   coefficient: "1",
-  levels: [...ALL_LEVELS], // tous par défaut
+  levels: [...ALL_CLASSES], // toutes les classes par défaut
 };
 
 export function SubjectsView() {
@@ -175,19 +175,19 @@ export function SubjectsView() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">{subject.name}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      {parseLevels(subject.levels).map((lvl) => (
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      {parseLevels(subject.levels).map((cls) => (
                         <Badge
-                          key={lvl}
+                          key={cls}
                           variant="outline"
                           className="text-[9px] font-mono px-1.5 py-0"
                         >
-                          {lvl}
+                          {cls}
                         </Badge>
                       ))}
-                      {parseLevels(subject.levels).length === 3 && (
+                      {parseLevels(subject.levels).length === 6 && (
                         <span className="text-[10px] text-muted-foreground ml-1">
-                          (tous)
+                          (toutes)
                         </span>
                       )}
                     </div>
@@ -270,14 +270,64 @@ export function SubjectsView() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Niveaux enseignés</Label>
-              <div className="flex items-center gap-4">
-                {ALL_LEVELS.map((lvl) => {
-                  const checked = form.levels.includes(lvl);
+              <Label>Classes concernées</Label>
+              {/* Raccourcis par niveau */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    setForm({ ...form, levels: ["CP1", "CP2"] })
+                  }
+                >
+                  Tout CP
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    setForm({ ...form, levels: ["CE1", "CE2"] })
+                  }
+                >
+                  Tout CE
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    setForm({ ...form, levels: ["CM1", "CM2"] })
+                  }
+                >
+                  Tout CM
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setForm({ ...form, levels: [...ALL_CLASSES] })}
+                >
+                  Toutes
+                </Button>
+              </div>
+              {/* 6 checkboxes par classe */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {ALL_CLASSES.map((cls) => {
+                  const checked = form.levels.includes(cls);
                   return (
                     <label
-                      key={lvl}
-                      className="flex items-center gap-2 cursor-pointer text-sm"
+                      key={cls}
+                      className={`flex items-center gap-1.5 cursor-pointer text-sm px-2 py-1.5 rounded-md border transition-colors ${
+                        checked
+                          ? "border-primary/40 bg-primary/5"
+                          : "border-border bg-card"
+                      }`}
                     >
                       <Checkbox
                         checked={checked}
@@ -285,40 +335,32 @@ export function SubjectsView() {
                           if (v) {
                             setForm({
                               ...form,
-                              levels: [...form.levels, lvl],
+                              levels: [...form.levels, cls],
                             });
                           } else {
                             setForm({
                               ...form,
-                              levels: form.levels.filter((l) => l !== lvl),
+                              levels: form.levels.filter((l) => l !== cls),
                             });
                           }
                         }}
                       />
-                      <span className="font-mono font-medium">{lvl}</span>
-                      <span className="text-[11px] text-muted-foreground">
-                        ({lvl === "CP" ? "CP1, CP2" : lvl === "CE" ? "CE1, CE2" : "CM1, CM2"})
+                      <span className="font-mono font-medium text-xs">
+                        {cls}
                       </span>
                     </label>
                   );
                 })}
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setForm({ ...form, levels: [...ALL_LEVELS] })}
-                >
-                  Tous les niveaux
-                </Button>
-                {form.levels.length === 0 && (
-                  <p className="text-[11px] text-amber-600">
-                    Au moins un niveau requis (sera « tous » si vide)
-                  </p>
-                )}
-              </div>
+              {form.levels.length === 0 && (
+                <p className="text-[11px] text-amber-600">
+                  Au moins une classe requise (sera « toutes » si vide)
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {form.levels.length} classe(s) sélectionnée(s).
+                Ex : décochez tout sauf CM2 pour une matière réservée à CM2 (ex: EPS).
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button

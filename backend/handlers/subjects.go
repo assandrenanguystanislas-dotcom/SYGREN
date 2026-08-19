@@ -11,51 +11,65 @@ import (
         "github.com/go-chi/chi/v5"
 )
 
-// ValidLevels — niveaux autorisés (cahier des charges §3 Module 1)
-var ValidLevels = map[string]bool{
-        "CP": true,
-        "CE": true,
-        "CM": true,
+// ValidClasses — classes autorisées (cahier des charges §3 Module 1)
+var ValidClasses = map[string]bool{
+        "CP1": true, "CP2": true,
+        "CE1": true, "CE2": true,
+        "CM1": true, "CM2": true,
 }
 
-// normalizeLevels valide et normalise une liste de niveaux.
-// Entrée : "CP,CE,CM" ou ["CP","CE"] → sortie : "CP,CE,CM" (string triée, sans doublons).
-// Si vide ou invalide → "CP,CE,CM" (tous niveaux par défaut).
-func normalizeLevels(input string) string {
+// levelToClasses — map niveau → classes composantes (pour migration ancien format)
+var levelToClasses = map[string][]string{
+        "CP": {"CP1", "CP2"},
+        "CE": {"CE1", "CE2"},
+        "CM": {"CM1", "CM2"},
+}
+
+// normalizeClasses valide et normalise une liste de classes.
+// Accepte les noms de classes (CP1, CP2, CE1, CE2, CM1, CM2) ET les anciens
+// niveaux (CP, CE, CM — convertis en leurs classes composantes pour rétrocompat).
+// Entrée : "CP1,CM2" ou "CP,CE,CM" → sortie : "CP1,CP2,CE1,CE2,CM1,CM2" (sans doublons).
+// Si vide ou invalide → toutes les classes (CP1,CP2,CE1,CE2,CM1,CM2).
+func normalizeClasses(input string) string {
         if input == "" {
-                return "CP,CE,CM"
+                return "CP1,CP2,CE1,CE2,CM1,CM2"
         }
         parts := strings.Split(input, ",")
         seen := map[string]bool{}
         var valid []string
         for _, p := range parts {
                 p = strings.TrimSpace(strings.ToUpper(p))
-                if ValidLevels[p] && !seen[p] {
+                // Si c'est un niveau (CP/CE/CM), l'étendre en ses classes
+                if classes, ok := levelToClasses[p]; ok {
+                        for _, c := range classes {
+                                if !seen[c] {
+                                        seen[c] = true
+                                        valid = append(valid, c)
+                                }
+                        }
+                } else if ValidClasses[p] && !seen[p] {
                         seen[p] = true
                         valid = append(valid, p)
                 }
         }
         if len(valid) == 0 {
-                return "CP,CE,CM"
+                return "CP1,CP2,CE1,CE2,CM1,CM2"
         }
         return strings.Join(valid, ",")
 }
 
 // ListSubjects returns all configured subjects (matières).
 // Accessible to any authenticated user (cahier des charges §3 Module 1).
-// Paramètre optionnel ?level=CP pour filtrer par niveau (ex: matières CP1/CP2).
+// Paramètre optionnel ?class=CM2 pour filtrer par classe spécifique.
 func ListSubjects(w http.ResponseWriter, r *http.Request) {
         var subjects []models.Subject
         query := database.DB.Order("name ASC")
 
-        // Filtre optionnel par niveau
-        if level := r.URL.Query().Get("level"); level != "" {
-                level = strings.ToUpper(strings.TrimSpace(level))
-                if ValidLevels[level] {
-                        // LIKE sur la colonne levels : matche "CP" dans "CP,CE,CM"
-                        // On utilise une approche simple : levels LIKE '%CP%' (suffisant car les niveaux
-                        // sont courts et sans ambiguité)
-                        query = query.Where("levels LIKE ?", "%"+level+"%")
+        // Filtre optionnel par classe
+        if class := r.URL.Query().Get("class"); class != "" {
+                class = strings.ToUpper(strings.TrimSpace(class))
+                if ValidClasses[class] {
+                        query = query.Where("levels LIKE ?", "%"+class+"%")
                 }
         }
 
@@ -74,7 +88,7 @@ func ListSubjects(w http.ResponseWriter, r *http.Request) {
 type CreateSubjectRequest struct {
         Name        string  `json:"name"`
         Coefficient float64 `json:"coefficient"`
-        Levels      string  `json:"levels"` // "CP,CE,CM" | "CP" | "CP,CE" etc.
+        Levels      string  `json:"levels"` // "CP1,CP2,CE1,CE2,CM1,CM2" | "CM2" | "CP1,CM2" etc.
 }
 
 // CreateSubject creates a new subject (admin/director only).
@@ -92,7 +106,7 @@ func CreateSubject(w http.ResponseWriter, r *http.Request) {
         if req.Coefficient == 0 {
                 req.Coefficient = 1
         }
-        levels := normalizeLevels(req.Levels)
+        levels := normalizeClasses(req.Levels)
         subject := models.Subject{
                 Name:        req.Name,
                 Coefficient: req.Coefficient,
@@ -125,7 +139,7 @@ func UpdateSubject(w http.ResponseWriter, r *http.Request) {
                 subject.Coefficient = req.Coefficient
         }
         if req.Levels != "" {
-                subject.Levels = normalizeLevels(req.Levels)
+                subject.Levels = normalizeClasses(req.Levels)
         }
         if err := database.DB.Save(&subject).Error; err != nil {
                 middlewareJSONError(w, "erreur mise à jour", http.StatusInternalServerError)
