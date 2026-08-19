@@ -451,16 +451,29 @@ func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf,
         totalAvg := 0.0
         totalPass := 0
         totalStudents := 0
+        _, passThreshold, _ := GetSystemSettings()
         for _, s := range sessions {
                 results, err := computeSessionResults(s.ID)
                 if err != nil {
                         continue
                 }
+                // Récupérer le niveau de la classe pour convertir le seuil de réussite
+                var cls models.Class
+                level := "CM" // défaut /20
+                if err := database.DB.First(&cls, "id = ?", s.ClassID).Error; err == nil {
+                        level = cls.Level
+                }
+                // Seuil effectif selon l'échelle du niveau (CP/CE → /10, CM → /20)
+                ratio := 20.0
+                if level == "CP" || level == "CE" {
+                        ratio = 10.0
+                }
+                effectivePassThreshold := passThreshold * ratio / 20.0
                 for _, r := range results.Results {
                         if r.HasAverage {
                                 totalAvg += r.Average
                                 totalStudents++
-                                if r.Average >= 10 {
+                                if r.Average >= effectivePassThreshold {
                                         totalPass++
                                 }
                         }

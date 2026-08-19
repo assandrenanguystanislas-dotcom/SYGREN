@@ -1283,3 +1283,49 @@ Stage Summary:
 - Moyenne normalisée sur /20 (mentions uniformes)
 - Édition des barèmes par admin/director (nouvelle vue Barèmes)
 - Édition inline (clic → saisir nouvelle valeur → update immédiat)
+
+---
+Task ID: Average-Scale-By-Level
+Agent: Main (tutor mode)
+Task: Moyenne normalisée /10 (CP/CE) ou /20 (CM) + seuils de mentions proportionnels
+
+Work Log:
+- Changement : la moyenne n'est plus uniformément sur /20
+  * CP et CE → moyenne sur /10
+  * CM → moyenne sur /20
+- Seuils de mentions (Settings configurés sur /20) convertis proportionnellement :
+  * CP/CE : seuil_effectif = seuil_settings × 10/20 = seuil_settings / 2
+    ex: Très Bien ≥ 16/20 → ≥ 8/10 pour CP/CE
+  * CM : seuil_effectif = seuil_settings (inchangé)
+
+Backend (Go) :
+- computation.go :
+  * averageScaleForLevel(level) : CP/CE → 10, CM → 20
+  * getMention(avg, level) : convertit les seuils proportionnellement selon l'échelle
+  * Calcul moyenne : normalized = value × averageScale / max_score (au lieu de × 20)
+  * SessionResults : ajout ClassLevel + AverageScale (10 ou 20) dans la réponse JSON
+  * computeClassStatistics(results, level) : seuils pass_rate/distinction convertis
+  * Appel annual.Mention utilise aussi cls.Level
+- dashboard.go (aggregateSessionsPerformance) :
+  * Récupère le niveau de la classe via session.ClassID
+  * Seuil de réussite effectif = passThreshold × scale/20 (5 pour CP/CE, 10 pour CM)
+  * Au lieu de hardcoded `r.Average >= 10`
+
+Frontend (React) :
+- types.ts : SessionResults ajout class_level + average_scale
+- results-view.tsx :
+  * StatisticsGrid : affiche value/scale (ex: 8.50/10) + hints adaptés
+    (ex: "élèves ≥ 5/10" au lieu de "élèves ≥ 10/20")
+  * StudentRow : affiche average/scale + couleur selon passThreshold (5 ou 10)
+  * StudentDetailCard : affiche grade/max_score (ex: 15/30) au lieu de grade brut
+    + couleur selon normalized_value ≥ scale/2
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+
+Stage Summary:
+- Moyenne CP/CE sur /10, CM sur /20 (cahier des charges §3 Module 2)
+- Seuils de mentions proportionnels automatiquement (Option A validée)
+- Affichage frontend adapté : value/max pour notes, average/scale pour moyennes
+- Dashboard : pass rate calculé correctement selon l'échelle du niveau

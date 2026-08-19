@@ -145,7 +145,7 @@ export function ResultsView() {
       ) : (
         <>
           {/* Statistiques de classe */}
-          <StatisticsGrid stats={results.statistics} />
+          <StatisticsGrid stats={results.statistics} averageScale={results.average_scale} />
 
           {/* Avertissement si notes en brouillon */}
           {results.results.some((r) => r.has_drafts) && (
@@ -190,6 +190,7 @@ export function ResultsView() {
                         key={r.student_id}
                         result={r}
                         expanded={expandedStudent === r.student_id}
+                        averageScale={results.average_scale}
                         onToggle={() =>
                           setExpandedStudent(
                             expandedStudent === r.student_id ? null : r.student_id,
@@ -209,6 +210,7 @@ export function ResultsView() {
               result={results.results.find(
                 (r) => r.student_id === expandedStudent,
               )}
+              averageScale={results.average_scale}
             />
           )}
         </>
@@ -222,13 +224,16 @@ function StudentRow({
   result,
   expanded,
   onToggle,
+  averageScale = 20,
 }: {
   result: StudentResult;
   expanded: boolean;
   onToggle: () => void;
+  averageScale?: number;
 }) {
   const mentionClass = MENTION_COLOR_CLASSES[result.mention_color] ?? "";
   const isTop = result.rank === 1 && result.has_average;
+  const passThreshold = averageScale / 2; // 5 pour /10, 10 pour /20
   return (
     <>
       <TableRow
@@ -264,10 +269,10 @@ function StudentRow({
             <span
               className={cn(
                 "font-bold text-base",
-                result.average >= 10 ? "text-emerald-600" : "text-amber-600",
+                result.average >= passThreshold ? "text-emerald-600" : "text-amber-600",
               )}
             >
-              {result.average.toFixed(2)}
+              {result.average.toFixed(2)}/{averageScale}
             </span>
           ) : (
             <span className="text-muted-foreground text-sm">—</span>
@@ -294,7 +299,13 @@ function StudentRow({
 }
 
 // === Carte de détail des matières d'un élève ===
-function StudentDetailCard({ result }: { result?: StudentResult }) {
+function StudentDetailCard({
+  result,
+  averageScale = 20,
+}: {
+  result?: StudentResult;
+  averageScale?: number;
+}) {
   if (!result) return null;
   return (
     <Card className="border-border/60 animate-in-up">
@@ -329,10 +340,12 @@ function StudentDetailCard({ result }: { result?: StudentResult }) {
                   <span
                     className={cn(
                       "font-bold text-sm",
-                      sg.grade >= 10 ? "text-emerald-600" : "text-amber-600",
+                      sg.normalized_value >= (averageScale / 2)
+                        ? "text-emerald-600"
+                        : "text-amber-600",
                     )}
                   >
-                    {sg.grade.toFixed(2)}
+                    {sg.grade.toFixed(2)}/{sg.max_score}
                   </span>
                 ) : (
                   <span className="text-muted-foreground text-sm">—</span>
@@ -349,34 +362,38 @@ function StudentDetailCard({ result }: { result?: StudentResult }) {
 // === Grille de statistiques de classe ===
 function StatisticsGrid({
   stats,
+  averageScale = 20,
 }: {
   stats: SessionResults["statistics"];
+  averageScale?: number;
 }) {
+  const passThreshold = averageScale / 2; // 5 pour /10, 10 pour /20
+  const distinctionThreshold = (averageScale * 14) / 20; // 7 pour /10, 14 pour /20
   const items = [
     {
       label: "Moyenne de classe",
-      value: stats.class_average > 0 ? stats.class_average.toFixed(2) : "—",
+      value: stats.class_average > 0 ? `${stats.class_average.toFixed(2)}/${averageScale}` : "—",
       hint: "moyenne des moyennes",
       icon: <TrendingUp className="w-4 h-4" />,
       tone: "primary",
     },
     {
       label: "Meilleure moyenne",
-      value: stats.max_average > 0 ? stats.max_average.toFixed(2) : "—",
+      value: stats.max_average > 0 ? `${stats.max_average.toFixed(2)}/${averageScale}` : "—",
       hint: "max de la classe",
       icon: <Trophy className="w-4 h-4" />,
       tone: "emerald",
     },
     {
       label: "Moyenne la plus basse",
-      value: stats.min_average > 0 ? stats.min_average.toFixed(2) : "—",
+      value: stats.min_average > 0 ? `${stats.min_average.toFixed(2)}/${averageScale}` : "—",
       hint: "min de la classe",
       icon: <TrendingUp className="w-4 h-4 rotate-180" />,
       tone: "amber",
     },
     {
       label: "Médiane",
-      value: stats.median_average > 0 ? stats.median_average.toFixed(2) : "—",
+      value: stats.median_average > 0 ? `${stats.median_average.toFixed(2)}/${averageScale}` : "—",
       hint: "valeur centrale",
       icon: <Target className="w-4 h-4" />,
       tone: "slate",
@@ -384,14 +401,14 @@ function StatisticsGrid({
     {
       label: "Taux de réussite",
       value: `${stats.pass_rate.toFixed(0)}%`,
-      hint: "élèves ≥ 10/20",
+      hint: `élèves ≥ ${passThreshold}/${averageScale}`,
       icon: <Award className="w-4 h-4" />,
       tone: "emerald",
     },
     {
       label: "Taux de distinction",
       value: `${stats.distinction_rate.toFixed(0)}%`,
-      hint: "élèves ≥ 14/20",
+      hint: `élèves ≥ ${distinctionThreshold}/${averageScale}`,
       icon: <Medal className="w-4 h-4" />,
       tone: "primary",
     },

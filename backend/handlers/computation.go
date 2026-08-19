@@ -82,6 +82,8 @@ type ClassStatistics struct {
 type SessionResults struct {
         SessionID    string           `json:"session_id"`
         ClassName    string           `json:"class_name"`
+        ClassLevel   string           `json:"class_level"` // CP | CE | CM
+        AverageScale int              `json:"average_scale"` // 10 (CP/CE) ou 20 (CM)
         SchoolName   string           `json:"school_name"`
         Month        int              `json:"month"`
         Year         int              `json:"year"`
@@ -90,11 +92,36 @@ type SessionResults struct {
         Statistics   ClassStatistics  `json:"statistics"`
 }
 
-// getMention détermine la mention selon la moyenne (système français/ivoirien)
-// Les seuils sont maintenant lus dynamiquement depuis la table Settings
-// (configurables via la vue Paramètres — cahier des charges §3 Module 5).
-func getMention(avg float64) (label, color string) {
+// averageScaleForLevel retourne l'échelle de la moyenne pour un niveau donné.
+// CP et CE → /10, CM → /20 (cahier des charges §3 Module 2).
+func averageScaleForLevel(level string) float64 {
+        switch level {
+        case "CP", "CE":
+                return 10.0
+        case "CM":
+                return 20.0
+        default:
+                return 20.0
+        }
+}
+
+// getMention détermine la mention selon la moyenne et le niveau.
+// Les seuils sont lus depuis Settings (configurés sur /20) puis convertis
+// proportionnellement selon l'échelle du niveau :
+//   - CP/CE (moyenne /10) : seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2
+//     ex: Très Bien ≥ 16/20 → ≥ 8/10 pour CP/CE
+//   - CM (moyenne /20) : seuil_effectif = seuil_settings (inchangé)
+func getMention(avg float64, level string) (label, color string) {
         tresBien, bien, assezBien, passable, faible, insuffisant := GetMentionThresholds()
+        scale := averageScaleForLevel(level)
+        // Conversion proportionnelle des seuils (de /20 vers l'échelle du niveau)
+        ratio := scale / 20.0
+        tresBien *= ratio
+        bien *= ratio
+        assezBien *= ratio
+        passable *= ratio
+        faible *= ratio
+        insuffisant *= ratio
         switch {
         case avg >= tresBien:
                 return "Très Bien", "emerald"
@@ -182,6 +209,7 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 totalCoef := 0.0
                 gradedCount := 0
                 hasDrafts := false
+                averageScale := averageScaleForLevel(cls.Level)
 
                 for _, subj := range subjects {
                         // Récupérer le barème max pour cette matière + niveau de la classe
@@ -197,9 +225,10 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                                 sg.Grade = g.Value
                                 sg.HasGrade = true
                                 sg.IsDraft = g.IsDraft
-                                // Normaliser la note sur /20 pour le calcul de la moyenne
-                                // normalized = value × 20 / max_score
-                                sg.NormalizedValue = g.Value * 20.0 / float64(maxScore)
+                                // Normaliser la note sur l'échelle du niveau :
+                                //   CP/CE → /10, CM → /20
+                                //   normalized = value × averageScale / max_score
+                                sg.NormalizedValue = g.Value * averageScale / float64(maxScore)
                                 if g.IsDraft {
                                         hasDrafts = true
                                 }
@@ -215,7 +244,8 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 if totalCoef > 0 && gradedCount > 0 {
                         sr.Average = totalWeighted / totalCoef
                         sr.HasAverage = true
-                        sr.Mention, sr.MentionColor = getMention(sr.Average)
+                        // getMention prend maintenant le niveau pour convertir les seuils proportionnellement
+                        sr.Mention, sr.MentionColor = getMention(sr.Average, cls.Level)
                 } else {
                         sr.HasAverage = false
                         sr.Mention = "Non évalué"
@@ -259,23 +289,27 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 prevAvg = results[i].Average
         }
 
-        // 7. Statistiques de classe
-        stats := computeClassStatistics(results)
+        // 7. Statistiques de classe (avec niveau pour conversion des seuils)
+        stats := computeClassStatistics(results, cls.Level)
 
         return &SessionResults{
-                SessionID:  session.ID,
-                ClassName:  cls.Name,
-                SchoolName: school.Name,
-                Month:      session.Month,
-                Year:       session.Year,
-                Status:     session.Status,
+                SessionID:    session.ID,
+                ClassName:     cls.Name,
+                ClassLevel:    cls.Level,
+                AverageScale:  int(averageScaleForLevel(cls.Level)),
+                SchoolName:    school.Name,
+                Month:         session.Month,
+                Year:          session.Year,
+                Status:        session.Status,
                 Results:    results,
                 Statistics: stats,
         }, nil
 }
 
-// computeClassStatistics calcule les statistiques agrégées de la classe
-func computeClassStatistics(results []StudentResult) ClassStatistics {
+// computeClassStatistics calcule les statistiques agrégées de la classe.
+// level est utilisé pour convertir proportionnellement les seuils de réussite/distinction
+// (configurés sur /20 dans Settings) selon l'échelle du niveau (CP/CE → /10, CM → /20).
+func computeClassStatistics(results []StudentResult, level string) ClassStatistics {
         stats := ClassStatistics{
                 StudentCount:        len(results),
                 MentionDistribution: make(map[string]int),
@@ -299,7 +333,11 @@ func computeClassStatistics(results []StudentResult) ClassStatistics {
         sort.Float64s(sorted)
 
         // Seuils dynamiques depuis les Settings (configurables via Paramètres)
+        // Conversion proportionnelle selon l'échelle du niveau
         _, passThreshold, distinctionThreshold := GetSystemSettings()
+        ratio := averageScaleForLevel(level) / 20.0
+        passThreshold *= ratio
+        distinctionThreshold *= ratio
 
         sum := 0.0
         passCount := 0
@@ -500,7 +538,7 @@ func GetStudentAnnualResults(w http.ResponseWriter, r *http.Request) {
         if validCount > 0 {
                 annual.AnnualAverage = sumAvg / float64(validCount)
                 annual.HasAnnual = true
-                annual.Mention, annual.MentionColor = getMention(annual.AnnualAverage)
+                annual.Mention, annual.MentionColor = getMention(annual.AnnualAverage, cls.Level)
         } else {
                 annual.HasAnnual = false
                 annual.Mention = "Non évalué"

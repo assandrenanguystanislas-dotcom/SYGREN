@@ -273,6 +273,8 @@ export interface ClassStatistics {
 export interface SessionResults {
   session_id: string;
   class_name: string;
+  class_level: string; // CP | CE | CM
+  average_scale: number; // 10 (CP/CE) ou 20 (CM)
   school_name: string;
   month: number;
   year: number;
