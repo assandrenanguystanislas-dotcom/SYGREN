@@ -1,11 +1,13 @@
-import { Suspense } from "react";
+"use client";
+
+import { Suspense, type ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
-export default function SynthesePageLayout({
+export default function SyntheseLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
-  return <Suspense fallback={<div>Chargement...</div>}>{children}</Suspense>;
+  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p>Chargement…</p></div>}>{children}</Suspense>;
 }
