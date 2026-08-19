@@ -4,9 +4,6 @@ import (
         "bytes"
         "fmt"
         "net/http"
-        "os"
-        "strings"
-        "time"
 
         "sygren-api/database"
         "sygren-api/middleware"
@@ -15,25 +12,43 @@ import (
         "github.com/go-pdf/fpdf"
 )
 
-// === Synthèse des Résultats (cahier des charges §3 Module 5) ===
-// Document officiel récapitulatif des résultats par niveau (CP1→CM2) et par genre.
-// Format : tableau 5-6 niveaux × 3 sous-colonnes (Garçons/Filles/Total)
-// Lignes : Inscrits, Présents, Admis, % Admis
-// + récapitulatif global + signatures Directeur/Inspecteur
+// === Synthèse des Résultats — Modèle officiel IEP ===
+// Reproduction fidèle du document Resultat.png
+// Couleur dominante : bleu marine (#000080)
+// Tableau : 5 niveaux (CP1, CP2, CE1, CE2, CM1) × 3 sous-colonnes (G, F, T)
+// Lignes : INSCRITS, PRÉSENTS, ADMIS, % ADMIS
+// + récapitulatif + signatures
+
+// NavyBlue RGB
+const (
+        nvR = 0   // 0x00
+        nvG = 0   // 0x00
+        nvB = 128 // 0x80
+)
+
+func setNavyBlue(pdf *fpdf.Fpdf) {
+        pdf.SetTextColor(nvR, nvG, nvB)
+}
+
+func setNavyBlueDraw(pdf *fpdf.Fpdf) {
+        pdf.SetDrawColor(nvR, nvG, nvB)
+}
+
+func setNavyBlueFill(pdf *fpdf.Fpdf) {
+        pdf.SetFillColor(nvR, nvG, nvB)
+}
 
 // SyntheseStats contient les statistiques pour un niveau donné
 type SyntheseStats struct {
-        Level    string
-        ClassName string // CP1, CP2, CE1, CE2, CM1, CM2
-        Inscrits [3]int // [0]=Garçons, [1]=Filles, [2]=Total
-        Presents [3]int
-        Admis    [3]int
-        PctAdmis [3]float64 // [0]=G, [1]=F, [2]=T
+        ClassName  string
+        Inscrits   [3]int // [0]=G, [1]=F, [2]=T
+        Presents   [3]int
+        Admis      [3]int
+        PctAdmis   [3]float64
 }
 
-// GenerateSynthesePDF génère un PDF de synthèse des résultats pour une session.
-// Le document couvre toutes les classes de l'école de la session sélectionnée.
-// RBAC : admin (toutes), director (son école), inspector (son IEP)
+// GenerateSynthesePDF génère un PDF de synthèse des résultats (modèle officiel IEP).
+// Reproduction fidèle du document Resultat.png fourni par l'utilisateur.
 func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
         sessionID := r.URL.Query().Get("session_id")
         if sessionID == "" {
@@ -41,7 +56,6 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // Charger la session + classe + école
         var session models.EvaluationSession
         if err := database.DB.First(&session, "id = ?", sessionID).Error; err != nil {
                 middleware.JSONError(w, "session introuvable", http.StatusNotFound)
@@ -76,7 +90,6 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                 }
         }
 
-        // Récupérer l'IEP pour l'en-tête
         var iep models.IEP
         _ = database.DB.First(&iep, "id = ?", school.IEPID).Error
 
@@ -84,13 +97,12 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
         var classes []models.Class
         database.DB.Where("school_id = ? AND active = ?", school.ID, true).Order("name ASC").Find(&classes)
 
-        // Pour chaque classe, calculer les stats
-        classNames := []string{"CP1", "CP2", "CE1", "CE2", "CM1", "CM2"}
+        // 5 niveaux uniquement (pas CM2, conforme au modèle)
+        classNames := []string{"CP1", "CP2", "CE1", "CE2", "CM1"}
         var allStats []SyntheseStats
 
         for _, cn := range classNames {
-                stats := SyntheseStats{Level: cn[:2], ClassName: cn}
-                // Trouver la classe correspondante
+                stats := SyntheseStats{ClassName: cn}
                 var targetClass *models.Class
                 for _, c := range classes {
                         if c.Name == cn {
@@ -103,7 +115,6 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                         continue
                 }
 
-                // Compter les élèves inscrits par genre
                 var students []models.Student
                 database.DB.Where("class_id = ?", targetClass.ID).Find(&students)
                 for _, s := range students {
@@ -115,26 +126,21 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                         stats.Inscrits[2]++
                 }
 
-                // Récupérer les résultats de cette classe pour cette période (même année)
-                // Chercher une session pour cette classe avec même année + même eval_type + eval_number
                 var classSession models.EvaluationSession
                 database.DB.Where("class_id = ? AND year = ? AND eval_type = ? AND eval_number = ?",
                         targetClass.ID, session.Year, session.EvalType, session.EvalNumber).First(&classSession)
 
                 if classSession.ID != "" {
-                        // Calculer les résultats pour cette session
                         result, err := computeSessionResults(classSession.ID)
                         if err == nil {
-                                for _, r := range result.Results {
-                                        if !r.HasAverage {
+                                for _, res := range result.Results {
+                                        if !res.HasAverage {
                                                 continue
                                         }
-                                        // Trouver le genre de l'élève
                                         var stu models.Student
-                                        if err := database.DB.First(&stu, "id = ?", r.StudentID).Error; err != nil {
+                                        if err := database.DB.First(&stu, "id = ?", res.StudentID).Error; err != nil {
                                                 continue
                                         }
-                                        // Présent = a une moyenne
                                         if stu.Gender == "M" {
                                                 stats.Presents[0]++
                                         } else {
@@ -142,11 +148,10 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                                         }
                                         stats.Presents[2]++
 
-                                        // Admis = moyenne >= pass threshold (sur l'échelle du niveau)
                                         scale := averageScaleForLevel(targetClass.Level)
                                         _, passThreshold, _ := GetSystemSettings()
                                         effectiveThreshold := passThreshold * scale / 20.0
-                                        if r.Average >= effectiveThreshold {
+                                        if res.Average >= effectiveThreshold {
                                                 if stu.Gender == "M" {
                                                         stats.Admis[0]++
                                                 } else {
@@ -158,7 +163,6 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                         }
                 }
 
-                // Calculer les pourcentages
                 for i := 0; i < 3; i++ {
                         if stats.Presents[i] > 0 {
                                 stats.PctAdmis[i] = float64(stats.Admis[i]) / float64(stats.Presents[i]) * 100
@@ -167,168 +171,185 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
                 allStats = append(allStats, stats)
         }
 
-        // Calculer les totaux
-        var totalG, totalF, totalT [4]int // [inscrits, presents, admis]
+        // Totaux
+        var totG, totF, totT [3]int // inscrits, presents, admis
         for _, s := range allStats {
-                totalG[0] += s.Inscrits[0]
-                totalG[1] += s.Presents[0]
-                totalG[2] += s.Admis[0]
-                totalF[0] += s.Inscrits[1]
-                totalF[1] += s.Presents[1]
-                totalF[2] += s.Admis[1]
-                totalT[0] += s.Inscrits[2]
-                totalT[1] += s.Presents[2]
-                totalT[2] += s.Admis[2]
+                totG[0] += s.Inscrits[0]; totG[1] += s.Presents[0]; totG[2] += s.Admis[0]
+                totF[0] += s.Inscrits[1]; totF[1] += s.Presents[1]; totF[2] += s.Admis[1]
+                totT[0] += s.Inscrits[2]; totT[1] += s.Presents[2]; totT[2] += s.Admis[2]
         }
         var pctG, pctF, pctT float64
-        if totalG[1] > 0 {
-                pctG = float64(totalG[2]) / float64(totalG[1]) * 100
-        }
-        if totalF[1] > 0 {
-                pctF = float64(totalF[2]) / float64(totalF[1]) * 100
-        }
-        if totalT[1] > 0 {
-                pctT = float64(totalT[2]) / float64(totalT[1]) * 100
-        }
+        if totG[1] > 0 { pctG = float64(totG[2]) / float64(totG[1]) * 100 }
+        if totF[1] > 0 { pctF = float64(totF[2]) / float64(totF[1]) * 100 }
+        if totT[1] > 0 { pctT = float64(totT[2]) / float64(totT[1]) * 100 }
 
-        // === Génération PDF ===
+        // === Génération PDF (modèle officiel) ===
         pdf := fpdf.New("P", "mm", "A4", "")
         pdf.AddPage()
         pdf.SetMargins(15, 15, 15)
         pdf.SetAutoPageBreak(true, 20)
 
-        // Helper de traduction UTF-8 → CP1252
         tr := pdf.UnicodeTranslatorFromDescriptor("")
 
-        // === En-tête ===
+        // === En-tête : Gauche (Ministère) + Droite (République + École) ===
         pdf.SetFont("Helvetica", "B", 9)
-        pdf.SetTextColor(0, 0, 0)
+        setNavyBlue(pdf)
 
         // Colonne gauche : Administration
-        pdf.MultiCell(90, 4, tr("République de Côte d'Ivoire\nMinistère de l'Éducation Nationale\nEt de l'Alphabétisation\nDirection Régionale de "+iep.Region+"\nInspection de l'Enseignement Préscolaire et Primaire\nde "+iep.Name), "", "L", false)
+        leftText := "République de Côte d'Ivoire\n"
+        leftText += "Ministère de l'Éducation Nationale\n"
+        leftText += "Et de l'Alphabétisation\n"
+        leftText += fmt.Sprintf("Direction Régionale de %s\n", iep.Region)
+        leftText += fmt.Sprintf("Inspection de l'Enseignement\nPréscolaire et Primaire de %s\n", iep.Name)
+        leftText += fmt.Sprintf("BP : %s\n", school.Address)
+        pdf.MultiCell(95, 4.5, tr(leftText), "", "L", false)
 
-        // Colonne droite : École
+        // Colonne droite : République + École
         pdf.SetXY(110, 15)
-        pdf.MultiCell(85, 4, tr("Union - Discipline - Travail\n\nÉCOLE : "+school.Name+"\n\nBP : "+school.Address+"\n"+iep.Name), "", "R", false)
+        rightText := "Union - Discipline - Travail\n\n\n"
+        rightText += fmt.Sprintf("ÉCOLE : %s\n", school.Name)
+        pdf.MultiCell(85, 4.5, tr(rightText), "", "R", false)
 
-        pdf.Ln(4)
-        pdf.SetTextColor(0, 0, 0)
+        // Trait de séparation bleu
+        pdf.Ln(2)
+        setNavyBlueDraw(pdf)
+        pdf.SetLineWidth(0.5)
+        pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
+        pdf.Ln(5)
 
-        // === Titre central ===
+        // === Titre central (cadre arrondi bleu) ===
         pdf.SetFont("Helvetica", "B", 14)
-        pdf.SetTextColor(0, 50, 100)
-        evalLabel := "Composition"
+        setNavyBlue(pdf)
+        titleText := "SYNTHÈSE DES RESULTATS"
+        evalLabel := "COMPOSITION"
         if session.EvalType == "exam_blanc" {
-                evalLabel = "Examen Blanc"
+                evalLabel = "EXAMEN BLANC"
         }
-        pdf.CellFormat(0, 10, tr(fmt.Sprintf("SYNTHÈSE DES RÉSULTATS\n%s N°%d du mois de %s %d",
-                evalLabel, session.EvalNumber, monthLabel(session.Month), session.Year)),
-                "", 0, "C", false, 0, "")
-        pdf.Ln(12)
+        subtitleText := fmt.Sprintf("%s DU MOIS DE %s %d", evalLabel, monthLabelFR(session.Month), session.Year)
+
+        // Cadre avec coins arrondis
+        titleW := 120.0
+        titleH := 14.0
+        titleX := (210 - titleW) / 2
+        titleY := pdf.GetY()
+        setNavyBlueDraw(pdf)
+        pdf.SetLineWidth(1.0)
+        pdf.RoundedRect(titleX, titleY, titleW, titleH, 3, "1111", "D")
+        pdf.SetXY(titleX, titleY+2)
+        pdf.CellFormat(titleW, 5, tr(titleText), "", 0, "C", false, 0, "")
+        pdf.SetXY(titleX, titleY+7)
+        pdf.SetFont("Helvetica", "B", 11)
+        pdf.CellFormat(titleW, 5, tr(subtitleText), "", 0, "C", false, 0, "")
+        pdf.Ln(titleH + 5)
 
         // === Tableau ===
-        pdf.SetTextColor(0, 0, 0)
+        setNavyBlue(pdf)
+        setNavyBlueDraw(pdf)
+        pdf.SetLineWidth(0.3)
+
+        // Calcul des largeurs de colonnes
+        // Première colonne (libellé) : 25mm
+        // 5 niveaux × 3 sous-colonnes : chaque sous-colonne = (195-25-15) / 15 = ~10.3mm
+        colLabel := 25.0
+        colSub := 10.3 // mm par sous-colonne
+        tableStartX := 15.0
+
+        // Ligne 1 : En-têtes des niveaux (CP1, CP2, CE1, CE2, CM1)
         pdf.SetFont("Helvetica", "B", 9)
+        setNavyBlueFill(pdf)
+        pdf.SetTextColor(255, 255, 255) // texte blanc sur fond bleu
 
-        // En-tête du tableau : Niveaux × (G, F, T)
-        colW := 28.0 // mm par sous-colonne
-        // Première colonne (libellé)
-        pdf.SetFillColor(0, 100, 50)
-        pdf.SetTextColor(255, 255, 255)
-        pdf.CellFormat(25, 8, "", "1", 0, "C", true, 0, "")
-
+        pdf.SetX(tableStartX)
+        pdf.CellFormat(colLabel, 7, "", "1", 0, "C", true, 0, "")
         for _, cn := range classNames {
-                pdf.CellFormat(colW*3, 4, tr(cn), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub*3, 7, tr(cn), "1", 0, "C", true, 0, "")
         }
         pdf.Ln(-1)
 
-        // Sous-en-tête G/F/T
+        // Ligne 2 : Sous-en-têtes G, F, T
         pdf.SetFont("Helvetica", "B", 8)
-        pdf.CellFormat(25, 4, "", "1", 0, "C", true, 0, "")
+        pdf.SetX(tableStartX)
+        pdf.CellFormat(colLabel, 5, "", "1", 0, "C", true, 0, "")
         for range classNames {
-                pdf.CellFormat(colW, 4, tr("G"), "1", 0, "C", true, 0, "")
-                pdf.CellFormat(colW, 4, tr("F"), "1", 0, "C", true, 0, "")
-                pdf.CellFormat(colW, 4, tr("T"), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub, 5, tr("G"), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub, 5, tr("F"), "1", 0, "C", true, 0, "")
+                pdf.CellFormat(colSub, 5, tr("T"), "1", 0, "C", true, 0, "")
         }
         pdf.Ln(-1)
 
-        // Lignes de données
-        pdf.SetTextColor(0, 0, 0)
-        pdf.SetFont("Helvetica", "", 9)
+        // Lignes de données : INSCRITS, PRÉSENTS, ADMIS, % ADMIS
+        pdf.SetTextColor(nvR, nvG, nvB) // retour au bleu marine
+        pdf.SetFont("Helvetica", "B", 8)
 
-        rowLabels := []string{"INSCRITS", "PRÉSENTS", "ADMIS", "% ADMIS"}
+        rowLabels := []string{"INSCRITS", "PRESENTS", "ADMIS", "% ADMIS"}
         for rowIdx, label := range rowLabels {
-                // Couleur alternée
-                if rowIdx%2 == 0 {
-                        pdf.SetFillColor(245, 245, 240)
-                } else {
-                        pdf.SetFillColor(255, 255, 255)
-                }
-                pdf.CellFormat(25, 7, tr(label), "1", 0, "L", true, 0, "")
+                pdf.SetX(tableStartX)
+                pdf.CellFormat(colLabel, 8, tr(label), "1", 0, "L", false, 0, "")
 
                 for _, s := range allStats {
                         var vals [3]string
-                        if rowIdx == 0 { // Inscrits
+                        switch rowIdx {
+                        case 0: // Inscrits
                                 vals = [3]string{fmt.Sprintf("%d", s.Inscrits[0]), fmt.Sprintf("%d", s.Inscrits[1]), fmt.Sprintf("%d", s.Inscrits[2])}
-                        } else if rowIdx == 1 { // Présents
+                        case 1: // Présents
                                 vals = [3]string{fmt.Sprintf("%d", s.Presents[0]), fmt.Sprintf("%d", s.Presents[1]), fmt.Sprintf("%d", s.Presents[2])}
-                        } else if rowIdx == 2 { // Admis
+                        case 2: // Admis
                                 vals = [3]string{fmt.Sprintf("%d", s.Admis[0]), fmt.Sprintf("%d", s.Admis[1]), fmt.Sprintf("%d", s.Admis[2])}
-                        } else { // % Admis
+                        case 3: // % Admis
                                 vals = [3]string{
-                                        fmt.Sprintf("%.1f%%", s.PctAdmis[0]),
-                                        fmt.Sprintf("%.1f%%", s.PctAdmis[1]),
-                                        fmt.Sprintf("%.1f%%", s.PctAdmis[2]),
+                                        fmt.Sprintf("%.2f", s.PctAdmis[0]),
+                                        fmt.Sprintf("%.2f", s.PctAdmis[1]),
+                                        fmt.Sprintf("%.2f", s.PctAdmis[2]),
                                 }
                         }
-                        pdf.CellFormat(colW, 7, vals[0], "1", 0, "C", true, 0, "")
-                        pdf.CellFormat(colW, 7, vals[1], "1", 0, "C", true, 0, "")
-                        pdf.CellFormat(colW, 7, vals[2], "1", 0, "C", true, 0, "")
+                        for i := 0; i < 3; i++ {
+                                pdf.CellFormat(colSub, 8, vals[i], "1", 0, "C", false, 0, "")
+                        }
                 }
                 pdf.Ln(-1)
         }
 
-        // === Récapitulatif global ===
-        pdf.Ln(3)
-        pdf.SetFont("Helvetica", "B", 11)
-        pdf.SetFillColor(240, 240, 235)
-        pdf.SetDrawColor(0, 100, 50)
-        pdf.SetLineWidth(0.5)
-
-        recapY := pdf.GetY()
-        pdf.Rect(15, recapY, 180, 14, "D")
-        pdf.SetXY(15, recapY)
-
-        // % Filles
+        // === Ligne récapitulative : FILLES + GARÇONS ===
+        pdf.Ln(2)
         pdf.SetFont("Helvetica", "B", 10)
-        pdf.CellFormat(60, 7, tr("FILLES"), "1", 0, "C", true, 0, "")
-        pdf.CellFormat(60, 7, tr("GARÇONS"), "1", 0, "C", true, 0, "")
-        pdf.CellFormat(60, 7, tr("TOTAL"), "1", 1, "C", true, 0, "")
+        setNavyBlue(pdf)
+        setNavyBlueDraw(pdf)
 
+        recapW := 180.0
+        recapX := tableStartX
+        recapY1 := pdf.GetY()
+        pdf.SetLineWidth(0.5)
+        pdf.RoundedRect(recapX, recapY1, recapW, 8, 2, "1111", "D")
+        pdf.SetXY(recapX, recapY1+1)
+        pdf.CellFormat(recapW/2, 6, tr(fmt.Sprintf("FILLES : %.2f %%", pctF)), "", 0, "C", false, 0, "")
+        pdf.CellFormat(recapW/2, 6, tr(fmt.Sprintf("GARÇONS : %.2f %%", pctG)), "", 1, "C", false, 0, "")
+
+        // === Ligne totale global ===
+        pdf.Ln(2)
+        recapY2 := pdf.GetY()
+        pdf.RoundedRect(recapX, recapY2, recapW, 10, 2, "1111", "D")
+        pdf.SetXY(recapX, recapY2+2)
         pdf.SetFont("Helvetica", "B", 14)
-        pdf.SetTextColor(0, 100, 50)
-        pdf.CellFormat(60, 7, fmt.Sprintf("%.2f %%", pctF), "1", 0, "C", false, 0, "")
-        pdf.CellFormat(60, 7, fmt.Sprintf("%.2f %%", pctG), "1", 0, "C", false, 0, "")
-        pdf.CellFormat(60, 7, fmt.Sprintf("%.2f %%", pctT), "1", 1, "C", false, 0, "")
-        pdf.SetTextColor(0, 0, 0)
+        pdf.CellFormat(recapW, 6, tr(fmt.Sprintf("%.2f %%", pctT)), "", 0, "C", false, 0, "")
 
         // === Pied de page : Signatures ===
-        pdf.Ln(15)
+        pdf.Ln(20)
         pdf.SetFont("Helvetica", "", 10)
+        setNavyBlue(pdf)
 
-        // Lieu + Date
+        // Date + lieu (aligné à droite)
+        pdf.SetX(tableStartX)
         pdf.CellFormat(0, 5, tr(fmt.Sprintf("Fait à %s, le ...../...../.....", iep.Region)), "", 1, "R", false, 0, "")
 
-        pdf.Ln(10)
+        pdf.Ln(15) // Espace pour signatures
 
-        // Signatures
+        // Labels signatures
         pdf.SetFont("Helvetica", "B", 10)
-        pdf.CellFormat(90, 5, tr("Le Directeur"), "", 0, "C", false, 0, "")
-        pdf.CellFormat(90, 5, tr("L'Inspecteur"), "", 1, "C", false, 0, "")
+        pdf.SetX(tableStartX)
+        pdf.CellFormat(85, 5, tr("Le Directeur"), "", 0, "C", false, 0, "")
+        pdf.CellFormat(85, 5, tr("L'Inspecteur"), "", 1, "C", false, 0, "")
 
-        pdf.Ln(20) // Espace pour signatures
-
-        // === Génération du PDF ===
+        // === Output PDF ===
         var buf bytes.Buffer
         if err := pdf.Output(&buf); err != nil {
                 middleware.JSONError(w, "erreur génération PDF", http.StatusInternalServerError)
@@ -336,25 +357,9 @@ func GenerateSynthesePDF(w http.ResponseWriter, r *http.Request) {
         }
         pdfBytes := buf.Bytes()
 
-        // Servir le PDF
         w.Header().Set("Content-Type", "application/pdf")
         w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="synthese_%s_%s_N%d_%d.pdf"`,
                 school.Code, evalLabel, session.EvalNumber, session.Year))
         w.Header().Set("Content-Length", fmt.Sprintf("%d", len(pdfBytes)))
         w.Write(pdfBytes)
 }
-
-// monthLabel returns the French month name
-func monthLabel(month int) string {
-        months := []string{"Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"}
-        if month >= 1 && month <= 12 {
-                return months[month-1]
-        }
-        return "—"
-}
-
-// init ensures we don't have unused imports
-var _ = os.ReadFile
-var _ = strings.TrimSpace
-var _ = time.Now
