@@ -304,6 +304,16 @@ export interface SessionSummary {
   mention: string;
 }
 
+export interface SessionSummary {
+  session_id: string;
+  month: number;
+  year: number;
+  average: number;
+  has_average: boolean;
+  rank: number;
+  mention: string;
+}
+
 export interface AnnualResult {
   student_id: string;
   matricule: string;

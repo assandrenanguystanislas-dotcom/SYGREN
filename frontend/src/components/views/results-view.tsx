@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { sessionsApi, computationApi, reportsApi, schoolsApi } from "@/lib/api";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import { SyntheseDocument } from "./synthese-document";
+import { StudentAnnualCard } from "./student-annual-card";
 import {
   MENTION_COLOR_CLASSES,
   type SessionResults,
@@ -273,12 +274,26 @@ export function ResultsView() {
 
           {/* Détail des matières pour l'élève expandé */}
           {expandedStudent && (
-            <StudentDetailCard
-              result={results.results.find(
-                (r) => r.student_id === expandedStudent,
-              )}
-              averageScale={results.average_scale}
-            />
+            <div className="space-y-4">
+              <StudentDetailCard
+                result={results.results.find(
+                  (r) => r.student_id === expandedStudent,
+                )}
+                averageScale={results.average_scale}
+              />
+              {/* Bilan annuel de l'élève */}
+              {(() => {
+                const r = results.results.find((r) => r.student_id === expandedStudent);
+                return r ? (
+                  <StudentAnnualCard
+                    studentId={r.student_id}
+                    studentName={`${r.last_name} ${r.first_name}`}
+                    classLevel={results.class_level}
+                    averageScale={results.average_scale}
+                  />
+                ) : null;
+              })()}
+            </div>
           )}
         </>
       )}
