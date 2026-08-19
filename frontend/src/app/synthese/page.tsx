@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect } from "react";
 import { Printer, X, Loader2 } from "lucide-react";
 import { monthLabel } from "@/lib/session-utils";
 
@@ -113,19 +113,6 @@ export default function SynthesePage() {
 
   const levelsData = CLASS_NAMES.map(getLevel);
 
-  // Render 3 cells (G, F, T) for a given level + row index
-  const renderCells = (lvl: LevelData, rowIdx: number, cn: string) => {
-    const vals = rowIdx === 0 ? lvl.inscrits : rowIdx === 1 ? lvl.presents : rowIdx === 2 ? lvl.admis : lvl.pct_admis;
-    const fmtFn = rowIdx === 3 ? fmtPct : fmt;
-    return (
-      <>
-        <td key={`${cn}-g`} className="border border-black p-1">{fmtFn(vals[0])}</td>
-        <td key={`${cn}-f`} className="border border-black p-1">{fmtFn(vals[1])}</td>
-        <td key={`${cn}-t`} className="border border-black p-1">{fmtFn(vals[2])}</td>
-      </>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
       {/* Barre d'outils */}
@@ -149,125 +136,172 @@ export default function SynthesePage() {
         </div>
       </div>
 
-      {/* === DOCUMENT (modèle exact fourni par l'utilisateur) === */}
-      <div id="synthese-doc" className="w-[297mm] p-6 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none">
-        {/* En-tête supérieur */}
-        <div className="flex justify-between items-start mb-2">
-          {/* Alignement Gauche */}
-          <div className="text-left space-y-0.5">
-            <p className="font-semibold">Ministère de l&apos;Education Nationale</p>
-            <p className="font-semibold">Et de l&apos;Alphabétisation</p>
-            <p className="italic">Direction Régionale de {data.iep_region}</p>
-            <p className="font-bold">Inspection de l&apos;Enseignement</p>
-            <p className="font-bold">Préscolaire et Primaire de {data.iep_name}</p>
-            <p>BP : {data.school_addr || "—"} / Tel : ............</p>
-            <p>Courriel : <span className="underline text-blue-800">............</span></p>
-          </div>
-
-          {/* Alignement Droite */}
-          <div className="text-right space-y-1">
-            <p className="font-semibold text-sm">République de Côte d&apos;Ivoire</p>
-            <p className="text-[10px] tracking-wide uppercase italic">Union - Discipline - Travail</p>
-
-            {/* Armoiries officielles */}
-            <div className="flex justify-end my-2">
-              <img
-                src="/ci-coat-of-arms.png"
-                alt="Armoiries Côte d'Ivoire"
-                className="h-16 object-contain"
-              />
+      {/* === DOCUMENT (modèle exact avec données dynamiques) === */}
+      <div
+        id="synthese-doc"
+        className="w-[297mm] h-[210mm] p-8 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none flex flex-col justify-between"
+      >
+        {/* Partie supérieure */}
+        <div>
+          {/* En-tête supérieur */}
+          <div className="flex justify-between items-start mb-2">
+            {/* Bloc Gauche */}
+            <div className="text-left space-y-0.5">
+              <p className="font-semibold">Ministère de l&apos;Education Nationale</p>
+              <p className="font-semibold">Et de l&apos;Alphabétisation</p>
+              <p className="italic">Direction Régionale de {data.iep_region}</p>
+              <p className="font-bold">Inspection de l&apos;Enseignement</p>
+              <p className="font-bold">Préscolaire et Primaire de {data.iep_name}</p>
+              <p>BP : {data.school_addr || "—"} / Tel : .............</p>
+              <p>Courriel : <span className="underline text-blue-800">............</span></p>
             </div>
 
-            <p className="font-bold text-sm">ECOLE : {data.school_name}</p>
+            {/* Bloc Droit : Centré en interne */}
+            <div className="flex flex-col items-center text-center space-y-1 min-w-[250px]">
+              <p className="font-semibold text-sm">République de Côte d&apos;Ivoire</p>
+              <p className="text-[10px] tracking-wide uppercase italic">Union - Discipline - Travail</p>
+
+              {/* Armoiries au centre */}
+              <div className="my-1 flex justify-center">
+                <img
+                  src="/ci-coat-of-arms.png"
+                  alt="Armoiries Côte d'Ivoire"
+                  className="h-16 object-contain"
+                />
+              </div>
+
+              <p className="font-bold text-sm">ECOLE : {data.school_name}</p>
+            </div>
           </div>
+
+          {/* Titre central encadré avec lignes d'union */}
+          <div className="flex items-center my-4">
+            <div className="flex-1 border-t border-black"></div>
+            <div className="border-2 border-black rounded-xl px-8 py-1.5 mx-4">
+              <h1 className="text-base font-bold tracking-wider uppercase">SYNTHÈSE DES RÉSULTATS</h1>
+            </div>
+            <div className="flex-1 border-t border-black"></div>
+          </div>
+
+          {/* Sous-titre */}
+          <div className="text-center font-bold text-sm mb-3">
+            {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
+          </div>
+
+          {/* Tableau des résultats */}
+          <table className="w-full border-collapse border border-black text-center font-bold">
+            <thead>
+              {/* Ligne 1 : Niveaux */}
+              <tr>
+                <th className="border border-black p-1 w-1/6"></th>
+                {CLASS_NAMES.map((cn) => (
+                  <th key={cn} colSpan={3} className="border border-black p-1">{cn}</th>
+                ))}
+              </tr>
+              {/* Ligne 2 : Genre (G, F, T) */}
+              <tr className="bg-gray-50">
+                <th className="border border-black p-1"></th>
+                {CLASS_NAMES.map((cn) => (
+                  <>
+                    <th key={`${cn}-g`} className="border border-black p-1">G</th>
+                    <th key={`${cn}-f`} className="border border-black p-1">F</th>
+                    <th key={`${cn}-t`} className="border border-black p-1">T</th>
+                  </>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* INSCRITS */}
+              <tr>
+                <td className="border border-black p-2 text-left uppercase">Inscrits</td>
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-ins-g`} className="border border-black p-1">{fmt(lvl.inscrits[0])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-ins-f`} className="border border-black p-1">{fmt(lvl.inscrits[1])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-ins-t`} className="border border-black p-1">{fmt(lvl.inscrits[2])}</td>
+                ))}
+              </tr>
+              {/* PRÉSENTS */}
+              <tr>
+                <td className="border border-black p-2 text-left uppercase">Présents</td>
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-pre-g`} className="border border-black p-1">{fmt(lvl.presents[0])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-pre-f`} className="border border-black p-1">{fmt(lvl.presents[1])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-pre-t`} className="border border-black p-1">{fmt(lvl.presents[2])}</td>
+                ))}
+              </tr>
+              {/* ADMIS */}
+              <tr>
+                <td className="border border-black p-2 text-left uppercase">Admis</td>
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-adm-g`} className="border border-black p-1">{fmt(lvl.admis[0])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-adm-f`} className="border border-black p-1">{fmt(lvl.admis[1])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-adm-t`} className="border border-black p-1">{fmt(lvl.admis[2])}</td>
+                ))}
+              </tr>
+              {/* % ADMIS */}
+              <tr>
+                <td className="border border-black p-2 text-left uppercase">% Admis</td>
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-pct-g`} className="border border-black p-1">{fmtPct(lvl.pct_admis[0])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-pct-f`} className="border border-black p-1">{fmtPct(lvl.pct_admis[1])}</td>
+                ))}
+                {levelsData.map((lvl) => (
+                  <td key={`${lvl.class_name}-pct-t`} className="border border-black p-1">{fmtPct(lvl.pct_admis[2])}</td>
+                ))}
+              </tr>
+              {/* Ligne % Total d'Admis par Genre */}
+              <tr>
+                <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
+                <td colSpan={15} className="border border-black p-2">
+                  <div className="flex justify-around items-center font-bold">
+                    <span>FILLES : {fmtPct(data.totals.pct_f)} %</span>
+                    <span>GARÇONS : {fmtPct(data.totals.pct_g)} %</span>
+                  </div>
+                </td>
+              </tr>
+              {/* Ligne % Total Global */}
+              <tr>
+                <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
+                <td colSpan={15} className="border border-black p-2 text-center text-base font-bold">
+                  {fmtPct(data.totals.pct_t)} %
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        {/* Titre central encadré avec lignes d'union */}
-        <div className="flex items-center my-4">
-          <div className="flex-1 border-t border-black"></div>
-          <div className="border-2 border-black rounded-xl px-8 py-1.5 mx-4">
-            <h1 className="text-base font-bold tracking-wider uppercase">Synthèse des Résultats</h1>
-          </div>
-          <div className="flex-1 border-t border-black"></div>
-        </div>
+        {/* Zone des Signatures et Cachets (Espace réservé réajusté) */}
+        <div className="mt-6 pt-2">
+          <div className="flex justify-between items-start font-bold">
+            {/* Côté Directeur */}
+            <div className="text-left w-1/2">
+              <p className="underline mb-2">Le Directeur</p>
+              {/* Espace vide de ~96px pour le tampon circulaire et la signature manuscrite */}
+              <div className="h-24"></div>
+              <p className="text-xs uppercase">{data.school_name}</p>
+            </div>
 
-        {/* Sous-titre */}
-        <div className="text-center font-bold text-sm mb-3">
-          {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
-        </div>
-
-        {/* Tableau des résultats */}
-        <table className="w-full border-collapse border border-black text-center font-bold">
-          <thead>
-            {/* Ligne 1 : Niveaux */}
-            <tr>
-              <th className="border border-black p-1 w-1/6"></th>
-              {CLASS_NAMES.map((cn) => (
-                <th key={cn} colSpan={3} className="border border-black p-1">{cn}</th>
-              ))}
-            </tr>
-            {/* Ligne 2 : Genre (Garçons, Filles, Total) */}
-            <tr className="bg-gray-50">
-              <th className="border border-black p-1"></th>
-              {CLASS_NAMES.map((cn) => (
-                <>
-                  <th key={`${cn}-G`} className="border border-black p-1">G</th>
-                  <th key={`${cn}-F`} className="border border-black p-1">F</th>
-                  <th key={`${cn}-T`} className="border border-black p-1">T</th>
-                </>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {/* INSCRITS */}
-            <tr>
-              <td className="border border-black p-2 text-left uppercase">Inscrits</td>
-              {levelsData.map((lvl) => renderCells(lvl, 0, lvl.class_name))}
-            </tr>
-            {/* PRESENTS */}
-            <tr>
-              <td className="border border-black p-2 text-left uppercase">Présents</td>
-              {levelsData.map((lvl) => renderCells(lvl, 1, lvl.class_name))}
-            </tr>
-            {/* ADMIS */}
-            <tr>
-              <td className="border border-black p-2 text-left uppercase">Admis</td>
-              {levelsData.map((lvl) => renderCells(lvl, 2, lvl.class_name))}
-            </tr>
-            {/* % ADMIS */}
-            <tr>
-              <td className="border border-black p-2 text-left uppercase">% Admis</td>
-              {levelsData.map((lvl) => renderCells(lvl, 3, lvl.class_name))}
-            </tr>
-            {/* Ligne % Total d'Admis par Genre */}
-            <tr>
-              <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
-              <td colSpan={15} className="border border-black p-2">
-                <div className="flex justify-around items-center font-bold">
-                  <span>FILLES : {fmtPct(data.totals.pct_f)} %</span>
-                  <span>GARÇONS : {fmtPct(data.totals.pct_g)} %</span>
-                </div>
-              </td>
-            </tr>
-            {/* Ligne % Total Global */}
-            <tr>
-              <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
-              <td colSpan={15} className="border border-black p-2 text-center text-base font-bold">
-                {fmtPct(data.totals.pct_t)} %
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Zone des Signatures */}
-        <div className="flex justify-between items-start mt-8 px-4 font-bold">
-          <div className="text-left">
-            <p className="underline mb-12">Le Directeur</p>
-            <p className="text-xs uppercase">{data.school_name}</p>
-          </div>
-          <div className="text-right">
-            <p className="mb-8">Fait à {data.iep_region}, le ......................... {data.year}</p>
-            <p className="underline pr-12">L&apos;Inspecteur</p>
+            {/* Côté Inspecteur */}
+            <div className="text-right w-1/2">
+              <p className="mb-2">Fait à {data.iep_region}, le ......................... {data.year}</p>
+              <p className="underline pr-12">L&apos;Inspecteur</p>
+              {/* Espace identique réservé à la signature de l'inspecteur */}
+              <div className="h-24"></div>
+            </div>
           </div>
         </div>
       </div>
