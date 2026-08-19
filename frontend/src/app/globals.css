@@ -207,3 +207,23 @@
     padding: 0 !important;
   }
 }
+
+/* === Synthèse — Print CSS (correction page blanche) === */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #synthese-doc,
+  #synthese-doc * {
+    visibility: visible !important;
+  }
+  #synthese-doc {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 10mm !important;
+  }
+}
