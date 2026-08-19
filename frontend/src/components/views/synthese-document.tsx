@@ -299,30 +299,6 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
           </div>
         </div>
       </div>
-
-      {/* CSS Print — paysage A4 */}
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: A4 landscape;
-            margin: 10mm;
-          }
-          body * {
-            visibility: hidden;
-          }
-          #synthese-doc, #synthese-doc * {
-            visibility: visible;
-          }
-          #synthese-doc {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            box-shadow: none !important;
-            padding: 0 !important;
-          }
-        }
-      `}</style>
     </>
   );
 }
