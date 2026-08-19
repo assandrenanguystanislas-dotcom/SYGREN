@@ -19,6 +19,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useAutoSave, buildGradesMap, type SaveStatus } from "@/lib/use-autosave";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import type { StudentWithClass, Subject, Grade, SessionWithDetails } from "@/lib/types";
+import { parseLevels } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +94,12 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
   );
 
   const students = studentsData?.students ?? [];
-  const subjects = subjectsData?.subjects ?? [];
+  // Filtrer les matières selon le niveau de la classe (ex: CP1 → matières contenant "CP1" dans levels)
+  const className = selectedSession?.class_name ?? "";
+  const allSubjects = subjectsData?.subjects ?? [];
+  const subjects = className
+    ? allSubjects.filter((s) => parseLevels(s.levels).includes(className as any))
+    : allSubjects;
 
   const sessionStatus = selectedSession?.status;
   const canEdit = sessionStatus === "open" || user?.role === "admin";

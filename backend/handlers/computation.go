@@ -175,21 +175,16 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 return nil, err
         }
 
-        // 3. Charger les matières applicables à cette session
-        //    - Composition : toutes les matières SAUF EPS (sauf si EPS est configurée
-        //      pour le niveau de la classe via ses "levels")
-        //    - Examen Blanc (CM2 uniquement) : toutes les matières, EPS INCLUSE
+        // 3. Charger les matières applicables à cette session + classe
+        //    Filtrage par Subject.levels : la matière doit contenir le nom de la classe
+        //    (ex: "CP1,CP2" pour une matière CP-only, "CP1,CP2,CE1,CE2,CM1,CM2" pour toutes)
+        //    + exclusion EPS pour les compositions (sauf si EPS configurée pour cette classe)
         var subjects []models.Subject
-        subjectQuery := database.DB.Order("name ASC")
-        if session.EvalType == "exam_blanc" {
-                // Examen Blanc : toutes les matières, EPS incluse (réservé CM2)
-                // Pas de filtre supplémentaire
-        } else {
-                // Composition : exclure EPS (qui est réservée aux examens blancs CM2)
-                // sauf si EPS est explicitement configurée pour une classe de ce niveau
-                // via Subject.levels (ex: "CM2" ou "CM1,CM2")
-                subjectQuery = subjectQuery.Where("name != ?", "EPS").
-                        Or("levels LIKE ?", "%"+cls.Name+"%")
+        subjectQuery := database.DB.Order("name ASC").
+                Where("levels LIKE ?", "%"+cls.Name+"%")
+        if session.EvalType != "exam_blanc" {
+                // Composition : exclure EPS sauf si configurée pour cette classe
+                subjectQuery = subjectQuery.Where("name != ? OR levels LIKE ?", "EPS", "%"+cls.Name+"%")
         }
         if err := subjectQuery.Find(&subjects).Error; err != nil {
                 return nil, err

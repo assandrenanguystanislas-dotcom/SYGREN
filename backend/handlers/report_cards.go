@@ -354,8 +354,8 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
         pdf.SetTextColor(255, 255, 255)
         pdf.CellFormat(75, 7, tr("Matière"), "1", 0, "C", true, 0, "")
         pdf.CellFormat(20, 7, tr("Coef."), "1", 0, "C", true, 0, "")
-        pdf.CellFormat(25, 7, tr("Note /20"), "1", 0, "C", true, 0, "")
-        pdf.CellFormat(60, 7, tr("Appréciation"), "1", 1, "C", true, 0, "")
+        pdf.CellFormat(35, 7, tr("Note"), "1", 0, "C", true, 0, "")
+        pdf.CellFormat(50, 7, tr("Appréciation"), "1", 1, "C", true, 0, "")
 
         // Lignes du tableau
         pdf.SetFont("Helvetica", "", 10)
@@ -363,28 +363,28 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
         for _, sg := range result.SubjectGrades {
                 // Couleur alternée
                 pdf.SetFillColor(250, 250, 248)
-                // On n'utilise pas Fill=true pour tout, juste pour le rendu zébré manuel
                 pdf.CellFormat(75, 6.5, tr(sg.SubjectName), "1", 0, "L", false, 0, "")
                 pdf.CellFormat(20, 6.5, fmt.Sprintf("%.1f", sg.Coefficient), "1", 0, "C", false, 0, "")
 
                 if sg.HasGrade {
-                        noteStr := fmt.Sprintf("%.2f", sg.Grade)
-                        // Couleur de la note selon valeur
+                        // Afficher value/max (ex: 8/10, 25/30, 45/50)
+                        noteStr := fmt.Sprintf("%.2f/%d", sg.Grade, sg.MaxScore)
+                        // Couleur de la note selon valeur normalisée sur /20
                         if sg.IsDraft {
                                 pdf.SetTextColor(180, 120, 0) // orange pour brouillon
-                        } else if sg.Grade >= 10 {
+                        } else if sg.NormalizedValue >= 10 {
                                 pdf.SetTextColor(0, 120, 50) // vert
                         } else {
                                 pdf.SetTextColor(180, 40, 20) // rouge
                         }
-                        pdf.CellFormat(25, 6.5, noteStr, "1", 0, "C", false, 0, "")
+                        pdf.CellFormat(35, 6.5, noteStr, "1", 0, "C", false, 0, "")
                         pdf.SetTextColor(0, 0, 0)
                 } else {
                         pdf.SetTextColor(150, 150, 150)
-                        pdf.CellFormat(25, 6.5, "-", "1", 0, "C", false, 0, "")
+                        pdf.CellFormat(35, 6.5, "-", "1", 0, "C", false, 0, "")
                         pdf.SetTextColor(0, 0, 0)
                 }
-                pdf.CellFormat(60, 6.5, tr(getSubjectAppreciation(sg.Grade, sg.HasGrade)), "1", 1, "L", false, 0, "")
+                pdf.CellFormat(50, 6.5, tr(getSubjectAppreciationNormalized(sg.NormalizedValue, sg.HasGrade)), "1", 1, "L", false, 0, "")
         }
 
         pdf.Ln(4)
@@ -410,7 +410,8 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
         pdf.SetTextColor(0, 100, 50)
         avgStr := "-"
         if result.HasAverage {
-                avgStr = fmt.Sprintf("%.2f", result.Average)
+                // Afficher la moyenne sur l'échelle du niveau (10 pour CP/CE, 20 pour CM)
+                avgStr = fmt.Sprintf("%.2f/%d", result.Average, session.AverageScale)
         }
         pdf.SetXY(15, recapY+8)
         pdf.CellFormat(60, 8, avgStr, "R", 0, "C", false, 0, "")
@@ -479,22 +480,30 @@ func monthLabelFR(month int) string {
 }
 
 // getSubjectAppreciation returns the appreciation for a single subject grade.
+// Deprecated: use getSubjectAppreciationNormalized (works on /20 scale)
 func getSubjectAppreciation(grade float64, hasGrade bool) string {
+        return getSubjectAppreciationNormalized(grade, hasGrade)
+}
+
+// getSubjectAppreciationNormalized returns the appreciation based on the
+// normalized value (on /20). Works for all levels since normalized_value is
+// always on /20 regardless of the raw barème.
+func getSubjectAppreciationNormalized(normalized float64, hasGrade bool) string {
         if !hasGrade {
                 return "Non évalué"
         }
         switch {
-        case grade >= 16:
+        case normalized >= 16:
                 return "Excellent"
-        case grade >= 14:
+        case normalized >= 14:
                 return "Très bien"
-        case grade >= 12:
+        case normalized >= 12:
                 return "Bien"
-        case grade >= 10:
+        case normalized >= 10:
                 return "Assez bien"
-        case grade >= 8:
+        case normalized >= 8:
                 return "Passable"
-        case grade >= 5:
+        case normalized >= 5:
                 return "Insuffisant"
         default:
                 return "Très insuffisant"
