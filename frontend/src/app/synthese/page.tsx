@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Printer, X, Loader2 } from "lucide-react";
 import { monthLabel } from "@/lib/session-utils";
 
@@ -32,7 +32,6 @@ interface SyntheseData {
 }
 
 const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1"];
-const NAVY = "#000080";
 
 export default function SynthesePage() {
   const [data, setData] = useState<SyntheseData | null>(null);
@@ -43,18 +42,15 @@ export default function SynthesePage() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
 
-    // Récupérer le token depuis localStorage
     let token = "";
     try {
       const raw = localStorage.getItem("sygren-auth");
       if (raw) {
-        const parsed = JSON.parse(raw);
-        token = parsed?.state?.token ?? "";
+        token = JSON.parse(raw)?.state?.token ?? "";
       }
     } catch {}
 
     if (!sessionId) {
-      // Use a microtask to avoid synchronous setState in effect
       Promise.resolve().then(() => {
         setLoading(false);
         setError("Session ID manquant");
@@ -69,10 +65,7 @@ export default function SynthesePage() {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`HTTP ${res.status}: ${text}`);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((d) => {
@@ -88,7 +81,7 @@ export default function SynthesePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin" style={{ color: NAVY }} />
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
       </div>
     );
   }
@@ -98,10 +91,7 @@ export default function SynthesePage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 font-semibold">{error || "Erreur"}</p>
-          <button
-            onClick={() => window.close()}
-            className="mt-4 px-4 py-2 bg-gray-200 rounded"
-          >
+          <button onClick={() => window.close()} className="mt-4 px-4 py-2 bg-gray-200 rounded">
             Fermer
           </button>
         </div>
@@ -121,18 +111,30 @@ export default function SynthesePage() {
       pct_admis: [0, 0, 0],
     };
 
+  const levelsData = CLASS_NAMES.map(getLevel);
+
+  // Render 3 cells (G, F, T) for a given level + row index
+  const renderCells = (lvl: LevelData, rowIdx: number, cn: string) => {
+    const vals = rowIdx === 0 ? lvl.inscrits : rowIdx === 1 ? lvl.presents : rowIdx === 2 ? lvl.admis : lvl.pct_admis;
+    const fmtFn = rowIdx === 3 ? fmtPct : fmt;
+    return (
+      <>
+        <td key={`${cn}-g`} className="border border-black p-1">{fmtFn(vals[0])}</td>
+        <td key={`${cn}-f`} className="border border-black p-1">{fmtFn(vals[1])}</td>
+        <td key={`${cn}-t`} className="border border-black p-1">{fmtFn(vals[2])}</td>
+      </>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
       {/* Barre d'outils */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden">
-        <h3 className="font-semibold text-sm" style={{ color: NAVY }}>
-          Document de Synthèse — Aperçu
-        </h3>
+        <h3 className="font-semibold text-sm">Document de Synthèse — Aperçu</h3>
         <div className="flex items-center gap-2">
           <button
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-md text-sm"
-            style={{ background: NAVY }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800"
           >
             <Printer className="w-4 h-4" />
             Imprimer / PDF
@@ -147,158 +149,118 @@ export default function SynthesePage() {
         </div>
       </div>
 
-      {/* === DOCUMENT === */}
-      <div
-        id="synthese-doc"
-        className="bg-white mx-auto shadow-lg print:shadow-none print:p-0"
-        style={{
-          width: "100%",
-          maxWidth: "297mm",
-          minHeight: "210mm",
-          padding: "20px",
-          fontFamily: "Helvetica, Arial, sans-serif",
-          color: NAVY,
-        }}
-      >
-        {/* En-tête */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "bold", lineHeight: "1.5", textAlign: "left" }}>
-            <div>République de Côte d&apos;Ivoire</div>
-            <div>Ministère de l&apos;Éducation Nationale</div>
-            <div>Et de l&apos;Alphabétisation</div>
-            <div>Direction Régionale de {data.iep_region}</div>
-            <div>Inspection de l&apos;Enseignement</div>
-            <div>Préscolaire et Primaire de {data.iep_name}</div>
-            <div>BP : {data.school_addr || "—"} / Tél : ............</div>
+      {/* === DOCUMENT (modèle exact fourni par l'utilisateur) === */}
+      <div className="w-[297mm] min-h-[210mm] p-8 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none">
+        {/* En-tête supérieur */}
+        <div className="flex justify-between items-start mb-2">
+          {/* Alignement Gauche */}
+          <div className="text-left space-y-0.5">
+            <p className="font-semibold">Ministère de l&apos;Education Nationale</p>
+            <p className="font-semibold">Et de l&apos;Alphabétisation</p>
+            <p className="italic">Direction Régionale de {data.iep_region}</p>
+            <p className="font-bold">Inspection de l&apos;Enseignement</p>
+            <p className="font-bold">Préscolaire et Primaire de {data.iep_name}</p>
+            <p>BP : {data.school_addr || "—"} / Tel : ............</p>
+            <p>Courriel : <span className="underline text-blue-800">............</span></p>
           </div>
-          <div style={{ fontSize: "10px", fontWeight: "bold", textAlign: "right" }}>
-            <div style={{ marginBottom: "4px" }}>Union - Discipline - Travail</div>
-            <img
-              src="/ci-coat-of-arms.png"
-              alt="Armoiries Côte d'Ivoire"
-              style={{ width: "60px", height: "60px", objectFit: "contain", marginLeft: "auto" }}
-            />
-            <div style={{ marginTop: "4px" }}>ÉCOLE : {data.school_name}</div>
+
+          {/* Alignement Droite */}
+          <div className="text-right space-y-1">
+            <p className="font-semibold">République de Côte d&apos;Ivoire</p>
+            <p className="text-[10px] tracking-wide">Union-Discipline-Travail</p>
+            <div className="flex justify-end my-1">
+              <img src="/ci-coat-of-arms.png" alt="Armoiries Côte d'Ivoire" className="h-14 object-contain" />
+            </div>
+            <p className="font-bold text-sm">ECOLE : {data.school_name}</p>
           </div>
         </div>
 
-        {/* Trait */}
-        <hr style={{ borderColor: NAVY, borderWidth: "1px", margin: "8px 0 12px 0" }} />
-
-        {/* Titre */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
-          <div style={{ border: `2px solid ${NAVY}`, borderRadius: "8px", padding: "4px 48px", textAlign: "center" }}>
-            <div style={{ fontSize: "16px", fontWeight: "bold", letterSpacing: "1px" }}>
-              SYNTHÈSE DES RESULTATS
-            </div>
-            <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>
-              {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
-            </div>
+        {/* Titre central encadré avec lignes d'union */}
+        <div className="flex items-center my-4">
+          <div className="flex-1 border-t border-black"></div>
+          <div className="border-2 border-black rounded-xl px-8 py-1.5 mx-4">
+            <h1 className="text-base font-bold tracking-wider uppercase">Synthèse des Résultats</h1>
           </div>
+          <div className="flex-1 border-t border-black"></div>
         </div>
 
-        {/* Tableau */}
-        <table style={{ width: "100%", borderCollapse: "collapse", border: `1px solid ${NAVY}`, color: NAVY, fontSize: "11px", fontWeight: "bold" }}>
+        {/* Sous-titre */}
+        <div className="text-center font-bold text-sm mb-3">
+          {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
+        </div>
+
+        {/* Tableau des résultats */}
+        <table className="w-full border-collapse border border-black text-center font-bold">
           <thead>
+            {/* Ligne 1 : Niveaux */}
             <tr>
-              <th style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "6px", width: "8%" }}></th>
+              <th className="border border-black p-1 w-1/6"></th>
               {CLASS_NAMES.map((cn) => (
-                <th key={`h-${cn}`} colSpan={3} style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "6px", textAlign: "center" }}>
-                  {cn}
-                </th>
+                <th key={cn} colSpan={3} className="border border-black p-1">{cn}</th>
               ))}
             </tr>
-            <tr>
-              <th style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "4px" }}></th>
+            {/* Ligne 2 : Genre (Garçons, Filles, Total) */}
+            <tr className="bg-gray-50">
+              <th className="border border-black p-1"></th>
               {CLASS_NAMES.map((cn) => (
-                <th key={`g-${cn}`} style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "4px", textAlign: "center", fontSize: "10px", width: "6%" }}>G</th>
-              ))}
-              {CLASS_NAMES.map((cn) => (
-                <th key={`f-${cn}`} style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "4px", textAlign: "center", fontSize: "10px", width: "6%" }}>F</th>
-              ))}
-              {CLASS_NAMES.map((cn) => (
-                <th key={`t-${cn}`} style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "4px", textAlign: "center", fontSize: "10px", width: "6%" }}>T</th>
+                <>
+                  <th key={`${cn}-G`} className="border border-black p-1">G</th>
+                  <th key={`${cn}-F`} className="border border-black p-1">F</th>
+                  <th key={`${cn}-T`} className="border border-black p-1">T</th>
+                </>
               ))}
             </tr>
           </thead>
           <tbody>
             {/* INSCRITS */}
             <tr>
-              <td style={{ border: `1px solid ${NAVY}`, padding: "6px 8px" }}>INSCRITS</td>
-              {CLASS_NAMES.map((cn) => {
-                const lvl = getLevel(cn);
-                return (
-                  <td key={`ins-${cn}-g`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center" }}>{fmt(lvl.inscrits[0])}</td>
-                );
-              })}
-              {CLASS_NAMES.map((cn) => {
-                const lvl = getLevel(cn);
-                return (
-                  <td key={`ins-${cn}-f`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center" }}>{fmt(lvl.inscrits[1])}</td>
-                );
-              })}
-              {CLASS_NAMES.map((cn) => {
-                const lvl = getLevel(cn);
-                return (
-                  <td key={`ins-${cn}-t`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center" }}>{fmt(lvl.inscrits[2])}</td>
-                );
-              })}
+              <td className="border border-black p-2 text-left uppercase">Inscrits</td>
+              {levelsData.map((lvl) => renderCells(lvl, 0, lvl.class_name))}
             </tr>
             {/* PRESENTS */}
-            <tr style={{ background: "#f5f5f8" }}>
-              <td style={{ border: `1px solid ${NAVY}`, padding: "6px 8px", background: "#f5f5f8" }}>PRÉSENTS</td>
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`pre-${cn}-g`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center", background: "#f5f5f8" }}>{fmt(lvl.presents[0])}</td>; })}
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`pre-${cn}-f`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center", background: "#f5f5f8" }}>{fmt(lvl.presents[1])}</td>; })}
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`pre-${cn}-t`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center", background: "#f5f5f8" }}>{fmt(lvl.presents[2])}</td>; })}
+            <tr>
+              <td className="border border-black p-2 text-left uppercase">Présents</td>
+              {levelsData.map((lvl) => renderCells(lvl, 1, lvl.class_name))}
             </tr>
             {/* ADMIS */}
             <tr>
-              <td style={{ border: `1px solid ${NAVY}`, padding: "6px 8px" }}>ADMIS</td>
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`adm-${cn}-g`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center" }}>{fmt(lvl.admis[0])}</td>; })}
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`adm-${cn}-f`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center" }}>{fmt(lvl.admis[1])}</td>; })}
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`adm-${cn}-t`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center" }}>{fmt(lvl.admis[2])}</td>; })}
+              <td className="border border-black p-2 text-left uppercase">Admis</td>
+              {levelsData.map((lvl) => renderCells(lvl, 2, lvl.class_name))}
             </tr>
             {/* % ADMIS */}
-            <tr style={{ background: "#f5f5f8" }}>
-              <td style={{ border: `1px solid ${NAVY}`, padding: "6px 8px", background: "#f5f5f8" }}>% ADMIS</td>
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`pct-${cn}-g`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center", background: "#f5f5f8" }}>{fmtPct(lvl.pct_admis[0])}</td>; })}
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`pct-${cn}-f`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center", background: "#f5f5f8" }}>{fmtPct(lvl.pct_admis[1])}</td>; })}
-              {CLASS_NAMES.map((cn) => { const lvl = getLevel(cn); return <td key={`pct-${cn}-t`} style={{ border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center", background: "#f5f5f8" }}>{fmtPct(lvl.pct_admis[2])}</td>; })}
-            </tr>
-            {/* Récapitulatif */}
             <tr>
-              <td colSpan={8} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "13px" }}>
-                FILLES : {fmtPct(data.totals.pct_f)} %
-              </td>
-              <td colSpan={8} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "13px" }}>
-                GARÇONS : {fmtPct(data.totals.pct_g)} %
+              <td className="border border-black p-2 text-left uppercase">% Admis</td>
+              {levelsData.map((lvl) => renderCells(lvl, 3, lvl.class_name))}
+            </tr>
+            {/* Ligne % Total d'Admis par Genre */}
+            <tr>
+              <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
+              <td colSpan={15} className="border border-black p-2">
+                <div className="flex justify-around items-center font-bold">
+                  <span>FILLES : {fmtPct(data.totals.pct_f)} %</span>
+                  <span>GARÇONS : {fmtPct(data.totals.pct_g)} %</span>
+                </div>
               </td>
             </tr>
+            {/* Ligne % Total Global */}
             <tr>
-              <td colSpan={16} style={{ border: `1px solid ${NAVY}`, padding: "10px", textAlign: "center", fontSize: "16px" }}>
+              <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
+              <td colSpan={15} className="border border-black p-2 text-center text-base font-bold">
                 {fmtPct(data.totals.pct_t)} %
               </td>
             </tr>
           </tbody>
         </table>
 
-        {/* Signatures */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
-          <div style={{ textAlign: "center", width: "40%" }}>
-            <div style={{ fontSize: "12px", fontWeight: "bold", textDecoration: "underline" }}>Le Directeur</div>
-            <div style={{ height: "60px" }}></div>
-            <div style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase" }}>
-              {data.school_name}
-            </div>
+        {/* Zone des Signatures */}
+        <div className="flex justify-between items-start mt-8 px-4 font-bold">
+          <div className="text-left">
+            <p className="underline mb-12">Le Directeur</p>
+            <p className="text-xs uppercase">{data.school_name}</p>
           </div>
-          <div style={{ textAlign: "right", width: "40%" }}>
-            <div style={{ fontSize: "11px", marginBottom: "20px" }}>
-              Fait à {data.iep_region}, le ...../...../.....
-            </div>
-            <div style={{ fontSize: "12px", fontWeight: "bold", textDecoration: "underline" }}>
-              L&apos;Inspecteur
-            </div>
-            <div style={{ height: "40px" }}></div>
+          <div className="text-right">
+            <p className="mb-8">Fait à {data.iep_region}, le ......................... {data.year}</p>
+            <p className="underline pr-12">L&apos;Inspecteur</p>
           </div>
         </div>
       </div>
