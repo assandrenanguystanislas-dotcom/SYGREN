@@ -59,7 +59,20 @@ export default function SynthesePage() {
     }
 
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-    const url = `${apiBase}/api/reports/synthese-data?session_id=${sessionId}`;
+    // Nouveau : school_code + eval_type + eval_number + year (au lieu de session_id)
+    const schoolCode = params.get("school_code") || "";
+    const evalType = params.get("eval_type") || "composition";
+    const evalNumber = params.get("eval_number") || "1";
+    const year = params.get("year") || "2026";
+
+    let url: string;
+    if (schoolCode) {
+      url = `${apiBase}/api/reports/synthese-data?school_code=${encodeURIComponent(schoolCode)}&eval_type=${evalType}&eval_number=${evalNumber}&year=${year}`;
+    } else {
+      // Rétrocompatibilité : session_id
+      const sessionId = params.get("session_id") || "";
+      url = `${apiBase}/api/reports/synthese-data?session_id=${sessionId}`;
+    }
 
     fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -185,7 +198,7 @@ export default function SynthesePage() {
 
           {/* Sous-titre */}
           <div className="text-center font-bold text-sm mb-3">
-            {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
+            {data.eval_label.toUpperCase()} N°{data.eval_number} {data.month > 0 ? `DU MOIS DE ${monthLabel(data.month).toUpperCase()} ` : ""}{data.year}
           </div>
 
           {/* Tableau des résultats */}

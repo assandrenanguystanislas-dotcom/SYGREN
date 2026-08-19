@@ -15,10 +15,11 @@ import {
   Medal,
   AlertCircle,
   FileText,
+  School,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { sessionsApi, computationApi, reportsApi } from "@/lib/api";
+import { sessionsApi, computationApi, reportsApi, schoolsApi } from "@/lib/api";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import { SyntheseDocument } from "./synthese-document";
 import {
@@ -50,14 +51,26 @@ export function ResultsView() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [showSynthese, setShowSynthese] = useState(false);
+  const [schoolFilter, setSchoolFilter] = useState<string>("all");
 
   // Charger les sessions
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
     queryKey: ["sessions", "results-view"],
     queryFn: () => sessionsApi.list(),
   });
+  // Charger les écoles pour le filtre
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools", "results-filter"],
+    queryFn: () => schoolsApi.list(),
+  });
 
-  const sessions = sessionsData?.sessions ?? [];
+  const allSessions = sessionsData?.sessions ?? [];
+  const schools = schoolsData?.schools ?? [];
+
+  // Filtrer les sessions par école
+  const sessions = schoolFilter === "all"
+    ? allSessions
+    : allSessions.filter((s) => s.school_name === schools.find((sc) => sc.id === schoolFilter)?.name);
 
   // Auto-sélection : la session la plus récente
   const autoSessionId = selectedSessionId ?? sessions[0]?.id;
@@ -126,6 +139,9 @@ export function ResultsView() {
                   size="sm"
                   variant="outline"
                   onClick={() => {
+                    // Nouveau : envoyer school_code + eval info (synthèse par école)
+                    const schoolCode = selectedSession?.school_name ? "" : ""; // pas disponible directement
+                    // Utiliser session_id en rétrocompatibilité — le backend retrouve l'école
                     const url = `${window.location.origin}/synthese?session_id=${autoSessionId}`;
                     window.open(url, "_blank");
                   }}
@@ -137,10 +153,31 @@ export function ResultsView() {
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> Session
-            </label>
+          {/* Filtre par école */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="space-y-1.5 min-w-[200px]">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <School className="w-3 h-3" /> École
+              </label>
+              <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Toutes les écoles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les écoles</SelectItem>
+                  {schools.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 flex-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Session
+              </label>
             <Select
               value={autoSessionId ?? ""}
               onValueChange={setSelectedSessionId}
@@ -159,6 +196,7 @@ export function ResultsView() {
                 })}
               </SelectContent>
             </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
