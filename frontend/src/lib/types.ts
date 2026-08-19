@@ -148,9 +148,23 @@ export interface Grade {
   student_id: string;
   subject_id: string;
   session_id: string;
-  value: number; // 0-20
+  value: number; // note brute (sur max_score, pas forcément 20)
   is_draft: boolean;
   updated_at: string;
+}
+
+// === Barème de notation (GradeScale) ===
+export interface GradeScale {
+  id: string;
+  level: string; // "CP" | "CE" | "CM"
+  subject_id?: string | null; // NULL = défaut du niveau
+  max_score: number; // 10, 20, 30, 50...
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GradeScaleWithSubject extends GradeScale {
+  subject_name?: string;
 }
 
 export interface ReportCard {
@@ -220,7 +234,9 @@ export interface SubjectGrade {
   subject_id: string;
   subject_name: string;
   coefficient: number;
-  grade: number; // -1 si aucune note
+  grade: number; // -1 si aucune note (valeur brute)
+  max_score: number; // barème (10, 20, 30, 50...)
+  normalized_value: number; // note normalisée sur /20
   has_grade: boolean;
   is_draft: boolean;
 }

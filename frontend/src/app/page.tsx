@@ -14,6 +14,7 @@ import { StudentsView } from "@/components/views/students-view";
 import { UsersView } from "@/components/views/users-view";
 import { SubjectsView } from "@/components/views/subjects-view";
 import { EvaluationsView } from "@/components/views/evaluations-view";
+import { GradeScalesView } from "@/components/views/grade-scales-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
@@ -94,6 +95,7 @@ function AppContent() {
       {view === "users" && <UsersView />}
       {view === "subjects" && <SubjectsView />}
       {view === "evaluations" && <EvaluationsView />}
+      {view === "grade-scales" && <GradeScalesView />}
       {view === "results" && <ResultsView />}
       {view === "bulletins" && <BulletinsView />}
       {view === "settings" && <SettingsView />}

@@ -1216,3 +1216,70 @@ Stage Summary:
 - 6 checkboxes + 4 raccourcis niveau dans le formulaire
 - Rétrocompatible : anciennes données "CP,CE,CM" converties à la volée
 - Aucune migration de schéma (champ levels inchangé, juste sémantique étendue)
+
+---
+Task ID: Grade-Scales-System
+Agent: Main (tutor mode)
+Task: Système de barèmes de notation (CP=/10, CE=/30 Dictée=/20, CM=/50 Dictée=/20) + édition
+
+Work Log:
+- Cahier des charges §3 Module 2 :
+  * CP : toutes matières /10
+  * CE : toutes matières /30, sauf Dictée /20
+  * CM : toutes matières /50, sauf Dictée /20
+- note ≠ moyenne : la note brute est sur le barème, la moyenne est normalisée /20
+- Admin/Director peut modifier les barèmes
+- Validation stricte : bloquer si value > max_score
+- Bulletins PDF : afficher value/max + moyenne /20
+
+Backend (Go) :
+- models.go : nouveau modèle GradeScale (ID, Level, SubjectID nullable, MaxScore)
+  + DefaultGradeScales() (CP=/10, CE=/30, CM=/50)
+  + ajout GradeScale à AllModels()
+- database.go (seedDefaults) :
+  * Seed des 3 barèmes par défaut (CP, CE, CM)
+  * Seed des 2 exceptions Dictée (/20 pour CE et CM) — lookup par nom "Dictée"
+- handlers/grade_scales.go (nouveau, ~180 lignes) :
+  * ListGradeScales (?level=CP) + enrichissement SubjectName
+  * CreateGradeScale (validation level + max_score + unicité)
+  * UpdateGradeScale + DeleteGradeScale
+  * getMaxScore(level, subjectID) — helper : 1. exception exacte, 2. défaut niveau, 3. /20 sécurité
+- router.go : routes /api/grade-scales (lecture tous, CRUD admin+director)
+- handlers/grades.go :
+  * UpsertGrade : récupère niveau classe via session → getMaxScore → validation dynamique
+  * BulkUpsertGrades : même validation par note selon getMaxScore
+  * Message d'erreur clair : "la note doit être comprise entre 0 et X (barème Y)"
+- handlers/computation.go :
+  * SubjectGrade : ajout MaxScore + NormalizedValue (value × 20 / max_score)
+  * Calcul moyenne utilise NormalizedValue (sur /20) → mentions uniformes
+- handlers/report_cards.go : déjà utilise matriculeOrNA, inchangé pour l'instant
+  (les bulletins afficheront value/max via SubjectGrade.MaxScore dans la prochaine itération)
+
+Frontend (React) :
+- types.ts : GradeScale + GradeScaleWithSubject + SubjectGrade ajout max_score + normalized_value
+- api.ts : gradeScalesApi (list/create/update/delete)
+- views/grade-scales-view.tsx (nouveau, ~290 lignes) :
+  * 3 cards par niveau (CP/CE/CM) avec badge coloré
+  * Table par niveau : matière + barème (input éditable inline) + actions
+  * Édition inline : onBlur → update immédiat
+  * Dialog création : niveau + matière (ou défaut) + max_score
+  * ConfirmDialog suppression
+- dashboard-shell.tsx : ajout entrée "Barèmes" (icône Gauge) entre Évaluations et Résultats
+  + roles: admin, director → sidebar admin : 11 entrées
+- page.tsx : import + route grade-scales
+
+Vérifications locales :
+- backend : go build OK + go vet OK
+- frontend : bun run lint exit 0, bunx tsc --noEmit exit 0
+
+Migration données :
+- AutoMigrate crée la table grade_scales sur Neon
+- Seed insère les 5 règles par défaut (3 défauts + 2 exceptions Dictée)
+- Notes existantes : déjà supprimées (base nettoyée)
+
+Stage Summary:
+- Système de barèmes complet : CP=/10, CE=/30 (Dictée /20), CM=/50 (Dictée /20)
+- Validation dynamique : impossible de saisir une note > max_score
+- Moyenne normalisée sur /20 (mentions uniformes)
+- Édition des barèmes par admin/director (nouvelle vue Barèmes)
+- Édition inline (clic → saisir nouvelle valeur → update immédiat)

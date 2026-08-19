@@ -136,6 +136,17 @@ func New(cfg *config.Config) http.Handler {
                         r.Delete("/api/grades/{id}", handlers.DeleteGrade)
                 })
 
+                // === Barèmes de notation (cahier des charges §3 Module 2) ===
+                // Lecture : tous les rôles (pour afficher les placeholders /max)
+                // Création/Modification/Suppression : admin + director
+                r.Get("/api/grade-scales", handlers.ListGradeScales)
+                r.Group(func(r chi.Router) {
+                        r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+                        r.Post("/api/grade-scales", handlers.CreateGradeScale)
+                        r.Put("/api/grade-scales/{id}", handlers.UpdateGradeScale)
+                        r.Delete("/api/grade-scales/{id}", handlers.DeleteGradeScale)
+                })
+
                 // === Module 3 — Traitement mathématique (cahier des charges §3) ===
                 // Calcul des moyennes, classement, mentions — accessible à tous les rôles
                 // (RBAC par périmètre vérifié dans getSessionForUser)

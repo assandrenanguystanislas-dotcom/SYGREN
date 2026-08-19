@@ -162,12 +162,15 @@ func (e *EvaluationSession) BeforeCreate(tx *gorm.DB) error {
 }
 
 // === Grade (Note) ===
+// Value = note brute (0 à MaxScore, dépendant du barème de la matière+classe)
+// MaxScore est déterminé dynamiquement via la table GradeScale (cahier des charges
+// §3 Module 2 : CP et CE sur /10, CM sur /20, Dictée /20, etc.)
 type Grade struct {
         ID        string    `gorm:"primaryKey;type:text" json:"id"`
         StudentID string    `gorm:"type:text;index" json:"student_id"`
         SubjectID string    `gorm:"type:text;index" json:"subject_id"`
         SessionID string    `gorm:"type:text;index" json:"session_id"`
-        Value     float64   `json:"value"` // 0-20
+        Value     float64   `json:"value"` // note brute (sur MaxScore, pas forcément 20)
         IsDraft   bool      `gorm:"default:true" json:"is_draft"`
         UpdatedAt time.Time `json:"updated_at"`
 }
@@ -237,11 +240,51 @@ func DefaultSettings() []Setting {
         }
 }
 
+// === GradeScale (Barème de notation) ===
+// Définit le barème max d'une matière pour un niveau donné.
+// Si SubjectID est NULL → barème par défaut du niveau (toutes matières).
+// Si SubjectID est défini → exception spécifique (ex: Dictée CE à /20 alors que défaut CE est /10).
+type GradeScale struct {
+        ID        string    `gorm:"primaryKey;type:text" json:"id"`
+        Level     string    `gorm:"type:text;index" json:"level"`               // "CP" | "CE" | "CM"
+        SubjectID *string   `gorm:"type:text;index" json:"subject_id,omitempty"` // NULL = défaut du niveau
+        SubjectName string  `gorm:"-" json:"subject_name,omitempty"`            // rempli par le handler ( JOIN manuelle)
+        MaxScore  int       `gorm:"default:20" json:"max_score"`                 // 10, 20, 30, 50...
+        CreatedAt time.Time `json:"created_at"`
+        UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (gs *GradeScale) BeforeCreate(tx *gorm.DB) error {
+        if gs.ID == "" {
+                gs.ID = uuid.NewString()
+        }
+        return nil
+}
+
+// DefaultGradeScales retourne les barèmes par défaut (cahier des charges §3 Module 2).
+// Utilisé au premier seed.
+//   - CP  : toutes matières /10
+//   - CE  : toutes matières /30, sauf Dictée /20 (exception ajoutée au seed via SubjectID)
+//   - CM  : toutes matières /50, sauf Dictée /20 (exception ajoutée au seed via SubjectID)
+//
+// Les exceptions Dictée sont ajoutées dynamiquement dans seedDefaults() car on doit
+// d'abord trouver l'ID du sujet "Dictée" en base.
+func DefaultGradeScales() []GradeScale {
+        return []GradeScale{
+                // CP : défaut /10
+                {Level: "CP", SubjectID: nil, MaxScore: 10},
+                // CE : défaut /30
+                {Level: "CE", SubjectID: nil, MaxScore: 30},
+                // CM : défaut /50
+                {Level: "CM", SubjectID: nil, MaxScore: 50},
+        }
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
         return []interface{}{
                 &User{}, &IEP{}, &School{}, &Class{}, &Student{},
                 &Subject{}, &EvaluationSession{}, &Grade{}, &ReportCard{},
-                &Setting{},
+                &Setting{}, &GradeScale{},
         }
 }

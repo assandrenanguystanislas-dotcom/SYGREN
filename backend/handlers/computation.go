@@ -37,12 +37,14 @@ import (
 
 // SubjectGrade — note d'un élève dans une matière
 type SubjectGrade struct {
-        SubjectID   string  `json:"subject_id"`
-        SubjectName string  `json:"subject_name"`
-        Coefficient float64 `json:"coefficient"`
-        Grade       float64 `json:"grade"`    // -1 si aucune note
-        HasGrade    bool    `json:"has_grade"`
-        IsDraft     bool    `json:"is_draft"`
+        SubjectID       string  `json:"subject_id"`
+        SubjectName     string  `json:"subject_name"`
+        Coefficient     float64 `json:"coefficient"`
+        Grade           float64 `json:"grade"`            // -1 si aucune note (valeur brute)
+        MaxScore        int     `json:"max_score"`         // barème (10, 20, 30, 50...)
+        NormalizedValue float64 `json:"normalized_value"` // note normalisée sur /20
+        HasGrade        bool    `json:"has_grade"`
+        IsDraft         bool    `json:"is_draft"`
 }
 
 // StudentResult — résultat complet d'un élève pour une session
@@ -182,20 +184,26 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 hasDrafts := false
 
                 for _, subj := range subjects {
+                        // Récupérer le barème max pour cette matière + niveau de la classe
+                        maxScore := getMaxScore(cls.Level, subj.ID)
                         sg := SubjectGrade{
                                 SubjectID:   subj.ID,
                                 SubjectName: subj.Name,
                                 Coefficient: subj.Coefficient,
                                 Grade:       -1,
+                                MaxScore:    maxScore,
                         }
                         if g, ok := gradeMap[st.ID+"|"+subj.ID]; ok {
                                 sg.Grade = g.Value
                                 sg.HasGrade = true
                                 sg.IsDraft = g.IsDraft
+                                // Normaliser la note sur /20 pour le calcul de la moyenne
+                                // normalized = value × 20 / max_score
+                                sg.NormalizedValue = g.Value * 20.0 / float64(maxScore)
                                 if g.IsDraft {
                                         hasDrafts = true
                                 }
-                                totalWeighted += g.Value * subj.Coefficient
+                                totalWeighted += sg.NormalizedValue * subj.Coefficient
                                 totalCoef += subj.Coefficient
                                 gradedCount++
                         }

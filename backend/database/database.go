@@ -125,5 +125,34 @@ func seedDefaults(db *gorm.DB) error {
                 log.Printf("[DB] %d paramètres par défaut créés", len(defaults))
         }
 
+        // 4. Barèmes de notation par défaut (cahier des charges §3 Module 2)
+        //     CP=/10, CE=/30 (Dictée /20), CM=/50 (Dictée /20)
+        var scaleCount int64
+        db.Model(&models.GradeScale{}).Count(&scaleCount)
+        if scaleCount == 0 {
+                // D'abord les barèmes par défaut par niveau
+                for _, gs := range models.DefaultGradeScales() {
+                        if err := db.Create(&gs).Error; err != nil {
+                                log.Println("[DB] seed grade_scale:", gs.Level, err)
+                        }
+                }
+                // Puis les exceptions Dictée (/20) pour CE et CM
+                var dictee models.Subject
+                if err := db.Where("name = ?", "Dictée").First(&dictee).Error; err == nil {
+                        for _, level := range []string{"CE", "CM"} {
+                                exc := models.GradeScale{
+                                        Level:     level,
+                                        SubjectID: &dictee.ID,
+                                        MaxScore:  20,
+                                }
+                                if err := db.Create(&exc).Error; err != nil {
+                                        log.Println("[DB] seed grade_scale dictée:", level, err)
+                                }
+                        }
+                        log.Printf("[DB] exceptions Dictée /20 créées pour CE et CM")
+                }
+                log.Printf("[DB] barèmes de notation créés (CP=/10, CE=/30, CM=/50, Dictée CE+CM=/20)")
+        }
+
         return nil
 }

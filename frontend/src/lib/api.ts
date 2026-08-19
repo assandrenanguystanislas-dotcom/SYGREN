@@ -30,6 +30,7 @@ import type {
   EvaluationSession,
   SessionWithDetails,
   Grade,
+  GradeScaleWithSubject,
   SessionStatus,
   SessionResults,
   AnnualResult,
@@ -488,6 +489,38 @@ export const gradesApi = {
     }),
   delete: (id: string) =>
     apiFetch<{ status: string }>(`/api/grades/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Barèmes de notation (cahier des charges §3 Module 2) ===
+
+export const gradeScalesApi = {
+  list: (params?: { level?: string }) => {
+    const q = params?.level ? `?level=${params.level}` : "";
+    return apiFetch<{ grade_scales: GradeScaleWithSubject[]; count: number }>(
+      `/api/grade-scales${q}`,
+    );
+  },
+  create: (data: {
+    level: string;
+    subject_id?: string | null;
+    max_score: number;
+  }) =>
+    apiFetch<GradeScaleWithSubject>("/api/grade-scales", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: Partial<{ level: string; subject_id: string | null; max_score: number }>,
+  ) =>
+    apiFetch<GradeScaleWithSubject>(`/api/grade-scales/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/grade-scales/${id}`, {
       method: "DELETE",
     }),
 };
