@@ -178,12 +178,29 @@ export const subjectsApi = {
 export const iepApi = {
   list: () =>
     apiFetch<{ ieps: IEPWithStats[]; count: number }>("/api/iep"),
-  create: (data: { name: string; region: string }) =>
+  create: (data: {
+    name: string;
+    region?: string;
+    inspector_name?: string;
+    inspector_email?: string;
+    inspector_phone?: string;
+    bp?: string;
+  }) =>
     apiFetch<IEP>("/api/iep", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  update: (id: string, data: { name?: string; region?: string }) =>
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      region: string;
+      inspector_name: string;
+      inspector_email: string;
+      inspector_phone: string;
+      bp: string;
+    }>,
+  ) =>
     apiFetch<IEP>(`/api/iep/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -754,6 +771,12 @@ export const reportsApi = {
       // Transmis par le backend pour adapter le titre + le rendu côté frontend.
       level_group: "primary" | "cm2" | "all";
       document_label: string;
+      // === Infos pour les signatures et l'en-tête ===
+      director_name: string;
+      inspector_name: string;
+      inspector_email: string;
+      inspector_phone: string;
+      iep_bp: string;
     }>(`/api/reports/synthese-data?session_id=${sessionId}&level_group=${levelGroup}`),
 };
 

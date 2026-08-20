@@ -50,9 +50,16 @@ func ListIEP(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateIEPRequest — payload pour créer une IEP
+// Les champs d'inspecteur (InspectorName, InspectorEmail, InspectorPhone, BP)
+// sont optionnels à la création mais recommandés : ils alimentent
+// automatiquement le document de synthèse (signatures, en-tête contact).
 type CreateIEPRequest struct {
-        Name   string `json:"name"`
-        Region string `json:"region"`
+        Name            string `json:"name"`
+        Region          string `json:"region"`
+        InspectorName   string `json:"inspector_name"`
+        InspectorEmail  string `json:"inspector_email"`
+        InspectorPhone  string `json:"inspector_phone"`
+        BP              string `json:"bp"`
 }
 
 // CreateIEP creates a new IEP.
@@ -66,7 +73,14 @@ func CreateIEP(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, "le nom est requis", http.StatusBadRequest)
                 return
         }
-        iep := models.IEP{Name: req.Name, Region: req.Region}
+        iep := models.IEP{
+                Name:            req.Name,
+                Region:          req.Region,
+                InspectorName:   req.InspectorName,
+                InspectorEmail:  req.InspectorEmail,
+                InspectorPhone:  req.InspectorPhone,
+                BP:              req.BP,
+        }
         if err := database.DB.Create(&iep).Error; err != nil {
                 middleware.JSONError(w, "erreur création IEP", http.StatusInternalServerError)
                 return
@@ -75,6 +89,9 @@ func CreateIEP(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateIEP updates an existing IEP.
+// Les champs d'inspecteur peuvent être vides (effacés) — on ne fait pas de
+// "if !empty" pour eux, contrairement à Name/Region, afin de permettre la
+// correction d'une saisie erronée vers une valeur vide.
 func UpdateIEP(w http.ResponseWriter, r *http.Request) {
         id := chi.URLParam(r, "id")
         var req CreateIEPRequest
@@ -93,6 +110,11 @@ func UpdateIEP(w http.ResponseWriter, r *http.Request) {
         if req.Region != "" {
                 iep.Region = req.Region
         }
+        // Champs d'inspecteur : mise à jour même si vides (permet d'effacer)
+        iep.InspectorName = req.InspectorName
+        iep.InspectorEmail = req.InspectorEmail
+        iep.InspectorPhone = req.InspectorPhone
+        iep.BP = req.BP
         if err := database.DB.Save(&iep).Error; err != nil {
                 middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
                 return

@@ -33,6 +33,12 @@ interface SyntheseData {
   // Transmis par le backend pour adapter le titre + le rendu.
   level_group: "primary" | "cm2" | "all";
   document_label: string;
+  // === Infos pour les signatures et l'en-tête ===
+  director_name: string;
+  inspector_name: string;
+  inspector_email: string;
+  inspector_phone: string;
+  iep_bp: string;
 }
 
 // FIX BUG #1 : CM2 était absent → le tableau ne montrait que 5 classes au lieu de 6.
@@ -203,7 +209,9 @@ export function SyntheseDocument({
             <div>Direction Régionale de {data.iep_region}</div>
             <div>Inspection de l&apos;Enseignement</div>
             <div>Préscolaire et Primaire de {data.iep_name}</div>
-            <div>BP : {data.school_addr || "—"} / Tél : ............</div>
+            {/* BP / Tel : alimentés par les champs de l'IEP (formulaire Inspections).
+                Si vide, placeholder points pour préserver la mise en page. */}
+            <div>BP : {data.iep_bp || "........."} / Tél : {data.inspector_phone || "............"}</div>
           </div>
           <div style={{ fontSize: "10px", fontWeight: "bold", textAlign: "right" }}>
             <div style={{ marginBottom: "4px" }}>Union - Discipline - Travail</div>
@@ -305,13 +313,16 @@ export function SyntheseDocument({
           </tbody>
         </table>
 
-        {/* Signatures */}
+        {/* Signatures : nom du directeur (depuis User role=director) remplace
+            le nom de l'école. Nom de l'inspecteur ajouté (depuis IEP.inspector_name). */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
           <div style={{ textAlign: "center", width: "40%" }}>
             <div style={{ fontSize: "12px", fontWeight: "bold", textDecoration: "underline" }}>Le Directeur</div>
             <div style={{ height: "60px" }}></div>
+            {/* Nom du directeur de l'école (User role=director, school_id).
+                Placeholder si aucun directeur affecté. */}
             <div style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase" }}>
-              {data.school_name}
+              {data.director_name || "................................"}
             </div>
           </div>
           <div style={{ textAlign: "right", width: "40%" }}>
@@ -322,6 +333,11 @@ export function SyntheseDocument({
               L&apos;Inspecteur
             </div>
             <div style={{ height: "40px" }}></div>
+            {/* Nom de l'inspecteur titulaire de l'IEP (IEP.inspector_name).
+                Placeholder si non renseigné. */}
+            <div style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase" }}>
+              {data.inspector_name || "................................"}
+            </div>
           </div>
         </div>
       </div>

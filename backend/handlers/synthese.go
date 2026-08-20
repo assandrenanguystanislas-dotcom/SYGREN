@@ -49,6 +49,17 @@ type SyntheseData struct {
         // DocumentLabel est le sous-titre lisible affiché dans le document
         // (ex: "CP1 au CM1" ou "CM2 — Fin de cycle primaire").
         DocumentLabel string            `json:"document_label"`
+
+        // === Infos pour les signatures et l'en-tête du document ===
+        // DirectorName : nom du directeur de l'école (User role=director,
+        // school_id = école de la session). Affiché sous "Le Directeur".
+        DirectorName string             `json:"director_name"`
+        // Infos de l'inspecteur titulaire de l'IEP (depuis le modèle IEP).
+        // Affichées sous "L'Inspecteur" et dans l'en-tête (BP/Tel/Courriel).
+        InspectorName  string           `json:"inspector_name"`
+        InspectorEmail string           `json:"inspector_email"`
+        InspectorPhone string           `json:"inspector_phone"`
+        IEPBP          string           `json:"iep_bp"`
 }
 
 type SyntheseTotals struct {
@@ -288,20 +299,34 @@ func GetSyntheseData(w http.ResponseWriter, r *http.Request) {
                 documentLabel = "CP1 au CM2 (toutes classes)"
         }
 
+        // === Récupérer le nom du directeur de l'école (User role=director) ===
+        // Lookup par school_id. Si aucun directeur n'est affecté à l'école,
+        // on laisse le champ vide (le frontend affichera un placeholder).
+        var director models.User
+        directorName := ""
+        if err := database.DB.First(&director, "role = ? AND school_id = ?", models.RoleDirector, school.ID).Error; err == nil {
+                directorName = director.FullName
+        }
+
         data := SyntheseData{
-                IEPName:       iep.Name,
-                IEPRegion:     iep.Region,
-                SchoolName:    school.Name,
-                SchoolCode:    school.Code,
-                SchoolAddr:    school.Address,
-                EvalLabel:     evalLabel,
-                EvalNumber:    evalNumber,
-                Month:         0, // non utilisé maintenant (synthèse par école, pas par mois)
-                Year:          year,
-                Levels:        levels,
-                Totals:        totals,
-                LevelGroup:    levelGroup,
-                DocumentLabel: documentLabel,
+                IEPName:        iep.Name,
+                IEPRegion:      iep.Region,
+                SchoolName:     school.Name,
+                SchoolCode:     school.Code,
+                SchoolAddr:     school.Address,
+                EvalLabel:      evalLabel,
+                EvalNumber:     evalNumber,
+                Month:          0, // non utilisé maintenant (synthèse par école, pas par mois)
+                Year:           year,
+                Levels:         levels,
+                Totals:         totals,
+                LevelGroup:     levelGroup,
+                DocumentLabel:  documentLabel,
+                DirectorName:   directorName,
+                InspectorName:  iep.InspectorName,
+                InspectorEmail: iep.InspectorEmail,
+                InspectorPhone: iep.InspectorPhone,
+                IEPBP:          iep.BP,
         }
 
         jsonResponse(w, http.StatusOK, data)

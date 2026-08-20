@@ -32,6 +32,12 @@ interface SyntheseData {
   // Transmis par le backend pour adapter le titre + le rendu côté frontend.
   level_group: "primary" | "cm2" | "all";
   document_label: string;
+  // === Infos pour les signatures et l'en-tête ===
+  director_name: string;    // Nom du directeur de l'école (affiché sous "Le Directeur")
+  inspector_name: string;   // Nom de l'inspecteur titulaire (affiché sous "L'Inspecteur")
+  inspector_email: string;  // Courriel IEP (en-tête)
+  inspector_phone: string;  // Téléphone IEP (en-tête)
+  iep_bp: string;           // Boîte postale IEP (en-tête)
 }
 
 // FIX BUG : CM2 était absent → le tableau ne montrait que 5 classes au lieu de 6.
@@ -198,8 +204,10 @@ export default function SynthesePage() {
               <p className="italic">Direction Régionale de {data.iep_region}</p>
               <p className="font-bold">Inspection de l&apos;Enseignement</p>
               <p className="font-bold">Préscolaire et Primaire de {data.iep_name}</p>
-              <p>BP : {data.school_addr || "—"} / Tel : .............</p>
-              <p>Courriel : <span className="underline text-blue-800">............</span></p>
+              {/* BP / Tel / Courriel : alimentés par les champs de l'IEP
+                  (formulaire Inspections). Si vide, placeholder points. */}
+              <p>BP : {data.iep_bp || "........."} / Tel : {data.inspector_phone || "............."}</p>
+              <p>Courriel : <span className="underline text-blue-800">{data.inspector_email || "............"}</span></p>
             </div>
 
             {/* Bloc Droit : Centré en interne */}
@@ -326,19 +334,31 @@ export default function SynthesePage() {
             Fait à {data.iep_region}, le ......................... {data.year}
           </p>
 
-          {/* Signatures sur la même ligne */}
+          {/* Signatures sur la même ligne.
+              Le nom du directeur (depuis User role=director + school_id) remplace
+              l'ancien affichage du nom de l'école. Le nom de l'inspecteur
+              (depuis IEP.inspector_name) est ajouté sous sa signature. */}
           <div className="flex justify-between items-start font-bold">
-            {/* Côté Directeur */}
+            {/* Côté Directeur : nom du directeur de l'école */}
             <div className="text-left w-1/2">
               <p className="underline mb-1">Le Directeur</p>
               <div className="h-16"></div>
-              <p className="text-xs uppercase">{data.school_name}</p>
+              {/* Nom du directeur (récupéré depuis l'User affecté à l'école).
+                  Si aucun directeur n'est affecté, on affiche un placeholder. */}
+              <p className="text-xs uppercase">
+                {data.director_name || "................................"}
+              </p>
             </div>
 
-            {/* Côté Inspecteur */}
+            {/* Côté Inspecteur : nom de l'inspecteur titulaire de l'IEP */}
             <div className="text-right w-1/2">
               <p className="underline mb-1">L&apos;Inspecteur</p>
               <div className="h-16"></div>
+              {/* Nom de l'inspecteur (depuis IEP.inspector_name).
+                  Si non renseigné, placeholder. */}
+              <p className="text-xs uppercase">
+                {data.inspector_name || "................................"}
+              </p>
             </div>
           </div>
         </div>

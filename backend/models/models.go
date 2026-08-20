@@ -46,11 +46,19 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 }
 
 // === IEP — Inspection de l'Enseignement Primaire ===
+// Représente une circonscription (Inspection) et son titulaire.
+// Les informations de l'inspecteur (nom, contact, BP) sont utilisées pour
+// remplir automatiquement le document de synthèse des résultats (signatures,
+// en-tête "BP : ... / Tel : ..."). Évite de les ressaisir à chaque impression.
 type IEP struct {
-        ID        string    `gorm:"primaryKey;type:text" json:"id"`
-        Name      string    `gorm:"type:text" json:"name"`
-        Region    string    `gorm:"type:text" json:"region"`
-        CreatedAt time.Time `json:"created_at"`
+        ID            string    `gorm:"primaryKey;type:text" json:"id"`
+        Name          string    `gorm:"type:text" json:"name"`
+        Region        string    `gorm:"type:text" json:"region"`
+        InspectorName string    `gorm:"type:text" json:"inspector_name"`           // Nom + prénom de l'inspecteur titulaire
+        InspectorEmail string   `gorm:"type:text" json:"inspector_email"`         // Courriel officiel
+        InspectorPhone string   `gorm:"type:text" json:"inspector_phone"`        // Téléphone officiel
+        BP            string    `gorm:"type:text" json:"bp"`                      // Boîte postale de l'IEP
+        CreatedAt     time.Time `json:"created_at"`
 }
 
 func (i *IEP) BeforeCreate(tx *gorm.DB) error {

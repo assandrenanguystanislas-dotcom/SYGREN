@@ -34,6 +34,14 @@ export interface IEP {
   id: string;
   name: string;
   region: string;
+  // === Informations de l'inspecteur titulaire de l'IEP ===
+  // Ces champs alimentent automatiquement le document de synthèse des
+  // résultats (signatures + en-tête "BP / Tel / Courriel"). Évite de les
+  // ressaisir à chaque impression.
+  inspector_name: string;
+  inspector_email: string;
+  inspector_phone: string;
+  bp: string; // Boîte postale de l'IEP
   created_at: string;
 }
 

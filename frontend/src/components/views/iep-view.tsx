@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Plus, Pencil, Trash2, MapPin, School as SchoolIcon, Loader2 } from "lucide-react";
+import { BarChart3, Plus, Pencil, Trash2, MapPin, School as SchoolIcon, Loader2, User, Mail, Phone, MapPinned } from "lucide-react";
 
 import { iepApi } from "@/lib/api";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
@@ -18,9 +18,22 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 interface FormData {
   name: string;
   region: string;
+  // === Informations de l'inspecteur titulaire ===
+  // Alimentent le document de synthèse (signatures + en-tête contact).
+  inspector_name: string;
+  inspector_email: string;
+  inspector_phone: string;
+  bp: string;
 }
 
-const EMPTY: FormData = { name: "", region: "" };
+const EMPTY: FormData = {
+  name: "",
+  region: "",
+  inspector_name: "",
+  inspector_email: "",
+  inspector_phone: "",
+  bp: "",
+};
 
 export function IepView() {
   const { data, isLoading, error } = useQuery({
@@ -58,7 +71,14 @@ export function IepView() {
     setDialogOpen(true);
   }
   function openEdit(iep: IEPWithStats) {
-    setForm({ name: iep.name, region: iep.region });
+    setForm({
+      name: iep.name,
+      region: iep.region,
+      inspector_name: iep.inspector_name || "",
+      inspector_email: iep.inspector_email || "",
+      inspector_phone: iep.inspector_phone || "",
+      bp: iep.bp || "",
+    });
     setEditing(iep);
     setDialogOpen(true);
   }
@@ -134,6 +154,11 @@ export function IepView() {
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                       <MapPin className="w-3 h-3" /> {iep.region || "—"}
                     </p>
+                    {iep.inspector_name && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <User className="w-3 h-3" /> {iep.inspector_name}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <Button
@@ -199,6 +224,75 @@ export function IepView() {
               onChange={(e) => setForm({ ...form, region: e.target.value })}
               placeholder="Ex : Abidjan"
             />
+          </div>
+
+          {/* === Informations de l'inspecteur titulaire ===
+              Ces champs sont importés automatiquement dans le document de
+              synthèse (signatures + en-tête BP/Tel/Courriel). Section
+              visuellement séparée car elle représente le titulaire, pas
+              l'institution elle-même. */}
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-medium text-primary">
+                Inspecteur titulaire
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground -mt-2">
+              Ces informations alimentent automatiquement les signatures et
+              l&apos;en-tête du document de synthèse des résultats.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="iep-inspector-name" className="text-xs">
+                Nom et prénom de l&apos;inspecteur
+              </Label>
+              <Input
+                id="iep-inspector-name"
+                value={form.inspector_name}
+                onChange={(e) => setForm({ ...form, inspector_name: e.target.value })}
+                placeholder="Ex : M. Konan Yao Bernard"
+                className="text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="iep-inspector-email" className="text-xs flex items-center gap-1">
+                  <Mail className="w-3 h-3" /> Courriel
+                </Label>
+                <Input
+                  id="iep-inspector-email"
+                  type="email"
+                  value={form.inspector_email}
+                  onChange={(e) => setForm({ ...form, inspector_email: e.target.value })}
+                  placeholder="exemple@iep.edu.ci"
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="iep-inspector-phone" className="text-xs flex items-center gap-1">
+                  <Phone className="w-3 h-3" /> Téléphone
+                </Label>
+                <Input
+                  id="iep-inspector-phone"
+                  value={form.inspector_phone}
+                  onChange={(e) => setForm({ ...form, inspector_phone: e.target.value })}
+                  placeholder="Ex : +225 27 21 00 00 00"
+                  className="text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="iep-bp" className="text-xs flex items-center gap-1">
+                <MapPinned className="w-3 h-3" /> Boîte postale (BP) de l&apos;IEP
+              </Label>
+              <Input
+                id="iep-bp"
+                value={form.bp}
+                onChange={(e) => setForm({ ...form, bp: e.target.value })}
+                placeholder="Ex : BP 1234 Dabou"
+                className="text-sm"
+              />
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button
