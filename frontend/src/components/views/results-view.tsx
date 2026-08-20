@@ -215,9 +215,16 @@ export function ResultsView() {
             )}
           </div>
 
-          {/* Filtre par école + classe (Approche A) */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="space-y-1.5 min-w-[200px] flex-1">
+          {/* Filtre par école + classe (Approche A) ===
+              FIX BUG de chevauchement : les SelectTrigger shadcn ont par défaut
+              `w-fit` + `whitespace-nowrap` → le trigger Session (texte long comme
+              "Décembre 2026 — EPP COTIERE PALMERAIE (Validée)") débordait de son
+              conteneur flex-1 et chevauchait le filtre Classe.
+              Solution : w-full sur chaque SelectTrigger + min-w-0 sur les
+              conteneurs (crucial en flexbox pour autoriser le shrink sous la
+              min-w) + max-w pour borner la largeur. */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <School className="w-3 h-3" /> École
               </label>
@@ -226,7 +233,7 @@ export function ResultsView() {
                 setSelectedSessionId(undefined);
                 setClassFilter("all");
               }}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full overflow-hidden">
                   <SelectValue placeholder="Toutes les écoles" />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,7 +247,7 @@ export function ResultsView() {
               </Select>
             </div>
 
-            <div className="space-y-1.5 min-w-[200px] flex-1">
+            <div className="space-y-1.5 min-w-[220px] flex-1 max-w-[340px] min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <Calendar className="w-3 h-3" /> Session
               </label>
@@ -251,7 +258,7 @@ export function ResultsView() {
                   setClassFilter("all");
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full overflow-hidden">
                   <SelectValue placeholder="Choisir une session…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -268,7 +275,7 @@ export function ResultsView() {
             </div>
 
             {/* Filtre par classe (Approche A — session multi-classes) */}
-            <div className="space-y-1.5 min-w-[160px] flex-1">
+            <div className="space-y-1.5 min-w-[140px] flex-1 max-w-[180px] min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <GraduationCap className="w-3 h-3" /> Classe
               </label>
@@ -277,7 +284,7 @@ export function ResultsView() {
                 onValueChange={setClassFilter}
                 disabled={classesInResults.length === 0}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full overflow-hidden">
                   <SelectValue placeholder="Toutes les classes" />
                 </SelectTrigger>
                 <SelectContent>
