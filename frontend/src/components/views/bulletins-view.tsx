@@ -13,6 +13,7 @@ import {
   Calendar,
   Trophy,
   AlertCircle,
+  School as SchoolIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +21,7 @@ import {
   sessionsApi,
   computationApi,
   reportCardsApi,
+  schoolsApi,
 } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
@@ -31,6 +33,7 @@ import {
 } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -68,17 +71,42 @@ interface MergedStudent {
 export function BulletinsView() {
   const user = useAuthStore((s) => s.user);
   const canGenerate = user?.role === "admin" || user?.role === "director";
+  // Cascade stricte (même logique que students-view et results-view)
+  // - admin/inspector : doivent choisir une école → puis une session
+  // - director/teacher : école figée (RBAC backend) → choisissent une session
+  const isAdmin = user?.role === "admin";
+  const isInspector = user?.role === "inspector";
+  const needsSchoolSelect = isAdmin || isInspector;
   const queryClient = useQueryClient();
 
+  // === Cascade : École → Session ===
+  const [schoolFilter, setSchoolFilter] = useState<string>(
+    needsSchoolSelect ? "" : (user?.school_id ?? ""),
+  );
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
+  const hasSchoolSelected = schoolFilter !== "" && schoolFilter !== "all";
 
+  // Charger les écoles (admin/inspector seulement)
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools", "bulletins-filter"],
+    queryFn: () => schoolsApi.list(),
+    enabled: needsSchoolSelect,
+  });
+
+  // Charger les sessions : filtrées par école (cascade stricte)
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
-    queryKey: ["sessions", "bulletins-view"],
-    queryFn: () => sessionsApi.list(),
+    queryKey: ["sessions", "bulletins-view", schoolFilter],
+    queryFn: () =>
+      sessionsApi.list(
+        hasSchoolSelected ? { school_id: schoolFilter } : undefined,
+      ),
+    enabled: hasSchoolSelected,
   });
 
   const sessions = sessionsData?.sessions ?? [];
-  const autoSessionId = selectedSessionId ?? sessions[0]?.id;
+  const schools = schoolsData?.schools ?? [];
+  // Cascade stricte : PAS d'auto-sélection. L'utilisateur doit choisir.
+  const autoSessionId = selectedSessionId;
   const selectedSession = sessions.find((s) => s.id === autoSessionId);
 
   const { data: resultsData, isLoading: resultsLoading } = useQuery({
@@ -92,6 +120,10 @@ export function BulletinsView() {
     queryFn: () => reportCardsApi.list(autoSessionId!),
     enabled: !!autoSessionId,
   });
+
+  // États de la cascade stricte
+  const waitingForSchool = needsSchoolSelect && !hasSchoolSelected;
+  const waitingForSession = hasSchoolSelected && !autoSessionId;
 
   // Mutation : générer un bulletin individuel
   const generateMut = useMutation({
@@ -182,22 +214,8 @@ export function BulletinsView() {
   const completionPercent =
     totalCount > 0 ? (generatedCount / totalCount) * 100 : 0;
 
-  if (sessionsLoading) {
+  if (sessionsLoading && hasSchoolSelected) {
     return <LoadingState message="Chargement des sessions…" />;
-  }
-
-  if (sessions.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center">
-          <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-medium">Aucune session disponible</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Les bulletins peuvent être générés une fois qu'une session contient des notes.
-          </p>
-        </CardContent>
-      </Card>
-    );
   }
 
   const sessionCfg = selectedSession
@@ -219,7 +237,11 @@ export function BulletinsView() {
               <div>
                 <h2 className="font-semibold text-base">Bulletins PDF</h2>
                 <p className="text-xs text-muted-foreground">
-                  Génération, stockage et impression des bulletins officiels
+                  {waitingForSchool
+                    ? "Sélectionnez une école pour commencer"
+                    : waitingForSession
+                      ? "Sélectionnez une session pour générer les bulletins"
+                      : "Génération, stockage et impression des bulletins officiels"}
                 </p>
               </div>
             </div>
@@ -239,31 +261,112 @@ export function BulletinsView() {
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> Session
-            </label>
-            <Select value={autoSessionId ?? ""} onValueChange={setSelectedSessionId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choisir une session…" />
-              </SelectTrigger>
-              <SelectContent>
-                {sessions.map((s: SessionWithDetails) => {
-                  const c =
-                    SESSION_STATUS_CONFIG[
-                      s.status as keyof typeof SESSION_STATUS_CONFIG
-                    ];
-                  return (
-                    <SelectItem key={s.id} value={s.id}>
-                      {monthLabel(s.month)} {s.year} — {s.class_name} ({c.label})
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+          {/* === Cascade stricte : École → Session === */}
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Filtre École */}
+            {needsSchoolSelect ? (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[300px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <SchoolIcon className="w-3 h-3" /> École
+                </label>
+                <Select value={schoolFilter} onValueChange={(v) => {
+                  setSchoolFilter(v);
+                  setSelectedSessionId(undefined);
+                }}>
+                  <SelectTrigger className="w-full overflow-hidden">
+                    <SelectValue placeholder="Choisir une école…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schools.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[300px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <SchoolIcon className="w-3 h-3" /> École
+                </label>
+                <Input
+                  value={schools.find((s) => s.id === user?.school_id)?.name ?? "Mon école"}
+                  disabled
+                  className="bg-muted/50 text-muted-foreground"
+                />
+              </div>
+            )}
+
+            {/* Filtre Session (désactivé tant que pas d'école) */}
+            <div className="space-y-1.5 min-w-[220px] flex-1 max-w-[360px] min-w-0">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Session
+              </label>
+              <Select
+                value={autoSessionId ?? ""}
+                onValueChange={setSelectedSessionId}
+                disabled={!hasSchoolSelected || sessions.length === 0}
+              >
+                <SelectTrigger className="w-full overflow-hidden">
+                  <SelectValue
+                    placeholder={
+                      !hasSchoolSelected
+                        ? "Choisir une école d'abord"
+                        : sessions.length === 0
+                          ? "Aucune session"
+                          : "Choisir une session…"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessions.map((s: SessionWithDetails) => {
+                    const c =
+                      SESSION_STATUS_CONFIG[
+                        s.status as keyof typeof SESSION_STATUS_CONFIG
+                      ];
+                    return (
+                      <SelectItem key={s.id} value={s.id}>
+                        {monthLabel(s.month)} {s.year} — {s.school_name ?? s.class_name ?? "École"} ({c.label})
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* === États vides de la cascade stricte === */}
+      {waitingForSchool ? (
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="py-12 text-center">
+            <SchoolIcon className="w-8 h-8 mx-auto mb-3 text-primary/50" />
+            <p className="text-sm font-medium text-foreground">
+              Sélectionnez une école pour afficher les sessions
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Choisissez une école dans le filtre ci-dessus — les sessions
+              disponibles s&apos;afficheront automatiquement.
+            </p>
+          </CardContent>
+        </Card>
+      ) : waitingForSession ? (
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="py-12 text-center">
+            <Calendar className="w-8 h-8 mx-auto mb-3 text-primary/50" />
+            <p className="text-sm font-medium text-foreground">
+              Sélectionnez une session pour générer les bulletins
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {sessions.length > 0
+                ? `${sessions.length} session(s) disponible(s) — choisissez-en une dans le filtre ci-dessus.`
+                : "Aucune session n'a été créée pour cette école. Créez une session dans le module Évaluations."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Stats de génération */}
       {selectedSession && (
@@ -317,16 +420,17 @@ export function BulletinsView() {
         </Card>
       )}
 
-      {/* Tableau des bulletins */}
-      {resultsLoading ? (
-        <LoadingState message="Calcul des résultats…" />
-      ) : mergedStudents.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-12 text-center">
-            <p className="text-sm">Aucun élève dans cette session.</p>
-          </CardContent>
-        </Card>
-      ) : (
+      {/* Tableau des bulletins (seulement si session sélectionnée — cascade) */}
+      {selectedSession && (
+        resultsLoading ? (
+          <LoadingState message="Calcul des résultats…" />
+        ) : mergedStudents.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="py-12 text-center">
+              <p className="text-sm">Aucun élève dans cette session.</p>
+            </CardContent>
+          </Card>
+        ) : (
         <Card className="border-border/60 overflow-hidden">
           <CardContent className="p-0">
             <div className="overflow-x-auto scroll-sygren">
@@ -463,7 +567,7 @@ export function BulletinsView() {
             </div>
           </CardContent>
         </Card>
-      )}
+      ))}
 
       {/* Légende */}
       <Card className="border-border/60 bg-muted/30">
