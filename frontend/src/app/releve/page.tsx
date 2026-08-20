@@ -274,7 +274,7 @@ export default function RelevePage() {
                         <p className="font-bold">Inspection de l&apos;Enseignement</p>
                         <p className="font-bold">Préscolaire et Primaire de {data.iep_name}</p>
                         <p>BP : {data.iep_bp || "........."} / Tel : {data.inspector_phone || "............."}</p>
-                        <p className="text-blue-700 underline">{data.inspector_email || "............"}</p>
+                        <p>Courriel : <span className="text-blue-700 underline">{data.inspector_email || "............"}</span></p>
                       </div>
 
                       {/* Titre Centre */}
@@ -287,7 +287,7 @@ export default function RelevePage() {
                         </div>
                       </div>
 
-                      {/* Armoiries Droite + Effectif/Date */}
+                      {/* Armoiries Droite */}
                       <div className="flex flex-col items-center text-center min-w-[200px]">
                         <p className="font-semibold text-xs">République de Côte d&apos;Ivoire</p>
                         <p className="italic text-[10px] tracking-wide">Union-Discipline-Travail</p>
@@ -296,18 +296,23 @@ export default function RelevePage() {
                           alt="Armoiries Côte d'Ivoire"
                           className="h-14 my-1 object-contain"
                         />
-                        {/* Bloc G F T et Date justifié à droite par rapport à l'armoirie */}
-                        <div className="w-full text-right font-bold text-[11px] mt-1 pr-4">
-                          <p className="tracking-widest">G {data.total_g} F {data.total_f} T {data.total_t}</p>
-                          <p>Date: {data.date}</p>
-                        </div>
                       </div>
                     </div>
 
-                    {/* 2. LIGNE ÉCOLE ET CODE */}
+                    {/* 2. LIGNE ÉCOLE + CODE (gauche) et G/F/T + DATE (droite)
+                        Le CODE est juste sous le nom de l'école (même bloc gauche).
+                        G/F/T et Date sont alignés à droite au même niveau. */}
                     <div className="flex justify-between items-end font-bold text-xs mt-6 mb-2 uppercase">
-                      <span>ECOLE : {data.school_name}</span>
-                      <span>CODE : {data.school_code}</span>
+                      {/* Bloc gauche : ÉCOLE + CODE empilés */}
+                      <div className="text-left">
+                        <div>ECOLE : {data.school_name}</div>
+                        <div>CODE : {data.school_code}</div>
+                      </div>
+                      {/* Bloc droit : G/F/T + Date (alignés à droite, même hauteur que ÉCOLE) */}
+                      <div className="text-right text-[11px]">
+                        <p className="tracking-widest">G {data.total_g} &nbsp; F {data.total_f} &nbsp; T {data.total_t}</p>
+                        <p>Date: {data.date}</p>
+                      </div>
                     </div>
                   </div>
                 ) : (
