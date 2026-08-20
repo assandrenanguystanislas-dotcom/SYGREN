@@ -182,7 +182,7 @@ export default function RelevePage() {
       name: g.subject_name,
       max_score: g.max_score,
     })) ?? [];
-  const avgScale = data.students[0]?.average_scale ?? (data.class_level === "CM" ? 20 : 10);
+  const stats = data.stats;
 
   return (
     <div className="bg-gray-100 min-h-screen py-8 print:bg-white print:p-0 print:py-0">
@@ -218,16 +218,16 @@ export default function RelevePage() {
           return (
             <div
               key={pageIndex}
-              className="w-[210mm] min-h-[297mm] p-6 bg-white mx-auto mb-8 shadow-md print:shadow-none print:m-0 print:p-4 print:w-full font-sans text-xs flex flex-col justify-between break-after-page"
+              className="w-[210mm] min-h-[297mm] p-6 bg-white mx-auto mb-8 shadow-md print:shadow-none print:m-0 print:p-4 print:w-full font-sans text-xs text-black flex flex-col justify-between break-after-page"
               style={{ pageBreakAfter: 'always' }}
             >
               <div>
-                {/* EN-TÊTE : Uniquement sur la Page 1 */}
+                {/* === 1. EN-TÊTE SUPÉRIEUR (Page 1 uniquement) === */}
                 {isFirstPage ? (
                   <div>
-                    <div className="flex justify-between items-start mb-2">
-                      {/* Colonne gauche — infos Ministère */}
-                      <div className="text-left space-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-3 items-start mb-3">
+                      {/* Bloc Gauche : Ministère */}
+                      <div className="text-left space-y-0.5 text-[10px] leading-tight">
                         <p className="font-semibold">Ministère de l&apos;Education Nationale</p>
                         <p className="font-semibold">Et de l&apos;Alphabétisation</p>
                         <p className="italic">Direction Régionale de {data.iep_region}</p>
@@ -237,36 +237,40 @@ export default function RelevePage() {
                         <p className="text-blue-700 underline">{data.inspector_email || "............"}</p>
                       </div>
 
-                      {/* Colonne centre — titre + type examen */}
-                      <div className="flex flex-col items-center">
-                        <div className="border-2 border-black rounded-2xl px-6 py-2 bg-gray-100 font-bold text-sm tracking-wide">
+                      {/* Bloc Centre : Titres */}
+                      <div className="flex flex-col items-center justify-center pt-1">
+                        <div className="border-2 border-black rounded-2xl px-6 py-1.5 font-bold text-sm tracking-wide bg-white">
                           {data.title}
                         </div>
-                        <div className="border border-red-500 text-red-600 font-bold text-lg px-6 py-1 mt-3 tracking-widest uppercase">
+                        <div className="border border-red-500 text-red-600 font-bold text-base px-6 py-1 mt-3 uppercase tracking-wider">
                           {data.type_examen}
                         </div>
                       </div>
 
-                      {/* Colonne droite — République + armoiries + G/F/T + date */}
-                      <div className="text-right space-y-0.5 text-[10px]">
-                        <p className="font-semibold">République de Côte d&apos;Ivoire</p>
-                        <p className="italic">Union-Discipline-Travail</p>
-                        <div className="flex justify-end my-1">
+                      {/* Bloc Droit : Armoiries (Centré en interne) */}
+                      <div className="flex flex-col items-center text-center space-y-0.5">
+                        <p className="font-semibold text-xs">République de Côte d&apos;Ivoire</p>
+                        <p className="text-[9px] tracking-wide italic">Union-Discipline-Travail</p>
+
+                        <div className="my-1 flex justify-center">
                           <img
                             src="/ci-coat-of-arms.png"
                             alt="Armoiries Côte d'Ivoire"
                             className="h-12 object-contain"
                           />
                         </div>
-                        <p className="font-bold text-xs">
-                          G {data.total_g} F {data.total_f} T {data.total_t}
-                        </p>
-                        <p>Date: {data.date}</p>
+
+                        <div className="font-bold text-xs pt-1">
+                          G {data.total_g} &nbsp; F {data.total_f} &nbsp; T {data.total_t}
+                        </div>
+                        <div className="text-[10px]">
+                          Date: {data.date}
+                        </div>
                       </div>
                     </div>
 
-                    {/* École + Code */}
-                    <div className="flex justify-between items-center font-bold text-xs my-2">
+                    {/* 2. LIGNE ÉCOLE & CODE ÉCOLE */}
+                    <div className="flex justify-between items-center font-bold text-xs my-2 pt-1 border-t border-gray-200">
                       <span>ECOLE : {data.school_name}</span>
                       <span>CODE : {data.school_code}</span>
                     </div>
@@ -279,29 +283,26 @@ export default function RelevePage() {
                   </div>
                 )}
 
-                {/* TABLEAU DES NOTES */}
+                {/* === 3. TABLEAU DES NOTES (Colonnes optimisées) === */}
                 <table className="w-full border-collapse border border-black text-center text-[10px]">
                   <thead>
-                    <tr className="bg-gray-100 font-bold">
-                      <th className="border border-black p-0.5 w-6">N°</th>
-                      <th className="border border-black p-0.5 w-20">Matricule</th>
-                      <th className="border border-black p-0.5">Nom</th>
-                      <th className="border border-black p-0.5">Prénoms</th>
+                    <tr className="font-bold border-b border-black bg-gray-100">
+                      <th className="border border-black py-1 w-6">N°</th>
+                      <th className="border border-black py-1 w-20">Matricule</th>
+                      <th className="border border-black py-1 w-28">Nom</th>
+                      <th className="border border-black py-1">Prénoms</th>
                       {subjects.map((s, idx) => (
                         <th
                           key={idx}
-                          className={`border border-black p-0.5 ${isEPS(s.name) ? "bg-yellow-300" : ""}`}
-                          title={`${s.name} (sur ${s.max_score})`}
+                          className={`border border-black py-1 text-[9px] ${isEPS(s.name) ? "bg-yellow-300" : ""}`}
+                          style={{ width: isEPS(s.name) ? "w-10" : s.name.length > 15 ? "w-14" : "w-12" }}
                         >
-                          <div className="leading-tight">
-                            <div className="font-bold">{s.name}</div>
-                            <div className="font-normal text-[8px]">/{s.max_score}</div>
-                          </div>
+                          {s.name}
                         </th>
                       ))}
-                      <th className="border border-black p-0.5 w-12">Total</th>
-                      <th className="border border-black p-0.5 w-12">Moy</th>
-                      <th className="border border-black p-0.5 w-8">Obs</th>
+                      <th className="border border-black py-1 w-11">Total</th>
+                      <th className="border border-black py-1 w-11">Moy</th>
+                      <th className="border border-black py-1 w-8">Obs</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -315,7 +316,7 @@ export default function RelevePage() {
                           <td className={`border border-black text-left px-1 font-bold ${isFille ? 'text-red-600' : ''}`}>
                             {e.last_name}
                           </td>
-                          <td className={`border border-black text-left px-1 font-semibold ${isFille ? 'text-red-600' : ''}`}>
+                          <td className={`border border-black text-left px-1 font-semibold truncate max-w-[150px] ${isFille ? 'text-red-600' : ''}`}>
                             {e.first_name}
                           </td>
                           {subjects.map((subj, idx) => {
@@ -344,49 +345,51 @@ export default function RelevePage() {
                 </table>
               </div>
 
-              {/* BAS DE PAGE : Statistiques + Signatures (Uniquement sur la dernière page) */}
+              {/* === 4. BLOC FINAL (Statistiques + Signatures) ===
+                  Placé DIRECTEMENT sous le tableau (mt-3, pas de justify-between).
+                  Uniquement sur la dernière page. */}
               {isLastPage && (
-                <div className="mt-4 pt-2">
-                  <div className="grid grid-cols-3 gap-4 text-center font-bold text-xs">
-                    {/* Récapitulatif Pourcentages */}
-                    <div className="border border-black p-2 text-left space-y-1 text-[10px]">
+                <div className="mt-3 break-inside-avoid">
+                  <div className="grid grid-cols-3 gap-3 text-center font-bold text-xs">
+
+                    {/* Boîte Statistiques */}
+                    <div className="border border-black p-1.5 text-left space-y-1 text-[10px]">
                       <div className="flex justify-between">
-                        <span>Inscrits G: {data.stats.inscrits_g}</span>
-                        <span>F: {data.stats.inscrits_f}</span>
-                        <span>T: {data.stats.inscrits_t}</span>
+                        <span>Inscrits G: {stats.inscrits_g}</span>
+                        <span>F: {stats.inscrits_f}</span>
+                        <span>T: {stats.inscrits_t}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Présents: G {data.stats.presents_g}</span>
-                        <span>F {data.stats.presents_f}</span>
-                        <span>T {data.stats.presents_t}</span>
+                        <span>Présents: G {stats.presents_g}</span>
+                        <span>F {stats.presents_f}</span>
+                        <span>T {stats.presents_t}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Admis: G {data.stats.admis_g}</span>
-                        <span>F {data.stats.admis_f}</span>
-                        <span>T {data.stats.admis_t}</span>
+                        <span>Admis: G {stats.admis_g}</span>
+                        <span>F {stats.admis_f}</span>
+                        <span>T {stats.admis_t}</span>
                       </div>
                       <div className="pt-1 border-t border-gray-400 text-[9px]">
-                        % des Admis G {data.stats.pct_g.toFixed(2)}% | F {data.stats.pct_f.toFixed(2)}% | T {data.stats.pct_t.toFixed(2)}%
+                        % des Admis G {stats.pct_g.toFixed(2)}% | F {stats.pct_f.toFixed(2)}% | T {stats.pct_t.toFixed(2)}%
                       </div>
                     </div>
 
-                    {/* Bloc Directeur */}
+                    {/* Boîte Directeur */}
                     <div className="border border-black p-2 flex flex-col justify-between h-28">
-                      <span className="underline uppercase text-xs">Le Directeur</span>
-                      <div className="h-12"></div>
+                      <span className="underline uppercase text-xs">LE DIRECTEUR</span>
                       <span className="uppercase text-[10px] tracking-wider">
                         {data.director_name || "................................"}
                       </span>
                     </div>
 
-                    {/* Bloc Inspecteur */}
+                    {/* Boîte Inspecteur */}
                     <div className="border border-black p-2 flex flex-col justify-between h-28">
-                      <span className="underline uppercase text-xs">L&apos;Inspecteur</span>
-                      <div className="h-12"></div>
+                      <span className="underline uppercase text-xs">L&apos;INSPECTEUR</span>
                       <span className="uppercase text-[10px] tracking-wider">
                         {data.inspector_name || "................................"}
                       </span>
                     </div>
+
                   </div>
                 </div>
               )}
