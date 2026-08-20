@@ -31,7 +31,11 @@ interface SyntheseData {
   totals: Totals;
 }
 
-const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1"];
+// FIX BUG : CM2 était absent → le tableau ne montrait que 5 classes au lieu de 6.
+// Les 6 niveaux de l'école primaire ivoirienne : CP1, CP2, CE1, CE2, CM1, CM2.
+const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
+// Nombre total de colonnes : 1 (label) + 6 classes × 3 (G/F/T) = 19.
+const TOTAL_COLS = 1 + CLASS_NAMES.length * 3;
 
 export default function SynthesePage() {
   const [data, setData] = useState<SyntheseData | null>(null);
@@ -221,72 +225,57 @@ export default function SynthesePage() {
               {/* Ligne 2 : Genre (G, F, T) */}
               <tr className="bg-gray-50">
                 <th className="border border-black p-1"></th>
-                {CLASS_NAMES.map((cn) => (
-                  <>
-                    <th key={`${cn}-g`} className="border border-black p-1">G</th>
-                    <th key={`${cn}-f`} className="border border-black p-1">F</th>
-                    <th key={`${cn}-t`} className="border border-black p-1">T</th>
-                  </>
-                ))}
+                {/* FIX BUG : remplacé le Fragment <>...</> par flatMap pour éviter
+                    le bug de réordonnancement des cellules (les Fragments dans <tr>
+                    causaient un brouillage G/F/T colonne par colonne). */}
+                {CLASS_NAMES.flatMap((cn) => [
+                  <th key={`${cn}-g`} className="border border-black p-1">G</th>,
+                  <th key={`${cn}-f`} className="border border-black p-1">F</th>,
+                  <th key={`${cn}-t`} className="border border-black p-1">T</th>,
+                ])}
               </tr>
             </thead>
             <tbody>
-              {/* INSCRITS */}
+              {/* INSCRITS — FIX BUG : flatMap pour grouper G/F/T par classe */}
               <tr>
                 <td className="border border-black p-2 text-left uppercase">Inscrits</td>
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-ins-g`} className="border border-black p-1">{fmt(lvl.inscrits[0])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-ins-f`} className="border border-black p-1">{fmt(lvl.inscrits[1])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-ins-t`} className="border border-black p-1">{fmt(lvl.inscrits[2])}</td>
-                ))}
+                {levelsData.flatMap((lvl) => [
+                  <td key={`${lvl.class_name}-ins-g`} className="border border-black p-1">{fmt(lvl.inscrits[0])}</td>,
+                  <td key={`${lvl.class_name}-ins-f`} className="border border-black p-1">{fmt(lvl.inscrits[1])}</td>,
+                  <td key={`${lvl.class_name}-ins-t`} className="border border-black p-1">{fmt(lvl.inscrits[2])}</td>,
+                ])}
               </tr>
-              {/* PRÉSENTS */}
+              {/* PRÉSENTS — flatMap pour grouper G/F/T par classe */}
               <tr>
                 <td className="border border-black p-2 text-left uppercase">Présents</td>
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-pre-g`} className="border border-black p-1">{fmt(lvl.presents[0])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-pre-f`} className="border border-black p-1">{fmt(lvl.presents[1])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-pre-t`} className="border border-black p-1">{fmt(lvl.presents[2])}</td>
-                ))}
+                {levelsData.flatMap((lvl) => [
+                  <td key={`${lvl.class_name}-pre-g`} className="border border-black p-1">{fmt(lvl.presents[0])}</td>,
+                  <td key={`${lvl.class_name}-pre-f`} className="border border-black p-1">{fmt(lvl.presents[1])}</td>,
+                  <td key={`${lvl.class_name}-pre-t`} className="border border-black p-1">{fmt(lvl.presents[2])}</td>,
+                ])}
               </tr>
-              {/* ADMIS */}
+              {/* ADMIS — flatMap pour grouper G/F/T par classe */}
               <tr>
                 <td className="border border-black p-2 text-left uppercase">Admis</td>
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-adm-g`} className="border border-black p-1">{fmt(lvl.admis[0])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-adm-f`} className="border border-black p-1">{fmt(lvl.admis[1])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-adm-t`} className="border border-black p-1">{fmt(lvl.admis[2])}</td>
-                ))}
+                {levelsData.flatMap((lvl) => [
+                  <td key={`${lvl.class_name}-adm-g`} className="border border-black p-1">{fmt(lvl.admis[0])}</td>,
+                  <td key={`${lvl.class_name}-adm-f`} className="border border-black p-1">{fmt(lvl.admis[1])}</td>,
+                  <td key={`${lvl.class_name}-adm-t`} className="border border-black p-1">{fmt(lvl.admis[2])}</td>,
+                ])}
               </tr>
-              {/* % ADMIS */}
+              {/* % ADMIS — flatMap pour grouper G/F/T par classe */}
               <tr>
                 <td className="border border-black p-2 text-left uppercase">% Admis</td>
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-pct-g`} className="border border-black p-1">{fmtPct(lvl.pct_admis[0])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-pct-f`} className="border border-black p-1">{fmtPct(lvl.pct_admis[1])}</td>
-                ))}
-                {levelsData.map((lvl) => (
-                  <td key={`${lvl.class_name}-pct-t`} className="border border-black p-1">{fmtPct(lvl.pct_admis[2])}</td>
-                ))}
+                {levelsData.flatMap((lvl) => [
+                  <td key={`${lvl.class_name}-pct-g`} className="border border-black p-1">{fmtPct(lvl.pct_admis[0])}</td>,
+                  <td key={`${lvl.class_name}-pct-f`} className="border border-black p-1">{fmtPct(lvl.pct_admis[1])}</td>,
+                  <td key={`${lvl.class_name}-pct-t`} className="border border-black p-1">{fmtPct(lvl.pct_admis[2])}</td>,
+                ])}
               </tr>
-              {/* Ligne % Total d'Admis par Genre */}
+              {/* Ligne % Total d'Admis par Genre — colSpan dynamique (TOTAL_COLS-1=18) */}
               <tr>
                 <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
-                <td colSpan={15} className="border border-black p-2">
+                <td colSpan={TOTAL_COLS - 1} className="border border-black p-2">
                   <div className="flex justify-around items-center font-bold">
                     <span>FILLES : {fmtPct(data.totals.pct_f)} %</span>
                     <span>GARÇONS : {fmtPct(data.totals.pct_g)} %</span>
@@ -296,7 +285,7 @@ export default function SynthesePage() {
               {/* Ligne % Total Global */}
               <tr>
                 <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
-                <td colSpan={15} className="border border-black p-2 text-center text-base font-bold">
+                <td colSpan={TOTAL_COLS - 1} className="border border-black p-2 text-center text-base font-bold">
                   {fmtPct(data.totals.pct_t)} %
                 </td>
               </tr>
