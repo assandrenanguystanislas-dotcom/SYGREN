@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Users,
@@ -10,12 +10,14 @@ import {
   Loader2,
   Hash,
   Search,
+  School as SchoolIcon,
+  GraduationCap,
 } from "lucide-react";
 
-import { studentsApi, classesApi } from "@/lib/api";
+import { studentsApi, classesApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { StudentWithClass, ClassWithDetails } from "@/lib/types";
+import type { StudentWithClass, ClassWithDetails, SchoolWithStats } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,8 +60,21 @@ const EMPTY: FormData = {
 export function StudentsView() {
   const user = useAuthStore((s) => s.user);
   const canEdit = user?.role === "admin" || user?.role === "director";
+  // isAdmin : voit toutes les écoles (filtre École actif)
+  // isDirector : son école est pré-sélectionnée (filtre École désactivé)
+  // isTeacher : pas de filtre du tout, sa classe s'affiche directement
+  const isAdmin = user?.role === "admin";
+  const isDirector = user?.role === "director";
+  const isTeacher = user?.role === "teacher";
 
+  // === Filtres en cascade ===
+  // - admin : schoolFilter (toutes écoles) → classFilter (cascade selon école)
+  // - director : schoolFilter = son école (figé, non modifiable)
+  // - teacher : pas de filtre école ni classe (sa classe est chargée auto)
   const [search, setSearch] = useState("");
+  const [schoolFilter, setSchoolFilter] = useState<string>(
+    isDirector ? (user?.school_id ?? "all") : "all",
+  );
   const [classFilter, setClassFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StudentWithClass | null>(null);
@@ -68,13 +83,36 @@ export function StudentsView() {
     null,
   );
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["students"],
-    queryFn: () => studentsApi.list(),
+  // === Écoles (admin seulement) ===
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools"],
+    queryFn: () => schoolsApi.list(),
+    enabled: isAdmin,
   });
+
+  // === Classes : filtrées par école sélectionnée (admin/director) ===
+  // Pour teacher, on charge aussi les classes (pour lookup du nom de sa classe
+  // dans le tableau), mais le backend filtre déjà par teacher_id.
   const { data: classesData } = useQuery({
-    queryKey: ["classes"],
-    queryFn: () => classesApi.list(),
+    queryKey: ["classes", "students-view", schoolFilter],
+    queryFn: () =>
+      classesApi.list({
+        schoolId: schoolFilter !== "all" ? schoolFilter : undefined,
+      }),
+    // Teacher n'a pas besoin du filtre école (le backend filtre par teacher_id)
+    enabled: !isDirector || !!user?.school_id,
+  });
+
+  // === Élèves : le backend filtre déjà par rôle (RBAC) ===
+  // - admin : tous les élèves (pas de filtre scope)
+  // - director : élèves de son école
+  // - teacher : élèves de sa classe (teacher_id = classes.teacher_id)
+  // On passe classFilter au backend pour filtrer côté serveur (plus performant
+  // que de filtrer côté client sur de grosses listes).
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["students", schoolFilter, classFilter],
+    queryFn: () =>
+      studentsApi.list(classFilter !== "all" ? classFilter : undefined),
   });
 
   const createMut = useCrudMutation(studentsApi.create, {
@@ -144,8 +182,11 @@ export function StudentsView() {
 
   const allStudents = data?.students ?? [];
   const classes = classesData?.classes ?? [];
+  const schools = (schoolsData?.schools ?? []) as SchoolWithStats[];
 
-  // Filtrage local
+  // Filtrage local : uniquement la recherche texte (le filtre école/classe est
+  // déjà appliqué côté backend via les query params studentsApi.list(classId)
+  // et le RBAC du handler ListStudents).
   const filtered = allStudents.filter((s) => {
     const mat = s.matricule ?? "";
     const matchSearch =
@@ -153,14 +194,18 @@ export function StudentsView() {
       s.first_name.toLowerCase().includes(search.toLowerCase()) ||
       s.last_name.toLowerCase().includes(search.toLowerCase()) ||
       mat.toLowerCase().includes(search.toLowerCase());
-    const matchClass =
-      classFilter === "all" || s.class_id === classFilter;
-    return matchSearch && matchClass;
+    return matchSearch;
   });
+
+  // Pour le directeur, on récupère le nom de son école (pour l'afficher
+  // dans le filtre désactivé).
+  const directorSchoolName = isDirector
+    ? schools.find((s) => s.id === user?.school_id)?.name ?? "Mon école"
+    : "";
 
   return (
     <div className="space-y-4">
-      {/* En-tête + filtres */}
+      {/* En-tête + filtres en cascade par rôle */}
       <Card className="border-border/60">
         <CardContent className="py-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -171,7 +216,10 @@ export function StudentsView() {
               <div>
                 <h2 className="font-semibold text-base">Élèves</h2>
                 <p className="text-xs text-muted-foreground">
-                  {allStudents.length} élève(s) inscrit(s) · matricule fourni par le Ministère de l'Éducation
+                  {allStudents.length} élève(s) affiché(s)
+                  {isTeacher && " · votre classe"}
+                  {isDirector && ` · ${directorSchoolName}`}
+                  {isAdmin && " · matricule fourni par le Ministère"}
                 </p>
               </div>
             </div>
@@ -182,30 +230,113 @@ export function StudentsView() {
               </Button>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher par nom ou matricule…"
-                className="pl-9"
-              />
+          {/* === Filtres en cascade (admin + director seulement) ===
+              - admin : École (toutes) → Classe (cascade selon école)
+              - director : École (figée = son école, désactivé) → Classe
+              - teacher : aucun filtre (sa classe est chargée automatiquement
+                par le backend via RBAC teacher_id) */}
+          {(isAdmin || isDirector) && (
+            <div className="flex flex-wrap items-end gap-3">
+              {/* Filtre École (admin: actif, director: désactivé/figé) */}
+              {isAdmin && (
+                <div className="space-y-1.5 min-w-[200px] flex-1 max-w-[300px] min-w-0">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <SchoolIcon className="w-3 h-3" /> École
+                  </label>
+                  <Select
+                    value={schoolFilter}
+                    onValueChange={(v) => {
+                      setSchoolFilter(v);
+                      setClassFilter("all"); // reset classe quand école change
+                    }}
+                  >
+                    <SelectTrigger className="w-full overflow-hidden">
+                      <SelectValue placeholder="Toutes les écoles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes les écoles</SelectItem>
+                      {schools.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {isDirector && (
+                <div className="space-y-1.5 min-w-[200px] flex-1 max-w-[300px] min-w-0">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <SchoolIcon className="w-3 h-3" /> École
+                  </label>
+                  <Input
+                    value={directorSchoolName}
+                    disabled
+                    className="bg-muted/50 text-muted-foreground"
+                  />
+                </div>
+              )}
+
+              {/* Filtre Classe (cascade selon école) */}
+              <div className="space-y-1.5 min-w-[160px] flex-1 max-w-[200px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <GraduationCap className="w-3 h-3" /> Classe
+                </label>
+                <Select
+                  value={classFilter}
+                  onValueChange={setClassFilter}
+                  disabled={classes.length === 0}
+                >
+                  <SelectTrigger className="w-full overflow-hidden">
+                    <SelectValue placeholder="Toutes les classes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes les classes</SelectItem>
+                    {classes.map((c: ClassWithDetails) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Recherche texte (toujours disponible) */}
+              <div className="relative flex-1 min-w-[200px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
+                  <Search className="w-3 h-3" /> Rechercher
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Par nom ou matricule…"
+                    className="pl-9"
+                  />
+                </div>
+              </div>
             </div>
-            <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les classes</SelectItem>
-                {classes.map((c: ClassWithDetails) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          )}
+          {/* Teacher : juste la recherche (pas de filtre école/classe) */}
+          {isTeacher && (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="relative flex-1 min-w-[200px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
+                  <Search className="w-3 h-3" /> Rechercher
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Par nom ou matricule…"
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
