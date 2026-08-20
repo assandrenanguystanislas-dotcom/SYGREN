@@ -66,14 +66,16 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
   const isAdmin = user?.role === "admin";
   const isInspector = user?.role === "inspector";
   const isTeacher = user?.role === "teacher";
-  // Sélecteur d'école (pour admin/inspector uniquement — les autres sont
-  // rattachés à une école via le JWT, le backend filtre déjà).
-  const [schoolFilter, setSchoolFilter] = useState<string>("all");
-  // Sélecteur de classe — approche dérivée pour éviter un setState dans un
-  // effect (lint react-hooks/set-state-in-effect). On stocke la valeur
-  // explicite choisie par l'utilisateur ; la classe effective est dérivée
-  // (auto-sélection de la classe enseignée pour teacher tant que l'utilisateur
-  // n'a rien choisi manuellement).
+  // Cascade stricte (même logique que students/results/bulletins)
+  // - admin/inspector : doivent choisir une école → puis une classe → puis une session
+  // - director/teacher : école figée (RBAC backend) → choisissent une classe → session
+  const needsSchoolSelect = isAdmin || isInspector;
+
+  // === Cascade : École → Classe → Session ===
+  // schoolFilter démarre à "" (vide) pour admin/inspector → doit choisir
+  const [schoolFilter, setSchoolFilter] = useState<string>(
+    needsSchoolSelect ? "" : (userSchoolId ?? ""),
+  );
   const [explicitClassFilter, setExplicitClassFilter] = useState<string | undefined>(
     undefined,
   );
@@ -81,45 +83,23 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     initialSessionId,
   );
 
+  // hasSchoolSelected : true si une école est choisie
+  const hasSchoolSelected = schoolFilter !== "" && schoolFilter !== "all";
+
   // Écoles (admin/inspector : pour le filtre ; director/teacher : la leur)
   const { data: schoolsData } = useQuery({
     queryKey: ["schools", "grades-view"],
     queryFn: () => schoolsApi.list(),
-    enabled: isAdmin || isInspector,
+    enabled: needsSchoolSelect,
   });
   const schools: SchoolWithStats[] = schoolsData?.schools ?? [];
 
   // Détermine l'école active pour le filtre des sessions/classes :
   // - director/teacher : leur école (user.school_id)
-  // - admin/inspector : l'école choisie dans le filtre (ou "all")
-  const activeSchoolId =
-    userSchoolId && !isAdmin && !isInspector
-      ? userSchoolId
-      : schoolFilter !== "all"
-        ? schoolFilter
-        : undefined;
+  // - admin/inspector : l'école choisie dans le filtre
+  const activeSchoolId = hasSchoolSelected ? schoolFilter : undefined;
 
-  // Charger les sessions (filtrées par école si activeSchoolId défini)
-  const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
-    queryKey: ["sessions", "grades-view", activeSchoolId],
-    queryFn: () => sessionsApi.list(activeSchoolId ? { school_id: activeSchoolId } : undefined),
-  });
-
-  // Session sélectionnée : explicite (choix utilisateur) ou auto-sélection
-  // d'une session ouverte. Dérivé (pas de setState dans un effet).
-  const sessions = sessionsData?.sessions ?? [];
-  const autoSession =
-    sessions.find((s) => s.status === "open") ?? sessions[0];
-  const selectedSessionId = explicitSessionId ?? autoSession?.id;
-
-  // Charger les détails de la session sélectionnée
-  const selectedSession = sessionsData?.sessions?.find(
-    (s) => s.id === selectedSessionId,
-  );
-
-  // Charger les classes de l'école active (pour le sélecteur de classe
-  // et pour identifier le niveau de chaque classe afin de filtrer les
-  // élèves exemptés par niveau).
+  // Charger les classes : seulement si une école est sélectionnée (cascade)
   const { data: classesData } = useQuery({
     queryKey: ["classes", "grades-view", activeSchoolId],
     queryFn: () => classesApi.list(activeSchoolId ? { schoolId: activeSchoolId } : undefined),
@@ -135,6 +115,24 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     [classes, isTeacher, user?.id],
   );
   const classFilter: string = explicitClassFilter ?? teacherClassId ?? "all";
+  const hasClassSelected = classFilter !== "all" && classFilter !== undefined;
+
+  // Charger les sessions : seulement si une école est sélectionnée (cascade)
+  const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
+    queryKey: ["sessions", "grades-view", activeSchoolId],
+    queryFn: () => sessionsApi.list(activeSchoolId ? { school_id: activeSchoolId } : undefined),
+    enabled: hasSchoolSelected,
+  });
+
+  // Cascade stricte : PAS d'auto-sélection de session.
+  // L'utilisateur doit explicitement choisir une session dans le select.
+  const sessions = sessionsData?.sessions ?? [];
+  const selectedSessionId = explicitSessionId;
+
+  // Charger les détails de la session sélectionnée
+  const selectedSession = sessionsData?.sessions?.find(
+    (s) => s.id === selectedSessionId,
+  );
 
   // Charger les exemptions de la session (pour skip les élèves exemptés)
   const { data: exemptionsData } = useQuery({
@@ -315,42 +313,16 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     await queryClient.invalidateQueries({ queryKey: ["students", "grades-view"] });
   };
 
-  if (sessionsLoading) {
+  // === États de la cascade stricte ===
+  const waitingForSchool = needsSchoolSelect && !hasSchoolSelected;
+  const waitingForSession = hasSchoolSelected && !selectedSessionId;
+
+  if (sessionsLoading && hasSchoolSelected) {
     return (
       <Card>
         <CardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
           <p className="text-sm">Chargement des sessions…</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (sessions.length === 0 && !activeSchoolId) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center">
-          <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-medium">Aucune session disponible</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Le directeur doit ouvrir une session de saisie mensuelle pour que
-            vous puissiez saisir les notes.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (activeSchoolId && sessions.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center">
-          <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-medium">Aucune session pour cette école</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Aucune session de saisie n&apos;a encore été ouverte pour
-            l&apos;école sélectionnée.
-          </p>
         </CardContent>
       </Card>
     );
@@ -369,28 +341,30 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
               <div>
                 <h2 className="font-semibold text-base">Saisie des notes</h2>
                 <p className="text-xs text-muted-foreground">
-                  {visibleStudents.length} élève(s) × {subjects.length} matière(s) ={" "}
-                  {visibleStudents.length * subjects.length} notes attendues
+                  {waitingForSchool
+                    ? "Sélectionnez une école pour commencer"
+                    : waitingForSession
+                      ? "Sélectionnez une session pour saisir les notes"
+                      : `${visibleStudents.length} élève(s) × ${subjects.length} matière(s) = ${visibleStudents.length * subjects.length} notes attendues`}
                 </p>
               </div>
             </div>
             <SaveIndicator status={autoSave.status} pendingCount={autoSave.pendingCount} />
           </div>
 
-          {/* Ligne 1 : École + Classe (Approche A — la session couvre toute
-              l&apos;école ; l&apos;utilisateur choisit une classe pour la saisie) */}
+          {/* === Cascade stricte : École → Classe → Session === */}
           <div className="flex flex-wrap items-end gap-3">
-            {(isAdmin || isInspector) && (
-              <div className="space-y-1.5 min-w-[200px] flex-1">
+            {/* Filtre École (admin/inspector: actif, director/teacher: figé) */}
+            {needsSchoolSelect ? (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <School className="w-3 h-3" /> École
                 </label>
                 <Select value={schoolFilter} onValueChange={handleSchoolChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Toutes les écoles" />
+                  <SelectTrigger className="w-full overflow-hidden">
+                    <SelectValue placeholder="Choisir une école…" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Toutes les écoles</SelectItem>
                     {schools.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}
@@ -399,15 +373,37 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                   </SelectContent>
                 </Select>
               </div>
+            ) : (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <School className="w-3 h-3" /> École
+                </label>
+                <Input
+                  value={schools.find((s) => s.id === user?.school_id)?.name ?? "Mon école"}
+                  disabled
+                  className="bg-muted/50 text-muted-foreground"
+                />
+              </div>
             )}
 
-            <div className="space-y-1.5 min-w-[180px] flex-1">
+            {/* Filtre Classe (désactivé tant que pas d'école) */}
+            <div className="space-y-1.5 min-w-[160px] flex-1 max-w-[220px] min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <GraduationCap className="w-3 h-3" /> Classe
               </label>
-              <Select value={classFilter} onValueChange={handleClassChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir une classe…" />
+              <Select
+                value={classFilter}
+                onValueChange={handleClassChange}
+                disabled={!hasSchoolSelected || classes.length === 0}
+              >
+                <SelectTrigger className="w-full overflow-hidden">
+                  <SelectValue
+                    placeholder={
+                      !hasSchoolSelected
+                        ? "Choisir une école d'abord"
+                        : "Choisir une classe…"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {isTeacher ? null : (
@@ -421,20 +417,27 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          {/* Ligne 2 : Session + statut */}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5 min-w-[240px] flex-1">
+            {/* Filtre Session (désactivé tant que pas d'école) */}
+            <div className="space-y-1.5 min-w-[220px] flex-1 max-w-[340px] min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> Session mensuelle
+                <Calendar className="w-3 h-3" /> Session
               </label>
               <Select
                 value={selectedSessionId ?? ""}
                 onValueChange={handleSessionChange}
+                disabled={!hasSchoolSelected || sessions.length === 0}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir une session…" />
+                <SelectTrigger className="w-full overflow-hidden">
+                  <SelectValue
+                    placeholder={
+                      !hasSchoolSelected
+                        ? "Choisir une école d'abord"
+                        : sessions.length === 0
+                          ? "Aucune session"
+                          : "Choisir une session…"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {sessions.map((s: SessionWithDetails) => {
@@ -466,6 +469,36 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
         </CardContent>
       </Card>
 
+      {/* === États vides de la cascade stricte === */}
+      {waitingForSchool ? (
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="py-12 text-center">
+            <School className="w-8 h-8 mx-auto mb-3 text-primary/50" />
+            <p className="text-sm font-medium text-foreground">
+              Sélectionnez une école pour afficher les classes et sessions
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Choisissez une école dans le filtre ci-dessus — les classes et
+              sessions associées s&apos;afficheront automatiquement.
+            </p>
+          </CardContent>
+        </Card>
+      ) : waitingForSession ? (
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="py-12 text-center">
+            <Calendar className="w-8 h-8 mx-auto mb-3 text-primary/50" />
+            <p className="text-sm font-medium text-foreground">
+              Sélectionnez une session pour saisir les notes
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {sessions.length > 0
+                ? `${sessions.length} session(s) disponible(s) — choisissez-en une dans le filtre ci-dessus.`
+                : "Aucune session n'a été créée pour cette école. Le directeur doit ouvrir une session dans le module Évaluations."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Bandeau d'avertissement si saisie fermée */}
       {selectedSession && sessionStatus !== "open" && (
         <Card className="border-amber-200 bg-amber-50">
@@ -483,8 +516,9 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
         </Card>
       )}
 
-      {/* Grille de saisie */}
-      {selectedSessionId && (gradesLoading || !studentsData || !subjectsData) ? (
+      {/* Grille de saisie (seulement si session sélectionnée — cascade) */}
+      {selectedSessionId && (
+        (gradesLoading || !studentsData || !subjectsData) ? (
         <Card>
           <CardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -618,7 +652,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
             </div>
           </CardContent>
         </Card>
-      )}
+      ))}
 
       {/* Légende */}
       <Card className="border-border/60 bg-muted/30">
