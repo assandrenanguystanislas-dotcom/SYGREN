@@ -237,7 +237,12 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     : allSubjects;
 
   const sessionStatus = selectedSession?.status;
-  const canEdit = sessionStatus === "open" || user?.role === "admin";
+  // canEdit : la saisie est possible si la session est "open" ou si l'admin
+  // force l'édition (sauf si la session est "validated" — verrouillage définitif).
+  // isLocked : quand la session est "validated", les notes sont verrouillées
+  // définitivement — aucun utilisateur (même admin) ne peut les modifier.
+  const isLocked = sessionStatus === "validated";
+  const canEdit = !isLocked && (sessionStatus === "open" || user?.role === "admin");
   const cfg = sessionStatus
     ? SESSION_STATUS_CONFIG[sessionStatus as keyof typeof SESSION_STATUS_CONFIG]
     : null;
@@ -499,16 +504,19 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
         </Card>
       ) : null}
 
-      {/* Bandeau d'avertissement si saisie fermée */}
+      {/* Bandeau d'avertissement selon le statut de la session ===
+          - validated : rouge (verrouillage définitif, même admin ne peut plus modifier)
+          - closed : ambre (saisie fermée, admin peut encore forcer)
+          - draft : ambre (saisie pas encore ouverte) */}
       {selectedSession && sessionStatus !== "open" && (
-        <Card className="border-amber-200 bg-amber-50">
+        <Card className={isLocked ? "border-rose-300 bg-rose-50" : "border-amber-200 bg-amber-50"}>
           <CardContent className="py-3 flex items-center gap-2.5">
-            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-800">
+            <Lock className={cn("w-4 h-4 shrink-0", isLocked ? "text-rose-600" : "text-amber-600")} />
+            <p className={cn("text-sm", isLocked ? "text-rose-800" : "text-amber-800")}>
               {sessionStatus === "closed" &&
                 "La saisie est fermée. Les modifications sont bloquées en attente de validation."}
               {sessionStatus === "validated" &&
-                "Session validée — les notes sont verrouillées définitivement."}
+                "Session validée — les notes sont verrouillées définitivement. Aucune modification n'est possible (y compris pour l'administrateur)."}
               {sessionStatus === "draft" &&
                 "Session en brouillon — la saisie n'est pas encore ouverte."}
             </p>
@@ -625,6 +633,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                                   )
                                 }
                                 disabled={!canEdit}
+                                isLocked={isLocked}
                                 isDraft={grade?.is_draft}
                               />
                             </td>
@@ -682,6 +691,7 @@ interface GradeInputProps {
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   disabled?: boolean;
   isDraft?: boolean;
+  isLocked?: boolean; // session validée → verrouillage définitif (gris foncé)
   dataCell: string;
 }
 
@@ -691,6 +701,7 @@ function GradeInput({
   onKeyDown,
   disabled,
   isDraft,
+  isLocked,
   dataCell,
 }: GradeInputProps) {
   // État local non contrôlé initialement, pour permettre la frappe sans
@@ -705,7 +716,7 @@ function GradeInput({
       data-cell={dataCell}
       defaultValue={value === "" ? "" : String(value)}
       key={value} // remount quand la valeur externe change (re-sync)
-      disabled={disabled}
+      disabled={disabled || isLocked}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
       onFocus={(e) => e.target.select()}
@@ -713,10 +724,15 @@ function GradeInput({
       className={cn(
         "w-full h-9 text-center text-sm rounded border outline-none transition-colors",
         "focus:border-primary focus:ring-2 focus:ring-primary/20",
-        disabled
-          ? "bg-muted/40 text-muted-foreground cursor-not-allowed"
-          : "bg-card hover:border-primary/40",
-        isDraft && !disabled && "bg-amber-50/50 border-amber-200",
+        // Session validée → verrouillage définitif : gris foncé, read-only,
+        // pas de hover ni focus visible. Les notes restent lisibles mais
+        // clairement "gelées".
+        isLocked
+          ? "bg-zinc-100 text-zinc-500 border-zinc-200 cursor-not-allowed"
+          : disabled
+            ? "bg-muted/40 text-muted-foreground cursor-not-allowed"
+            : "bg-card hover:border-primary/40",
+        isDraft && !disabled && !isLocked && "bg-amber-50/50 border-amber-200",
       )}
     />
   );
