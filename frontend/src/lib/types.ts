@@ -141,7 +141,10 @@ export const EVAL_TYPE_LABELS: Record<EvalType, string> = {
 
 export interface EvaluationSession {
   id: string;
-  class_id: string;
+  // Approche A — 1 session par ÉCOLE (pas par classe).
+  // SchoolID remplace ClassID : toutes les classes actives de l'école
+  // participent à la session, sauf celles exemptées via SessionExemption.
+  school_id: string;
   month: number;
   year: number;
   status: SessionStatus;
@@ -152,6 +155,25 @@ export interface EvaluationSession {
   auto_open: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// SessionExemption — permet d'exempter une classe précise (class_id) ou un
+// niveau entier (level = CP|CE|CM) d'une session. Au moins un des deux champs
+// doit être renseigné. Les deux peuvent être cumulés pour documenter à la fois
+// la classe et le niveau concerné.
+export interface SessionExemption {
+  id: string;
+  session_id: string;
+  class_id?: string | null; // NULL = pas une classe précise
+  level?: string | null; // "CP"|"CE"|"CM" = tout le niveau
+  reason: string;
+  created_at: string;
+}
+
+// SessionExemptionWithDetails — exemption enrichie du nom de la classe
+// (rempli par le backend quand class_id est défini).
+export interface SessionExemptionWithDetails extends SessionExemption {
+  class_name?: string;
 }
 
 export interface Grade {
@@ -229,9 +251,12 @@ export interface InspectorWithDetails extends User {
 }
 
 export interface SessionWithDetails extends EvaluationSession {
+  // Approche A — la session couvre toute l'école. class_name est vide côté
+  // backend (multi-classes). Conservé en option pour compatibilité affichage.
   class_name?: string;
   school_name?: string;
-  teacher_name?: string | null;
+  class_count: number; // nombre de classes actives de l'école
+  exemption_count: number; // nombre d'exemptions déclarées sur la session
   student_count: number;
   subject_count: number;
   graded_count: number;
@@ -257,6 +282,12 @@ export interface StudentResult {
   matricule: string;
   first_name: string;
   last_name: string;
+  // Approche A — chaque élève porte SA propre classe (la session couvre
+  // toute l'école, donc les résultats mélangent CP1, CP2, ..., CM2).
+  class_name?: string;
+  class_id?: string;
+  class_level?: string; // CP | CE | CM
+  average_scale?: number; // 10 (CP/CE) ou 20 (CM) — par élève
   subject_grades: SubjectGrade[];
   average: number;
   has_average: boolean;
@@ -283,9 +314,13 @@ export interface ClassStatistics {
 
 export interface SessionResults {
   session_id: string;
+  // Approche A — la session couvre toute l'école. class_name et class_level
+  // sont vides côté backend (multi-classes/multi-niveaux). average_scale vaut
+  // 20 par défaut (compat statistiques agrégées). Le détail par élève (classe,
+  // niveau, barème) est dans chaque StudentResult.
   class_name: string;
-  class_level: string; // CP | CE | CM
-  average_scale: number; // 10 (CP/CE) ou 20 (CM)
+  class_level: string; // "" (multi-niveaux)
+  average_scale: number; // 20 (défaut CM, pour compat stats agrégées)
   school_name: string;
   month: number;
   year: number;

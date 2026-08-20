@@ -29,6 +29,8 @@ import type {
   InspectorWithDetails,
   EvaluationSession,
   SessionWithDetails,
+  SessionExemption,
+  SessionExemptionWithDetails,
   Grade,
   GradeScaleWithSubject,
   SessionStatus,
@@ -422,20 +424,29 @@ export const inspectorsApi = {
 };
 
 // === Sessions de saisie mensuelle (Module 2 — cahier des charges §3) ===
+//
+// Approche A — 1 session par ÉCOLE (pas par classe). Toutes les classes
+// actives de l'école participent à la session, sauf celles exemptées via
+// la table SessionExemption (par class_id ou par niveau CP/CE/CM).
 
 export const sessionsApi = {
-  list: (params?: { year?: number; month?: number; class_id?: string }) => {
+  list: (params?: {
+    year?: number;
+    month?: number;
+    school_id?: string;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.year) qs.set("year", String(params.year));
     if (params?.month) qs.set("month", String(params.month));
-    if (params?.class_id) qs.set("class_id", params.class_id);
+    if (params?.school_id) qs.set("school_id", params.school_id);
     const q = qs.toString();
     return apiFetch<{ sessions: SessionWithDetails[]; count: number }>(
       q ? `/api/sessions?${q}` : "/api/sessions",
     );
   },
+  /** Crée une session pour une école précise (Approche A — 1 session par école). */
   create: (data: {
-    class_id: string;
+    school_id: string;
     month: number;
     year: number;
     status?: SessionStatus;
@@ -449,6 +460,12 @@ export const sessionsApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  /**
+   * Crée 1 session par école dans le périmètre choisi.
+   * - scope="all" : toutes les écoles (admin uniquement)
+   * - scope="school" : une école identifiée par son code (admin) ou par
+   *   défaut l'école du directeur (le school_code est ignoré pour le director).
+   */
   bulkCreate: (data: {
     scope: "all" | "school";
     school_code?: string;
@@ -465,7 +482,7 @@ export const sessionsApi = {
       created: number;
       skipped: string[];
       failed: string[];
-      total_classes: number;
+      total_schools: number;
     }>("/api/sessions/bulk", {
       method: "POST",
       body: JSON.stringify(data),
@@ -484,6 +501,39 @@ export const sessionsApi = {
     apiFetch<{ status: string }>(`/api/sessions/${id}`, {
       method: "DELETE",
     }),
+
+  // === Exemptions — dispenser des classes/niveaux d'une session ===
+
+  /** Liste toutes les exemptions d'une session (GET /api/sessions/{id}/exemptions). */
+  listExemptions: (sessionId: string) =>
+    apiFetch<{
+      exemptions: SessionExemptionWithDetails[];
+      count: number;
+    }>(`/api/sessions/${sessionId}/exemptions`),
+
+  /**
+   * Crée une exemption pour une session (POST /api/sessions/{id}/exemptions).
+   * Au moins un de class_id / level doit être fourni.
+   */
+  createExemption: (
+    sessionId: string,
+    data: {
+      class_id?: string | null;
+      level?: string | null; // "CP" | "CE" | "CM"
+      reason: string;
+    },
+  ) =>
+    apiFetch<SessionExemption>(`/api/sessions/${sessionId}/exemptions`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /** Supprime une exemption d'une session (DELETE /api/sessions/{id}/exemptions/{eid}). */
+  deleteExemption: (sessionId: string, exemptionId: string) =>
+    apiFetch<{ status: string }>(
+      `/api/sessions/${sessionId}/exemptions/${exemptionId}`,
+      { method: "DELETE" },
+    ),
 };
 
 // === Notes (Module 2 — saisie des notes) ===

@@ -145,12 +145,14 @@ func (s *Subject) BeforeCreate(tx *gorm.DB) error {
 // === EvaluationSession ===
 // Session d'évaluation. Statuts : draft → open → closed → validated
 // Type : "composition" (défaut) ou "exam_blanc" (réservé au CM2, inclut EPS)
-// Number : numéro de l'évaluation dans l'année (Composition N°1, Examen Blanc N°2, etc.)
-// OpenAt/CloseAt : dates d'ouverture et de clôture obligatoires (planification)
+// Number : numéro de l'évaluation dans l'année (Composition N°1, etc.)
+// SchoolID : 1 session par ÉCOLE (pas par classe). Les notes sont rattachées
+//   via Grade.StudentID → Student.ClassID (l'élève sait dans quelle classe il est)
+// OpenAt/CloseAt : dates d'ouverture et de clôture obligatoires
 // AutoOpen : si true, ouverture automatique à OpenAt (goroutine main.go)
 type EvaluationSession struct {
         ID         string     `gorm:"primaryKey;type:text" json:"id"`
-        ClassID    string     `gorm:"type:text;index" json:"class_id"`
+        SchoolID   string     `gorm:"type:text;index" json:"school_id"`
         Month      int        `json:"month"`
         Year       int        `json:"year"`
         Status     string     `gorm:"type:text;default:draft" json:"status"`
@@ -289,11 +291,32 @@ func DefaultGradeScales() []GradeScale {
         }
 }
 
+// === SessionExemption — Dispense de classe/niveau pour une session ===
+// Permet d'exempter certaines classes ou niveaux d'une évaluation.
+// Si ClassID est défini → exemption d'une classe précise (ex: CP1)
+// Si Level est défini → exemption de tout le niveau (ex: "CP" = CP1 + CP2)
+// Les deux peuvent être cumulés.
+type SessionExemption struct {
+        ID        string    `gorm:"primaryKey;type:text" json:"id"`
+        SessionID string    `gorm:"type:text;index" json:"session_id"`
+        ClassID   *string   `gorm:"type:text;index" json:"class_id,omitempty"`  // NULL = pas une classe précise
+        Level     *string   `gorm:"type:text" json:"level,omitempty"`            // "CP"|"CE"|"CM" = tout le niveau
+        Reason    string    `gorm:"type:text" json:"reason"`
+        CreatedAt time.Time `json:"created_at"`
+}
+
+func (e *SessionExemption) BeforeCreate(tx *gorm.DB) error {
+        if e.ID == "" {
+                e.ID = uuid.NewString()
+        }
+        return nil
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
         return []interface{}{
                 &User{}, &IEP{}, &School{}, &Class{}, &Student{},
                 &Subject{}, &EvaluationSession{}, &Grade{}, &ReportCard{},
-                &Setting{}, &GradeScale{},
+                &Setting{}, &GradeScale{}, &SessionExemption{},
         }
 }

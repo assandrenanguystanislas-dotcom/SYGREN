@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Trophy,
@@ -16,6 +16,8 @@ import {
   AlertCircle,
   FileText,
   School,
+  GraduationCap,
+  ShieldOff,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,11 +55,20 @@ export function ResultsView() {
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [showSynthese, setShowSynthese] = useState(false);
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
+  // Approche A — la session couvre toute l'école. Les résultats retournés
+  // par computeSessionResults mélangent toutes les classes (CP1, CP2, ...).
+  // On ajoute un filtre classe pour permettre à l'utilisateur de focus sur
+  // une classe précise (le classement de chaque élève reste calculé PAR CLASSE
+  // côté backend, donc le rang affiché est cohérent même filtré).
+  const [classFilter, setClassFilter] = useState<string>("all");
 
-  // Charger les sessions
+  // Charger les sessions (filtrées par école via query param côté backend)
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
-    queryKey: ["sessions", "results-view"],
-    queryFn: () => sessionsApi.list(),
+    queryKey: ["sessions", "results-view", schoolFilter],
+    queryFn: () =>
+      sessionsApi.list(
+        schoolFilter !== "all" ? { school_id: schoolFilter } : undefined,
+      ),
   });
   // Charger les écoles pour le filtre
   const { data: schoolsData } = useQuery({
@@ -65,24 +76,39 @@ export function ResultsView() {
     queryFn: () => schoolsApi.list(),
   });
 
-  const allSessions = sessionsData?.sessions ?? [];
+  const sessions = sessionsData?.sessions ?? [];
   const schools = schoolsData?.schools ?? [];
-
-  // Filtrer les sessions par école
-  const sessions = schoolFilter === "all"
-    ? allSessions
-    : allSessions.filter((s) => s.school_name === schools.find((sc) => sc.id === schoolFilter)?.name);
 
   // Auto-sélection : la session la plus récente
   const autoSessionId = selectedSessionId ?? sessions[0]?.id;
   const selectedSession = sessions.find((s) => s.id === autoSessionId);
 
-  // Charger les résultats calculés
+  // Charger les résultats calculés (Approche A — agrège toutes les classes
+  // de l'école, classement PAR CLASSE dans le backend).
   const { data: results, isLoading: resultsLoading, error } = useQuery({
     queryKey: ["computation", "session", autoSessionId],
     queryFn: () => computationApi.getSessionResults(autoSessionId!),
     enabled: !!autoSessionId,
   });
+
+  // Filtrer les résultats par classe si classFilter sélectionné.
+  // Le rank_label est calculé PAR CLASSE côté backend, il reste cohérent.
+  const filteredResults = useMemo(() => {
+    if (!results) return [];
+    if (classFilter === "all") return results.results;
+    return results.results.filter((r) => r.class_id === classFilter);
+  }, [results, classFilter]);
+
+  // Liste des classes présentes dans les résultats (pour le select classe)
+  const classesInResults = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const r of results?.results ?? []) {
+      if (r.class_id && r.class_name && !seen.has(r.class_id)) {
+        seen.set(r.class_id, r.class_name);
+      }
+    }
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }, [results]);
 
   if (sessionsLoading) return <LoadingState message="Chargement des sessions…" />;
 
@@ -93,7 +119,7 @@ export function ResultsView() {
           <Trophy className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm font-medium">Aucune session disponible</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Les résultats apparaîtront ici une fois qu'une session de saisie
+            Les résultats apparaîtront ici une fois qu&apos;une session de saisie
             aura été créée.
           </p>
         </CardContent>
@@ -126,7 +152,7 @@ export function ResultsView() {
               <div>
                 <h2 className="font-semibold text-base">Résultats & Classement</h2>
                 <p className="text-xs text-muted-foreground">
-                  Moyennes pondérées, rangs (ex-aequo inclus) et mentions
+                  Moyennes pondérées, rangs par classe (ex-aequo inclus) et mentions
                   automatiques
                 </p>
               </div>
@@ -158,13 +184,17 @@ export function ResultsView() {
             )}
           </div>
 
-          {/* Filtre par école */}
+          {/* Filtre par école + classe (Approche A) */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="space-y-1.5 min-w-[200px]">
+            <div className="space-y-1.5 min-w-[200px] flex-1">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <School className="w-3 h-3" /> École
               </label>
-              <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+              <Select value={schoolFilter} onValueChange={(v) => {
+                setSchoolFilter(v);
+                setSelectedSessionId(undefined);
+                setClassFilter("all");
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Toutes les écoles" />
                 </SelectTrigger>
@@ -179,30 +209,66 @@ export function ResultsView() {
               </Select>
             </div>
 
-            <div className="space-y-1.5 flex-1">
+            <div className="space-y-1.5 min-w-[200px] flex-1">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <Calendar className="w-3 h-3" /> Session
               </label>
-            <Select
-              value={autoSessionId ?? ""}
-              onValueChange={setSelectedSessionId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Choisir une session…" />
-              </SelectTrigger>
-              <SelectContent>
-                {sessions.map((s) => {
-                  const c = SESSION_STATUS_CONFIG[s.status as keyof typeof SESSION_STATUS_CONFIG];
-                  return (
-                    <SelectItem key={s.id} value={s.id}>
-                      {monthLabel(s.month)} {s.year} — {s.class_name} ({c.label})
+              <Select
+                value={autoSessionId ?? ""}
+                onValueChange={(v) => {
+                  setSelectedSessionId(v);
+                  setClassFilter("all");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir une session…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessions.map((s) => {
+                    const c = SESSION_STATUS_CONFIG[s.status as keyof typeof SESSION_STATUS_CONFIG];
+                    return (
+                      <SelectItem key={s.id} value={s.id}>
+                        {monthLabel(s.month)} {s.year} — {s.school_name ?? "École"} ({c.label})
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Filtre par classe (Approche A — session multi-classes) */}
+            <div className="space-y-1.5 min-w-[160px] flex-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <GraduationCap className="w-3 h-3" /> Classe
+              </label>
+              <Select
+                value={classFilter}
+                onValueChange={setClassFilter}
+                disabled={classesInResults.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Toutes les classes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les classes</SelectItem>
+                  {classesInResults.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
+
+          {/* Indicateur si filtration active */}
+          {classFilter !== "all" && results && (
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <ShieldOff className="w-3 h-3" />
+              Filtrage par classe — {filteredResults.length} élève(s) affiché(s).
+              Le classement est calculé par classe côté serveur.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -212,7 +278,7 @@ export function ResultsView() {
         <ErrorState message={(error as Error).message} />
       ) : (
         <>
-          {/* Statistiques de classe */}
+          {/* Statistiques agrégées (toutes classes confondues — Approche A) */}
           <StatisticsGrid stats={results.statistics} averageScale={results.average_scale} />
 
           {/* Avertissement si notes en brouillon */}
@@ -235,7 +301,11 @@ export function ResultsView() {
                 <Medal className="w-4 h-4 text-primary" />
                 Classement — {monthLabel(results.month)} {results.year}
                 <span className="text-xs font-normal text-muted-foreground">
-                  ({results.class_name})
+                  ({results.school_name || "École inconnue"}
+                  {classFilter !== "all" && classesInResults.find((c) => c.id === classFilter)
+                    ? ` · ${classesInResults.find((c) => c.id === classFilter)?.name}`
+                    : " · toutes classes"}
+                  )
                 </span>
               </CardTitle>
             </CardHeader>
@@ -253,12 +323,12 @@ export function ResultsView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {results.results.map((r) => (
+                    {filteredResults.map((r) => (
                       <StudentRow
                         key={r.student_id}
                         result={r}
                         expanded={expandedStudent === r.student_id}
-                        averageScale={results.average_scale}
+                        averageScale={r.average_scale ?? results.average_scale}
                         onToggle={() =>
                           setExpandedStudent(
                             expandedStudent === r.student_id ? null : r.student_id,
@@ -266,6 +336,13 @@ export function ResultsView() {
                         }
                       />
                     ))}
+                    {filteredResults.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                          Aucun élève pour ce filtre.
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -279,7 +356,10 @@ export function ResultsView() {
                 result={results.results.find(
                   (r) => r.student_id === expandedStudent,
                 )}
-                averageScale={results.average_scale}
+                averageScale={
+                  results.results.find((r) => r.student_id === expandedStudent)?.average_scale
+                  ?? results.average_scale
+                }
               />
               {/* Bilan annuel de l'élève */}
               {(() => {
@@ -288,8 +368,8 @@ export function ResultsView() {
                   <StudentAnnualCard
                     studentId={r.student_id}
                     studentName={`${r.last_name} ${r.first_name}`}
-                    classLevel={results.class_level}
-                    averageScale={results.average_scale}
+                    classLevel={r.class_level}
+                    averageScale={r.average_scale ?? results.average_scale}
                   />
                 ) : null;
               })()}
@@ -341,8 +421,14 @@ function StudentRow({
             <span className="font-medium">
               {result.last_name} {result.first_name}
             </span>
-            <span className="text-[11px] text-muted-foreground font-mono">
+            <span className="text-[11px] text-muted-foreground font-mono flex items-center gap-1.5">
               {result.matricule}
+              {result.class_name && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-muted text-[10px]">
+                  <GraduationCap className="w-2.5 h-2.5" />
+                  {result.class_name}
+                </span>
+              )}
             </span>
           </div>
         </TableCell>

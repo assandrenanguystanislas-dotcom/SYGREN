@@ -417,27 +417,33 @@ func computeSessionStats(scope string) SessionStats {
 }
 
 func computeSessionStatsForIEP(iepID string) SessionStats {
+        // Approche A : sessions rattachées directement à une école (school_id).
+        // On JOIN schools pour filtrer par IEP.
         var sessions []models.EvaluationSession
         database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Joins("JOIN schools ON schools.id = classes.school_id").
+                Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
                 Where("schools.iep_id = ?", iepID).
                 Find(&sessions)
         return countSessionStatuses(sessions)
 }
 
 func computeSessionStatsForSchool(schoolID string) SessionStats {
+        // Approche A : filtrage direct par school_id (pas de JOIN classes).
         var sessions []models.EvaluationSession
-        database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Where("classes.school_id = ?", schoolID).
-                Find(&sessions)
+        database.DB.Where("evaluation_sessions.school_id = ?", schoolID).Find(&sessions)
         return countSessionStatuses(sessions)
 }
 
 func computeSessionStatsForClass(classID string) SessionStats {
+        // Approche A : les sessions sont par école. On récupère l'école de la classe
+        // puis on filtre par school_id (les classes d'une même école partagent la
+        // même session).
+        var cls models.Class
+        if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+                return SessionStats{}
+        }
         var sessions []models.EvaluationSession
-        database.DB.Where("class_id = ?", classID).Find(&sessions)
+        database.DB.Where("school_id = ?", cls.SchoolID).Find(&sessions)
         return countSessionStatuses(sessions)
 }
 
@@ -515,26 +521,27 @@ func computeOverallPerformance(scope string) (avgPerf, passRate float64) {
         return computePerformanceFromSessions("")
 }
 func computeIEPPerformance(iepID string) (avgPerf, passRate float64) {
-        // Pour chaque session de l'IEP, calculer les résultats et agréger
+        // Approche A : JOIN schools directement sur evaluation_sessions.school_id.
         var sessions []models.EvaluationSession
         database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Joins("JOIN schools ON schools.id = classes.school_id").
+                Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
                 Where("schools.iep_id = ?", iepID).
                 Find(&sessions)
         return aggregateSessionsPerformance(sessions)
 }
 func computeSchoolPerformance(schoolID string) (avgPerf, passRate float64) {
         var sessions []models.EvaluationSession
-        database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Where("classes.school_id = ?", schoolID).
-                Find(&sessions)
+        database.DB.Where("evaluation_sessions.school_id = ?", schoolID).Find(&sessions)
         return aggregateSessionsPerformance(sessions)
 }
 func computeClassPerformance(classID string) (avgPerf, passRate float64) {
+        // Approche A : les sessions sont par école. On remonte à l'école de la classe.
+        var cls models.Class
+        if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+                return 0, 0
+        }
         var sessions []models.EvaluationSession
-        database.DB.Where("class_id = ?", classID).Find(&sessions)
+        database.DB.Where("school_id = ?", cls.SchoolID).Find(&sessions)
         return aggregateSessionsPerformance(sessions)
 }
 
@@ -556,24 +563,19 @@ func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf,
                 if err != nil {
                         continue
                 }
-                // Récupérer le niveau de la classe
-                var cls models.Class
-                level := "CM"
-                if err := database.DB.First(&cls, "id = ?", s.ClassID).Error; err == nil {
-                        level = cls.Level
-                }
-                // Filtre par niveau
-                if f.Level != "" && level != f.Level {
-                        continue
-                }
-                // Seuil effectif selon l'échelle du niveau
-                ratio := 20.0
-                if level == "CP" || level == "CE" {
-                        ratio = 10.0
-                }
-                effectivePassThreshold := passThreshold * ratio / 20.0
+                // Approche A : la session couvre plusieurs classes (CP1, CP2, ..., CM2).
+                // Le niveau est désormais porté par chaque StudentResult (r.ClassLevel).
+                // On applique donc le filtre niveau + le seuil effectif PAR ÉLÈVE.
                 for _, r := range results.Results {
                         if !r.HasAverage {
+                                continue
+                        }
+                        level := r.ClassLevel
+                        if level == "" {
+                                level = "CM" // défaut
+                        }
+                        // Filtre par niveau (par élève)
+                        if f.Level != "" && level != f.Level {
                                 continue
                         }
                         // Filtre par genre
@@ -586,6 +588,12 @@ func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf,
                                         continue
                                 }
                         }
+                        // Seuil effectif selon l'échelle du niveau de l'élève
+                        ratio := 20.0
+                        if level == "CP" || level == "CE" {
+                                ratio = 10.0
+                        }
+                        effectivePassThreshold := passThreshold * ratio / 20.0
                         totalAvg += r.Average
                         totalStudents++
                         if r.Average >= effectivePassThreshold {
@@ -614,25 +622,27 @@ func computeGlobalMentions() MentionDistribution {
         return aggregateMentions(sessions)
 }
 func computeIEPMentions(iepID string) MentionDistribution {
+        // Approche A : JOIN schools sur evaluation_sessions.school_id.
         var sessions []models.EvaluationSession
         database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Joins("JOIN schools ON schools.id = classes.school_id").
+                Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
                 Where("schools.iep_id = ?", iepID).
                 Find(&sessions)
         return aggregateMentions(sessions)
 }
 func computeSchoolMentions(schoolID string) MentionDistribution {
         var sessions []models.EvaluationSession
-        database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Where("classes.school_id = ?", schoolID).
-                Find(&sessions)
+        database.DB.Where("evaluation_sessions.school_id = ?", schoolID).Find(&sessions)
         return aggregateMentions(sessions)
 }
 func computeClassMentions(classID string) MentionDistribution {
+        // Approche A : on remonte à l'école de la classe pour trouver les sessions.
+        var cls models.Class
+        if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+                return MentionDistribution{Labels: []string{}, Values: []int{}}
+        }
         var sessions []models.EvaluationSession
-        database.DB.Where("class_id = ?", classID).Find(&sessions)
+        database.DB.Where("school_id = ?", cls.SchoolID).Find(&sessions)
         return aggregateMentions(sessions)
 }
 
@@ -673,10 +683,10 @@ func computeMonthlyTrend(scope string) []MonthlyTrend {
         return aggregateMonthlyTrend(sessions)
 }
 func computeMonthlyTrendForIEP(iepID string) []MonthlyTrend {
+        // Approche A : JOIN schools directement.
         var sessions []models.EvaluationSession
         database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Joins("JOIN schools ON schools.id = classes.school_id").
+                Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
                 Where("schools.iep_id = ?", iepID).
                 Order("evaluation_sessions.year ASC, evaluation_sessions.month ASC").
                 Find(&sessions)
@@ -684,16 +694,18 @@ func computeMonthlyTrendForIEP(iepID string) []MonthlyTrend {
 }
 func computeMonthlyTrendForSchool(schoolID string) []MonthlyTrend {
         var sessions []models.EvaluationSession
-        database.DB.
-                Joins("JOIN classes ON classes.id = evaluation_sessions.class_id").
-                Where("classes.school_id = ?", schoolID).
-                Order("evaluation_sessions.year ASC, evaluation_sessions.month ASC").
-                Find(&sessions)
+        database.DB.Where("evaluation_sessions.school_id = ?", schoolID).
+                Order("year ASC, month ASC").Find(&sessions)
         return aggregateMonthlyTrend(sessions)
 }
 func computeMonthlyTrendForClass(classID string) []MonthlyTrend {
+        // Approche A : remonte à l'école de la classe.
+        var cls models.Class
+        if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+                return []MonthlyTrend{}
+        }
         var sessions []models.EvaluationSession
-        database.DB.Where("class_id = ?", classID).
+        database.DB.Where("school_id = ?", cls.SchoolID).
                 Order("year ASC, month ASC").Find(&sessions)
         return aggregateMonthlyTrend(sessions)
 }

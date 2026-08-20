@@ -175,22 +175,24 @@ func ListReportCards(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // Charger les infos de session pour mois/année/classe
+        // Charger les infos de session pour mois/année/école
         var session models.EvaluationSession
-        var cls models.Class
         var school models.School
         _ = database.DB.First(&session, "id = ?", sessionID).Error
-        if session.ClassID != "" {
-                _ = database.DB.First(&cls, "id = ?", session.ClassID).Error
-                if cls.SchoolID != "" {
-                        _ = database.DB.First(&school, "id = ?", cls.SchoolID).Error
-                }
+        if session.SchoolID != "" {
+                _ = database.DB.First(&school, "id = ?", session.SchoolID).Error
         }
 
         result := make([]ReportCardWithStudent, 0, len(cards))
         for _, c := range cards {
                 var s models.Student
                 _ = database.DB.First(&s, "id = ?", c.StudentID).Error
+                // Approche A : la session couvre plusieurs classes ; on récupère
+                // la classe de l'élève pour afficher son nom sur le bulletin.
+                var cls models.Class
+                if s.ClassID != "" {
+                        _ = database.DB.First(&cls, "id = ?", s.ClassID).Error
+                }
                 result = append(result, ReportCardWithStudent{
                         ReportCard:       c,
                         StudentName:      s.LastName + " " + s.FirstName,
@@ -335,7 +337,7 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
         pdf.CellFormat(0, 5, tr(fmt.Sprintf("Matricule: %s", matriculeOrNA(student.Matricule))), "", 0, "L", false, 0, "")
 
         pdf.SetXY(18, boxY+9)
-        pdf.CellFormat(0, 5, tr(fmt.Sprintf("Classe: %s", session.ClassName)), "", 0, "L", false, 0, "")
+        pdf.CellFormat(0, 5, tr(fmt.Sprintf("Classe: %s", result.ClassName)), "", 0, "L", false, 0, "")
         pdf.SetXY(110, boxY+9)
         pdf.CellFormat(0, 5, tr(fmt.Sprintf("Effectif: %d", session.Statistics.StudentCount)), "", 0, "L", false, 0, "")
 
@@ -408,10 +410,15 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
         // Valeurs récap
         pdf.SetFont("Helvetica", "B", 14)
         pdf.SetTextColor(0, 100, 50)
+        // Afficher la moyenne sur l'échelle du niveau de l'élève
+        // (Approche A : chaque élève a sa propre classe/level → AverageScale)
         avgStr := "-"
+        avgScale := session.AverageScale
+        if result.AverageScale > 0 {
+                avgScale = result.AverageScale
+        }
         if result.HasAverage {
-                // Afficher la moyenne sur l'échelle du niveau (10 pour CP/CE, 20 pour CM)
-                avgStr = fmt.Sprintf("%.2f/%d", result.Average, session.AverageScale)
+                avgStr = fmt.Sprintf("%.2f/%d", result.Average, avgScale)
         }
         pdf.SetXY(15, recapY+8)
         pdf.CellFormat(60, 8, avgStr, "R", 0, "C", false, 0, "")

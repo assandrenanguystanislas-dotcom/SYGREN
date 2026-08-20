@@ -115,6 +115,8 @@ func New(cfg *config.Config) http.Handler {
                 })
 
                 // === Module 2 — Sessions de saisie mensuelle (cahier des charges §3) ===
+                // Approche A — 1 session par ÉCOLE (pas par classe). Les exemptions
+                // permettent d'exclure des classes/niveaux d'une session.
                 // Lecture : tous les rôles (filtré par scope dans le handler)
                 // Création/Modification/Suppression : admin + director (RBAC director = son école)
                 r.Get("/api/sessions", handlers.ListSessions)
@@ -125,6 +127,17 @@ func New(cfg *config.Config) http.Handler {
                         r.Put("/api/sessions/{id}/status", handlers.UpdateSessionStatus)
                         r.Put("/api/sessions/{id}/extend", handlers.ExtendSession)
                         r.Delete("/api/sessions/{id}", handlers.DeleteSession)
+                })
+
+                // === Exemptions de session (Approche A) ===
+                // Permettent d'exempter des classes/niveaux d'une session.
+                // Lecture : tous les rôles (filtré par scope dans le handler)
+                // Création/Suppression : admin + director (RBAC director = son école)
+                r.Get("/api/sessions/{id}/exemptions", handlers.ListExemptions)
+                r.Group(func(r chi.Router) {
+                        r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
+                        r.Post("/api/sessions/{id}/exemptions", handlers.CreateExemption)
+                        r.Delete("/api/sessions/{id}/exemptions/{eid}", handlers.DeleteExemption)
                 })
 
                 // === Module 2 — Saisie des notes ===

@@ -15,10 +15,14 @@ import {
   ChevronRight,
   Building2,
   School as SchoolIcon,
+  ShieldOff,
+  Trash2,
+  Layers,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { sessionsApi, classesApi } from "@/lib/api";
+import { sessionsApi, classesApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import {
@@ -26,7 +30,11 @@ import {
   SESSION_STATUS_CONFIG,
   nextStatus,
 } from "@/lib/session-utils";
-import type { SessionWithDetails, ClassWithDetails } from "@/lib/types";
+import type {
+  SessionWithDetails,
+  ClassWithDetails,
+  SessionExemptionWithDetails,
+} from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,9 +52,13 @@ import { Progress } from "@/components/ui/progress";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
+// Niveaux d'exemption possibles (Approche A — exemptions par niveau)
+const EXEMPT_LEVELS = ["CP", "CE", "CM"] as const;
+type ExemptLevel = (typeof EXEMPT_LEVELS)[number];
+
 interface FormData {
   scope: "all" | "school";
-  school_code: string;
+  school_code: string; // identifiant de l'école (son code unique)
   month: string;
   year: string;
   eval_type: "composition" | "exam_blanc";
@@ -54,6 +66,9 @@ interface FormData {
   open_at: string;
   close_at: string;
   auto_open: boolean;
+  // Exemptions rapides par niveau (uniquement pertinentes en scope=school)
+  exemptLevels: ExemptLevel[];
+  exemptReason: string;
 }
 
 function toLocalDatetime(d: Date): string {
@@ -80,6 +95,8 @@ const EMPTY: FormData = {
   open_at: nowPlusDays(0),
   close_at: nowPlusDays(7),
   auto_open: false,
+  exemptLevels: [],
+  exemptReason: "",
 };
 
 export function SessionsView() {
@@ -94,6 +111,8 @@ export function SessionsView() {
   );
   const [extendTarget, setExtendTarget] = useState<SessionWithDetails | null>(null);
   const [extendDate, setExtendDate] = useState("");
+  // Gestion des exemptions (dialog dédié par session)
+  const [exemptionTarget, setExemptionTarget] = useState<SessionWithDetails | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["sessions"],
@@ -104,10 +123,16 @@ export function SessionsView() {
     queryFn: () => classesApi.list(),
     enabled: canManage,
   });
+  // Liste des écoles pour le Select du formulaire (scope=school)
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools", "sessions-view"],
+    queryFn: () => schoolsApi.list(),
+    enabled: canManage,
+  });
 
   const createMut = useMutation({
     mutationFn: async (data: FormData) => {
-      return sessionsApi.bulkCreate({
+      const result = await sessionsApi.bulkCreate({
         scope: data.scope,
         school_code: data.scope === "school" ? data.school_code : undefined,
         month: parseInt(data.month, 10),
@@ -118,10 +143,55 @@ export function SessionsView() {
         close_at: toISO(data.close_at),
         auto_open: data.auto_open,
       });
+      // Approche A — après création, si des exemptions rapides par niveau
+      // ont été sélectionnées (scope=school uniquement), on les applique
+      // sur la session fraîchement créée pour cette école.
+      if (
+        data.scope === "school" &&
+        data.exemptLevels.length > 0 &&
+        result.created > 0 &&
+        data.school_code
+      ) {
+        // Récupère le school_id à partir du code (lookup dans la liste déjà chargée)
+        const school = schoolsData?.schools.find((s) => s.code === data.school_code);
+        if (school) {
+          // Récupère la session fraîchement créée via filtre school_id
+          const fresh = await sessionsApi.list({
+            school_id: school.id,
+            month: parseInt(data.month, 10),
+            year: parseInt(data.year, 10),
+          });
+          const session = fresh.sessions.find(
+            (s) =>
+              s.eval_type === data.eval_type &&
+              s.eval_number === (parseInt(data.eval_number, 10) || 1),
+          );
+          if (session) {
+            const reason = data.exemptReason.trim() || "Exemption rapide (niveau)";
+            for (const level of data.exemptLevels) {
+              try {
+                await sessionsApi.createExemption(session.id, {
+                  level,
+                  reason,
+                });
+              } catch {
+                // doublon potentiel — ignoré (déjà toasté en cas d'erreur réelle)
+              }
+            }
+          }
+        }
+      }
+      return result;
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, vars) => {
+      const exMsg =
+        vars.scope === "school" && vars.exemptLevels.length > 0
+          ? ` · ${vars.exemptLevels.length} exemption(s) appliquée(s)`
+          : "";
       toast.success("Sessions créées", {
-        description: `${result.created} session(s) créée(s)${result.skipped.length > 0 ? ` · ${result.skipped.length} ignorée(s)` : ""}`,
+        description: `${result.created} session(s) créée(s)${
+          result.skipped.length > 0 ? ` · ${result.skipped.length} ignorée(s)` : ""
+        }${exMsg}`,
       });
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
@@ -189,6 +259,11 @@ export function SessionsView() {
       ...EMPTY,
       // Director : scope forcé à "school" (son école)
       scope: user?.role === "director" ? "school" : "all",
+      // Director : on pré-remplit le code de son école s'il est chargé
+      school_code:
+        user?.role === "director"
+          ? (schoolsData?.schools.find((s) => s.id === user.school_id)?.code ?? "")
+          : "",
     });
     setDialogOpen(true);
   }
@@ -198,6 +273,7 @@ export function SessionsView() {
 
   const sessions = data?.sessions ?? [];
   const classes = classesData?.classes ?? [];
+  const schools = schoolsData?.schools ?? [];
 
   return (
     <div className="space-y-4">
@@ -211,7 +287,7 @@ export function SessionsView() {
             <div>
               <h2 className="font-semibold text-base">Sessions de saisie</h2>
               <p className="text-xs text-muted-foreground">
-                {sessions.length} session(s) · cycles mensuels par classe
+                {sessions.length} session(s) · cycles mensuels par école
               </p>
             </div>
           </div>
@@ -240,13 +316,17 @@ export function SessionsView() {
                 <CardContent className="py-4">
                   {/* En-tête : mois/année + statut */}
                   <div className="flex items-start justify-between gap-2 mb-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-semibold text-base">
                         {s.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{s.eval_number}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {monthLabel(s.month)} {s.year} · {s.class_name ?? "Classe inconnue"}
-                        {s.school_name && ` · ${s.school_name}`}
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {monthLabel(s.month)} {s.year} · {s.school_name ?? "École inconnue"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {s.class_count > 0
+                          ? `${s.class_count} classe(s) participante(s)`
+                          : "Aucune classe active"}
                       </p>
                       {s.open_at && s.close_at && (
                         <p className="text-[10px] text-muted-foreground mt-1">
@@ -255,10 +335,22 @@ export function SessionsView() {
                         </p>
                       )}
                     </div>
-                    <Badge variant="outline" className={`text-[10px] ${cfg.color}`}>
+                    <Badge variant="outline" className={`text-[10px] shrink-0 ${cfg.color}`}>
                       {cfg.label}
                     </Badge>
                   </div>
+
+                  {/* Badge exemption si présent */}
+                  {s.exemption_count > 0 && (
+                    <div
+                      className="mb-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors"
+                      onClick={() => canManage && setExemptionTarget(s)}
+                      title={canManage ? "Gérer les exemptions" : "Exemptions appliquées"}
+                    >
+                      <ShieldOff className="w-3 h-3" />
+                      {s.exemption_count} exemption(s)
+                    </div>
+                  )}
 
                   {/* Stats */}
                   <div className="space-y-2 text-xs">
@@ -333,6 +425,21 @@ export function SessionsView() {
                       Prolonger la clôture
                     </Button>
                   )}
+
+                  {/* Gestion des exemptions (Approche A — par session) */}
+                  {canManage && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-1 text-xs"
+                      onClick={() => setExemptionTarget(s)}
+                    >
+                      <ShieldOff className="w-3.5 h-3.5 mr-1.5" />
+                      {s.exemption_count > 0
+                        ? `Gérer les exemptions (${s.exemption_count})`
+                        : "Exempter des classes/niveaux"}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -382,20 +489,45 @@ export function SessionsView() {
               </div>
               {form.scope === "school" && (
                 <div className="space-y-1.5 mt-2">
-                  <Label htmlFor="school-code">Code de l&apos;école</Label>
-                  <Input
-                    id="school-code"
-                    value={form.school_code}
-                    onChange={(e) => setForm({ ...form, school_code: e.target.value })}
-                    placeholder="Ex : E19474745"
-                    required
-                    className="font-mono"
-                    disabled={user?.role === "director"}
-                  />
-                  {user?.role === "director" && (
-                    <p className="text-[11px] text-muted-foreground">
-                      En tant que directeur, les sessions seront créées pour votre école uniquement.
-                    </p>
+                  <Label htmlFor="school-select">École</Label>
+                  {user?.role === "director" ? (
+                    <>
+                      <Input
+                        id="school-select"
+                        value={
+                          schools.find((s) => s.code === form.school_code)?.name ?? form.school_code
+                        }
+                        disabled
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        En tant que directeur, les sessions seront créées pour votre école uniquement.
+                      </p>
+                    </>
+                  ) : (
+                    <Select
+                      value={form.school_code}
+                      onValueChange={(v) => setForm({ ...form, school_code: v })}
+                    >
+                      <SelectTrigger id="school-select">
+                        <SelectValue placeholder="Choisir une école…" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {schools.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                            Aucune école enregistrée
+                          </div>
+                        ) : (
+                          schools.map((s) => (
+                            <SelectItem key={s.id} value={s.code}>
+                              <span className="font-medium">{s.name}</span>
+                              <span className="text-muted-foreground ml-2 font-mono text-[10px]">
+                                {s.code}
+                              </span>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                   )}
                 </div>
               )}
@@ -524,6 +656,64 @@ export function SessionsView() {
               </p>
             )}
 
+            {/* Section Exemptions (Approche A) — checkboxes par niveau.
+                Uniquement pertinent en scope=school : on ne peut exempter
+                que pour une école précise (sinon trop large). */}
+            {form.scope === "school" && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2.5">
+                <div className="flex items-center gap-1.5">
+                  <ShieldOff className="w-3.5 h-3.5 text-amber-600" />
+                  <Label className="text-xs font-medium text-amber-800">
+                    Exemptions rapides (par niveau)
+                  </Label>
+                </div>
+                <p className="text-[11px] text-amber-700 -mt-1">
+                  Cochez les niveaux à exempter de cette session (CP1+CP2 pour
+                  « CP », etc.). Pour exempter une classe précise, utilisez le
+                  bouton « Exempter » après création.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {EXEMPT_LEVELS.map((lvl) => {
+                    const checked = form.exemptLevels.includes(lvl);
+                    return (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            exemptLevels: checked
+                              ? form.exemptLevels.filter((l) => l !== lvl)
+                              : [...form.exemptLevels, lvl],
+                          })
+                        }
+                        className={`flex flex-col items-center gap-1 p-2 rounded-md border text-xs transition-colors ${
+                          checked
+                            ? "border-amber-500 bg-amber-100 text-amber-800"
+                            : "border-amber-200 bg-card text-muted-foreground hover:bg-amber-50"
+                        }`}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span className="font-medium">Niveau {lvl}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="exempt-reason" className="text-[11px]">
+                    Motif (optionnel)
+                  </Label>
+                  <Input
+                    id="exempt-reason"
+                    value={form.exemptReason}
+                    onChange={(e) => setForm({ ...form, exemptReason: e.target.value })}
+                    placeholder="Ex : Examen Blanc réservé au CM2"
+                    className="text-xs h-8"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] text-emerald-700">
               ℹ️ La session sera créée avec le statut « Saisie ouverte » (ou « Brouillon » si ouverture automatique). Les enseignants pourront saisir leurs notes.
             </div>
@@ -554,7 +744,7 @@ export function SessionsView() {
         }
         description={
           statusTarget
-            ? `${monthLabel(statusTarget.month)} ${statusTarget.year} — classe ${statusTarget.class_name}. ` +
+            ? `${monthLabel(statusTarget.month)} ${statusTarget.year} — école ${statusTarget.school_name ?? "inconnue"}. ` +
               (nextStatus(statusTarget.status).status === "validated"
                 ? "Cette action verrouillera définitivement les notes. Plus aucune modification ne sera possible."
                 : nextStatus(statusTarget.status).status === "closed"
@@ -587,7 +777,7 @@ export function SessionsView() {
               <p className="text-sm text-muted-foreground">
                 {extendTarget.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{extendTarget.eval_number}
                 {" — "}
-                {extendTarget.class_name}
+                {extendTarget.school_name ?? "École inconnue"}
               </p>
               {extendTarget.close_at && (
                 <p className="text-xs text-muted-foreground">
@@ -632,6 +822,15 @@ export function SessionsView() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Dialog de gestion des exemptions (Approche A) */}
+      {exemptionTarget && (
+        <ExemptionDialog
+          session={exemptionTarget}
+          classesOfSchool={classes.filter((c) => c.school_id === exemptionTarget.school_id)}
+          onClose={() => setExemptionTarget(null)}
+        />
       )}
     </div>
   );
@@ -680,5 +879,275 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// === Dialog de gestion des exemptions (Approche A — par session) ===
+//
+// Affiche la liste des exemptions existantes (avec suppression) et un
+// formulaire d'ajout. Permet d'exempter soit une classe précise (class_id),
+// soit un niveau entier (level = CP|CE|CM). Au moins un des deux doit être
+// renseigné (validé côté backend).
+
+interface ExemptionDialogProps {
+  session: SessionWithDetails;
+  classesOfSchool: ClassWithDetails[];
+  onClose: () => void;
+}
+
+function ExemptionDialog({ session, classesOfSchool, onClose }: ExemptionDialogProps) {
+  const queryClient = useQueryClient();
+  // "level" | "class" : type d'exemption en cours d'ajout
+  const [addMode, setAddMode] = useState<"level" | "class">("level");
+  const [levelValue, setLevelValue] = useState<string>("");
+  const [classValue, setClassValue] = useState<string>("");
+  const [reason, setReason] = useState("");
+
+  // Charge les exemptions de la session
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["session-exemptions", session.id],
+    queryFn: () => sessionsApi.listExemptions(session.id),
+  });
+
+  const exemptions = data?.exemptions ?? [];
+
+  const addMut = useMutation({
+    mutationFn: async () => {
+      const payload: { class_id?: string | null; level?: string | null; reason: string } = {
+        reason: reason.trim(),
+      };
+      if (addMode === "level") {
+        if (!levelValue) throw new Error("Niveau requis");
+        payload.level = levelValue;
+      } else {
+        if (!classValue) throw new Error("Classe requise");
+        payload.class_id = classValue;
+      }
+      return sessionsApi.createExemption(session.id, payload);
+    },
+    onSuccess: async () => {
+      toast.success("Exemption ajoutée");
+      setReason("");
+      // Reset selections
+      if (addMode === "level") setLevelValue("");
+      else setClassValue("");
+      await queryClient.invalidateQueries({ queryKey: ["session-exemptions", session.id] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+    onError: (e) => {
+      toast.error("Exemption échouée", {
+        description: e instanceof Error ? e.message : "Erreur",
+      });
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (exemptionId: string) =>
+      sessionsApi.deleteExemption(session.id, exemptionId),
+    onSuccess: async () => {
+      toast.success("Exemption supprimée");
+      await queryClient.invalidateQueries({ queryKey: ["session-exemptions", session.id] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+    onError: (e) => {
+      toast.error("Suppression échouée", {
+        description: e instanceof Error ? e.message : "Erreur",
+      });
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        <CardContent className="py-6 flex flex-col gap-4 overflow-y-auto scroll-sygren">
+          {/* En-tête */}
+          <div>
+            <h3 className="font-semibold text-base flex items-center gap-2">
+              <ShieldOff className="w-4 h-4 text-amber-600" />
+              Exemptions — session {session.school_name ?? "École inconnue"}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {session.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{session.eval_number} · {monthLabel(session.month)} {session.year}
+            </p>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground -mt-2">
+            Exemptez une classe précise ou un niveau entier (CP = CP1+CP2, etc.).
+            Les élèves exemptés n&apos;apparaîtront ni dans la saisie des notes ni dans les résultats.
+          </p>
+
+          {/* Liste des exemptions existantes */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">
+              {exemptions.length} exemption(s) actuelle(s)
+            </p>
+            {isLoading ? (
+              <div className="py-4 flex items-center justify-center">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <p className="text-xs text-destructive">Erreur de chargement</p>
+            ) : exemptions.length === 0 ? (
+              <div className="rounded-lg border border-dashed py-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  Aucune exemption — toutes les classes de l&apos;école participent.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-44 overflow-y-auto scroll-sygren">
+                {exemptions.map((ex: SessionExemptionWithDetails) => (
+                  <div
+                    key={ex.id}
+                    className="flex items-start justify-between gap-2 p-2 rounded-md border bg-card text-xs"
+                  >
+                    <div className="flex items-start gap-2 min-w-0">
+                      {ex.class_id ? (
+                        <GraduationCap className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                      ) : (
+                        <Layers className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {ex.class_id
+                            ? `Classe ${ex.class_name ?? "—"}`
+                            : `Niveau ${ex.level ?? "—"}`}
+                        </p>
+                        {ex.reason && (
+                          <p className="text-muted-foreground text-[11px] truncate">
+                            {ex.reason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteMut.mutate(ex.id)}
+                      disabled={deleteMut.isPending}
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Formulaire d'ajout */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50/30 p-3 space-y-2.5">
+            <p className="text-xs font-medium text-amber-800 flex items-center gap-1.5">
+              <Plus className="w-3 h-3" />
+              Ajouter une exemption
+            </p>
+            {/* Type d'exemption */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAddMode("level")}
+                className={`flex items-center justify-center gap-1.5 p-2 rounded-md border text-xs transition-colors ${
+                  addMode === "level"
+                    ? "border-amber-500 bg-amber-100 text-amber-800"
+                    : "border-amber-200 bg-card text-muted-foreground hover:bg-amber-50"
+                }`}
+              >
+                <Layers className="w-3 h-3" />
+                Niveau entier
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddMode("class")}
+                className={`flex items-center justify-center gap-1.5 p-2 rounded-md border text-xs transition-colors ${
+                  addMode === "class"
+                    ? "border-amber-500 bg-amber-100 text-amber-800"
+                    : "border-amber-200 bg-card text-muted-foreground hover:bg-amber-50"
+                }`}
+              >
+                <GraduationCap className="w-3 h-3" />
+                Classe précise
+              </button>
+            </div>
+
+            {addMode === "level" ? (
+              <div className="space-y-1">
+                <Label className="text-[11px]">Niveau à exempter</Label>
+                <Select value={levelValue} onValueChange={setLevelValue}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="CP / CE / CM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXEMPT_LEVELS.map((lvl) => (
+                      <SelectItem key={lvl} value={lvl}>
+                        Niveau {lvl}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Label className="text-[11px]">Classe à exempter</Label>
+                {classesOfSchool.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Aucune classe active dans cette école.
+                  </p>
+                ) : (
+                  <Select value={classValue} onValueChange={setClassValue}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Choisir une classe…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classesOfSchool.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.level})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label htmlFor="exemption-reason" className="text-[11px]">
+                Motif (optionnel)
+              </Label>
+              <Input
+                id="exemption-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Ex : Niveau non concerné par cette évaluation"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={() => addMut.mutate()}
+              disabled={
+                addMut.isPending ||
+                (addMode === "level" ? !levelValue : !classValue)
+              }
+            >
+              {addMut.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              Exempter
+            </Button>
+          </div>
+
+          {/* Fermer */}
+          <div className="flex justify-end pt-1">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Fermer
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

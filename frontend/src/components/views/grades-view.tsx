@@ -11,14 +11,30 @@ import {
   Lock,
   CloudUpload,
   Calendar,
+  School,
+  GraduationCap,
+  ShieldOff,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { sessionsApi, studentsApi, subjectsApi, gradesApi } from "@/lib/api";
+import {
+  sessionsApi,
+  studentsApi,
+  subjectsApi,
+  gradesApi,
+  schoolsApi,
+  classesApi,
+} from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useAutoSave, buildGradesMap, type SaveStatus } from "@/lib/use-autosave";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
-import type { StudentWithClass, Subject, Grade, SessionWithDetails } from "@/lib/types";
+import type {
+  StudentWithClass,
+  Subject,
+  SessionWithDetails,
+  ClassWithDetails,
+  SchoolWithStats,
+} from "@/lib/types";
 import { parseLevels } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,14 +58,51 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
+  // Approche A — la session couvre toute l'école. On a donc besoin de
+  // filtrer par école (pour admin/inspector qui voient plusieurs écoles) et
+  // par classe (l'enseignant ne saisit que pour SA classe, même si la
+  // session est school-wide).
+  const userSchoolId = user?.school_id ?? undefined;
+  const isAdmin = user?.role === "admin";
+  const isInspector = user?.role === "inspector";
+  const isTeacher = user?.role === "teacher";
+  // Sélecteur d'école (pour admin/inspector uniquement — les autres sont
+  // rattachés à une école via le JWT, le backend filtre déjà).
+  const [schoolFilter, setSchoolFilter] = useState<string>("all");
+  // Sélecteur de classe — approche dérivée pour éviter un setState dans un
+  // effect (lint react-hooks/set-state-in-effect). On stocke la valeur
+  // explicite choisie par l'utilisateur ; la classe effective est dérivée
+  // (auto-sélection de la classe enseignée pour teacher tant que l'utilisateur
+  // n'a rien choisi manuellement).
+  const [explicitClassFilter, setExplicitClassFilter] = useState<string | undefined>(
+    undefined,
+  );
   const [explicitSessionId, setExplicitSessionId] = useState<string | undefined>(
     initialSessionId,
   );
 
-  // Charger les sessions (filtrées par scope : teacher → sa classe)
+  // Écoles (admin/inspector : pour le filtre ; director/teacher : la leur)
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools", "grades-view"],
+    queryFn: () => schoolsApi.list(),
+    enabled: isAdmin || isInspector,
+  });
+  const schools: SchoolWithStats[] = schoolsData?.schools ?? [];
+
+  // Détermine l'école active pour le filtre des sessions/classes :
+  // - director/teacher : leur école (user.school_id)
+  // - admin/inspector : l'école choisie dans le filtre (ou "all")
+  const activeSchoolId =
+    userSchoolId && !isAdmin && !isInspector
+      ? userSchoolId
+      : schoolFilter !== "all"
+        ? schoolFilter
+        : undefined;
+
+  // Charger les sessions (filtrées par école si activeSchoolId défini)
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
-    queryKey: ["sessions", "grades-view"],
-    queryFn: () => sessionsApi.list(),
+    queryKey: ["sessions", "grades-view", activeSchoolId],
+    queryFn: () => sessionsApi.list(activeSchoolId ? { school_id: activeSchoolId } : undefined),
   });
 
   // Session sélectionnée : explicite (choix utilisateur) ou auto-sélection
@@ -64,12 +117,63 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     (s) => s.id === selectedSessionId,
   );
 
-  // Charger les élèves, matières, notes de la session sélectionnée
-  const { data: studentsData } = useQuery({
-    queryKey: ["students", selectedSession?.class_id],
-    queryFn: () => studentsApi.list(selectedSession?.class_id),
-    enabled: !!selectedSession?.class_id,
+  // Charger les classes de l'école active (pour le sélecteur de classe
+  // et pour identifier le niveau de chaque classe afin de filtrer les
+  // élèves exemptés par niveau).
+  const { data: classesData } = useQuery({
+    queryKey: ["classes", "grades-view", activeSchoolId],
+    queryFn: () => classesApi.list(activeSchoolId ? { schoolId: activeSchoolId } : undefined),
+    enabled: !!activeSchoolId,
   });
+  const classes: ClassWithDetails[] = classesData?.classes ?? [];
+
+  // Auto-sélection de la classe de l'enseignant (1 seule classe enseignée).
+  // Dérivé : on prend la classe choisie explicitement, sinon la classe
+  // enseignée si l'utilisateur est teacher, sinon "all".
+  const teacherClassId = useMemo(
+    () => (isTeacher ? classes.find((c) => c.teacher_id === user?.id)?.id : undefined),
+    [classes, isTeacher, user?.id],
+  );
+  const classFilter: string = explicitClassFilter ?? teacherClassId ?? "all";
+
+  // Charger les exemptions de la session (pour skip les élèves exemptés)
+  const { data: exemptionsData } = useQuery({
+    queryKey: ["session-exemptions", selectedSessionId],
+    queryFn: () => sessionsApi.listExemptions(selectedSessionId!),
+    enabled: !!selectedSessionId,
+  });
+  const exemptions = exemptionsData?.exemptions ?? [];
+
+  // Construire un set des class_id exemptés + un set des levels exemptés
+  const exemptedClassIds = useMemo(
+    () =>
+      new Set(
+        exemptions
+          .map((e) => e.class_id ?? null)
+          .filter((v): v is string => !!v),
+      ),
+    [exemptions],
+  );
+  const exemptedLevels = useMemo(
+    () =>
+      new Set(
+        exemptions
+          .map((e) => e.level ?? null)
+          .filter((v): v is string => !!v),
+      ),
+    [exemptions],
+  );
+
+  // Charger les élèves :
+  // - Si classFilter sélectionné : studentsApi.list(classFilter)
+  // - Sinon : tous les élèves visibles (RBAC backend), filtrés côté client
+  //   par les classes de l'école active
+  const { data: studentsData } = useQuery({
+    queryKey: ["students", "grades-view", classFilter, activeSchoolId],
+    queryFn: () => studentsApi.list(classFilter !== "all" ? classFilter : undefined),
+    enabled: !!selectedSessionId,
+  });
+
   const { data: subjectsData } = useQuery({
     queryKey: ["subjects"],
     queryFn: () => subjectsApi.list(),
@@ -93,12 +197,45 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     [gradesData],
   );
 
-  const students = studentsData?.students ?? [];
-  // Filtrer les matières selon le niveau de la classe (ex: CP1 → matières contenant "CP1" dans levels)
-  const className = selectedSession?.class_name ?? "";
+  // Filtrage des élèves :
+  // - 1. Si pas de classFilter : ne garder que les élèves dont la classe
+  //   appartient à l'école active (parmi les classes chargées).
+  // - 2. Skip les élèves dont la classe est exemptée (par class_id ou par
+  //   niveau — on lookup le niveau via la liste des classes).
+  const allStudents = studentsData?.students ?? [];
+  const classById = useMemo(() => {
+    const m = new Map<string, ClassWithDetails>();
+    for (const c of classes) m.set(c.id, c);
+    return m;
+  }, [classes]);
+  const visibleStudents = useMemo(() => {
+    return allStudents.filter((st) => {
+      // 1. Filtre par école (via classes de l'école active)
+      if (activeSchoolId) {
+        const cls = classById.get(st.class_id);
+        if (!cls) return false; // classe inconnue / hors école
+      }
+      // 2. Skip exemptés
+      const cls = classById.get(st.class_id);
+      const classLevel = cls?.level;
+      if (st.class_id && exemptedClassIds.has(st.class_id)) return false;
+      if (classLevel && exemptedLevels.has(classLevel)) return false;
+      return true;
+    });
+  }, [allStudents, activeSchoolId, classById, exemptedClassIds, exemptedLevels]);
+
+  // Filtrer les matières par niveau de la classe sélectionnée
+  // (ex: CP1 → matières contenant "CP1" dans levels).
+  // Approche A : on prend la classe sélectionnée dans le filtre, sinon la
+  // 1ère classe de l'école active (pour admin qui veut tout voir).
+  const selectedClass = useMemo(() => {
+    if (classFilter !== "all") return classById.get(classFilter);
+    return classes[0];
+  }, [classFilter, classById, classes]);
+  const className = selectedClass?.name ?? "";
   const allSubjects = subjectsData?.subjects ?? [];
   const subjects = className
-    ? allSubjects.filter((s) => parseLevels(s.levels).includes(className as any))
+    ? allSubjects.filter((s) => parseLevels(s.levels).includes(className as never))
     : allSubjects;
 
   const sessionStatus = selectedSession?.status;
@@ -159,6 +296,25 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     await queryClient.invalidateQueries({ queryKey: ["grades"] });
   };
 
+  // Handler changement école (admin/inspector) → reset session + class
+  const handleSchoolChange = async (id: string) => {
+    if (autoSave.pendingCount > 0) {
+      await autoSave.flush();
+    }
+    setSchoolFilter(id);
+    setExplicitSessionId(undefined);
+    setExplicitClassFilter(undefined);
+  };
+
+  // Handler changement classe
+  const handleClassChange = async (id: string) => {
+    if (autoSave.pendingCount > 0) {
+      await autoSave.flush();
+    }
+    setExplicitClassFilter(id);
+    await queryClient.invalidateQueries({ queryKey: ["students", "grades-view"] });
+  };
+
   if (sessionsLoading) {
     return (
       <Card>
@@ -170,7 +326,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     );
   }
 
-  if (sessions.length === 0) {
+  if (sessions.length === 0 && !activeSchoolId) {
     return (
       <Card className="border-dashed">
         <CardContent className="py-12 text-center">
@@ -179,6 +335,21 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
           <p className="text-xs text-muted-foreground mt-1">
             Le directeur doit ouvrir une session de saisie mensuelle pour que
             vous puissiez saisir les notes.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (activeSchoolId && sessions.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="py-12 text-center">
+          <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm font-medium">Aucune session pour cette école</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Aucune session de saisie n&apos;a encore été ouverte pour
+            l&apos;école sélectionnée.
           </p>
         </CardContent>
       </Card>
@@ -198,14 +369,61 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
               <div>
                 <h2 className="font-semibold text-base">Saisie des notes</h2>
                 <p className="text-xs text-muted-foreground">
-                  {students.length} élève(s) × {subjects.length} matière(s) ={" "}
-                  {students.length * subjects.length} notes attendues
+                  {visibleStudents.length} élève(s) × {subjects.length} matière(s) ={" "}
+                  {visibleStudents.length * subjects.length} notes attendues
                 </p>
               </div>
             </div>
             <SaveIndicator status={autoSave.status} pendingCount={autoSave.pendingCount} />
           </div>
 
+          {/* Ligne 1 : École + Classe (Approche A — la session couvre toute
+              l&apos;école ; l&apos;utilisateur choisit une classe pour la saisie) */}
+          <div className="flex flex-wrap items-end gap-3">
+            {(isAdmin || isInspector) && (
+              <div className="space-y-1.5 min-w-[200px] flex-1">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <School className="w-3 h-3" /> École
+                </label>
+                <Select value={schoolFilter} onValueChange={handleSchoolChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Toutes les écoles" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes les écoles</SelectItem>
+                    {schools.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-1.5 min-w-[180px] flex-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <GraduationCap className="w-3 h-3" /> Classe
+              </label>
+              <Select value={classFilter} onValueChange={handleClassChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir une classe…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isTeacher ? null : (
+                    <SelectItem value="all">Toutes les classes</SelectItem>
+                  )}
+                  {classes.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} {c.level && `(${c.level})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Ligne 2 : Session + statut */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5 min-w-[240px] flex-1">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -223,7 +441,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                     const c = SESSION_STATUS_CONFIG[s.status as keyof typeof SESSION_STATUS_CONFIG];
                     return (
                       <SelectItem key={s.id} value={s.id}>
-                        {monthLabel(s.month)} {s.year} — {s.class_name} ({c.label})
+                        {monthLabel(s.month)} {s.year} — {s.school_name ?? "École"} ({c.label})
                       </SelectItem>
                     );
                   })}
@@ -233,6 +451,15 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
             {cfg && (
               <Badge variant="outline" className={cn("text-xs", cfg.color)}>
                 {cfg.label}
+              </Badge>
+            )}
+            {exemptions.length > 0 && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+              >
+                <ShieldOff className="w-3 h-3 mr-1" />
+                {exemptions.length} exemption(s)
               </Badge>
             )}
           </div>
@@ -264,10 +491,13 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
             <p className="text-sm">Chargement de la grille…</p>
           </CardContent>
         </Card>
-      ) : students.length === 0 ? (
+      ) : visibleStudents.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-12 text-center">
-            <p className="text-sm">Aucun élève dans cette classe.</p>
+            <p className="text-sm">Aucun élève à afficher.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Vérifiez le filtre classe ou les exemptions de la session.
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -302,7 +532,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {students.map((student: StudentWithClass, rowIdx: number) => {
+                  {visibleStudents.map((student: StudentWithClass, rowIdx: number) => {
                     // Calculer la moyenne de l'élève sur les notes saisies
                     const studentGrades = subjects
                       .map((subj) => {
@@ -356,7 +586,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                                     e,
                                     rowIdx,
                                     colIdx,
-                                    students.length,
+                                    visibleStudents.length,
                                     subjects.length,
                                   )
                                 }
