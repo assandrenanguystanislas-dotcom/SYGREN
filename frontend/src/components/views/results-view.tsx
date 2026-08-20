@@ -18,10 +18,12 @@ import {
   School,
   GraduationCap,
   ShieldOff,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { sessionsApi, computationApi, reportsApi, schoolsApi } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import { SyntheseDocument } from "./synthese-document";
 import { StudentAnnualCard } from "./student-annual-card";
@@ -33,6 +35,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -51,46 +54,64 @@ import {
 import { cn } from "@/lib/utils";
 
 export function ResultsView() {
+  const user = useAuthStore((s) => s.user);
+  // Rôles pour la cascade stricte (même logique que students-view)
+  // - admin/inspector : doivent choisir une école → puis une session → résultats
+  // - director/teacher : école figée (RBAC backend) → choisissent une session → résultats
+  const isAdmin = user?.role === "admin";
+  const isInspector = user?.role === "inspector";
+  const isDirector = user?.role === "director";
+  const isTeacher = user?.role === "teacher";
+  // admin et inspector doivent choisir une école (cascade stricte)
+  const needsSchoolSelect = isAdmin || isInspector;
+
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [showSynthese, setShowSynthese] = useState(false);
   // === Deux documents de synthèse (cahier des charges) ===
-  // "primary" → CP1 au CM1 (document principal)
-  // "cm2"     → CM2 seul (document dédié fin de cycle primaire)
-  // Le choix est stocké dans l'état puis passé au composant SyntheseDocument
-  // (modal) ET inclus dans l'URL du nouvel onglet (page standalone).
   const [syntheseLevelGroup, setSyntheseLevelGroup] = useState<"primary" | "cm2">("primary");
-  const [schoolFilter, setSchoolFilter] = useState<string>("all");
-  // Approche A — la session couvre toute l'école. Les résultats retournés
-  // par computeSessionResults mélangent toutes les classes (CP1, CP2, ...).
-  // On ajoute un filtre classe pour permettre à l'utilisateur de focus sur
-  // une classe précise (le classement de chaque élève reste calculé PAR CLASSE
-  // côté backend, donc le rang affiché est cohérent même filtré).
+
+  // === Cascade stricte : École → Session → Classe ===
+  // - admin/inspector : schoolFilter démarre à "" (vide) → doit choisir
+  // - director/teacher : schoolFilter = user.school_id (figé, RBAC backend)
+  const [schoolFilter, setSchoolFilter] = useState<string>(
+    needsSchoolSelect ? "" : (user?.school_id ?? ""),
+  );
   const [classFilter, setClassFilter] = useState<string>("all");
 
-  // Charger les sessions (filtrées par école via query param côté backend)
+  // hasSchoolSelected : true si une école est choisie (admin/inspector) ou si
+  // director/teacher ont toujours leur école (RBAC implicite)
+  const hasSchoolSelected = schoolFilter !== "" && schoolFilter !== "all";
+
+  // Charger les écoles pour le filtre (admin/inspector seulement — director/
+  // teacher ont leur école figée, pas besoin de la liste)
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools", "results-filter"],
+    queryFn: () => schoolsApi.list(),
+    enabled: needsSchoolSelect,
+  });
+
+  // Charger les sessions : filtrées par école (cascade stricte — ne se charge
+  // que si une école est sélectionnée). Pour director/teacher, le backend
+  // filtre déjà par school_id (RBAC), donc on peut charger directement.
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
     queryKey: ["sessions", "results-view", schoolFilter],
     queryFn: () =>
       sessionsApi.list(
-        schoolFilter !== "all" ? { school_id: schoolFilter } : undefined,
+        hasSchoolSelected ? { school_id: schoolFilter } : undefined,
       ),
-  });
-  // Charger les écoles pour le filtre
-  const { data: schoolsData } = useQuery({
-    queryKey: ["schools", "results-filter"],
-    queryFn: () => schoolsApi.list(),
+    enabled: hasSchoolSelected,
   });
 
   const sessions = sessionsData?.sessions ?? [];
   const schools = schoolsData?.schools ?? [];
 
-  // Auto-sélection : la session la plus récente
-  const autoSessionId = selectedSessionId ?? sessions[0]?.id;
+  // Cascade stricte : PAS d'auto-sélection de session.
+  // L'utilisateur doit explicitement choisir une session dans le select.
+  const autoSessionId = selectedSessionId;
   const selectedSession = sessions.find((s) => s.id === autoSessionId);
 
-  // Charger les résultats calculés (Approche A — agrège toutes les classes
-  // de l'école, classement PAR CLASSE dans le backend).
+  // Charger les résultats : seulement si une session est explicitement choisie
   const { data: results, isLoading: resultsLoading, error } = useQuery({
     queryKey: ["computation", "session", autoSessionId],
     queryFn: () => computationApi.getSessionResults(autoSessionId!),
@@ -98,7 +119,6 @@ export function ResultsView() {
   });
 
   // Filtrer les résultats par classe si classFilter sélectionné.
-  // Le rank_label est calculé PAR CLASSE côté backend, il reste cohérent.
   const filteredResults = useMemo(() => {
     if (!results) return [];
     if (classFilter === "all") return results.results;
@@ -116,22 +136,11 @@ export function ResultsView() {
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   }, [results]);
 
-  if (sessionsLoading) return <LoadingState message="Chargement des sessions…" />;
-
-  if (sessions.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center">
-          <Trophy className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-medium">Aucune session disponible</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Les résultats apparaîtront ici une fois qu&apos;une session de saisie
-            aura été créée.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  // États de la cascade stricte :
+  // - waitingForSchool : admin/inspector n'a pas encore choisi d'école
+  // - waitingForSession : école choisie mais pas de session sélectionnée
+  const waitingForSchool = needsSchoolSelect && !hasSchoolSelected;
+  const waitingForSession = hasSchoolSelected && !autoSessionId;
 
   const sessionCfg = selectedSession
     ? SESSION_STATUS_CONFIG[selectedSession.status as keyof typeof SESSION_STATUS_CONFIG]
@@ -164,8 +173,11 @@ export function ResultsView() {
               <div>
                 <h2 className="font-semibold text-base">Résultats & Classement</h2>
                 <p className="text-xs text-muted-foreground">
-                  Moyennes pondérées, rangs par classe (ex-aequo inclus) et mentions
-                  automatiques
+                  {waitingForSchool
+                    ? "Sélectionnez une école pour commencer"
+                    : waitingForSession
+                      ? "Sélectionnez une session pour voir les résultats"
+                      : "Moyennes pondérées, rangs par classe (ex-aequo inclus) et mentions automatiques"}
                 </p>
               </div>
             </div>
@@ -174,11 +186,6 @@ export function ResultsView() {
                 <Badge variant="outline" className={cn("text-xs", sessionCfg.color)}>
                   {sessionCfg.label}
                 </Badge>
-                {/* === Deux documents de synthèse (cahier des charges) ===
-                    Bouton 1 : Synthèse CP1-CM1 (document principal, 5 classes)
-                    Bouton 2 : Synthèse CM2 (document dédié fin de cycle, 1 classe)
-                    Chaque bouton ouvre le document dans un nouvel onglet avec
-                    level_group dans l'URL. */}
                 <Button
                   size="sm"
                   variant="outline"
@@ -215,38 +222,48 @@ export function ResultsView() {
             )}
           </div>
 
-          {/* Filtre par école + classe (Approche A) ===
-              FIX BUG de chevauchement : les SelectTrigger shadcn ont par défaut
-              `w-fit` + `whitespace-nowrap` → le trigger Session (texte long comme
-              "Décembre 2026 — EPP COTIERE PALMERAIE (Validée)") débordait de son
-              conteneur flex-1 et chevauchait le filtre Classe.
-              Solution : w-full sur chaque SelectTrigger + min-w-0 sur les
-              conteneurs (crucial en flexbox pour autoriser le shrink sous la
-              min-w) + max-w pour borner la largeur. */}
+          {/* === Cascade stricte : École → Session → Classe ===
+              - admin/inspector : École (vide au départ) → Session (désactivé
+                tant que pas d'école) → Classe (désactivé tant que pas de session)
+              - director/teacher : École figée → Session actif → Classe cascade */}
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <School className="w-3 h-3" /> École
-              </label>
-              <Select value={schoolFilter} onValueChange={(v) => {
-                setSchoolFilter(v);
-                setSelectedSessionId(undefined);
-                setClassFilter("all");
-              }}>
-                <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue placeholder="Toutes les écoles" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les écoles</SelectItem>
-                  {schools.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Filtre École */}
+            {needsSchoolSelect ? (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <School className="w-3 h-3" /> École
+                </label>
+                <Select value={schoolFilter} onValueChange={(v) => {
+                  setSchoolFilter(v);
+                  setSelectedSessionId(undefined);
+                  setClassFilter("all");
+                }}>
+                  <SelectTrigger className="w-full overflow-hidden">
+                    <SelectValue placeholder="Choisir une école…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schools.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <School className="w-3 h-3" /> École
+                </label>
+                <Input
+                  value={schools.find((s) => s.id === user?.school_id)?.name ?? "Mon école"}
+                  disabled
+                  className="bg-muted/50 text-muted-foreground"
+                />
+              </div>
+            )}
 
+            {/* Filtre Session (désactivé tant que pas d'école) */}
             <div className="space-y-1.5 min-w-[220px] flex-1 max-w-[340px] min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <Calendar className="w-3 h-3" /> Session
@@ -257,9 +274,18 @@ export function ResultsView() {
                   setSelectedSessionId(v);
                   setClassFilter("all");
                 }}
+                disabled={!hasSchoolSelected || sessions.length === 0}
               >
                 <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue placeholder="Choisir une session…" />
+                  <SelectValue
+                    placeholder={
+                      !hasSchoolSelected
+                        ? "Choisir une école d'abord"
+                        : sessions.length === 0
+                          ? "Aucune session"
+                          : "Choisir une session…"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {sessions.map((s) => {
@@ -274,7 +300,7 @@ export function ResultsView() {
               </Select>
             </div>
 
-            {/* Filtre par classe (Approche A — session multi-classes) */}
+            {/* Filtre Classe (désactivé tant que pas de session / pas de résultats) */}
             <div className="space-y-1.5 min-w-[140px] flex-1 max-w-[180px] min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <GraduationCap className="w-3 h-3" /> Classe
@@ -282,10 +308,16 @@ export function ResultsView() {
               <Select
                 value={classFilter}
                 onValueChange={setClassFilter}
-                disabled={classesInResults.length === 0}
+                disabled={!autoSessionId || classesInResults.length === 0}
               >
                 <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue placeholder="Toutes les classes" />
+                  <SelectValue
+                    placeholder={
+                      !autoSessionId
+                        ? "Choisir une session d'abord"
+                        : "Toutes les classes"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les classes</SelectItem>
@@ -310,7 +342,35 @@ export function ResultsView() {
         </CardContent>
       </Card>
 
-      {resultsLoading || !results ? (
+      {/* === États vides de la cascade stricte === */}
+      {waitingForSchool ? (
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="py-12 text-center">
+            <School className="w-8 h-8 mx-auto mb-3 text-primary/50" />
+            <p className="text-sm font-medium text-foreground">
+              Sélectionnez une école pour afficher les sessions
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Choisissez une école dans le filtre ci-dessus — les sessions et
+              résultats associés s&apos;afficheront automatiquement.
+            </p>
+          </CardContent>
+        </Card>
+      ) : waitingForSession ? (
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="py-12 text-center">
+            <Calendar className="w-8 h-8 mx-auto mb-3 text-primary/50" />
+            <p className="text-sm font-medium text-foreground">
+              Sélectionnez une session pour voir les résultats
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {sessions.length > 0
+                ? `${sessions.length} session(s) disponible(s) — choisissez-en une dans le filtre ci-dessus.`
+                : "Aucune session n'a été créée pour cette école. Créez une session dans le module Évaluations."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : resultsLoading || !results ? (
         <LoadingState message="Calcul des moyennes et du classement…" />
       ) : error ? (
         <ErrorState message={(error as Error).message} />
