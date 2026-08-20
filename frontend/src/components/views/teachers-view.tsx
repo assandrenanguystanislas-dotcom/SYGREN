@@ -12,9 +12,12 @@ import {
   Phone,
   BookOpen,
   ShieldCheck,
+  Search,
+  School as SchoolIcon,
+  MapPin,
 } from "lucide-react";
 
-import { teachersApi, schoolsApi } from "@/lib/api";
+import { teachersApi, schoolsApi, iepApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type { TeacherWithDetails, SchoolWithStats } from "@/lib/types";
@@ -52,6 +55,16 @@ const EMPTY: FormData = {
 export function TeachersView() {
   const user = useAuthStore((s) => s.user);
   const canEdit = user?.role === "admin" || user?.role === "director";
+  // Cascade : IEP (admin) → École → recherche
+  // - admin : filtre IEP optionnel → filtre École (cascade) → recherche
+  // - inspector : IEP figé (RBAC backend) → filtre École → recherche
+  // - director : école figée (RBAC backend) → recherche seule
+  const isAdmin = user?.role === "admin";
+
+  // === Filtres en cascade ===
+  const [iepFilter, setIepFilter] = useState<string>("all");
+  const [schoolFilter, setSchoolFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["teachers"],
@@ -61,6 +74,12 @@ export function TeachersView() {
     queryKey: ["schools"],
     queryFn: schoolsApi.list,
     enabled: canEdit,
+  });
+  // IEPs (admin seulement — inspector a son IEP figé par le backend RBAC)
+  const { data: iepsData } = useQuery({
+    queryKey: ["iep"],
+    queryFn: iepApi.list,
+    enabled: isAdmin,
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -155,36 +174,154 @@ export function TeachersView() {
 
   const teachers = data?.teachers ?? [];
   const schools = schoolsData?.schools ?? [];
+  const ieps = iepsData?.ieps ?? [];
+
+  // Cascade : écoles filtrées par IEP sélectionné
+  const filteredSchools =
+    iepFilter !== "all"
+      ? schools.filter((s) => s.iep_id === iepFilter)
+      : schools;
+
+  // Filtrage côté client : IEP (via école) → École → recherche texte.
+  // Le backend filtre déjà par rôle (admin voit tout, inspector voit son IEP,
+  // director voit son école).
+  const filtered = teachers.filter((t) => {
+    if (schoolFilter !== "all" && t.school_id !== schoolFilter) return false;
+    if (iepFilter !== "all") {
+      const school = schools.find((s) => s.id === t.school_id);
+      if (!school || school.iep_id !== iepFilter) return false;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      if (
+        !t.full_name.toLowerCase().includes(q) &&
+        !(t.email ?? "").toLowerCase().includes(q) &&
+        !(t.phone ?? "").toLowerCase().includes(q)
+      )
+        return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-4">
       <Card className="border-border/60">
-        <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Users className="w-4 h-4" />
+        <CardContent className="py-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-base">Enseignants</h2>
+                <p className="text-xs text-muted-foreground">
+                  {filtered.length} enseignant(s) affiché(s)
+                  {iepFilter !== "all" && ieps.find((i) => i.id === iepFilter)
+                    ? ` · ${ieps.find((i) => i.id === iepFilter)?.name}`
+                    : ""}
+                  {" · comptes + affectation"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-semibold text-base">Enseignants</h2>
-              <p className="text-xs text-muted-foreground">
-                {teachers.length} enseignant(s) · comptes + affectation
-              </p>
+            {canEdit && (
+              <Button onClick={openCreate} size="sm" className="shadow-sm">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Créer un enseignant
+              </Button>
+            )}
+          </div>
+          {/* === Filtres en cascade : IEP → École → recherche ===
+              - admin : IEP (tous) → École (cascade selon IEP) → recherche
+              - inspector/director : IEP figé par le backend → École + recherche */}
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Filtre IEP (admin seulement) */}
+            {isAdmin && (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> IEP
+                </label>
+                <Select
+                  value={iepFilter}
+                  onValueChange={(v) => {
+                    setIepFilter(v);
+                    setSchoolFilter("all");
+                  }}
+                >
+                  <SelectTrigger className="w-full overflow-hidden">
+                    <SelectValue placeholder="Tous les IEP" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les IEP</SelectItem>
+                    {ieps.map((iep) => (
+                      <SelectItem key={iep.id} value={iep.id}>
+                        {iep.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Filtre École (cascade selon IEP) */}
+            <div className="space-y-1.5 min-w-[200px] flex-1 max-w-[300px] min-w-0">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <SchoolIcon className="w-3 h-3" /> École
+              </label>
+              <Select
+                value={schoolFilter}
+                onValueChange={setSchoolFilter}
+                disabled={filteredSchools.length === 0}
+              >
+                <SelectTrigger className="w-full overflow-hidden">
+                  <SelectValue placeholder="Toutes les écoles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les écoles</SelectItem>
+                  {filteredSchools.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Recherche texte */}
+            <div className="relative flex-1 min-w-[200px] min-w-0">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
+                <Search className="w-3 h-3" /> Rechercher
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Par nom, email ou téléphone…"
+                  className="pl-9"
+                />
+              </div>
             </div>
           </div>
-          {canEdit && (
-            <Button onClick={openCreate} size="sm" className="shadow-sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Créer un enseignant
-            </Button>
-          )}
         </CardContent>
       </Card>
 
       {teachers.length === 0 ? (
         <EmptyState onCreate={canEdit ? openCreate : undefined} />
+      ) : filtered.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center">
+            <Search className="w-6 h-6 mx-auto mb-2 opacity-50" />
+            <p className="text-sm font-medium">
+              Aucun enseignant ne correspond à votre recherche
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Modifiez les filtres pour élargir la recherche.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {teachers.map((t, i) => (
+          {filtered.map((t, i) => (
             <Card
               key={t.id}
               className="border-border/60 hover:shadow-md transition-shadow animate-in-up"

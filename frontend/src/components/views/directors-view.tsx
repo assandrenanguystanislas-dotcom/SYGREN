@@ -13,9 +13,11 @@ import {
   School as SchoolIcon,
   ShieldCheck,
   MapPin,
+  Search,
 } from "lucide-react";
 
-import { directorsApi, schoolsApi } from "@/lib/api";
+import { directorsApi, schoolsApi, iepApi } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type { DirectorWithDetails, SchoolWithStats } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,6 +52,16 @@ const EMPTY: FormData = {
 };
 
 export function DirectorsView() {
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === "admin";
+
+  // === Filtres en cascade : IEP → École → recherche ===
+  // - admin : peut choisir un IEP puis une école (cascade)
+  // - inspector : son IEP est figé par le backend (RBAC) → pas de filtre IEP
+  const [iepFilter, setIepFilter] = useState<string>("all");
+  const [schoolFilter, setSchoolFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["directors"],
     queryFn: directorsApi.list,
@@ -57,6 +69,12 @@ export function DirectorsView() {
   const { data: schoolsData } = useQuery({
     queryKey: ["schools"],
     queryFn: schoolsApi.list,
+  });
+  // IEPs (admin seulement — inspector a son IEP figé par le backend RBAC)
+  const { data: iepsData } = useQuery({
+    queryKey: ["iep"],
+    queryFn: iepApi.list,
+    enabled: isAdmin,
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -146,34 +164,146 @@ export function DirectorsView() {
 
   const directors = data?.directors ?? [];
   const schools = schoolsData?.schools ?? [];
+  const ieps = iepsData?.ieps ?? [];
+
+  // Cascade : écoles filtrées par IEP sélectionné (alimente le select École)
+  const filteredSchools =
+    iepFilter !== "all"
+      ? schools.filter((s) => s.iep_id === iepFilter)
+      : schools;
+
+  // Filtrage côté client : IEP (via école) → École → recherche texte.
+  // Le backend filtre déjà par rôle (admin voit tout, inspector voit son IEP).
+  const filtered = directors.filter((d) => {
+    if (schoolFilter !== "all" && d.school_id !== schoolFilter) return false;
+    if (iepFilter !== "all") {
+      const school = schools.find((s) => s.id === d.school_id);
+      if (!school || school.iep_id !== iepFilter) return false;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      if (
+        !d.full_name.toLowerCase().includes(q) &&
+        !(d.email ?? "").toLowerCase().includes(q)
+      )
+        return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-4">
       <Card className="border-border/60">
-        <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Building2 className="w-4 h-4" />
+        <CardContent className="py-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-base">Directeurs d&apos;école</h2>
+                <p className="text-xs text-muted-foreground">
+                  {filtered.length} directeur(s) · un directeur par école
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-semibold text-base">Directeurs d&apos;école</h2>
-              <p className="text-xs text-muted-foreground">
-                {directors.length} directeur(s) · un directeur par école
-              </p>
+            <Button onClick={openCreate} size="sm" className="shadow-sm">
+              <Plus className="w-4 h-4 mr-1.5" />
+              Créer un directeur
+            </Button>
+          </div>
+          {/* === Filtres en cascade : IEP → École → recherche ===
+              - admin : IEP (tous) → École (cascade selon IEP) → recherche
+              - inspector : son IEP est figé par le backend (RBAC) → École + recherche
+              - autres : École + recherche */}
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Filtre IEP (admin seulement) */}
+            {isAdmin && (
+              <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> IEP
+                </label>
+                <Select
+                  value={iepFilter}
+                  onValueChange={(v) => {
+                    setIepFilter(v);
+                    setSchoolFilter("all"); // reset école quand IEP change
+                  }}
+                >
+                  <SelectTrigger className="w-full overflow-hidden">
+                    <SelectValue placeholder="Tous les IEP" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les IEP</SelectItem>
+                    {ieps.map((iep) => (
+                      <SelectItem key={iep.id} value={iep.id}>
+                        {iep.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Filtre École (cascade selon IEP) */}
+            <div className="space-y-1.5 min-w-[200px] flex-1 max-w-[300px] min-w-0">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <SchoolIcon className="w-3 h-3" /> École
+              </label>
+              <Select
+                value={schoolFilter}
+                onValueChange={setSchoolFilter}
+                disabled={filteredSchools.length === 0}
+              >
+                <SelectTrigger className="w-full overflow-hidden">
+                  <SelectValue placeholder="Toutes les écoles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les écoles</SelectItem>
+                  {filteredSchools.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Recherche texte (toujours disponible) */}
+            <div className="relative flex-1 min-w-[200px] min-w-0">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
+                <Search className="w-3 h-3" /> Rechercher
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Par nom ou email…"
+                  className="pl-9"
+                />
+              </div>
             </div>
           </div>
-          <Button onClick={openCreate} size="sm" className="shadow-sm">
-            <Plus className="w-4 h-4 mr-1.5" />
-            Créer un directeur
-          </Button>
         </CardContent>
       </Card>
 
       {directors.length === 0 ? (
         <EmptyState onCreate={openCreate} />
+      ) : filtered.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center">
+            <p className="text-sm font-medium">
+              Aucun directeur ne correspond à votre recherche
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Modifiez les filtres pour élargir la recherche.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {directors.map((d, i) => (
+          {filtered.map((d, i) => (
             <Card
               key={d.id}
               className="border-border/60 hover:shadow-md transition-shadow animate-in-up"
