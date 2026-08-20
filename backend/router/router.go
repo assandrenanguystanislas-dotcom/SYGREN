@@ -192,6 +192,14 @@ func New(cfg *config.Config) http.Handler {
                 // RBAC : admin (toutes), director (son école), inspector (son IEP)
                 r.Get("/api/reports/synthese-data", handlers.GetSyntheseData)
 
+                // === Relevé de Notes par classe (cahier des charges §3 Module 5) ===
+                // Document A4 portrait multi-pages (1 PDF par classe) listant tous
+                // les élèves avec leurs notes par matière, total, moyenne, observation
+                // (A=Admis, R=Refusé) + stats Inscrits/Présents/Admis G/F/T + signatures.
+                // RBAC : admin (toutes), director (son école), inspector (son IEP),
+                // teacher (son école — RBAC implicite via la session).
+                r.Get("/api/reports/releve-data", handlers.GetReleveData)
+
                 // === Module 5 — Tableaux de bord analytiques ===
                 // GET /api/dashboard : renvoie des KPIs agrégés selon le rôle/scope
                 r.Get("/api/dashboard", handlers.GetDashboard)

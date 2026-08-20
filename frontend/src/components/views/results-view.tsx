@@ -19,6 +19,7 @@ import {
   GraduationCap,
   ShieldOff,
   Search,
+  FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -218,6 +219,29 @@ export function ResultsView() {
                   <FileText className="w-4 h-4 mr-1.5" />
                   Synthèse CM2
                 </Button>
+                {/* === Relevé de Notes (1 PDF par classe) ===
+                    Bouton activé uniquement si une classe précise est filtrée.
+                    Ouvre /releve?session_id=...&class_id=... dans un nouvel onglet.
+                    Le document est multi-pages A4 portrait avec en-tête institutionnel,
+                    tableau des élèves + notes par matière, stats G/F/T et signatures. */}
+                {classFilter !== "all" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      let token = "";
+                      try {
+                        const raw = localStorage.getItem("sygren-auth");
+                        if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+                      } catch {}
+                      const url = `${window.location.origin}/releve?session_id=${autoSessionId}&class_id=${classFilter}&t=${encodeURIComponent(token)}`;
+                      window.open(url, "_blank");
+                    }}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                    Relevé PDF
+                  </Button>
+                )}
               </div>
             )}
           </div>

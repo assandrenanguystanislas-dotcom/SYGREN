@@ -778,6 +778,68 @@ export const reportsApi = {
       inspector_phone: string;
       iep_bp: string;
     }>(`/api/reports/synthese-data?session_id=${sessionId}&level_group=${levelGroup}`),
+
+  /**
+   * Récupère les données JSON pour le document de Relevé de Notes (1 classe).
+   *
+   * Document A4 portrait multi-pages :
+   *   - Page 1 : en-tête institutionnel + tableau (40 élèves max)
+   *   - Pages 2..N : tableau suite (45 élèves max/page)
+   *   - Dernière page : stats Inscrits/Présents/Admis G/F/T + signatures
+   *
+   * @param sessionId ID de la session (couvre toute l'école — Approche A)
+   * @param classId   ID de la classe à filtrer (1 PDF par classe)
+   */
+  getReleveData: (sessionId: string, classId: string) =>
+    apiFetch<{
+      iep_name: string;
+      iep_region: string;
+      iep_bp: string;
+      inspector_name: string;
+      inspector_email: string;
+      inspector_phone: string;
+      school_name: string;
+      school_code: string;
+      school_addr: string;
+      class_name: string;
+      class_level: string; // "CP" | "CE" | "CM"
+      director_name: string;
+      eval_label: string;
+      eval_number: number;
+      eval_type: string; // "composition" | "exam_blanc"
+      month: number;
+      year: number;
+      date: string; // "jj/mm/aaaa"
+      title: string; // "RELEVE DE NOTES CM2"
+      type_examen: string; // "COMPOSITION N°1"
+      total_g: number;
+      total_f: number;
+      total_t: number;
+      students: Array<{
+        num: number;
+        matricule: string;
+        last_name: string;
+        first_name: string;
+        gender: string; // "M" | "F"
+        grades: Array<{
+          subject_name: string;
+          value: number; // note brute (ex: 18.5/20)
+          max_score: number;
+          has_grade: boolean;
+        }>;
+        total: number; // somme des notes brutes
+        average: number; // moyenne sur l'échelle du niveau
+        average_scale: number; // 10 (CP/CE) ou 20 (CM)
+        has_average: boolean;
+        observation: string; // "A" (Admis) | "R" (Refusé)
+      }>;
+      stats: {
+        inscrits_g: number; inscrits_f: number; inscrits_t: number;
+        presents_g: number; presents_f: number; presents_t: number;
+        admis_g: number; admis_f: number; admis_t: number;
+        pct_g: number; pct_f: number; pct_t: number;
+      };
+    }>(`/api/reports/releve-data?session_id=${sessionId}&class_id=${classId}`),
 };
 
 // === Paramètres système (admin uniquement) ===
