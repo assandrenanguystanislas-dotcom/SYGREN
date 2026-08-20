@@ -258,7 +258,7 @@ export default function RelevePage() {
           return (
             <div
               key={pageIndex}
-              className="w-[210mm] min-h-[297mm] p-6 bg-white mx-auto mb-8 shadow-md print:shadow-none print:m-0 print:p-4 print:w-full font-sans text-xs text-black flex flex-col justify-between break-after-page"
+              className="w-[210mm] min-h-[297mm] p-6 bg-white mx-auto mb-8 shadow-md print:shadow-none print:m-0 print:p-4 print:w-full font-sans text-xs text-black break-after-page"
               style={{ pageBreakAfter: 'always' }}
             >
               <div>
