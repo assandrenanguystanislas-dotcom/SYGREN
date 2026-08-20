@@ -54,6 +54,12 @@ export function ResultsView() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [showSynthese, setShowSynthese] = useState(false);
+  // === Deux documents de synthèse (cahier des charges) ===
+  // "primary" → CP1 au CM1 (document principal)
+  // "cm2"     → CM2 seul (document dédié fin de cycle primaire)
+  // Le choix est stocké dans l'état puis passé au composant SyntheseDocument
+  // (modal) ET inclus dans l'URL du nouvel onglet (page standalone).
+  const [syntheseLevelGroup, setSyntheseLevelGroup] = useState<"primary" | "cm2">("primary");
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   // Approche A — la session couvre toute l'école. Les résultats retournés
   // par computeSessionResults mélangent toutes les classes (CP1, CP2, ...).
@@ -133,7 +139,13 @@ export function ResultsView() {
 
   // Afficher le document de synthèse si demandé
   if (showSynthese && autoSessionId) {
-    return <SyntheseDocument sessionId={autoSessionId} onClose={() => setShowSynthese(false)} />;
+    return (
+      <SyntheseDocument
+        sessionId={autoSessionId}
+        levelGroup={syntheseLevelGroup}
+        onClose={() => setShowSynthese(false)}
+      />
+    );
   }
 
   // Si pas de session sélectionnée, ne pas afficher le bouton
@@ -162,23 +174,42 @@ export function ResultsView() {
                 <Badge variant="outline" className={cn("text-xs", sessionCfg.color)}>
                   {sessionCfg.label}
                 </Badge>
+                {/* === Deux documents de synthèse (cahier des charges) ===
+                    Bouton 1 : Synthèse CP1-CM1 (document principal, 5 classes)
+                    Bouton 2 : Synthèse CM2 (document dédié fin de cycle, 1 classe)
+                    Chaque bouton ouvre le document dans un nouvel onglet avec
+                    level_group dans l'URL. */}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    // Récupérer le token depuis localStorage
                     let token = "";
                     try {
                       const raw = localStorage.getItem("sygren-auth");
                       if (raw) token = JSON.parse(raw)?.state?.token ?? "";
                     } catch {}
-                    // Envoyer session_id + token dans l'URL
-                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}&t=${encodeURIComponent(token)}`;
+                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}&level_group=primary&t=${encodeURIComponent(token)}`;
                     window.open(url, "_blank");
                   }}
                 >
                   <FileText className="w-4 h-4 mr-1.5" />
-                  Synthèse PDF
+                  Synthèse CP1-CM1
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    let token = "";
+                    try {
+                      const raw = localStorage.getItem("sygren-auth");
+                      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+                    } catch {}
+                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}&level_group=cm2&t=${encodeURIComponent(token)}`;
+                    window.open(url, "_blank");
+                  }}
+                >
+                  <FileText className="w-4 h-4 mr-1.5" />
+                  Synthèse CM2
                 </Button>
               </div>
             )}

@@ -30,19 +30,35 @@ interface SyntheseData {
   year: number;
   levels: LevelData[];
   totals: Totals;
+  // Transmis par le backend pour adapter le titre + le rendu.
+  level_group: "primary" | "cm2" | "all";
+  document_label: string;
 }
 
 // FIX BUG #1 : CM2 était absent → le tableau ne montrait que 5 classes au lieu de 6.
 // Les 6 niveaux de l'école primaire ivoirienne : CP1, CP2, CE1, CE2, CM1, CM2.
-const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
+//
+// === Séparation en 2 documents (cahier des charges) ===
+// Le document de synthèse est désormais scindé en deux :
+//   1. Document principal (level_group=primary) → CP1 au CM1 (5 classes)
+//   2. Document CM2 dédié (level_group=cm2) → CM2 seul (fin de cycle primaire)
+// CLASS_NAMES est maintenant DYNAMIQUE : il se base sur la réponse du backend
+// (data.levels) plutôt que sur une constante codée en dur.
+const ALL_CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
 const NAVY = "#000080";
-// Nombre total de colonnes du tableau : 1 (label) + 6 classes × 3 (G/F/T) = 19.
-const TOTAL_COLS = 1 + CLASS_NAMES.length * 3;
 
-export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+export function SyntheseDocument({
+  sessionId,
+  levelGroup = "primary",
+  onClose,
+}: {
+  sessionId: string;
+  levelGroup?: "primary" | "cm2" | "all";
+  onClose: () => void;
+}) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["synthese-data", sessionId],
-    queryFn: () => reportsApi.getSyntheseData(sessionId),
+    queryKey: ["synthese-data", sessionId, levelGroup],
+    queryFn: () => reportsApi.getSyntheseData(sessionId, levelGroup),
   });
 
   if (isLoading) {
@@ -66,6 +82,15 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
 
   const fmt = (v: number) => v > 0 ? String(v) : "—";
   const fmtPct = (v: number) => v > 0 ? v.toFixed(2) : "—";
+
+  // CLASS_NAMES dynamique : dérivé de la réponse du backend (data.levels).
+  // On garde l'ordre canonique (CP1, CP2, CE1, CE2, CM1, CM2) même si le
+  // backend renvoie un sous-ensemble (ex: CM2 seul pour le doc dédié).
+  const CLASS_NAMES = ALL_CLASS_NAMES.filter((cn) =>
+    data.levels.some((l) => l.class_name === cn),
+  );
+  // Nombre total de colonnes : 1 (label) + N classes × 3 (G/F/T).
+  const TOTAL_COLS = 1 + CLASS_NAMES.length * 3;
 
   // Helper pour trouver un niveau par nom de classe
   const getLevel = (name: string): LevelData => {
@@ -207,6 +232,11 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
             </div>
             <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>
               {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
+            </div>
+            {/* Périmètre du document (CP1 au CM1 / CM2 / etc.) — permet de
+                différencier visuellement les 2 versions de synthèse. */}
+            <div style={{ fontSize: "10px", fontStyle: "italic", marginTop: "2px", opacity: 0.8 }}>
+              {data.document_label}
             </div>
           </div>
         </div>

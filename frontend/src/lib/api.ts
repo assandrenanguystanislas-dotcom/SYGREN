@@ -718,8 +718,16 @@ export const dashboardApi = {
 // === Synthèse des Résultats (document officiel) ===
 
 export const reportsApi = {
-  /** Récupère les données JSON pour le document de synthèse */
-  getSyntheseData: (sessionId: string) =>
+  /**
+   * Récupère les données JSON pour le document de synthèse.
+   *
+   * @param sessionId ID de la session (rétrocompat : on retrouve l'école + eval)
+   * @param levelGroup Périmètre du document :
+   *   - "primary" (défaut) → CP1 au CM1 (5 classes)
+   *   - "cm2"              → CM2 seulement (document dédié fin de cycle)
+   *   - "all"              → toutes les 6 classes (rétrocompatibilité)
+   */
+  getSyntheseData: (sessionId: string, levelGroup: "primary" | "cm2" | "all" = "primary") =>
     apiFetch<{
       iep_name: string;
       iep_region: string;
@@ -743,7 +751,10 @@ export const reportsApi = {
         admis_g: number; admis_f: number; admis_t: number;
         pct_g: number; pct_f: number; pct_t: number;
       };
-    }>(`/api/reports/synthese-data?session_id=${sessionId}`),
+      // Transmis par le backend pour adapter le titre + le rendu côté frontend.
+      level_group: "primary" | "cm2" | "all";
+      document_label: string;
+    }>(`/api/reports/synthese-data?session_id=${sessionId}&level_group=${levelGroup}`),
 };
 
 // === Paramètres système (admin uniquement) ===

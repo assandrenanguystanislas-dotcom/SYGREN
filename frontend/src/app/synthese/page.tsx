@@ -29,13 +29,22 @@ interface SyntheseData {
   year: number;
   levels: LevelData[];
   totals: Totals;
+  // Transmis par le backend pour adapter le titre + le rendu côté frontend.
+  level_group: "primary" | "cm2" | "all";
+  document_label: string;
 }
 
 // FIX BUG : CM2 était absent → le tableau ne montrait que 5 classes au lieu de 6.
 // Les 6 niveaux de l'école primaire ivoirienne : CP1, CP2, CE1, CE2, CM1, CM2.
-const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
-// Nombre total de colonnes : 1 (label) + 6 classes × 3 (G/F/T) = 19.
-const TOTAL_COLS = 1 + CLASS_NAMES.length * 3;
+//
+// === Séparation en 2 documents (cahier des charges) ===
+// Le document de synthèse est désormais scindé en deux :
+//   1. Document principal (level_group=primary) → CP1 au CM1 (5 classes)
+//   2. Document CM2 dédié (level_group=cm2) → CM2 seul (fin de cycle primaire)
+// CLASS_NAMES est maintenant DYNAMIQUE : il se base sur la réponse du backend
+// (data.levels) plutôt que sur une constante codée en dur, pour s'adapter
+// automatiquement au périmètre choisi.
+const ALL_CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
 
 export default function SynthesePage() {
   const [data, setData] = useState<SyntheseData | null>(null);
@@ -70,19 +79,22 @@ export default function SynthesePage() {
     }
 
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-    // Nouveau : school_code + eval_type + eval_number + year (au lieu de session_id)
+    // school_code + eval_type + eval_number + year (mode alternatif à session_id)
     const schoolCode = params.get("school_code") || "";
     const evalType = params.get("eval_type") || "composition";
     const evalNumber = params.get("eval_number") || "1";
     const year = params.get("year") || "2026";
+    // level_group : périmètre du document (primary=CP1-CM1, cm2=CM2 seul, all=tous).
+    // Défaut "primary" si absent (rétrocompatibilité avec les anciennes URLs).
+    const levelGroup = params.get("level_group") || "primary";
 
     let url: string;
     if (schoolCode) {
-      url = `${apiBase}/api/reports/synthese-data?school_code=${encodeURIComponent(schoolCode)}&eval_type=${evalType}&eval_number=${evalNumber}&year=${year}`;
+      url = `${apiBase}/api/reports/synthese-data?school_code=${encodeURIComponent(schoolCode)}&eval_type=${evalType}&eval_number=${evalNumber}&year=${year}&level_group=${levelGroup}`;
     } else {
       // Rétrocompatibilité : session_id
       const sessionId = params.get("session_id") || "";
-      url = `${apiBase}/api/reports/synthese-data?session_id=${sessionId}`;
+      url = `${apiBase}/api/reports/synthese-data?session_id=${sessionId}&level_group=${levelGroup}`;
     }
 
     fetch(url, {
@@ -125,6 +137,16 @@ export default function SynthesePage() {
 
   const fmt = (v: number) => (v > 0 ? String(v) : "—");
   const fmtPct = (v: number) => (v > 0 ? v.toFixed(2) : "—");
+
+  // CLASS_NAMES dynamique : dérivé de la réponse du backend (data.levels)
+  // plutôt que codé en dur, pour s'adapter au périmètre du document.
+  // On garde l'ordre canonique (CP1, CP2, CE1, CE2, CM1, CM2) même si le
+  // backend renvoie un sous-ensemble.
+  const CLASS_NAMES = ALL_CLASS_NAMES.filter((cn) =>
+    data.levels.some((l) => l.class_name === cn),
+  );
+  // Nombre total de colonnes : 1 (label) + N classes × 3 (G/F/T).
+  const TOTAL_COLS = 1 + CLASS_NAMES.length * 3;
 
   const getLevel = (name: string): LevelData =>
     data.levels.find((l) => l.class_name === name) || {
@@ -207,9 +229,13 @@ export default function SynthesePage() {
             <div className="flex-1 border-t border-black"></div>
           </div>
 
-          {/* Sous-titre */}
-          <div className="text-center font-bold text-sm mb-3">
+          {/* Sous-titre : inclut le périmètre du document (CP1 au CM1 / CM2 / etc.)
+              pour éviter toute confusion entre les 2 versions de synthèse. */}
+          <div className="text-center font-bold text-sm mb-1">
             {data.eval_label.toUpperCase()} N°{data.eval_number} {data.month > 0 ? `DU MOIS DE ${monthLabel(data.month).toUpperCase()} ` : ""}{data.year}
+          </div>
+          <div className="text-center font-bold text-xs mb-3 text-gray-700 italic">
+            {data.document_label}
           </div>
 
           {/* Tableau des résultats */}
