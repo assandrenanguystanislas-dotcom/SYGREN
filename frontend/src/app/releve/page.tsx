@@ -89,15 +89,17 @@ function isEPS(name: string): boolean {
   return name.trim().toUpperCase() === "EPS";
 }
 
-// Abréviation des noms de matières pour libérer de la largeur
-// (pas de barème affiché — les colonnes de notes restent compactes)
+// Abréviation des noms de matières pour libérer de la largeur.
+// Les matières CP sont très abrégées car il y en a 9 (Chant, Copie, Dessin,
+// Dictée, EDHC, Ecriture, Exp. écrit, Lecture, Maths) — il faut libérer
+// un maximum de place pour la colonne Prénoms.
 function abbreviateSubject(name: string): string {
   const n = name.trim();
   switch (n.toUpperCase()) {
     case "EXPLOITATION DE TEXTE":
-      return "Expl. de texte";
+      return "Expl. texte";
     case "ETUDE DU MILIEU":
-      return "Etude du Milieu";
+      return "Et. Milieu";
     case "MATHEMATIQUES":
       return "Maths";
     case "DICTEE":
@@ -109,22 +111,43 @@ function abbreviateSubject(name: string): string {
       return "Copie";
     case "ECRIT":
       return "Ecrit";
+    case "ECRITURE":
+      return "Ecrit.";
     case "EXPRESSION ECRITES":
     case "EXPRESSION ECRITE":
-      return "Exp. écrit";
+      return "Exp. écr.";
     case "DESSIN EDHC":
+      return "D. EDHC";
     case "EDHC":
-      return "Dessin EDHC";
+      return "EDHC";
     case "LECTURE":
     case "LECT.":
       return "Lect.";
     case "POES./CHANT":
+      return "Poés./ch.";
     case "CHANT":
     case "POESIE":
-      return "Poés./chant";
+      return "Chant";
     default:
       return n;
   }
+}
+
+// Abrège le prénom d'un élève : garde les 3 premiers prénoms entiers,
+// abrège le 4ème et suivants en initiale pointée (ex: "Yao" → "Y.").
+// "Kouassi Bertrand Yves Aristide" → "Kouassi Bertrand Yves A."
+// "Moussa Issoufou Aboubacar Sidiki" → "Moussa Issoufou Aboubacar S."
+function abbreviateFirstNames(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 3) return fullName;
+  // Garder les 3 premiers entiers, abréger le reste
+  const first3 = parts.slice(0, 3);
+  const rest = parts.slice(3).map(p => {
+    // Première lettre + point (ex: "Aristide" → "A.")
+    const initial = p.charAt(0).toUpperCase();
+    return initial + ".";
+  });
+  return [...first3, ...rest].join(" ");
 }
 
 function fmt(v: number, hasGrade: boolean): string {
@@ -358,7 +381,7 @@ export default function RelevePage() {
                             {e.last_name}
                           </td>
                           <td className={`border border-black text-left px-1.5 font-bold ${isFille ? 'text-red-600' : ''}`}>
-                            {e.first_name}
+                            {abbreviateFirstNames(e.first_name)}
                           </td>
                           {subjects.map((subj, idx) => {
                             const g = e.grades[idx];
