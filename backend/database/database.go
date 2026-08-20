@@ -41,10 +41,16 @@ func Init(cfg *config.Config) error {
                 log.Println("[DB] Connecté à PostgreSQL (Neon)")
         } else {
                 // Mode dev : SQLite local
+                // Note : les champs *time.Time du modèle EvaluationSession utilisent
+                // `gorm:"type:timestamp"` (et NON timestamptz) car le driver
+                // mattn/go-sqlite3 ne reconnaît que les types "timestamp"/"datetime"/
+                // "date" pour parser automatiquement les TEXT en time.Time. Avec
+                // timestamptz, il retourne une string → erreur "unsupported Scan".
                 if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0755); err != nil {
                         return err
                 }
-                db, err = gorm.Open(sqlite.Open(cfg.DBPath), &gorm.Config{
+                sqliteDSN := cfg.DBPath + "?_busy_timeout=5000&_journal_mode=WAL"
+                db, err = gorm.Open(sqlite.Open(sqliteDSN), &gorm.Config{
                         Logger: logger.Default.LogMode(gormLogLevel),
                 })
                 if err != nil {

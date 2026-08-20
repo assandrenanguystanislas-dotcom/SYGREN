@@ -21,6 +21,15 @@ export function monthShortLabel(month: number): string {
 }
 
 // Couleurs et labels par statut de session
+//
+// Les statuts "actifs" (draft, open, closed, validated) suivent le cycle
+// normal de saisie. Les statuts "terminaux" (cancelled, archived) sont des
+// états finaux lecture seule :
+//   - cancelled : session annulée (raison obligatoire). N'apparaît pas dans
+//     la liste active par défaut (filtre include_cancelled=false côté API).
+//   - archived  : session validée puis archivée (manuel ou cron fin d'année).
+//     Les notes sont conservées pour le bilan annuel + comparaison inter-annuelle.
+//     Masquée de la liste active par défaut (include_archived=false).
 export const SESSION_STATUS_CONFIG = {
   draft: {
     label: "Brouillon",
@@ -42,9 +51,27 @@ export const SESSION_STATUS_CONFIG = {
     color: "bg-primary/15 text-primary border-primary/30",
     description: "Verrouillée, calculs des moyennes disponibles",
   },
+  cancelled: {
+    label: "Annulée",
+    color: "bg-rose-100 text-rose-700 border-rose-200",
+    description:
+      "Session annulée — l'évaluation n'a pas eu lieu. Les notes ont été supprimées.",
+  },
+  archived: {
+    label: "Archivée",
+    color: "bg-zinc-100 text-zinc-600 border-zinc-200",
+    description:
+      "Session validée puis archivée. Notes conservées pour le bilan annuel.",
+  },
 } as const;
 
-// Prochaine transition possible pour un statut donné
+// Type union des clés de SESSION_STATUS_CONFIG (utile pour le typage strict)
+export type SessionStatusKey = keyof typeof SESSION_STATUS_CONFIG;
+
+// Prochaine transition possible pour un statut donné.
+// Retourne null pour les statuts terminaux (cancelled, archived) — aucune
+// transition n'est possible via UpdateSessionStatus (ils passent par des
+// endpoints dédiés : CancelSession / ArchiveSession).
 export function nextStatus(status: string): {
   status: "open" | "closed" | "validated" | null;
   label: string;
@@ -56,6 +83,9 @@ export function nextStatus(status: string): {
       return { status: "closed", label: "Fermer la saisie" };
     case "closed":
       return { status: "validated", label: "Valider les notes" };
+    // "validated" : la transition suivante est l'archivage, gérée par un
+    // endpoint dédié (ArchiveSession), pas par UpdateSessionStatus.
+    // "cancelled" / "archived" : statuts terminaux, aucune transition.
     default:
       return { status: null, label: "" };
   }

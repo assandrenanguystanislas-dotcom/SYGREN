@@ -1,6 +1,7 @@
 package main
 
 import (
+        "fmt"
         "log"
         "net/http"
         "time"
@@ -52,6 +53,12 @@ func main() {
         // Toutes les 60 secondes :
         //   1. Sessions draft avec AutoOpen=true et OpenAt ≤ now → statut = open
         //   2. Sessions open avec CloseAt ≤ now → statut = closed
+        //   3. (1x/jour) Auto-archivage des sessions validated dont l'année
+        //      scolaire est antérieure à l'année courante (setting
+        //      system.school_year). Les notes sont CONSERVÉES (l'archivage
+        //      est soft — il nettoie l'UI active sans détruire les données,
+        //      qui continuent de nourrir le bilan annuel + la comparaison
+        //      inter-annuelle).
         go startSessionScheduler()
 
         if err := server.ListenAndServe(); err != nil {
@@ -64,6 +71,8 @@ func main() {
 func startSessionScheduler() {
         ticker := time.NewTicker(60 * time.Second)
         defer ticker.Stop()
+        // Suivi de la dernière date d'exécution de l'auto-archivage (1x/jour max)
+        lastArchiveRunDate := ""
         for range ticker.C {
                 now := time.Now()
 
@@ -84,7 +93,64 @@ func startSessionScheduler() {
                 if result2.RowsAffected > 0 {
                         log.Printf("[SCHEDULER] %d session(s) clôturée(s) automatiquement", result2.RowsAffected)
                 }
+
+                // 3. Auto-archivage quotidien : une seule fois par jour (vers 03:00 local).
+                //    Archive les sessions validated dont l'année scolaire est
+                //    strictement antérieure à l'année scolaire courante (setting
+                //    system.school_year). Les notes sont conservées.
+                //    Rationale : nettoyer l'UI active sans détruire les données —
+                //    le bilan annuel élève + la comparaison inter-annuelle ont
+                //    besoin des sessions des années précédentes.
+                today := now.Format("2006-01-02")
+                if today != lastArchiveRunDate && now.Hour() >= 3 {
+                        archived := autoArchivePastSessions(now)
+                        if archived > 0 {
+                                log.Printf("[SCHEDULER] Auto-archivage : %d session(s) validée(s) d'années antérieures archivée(s)", archived)
+                        }
+                        lastArchiveRunDate = today
+                }
         }
+}
+
+// autoArchivePastSessions archive automatiquement les sessions validated dont
+// l'année est strictement inférieure à l'année scolaire courante (setting
+// system.school_year). Retourne le nombre de sessions archivées.
+//
+// Politique de rétention :
+//   - Les notes sont CONSERVÉES (l'archivage est soft).
+//   - L'auteur est marqué comme "system-cron" pour distinguer l'archivage
+//     automatique de l'archivage manuel (ArchivedBy = user id).
+//   - Les sessions de l'année courante ne sont JAMAIS auto-archivées,
+//     même si validated (l'admin peut les archiver manuellement si besoin).
+func autoArchivePastSessions(now time.Time) int64 {
+        // Lire l'année scolaire courante depuis les settings
+        var setting models.Setting
+        if err := database.DB.First(&setting, "key = ?", "system.school_year").Error; err != nil {
+                // Setting absent — fallback sur l'année civile courante
+                log.Printf("[SCHEDULER] Setting system.school_year absent — fallback année civile %d", now.Year())
+                setting.Value = ""
+        }
+        currentSchoolYear := 0
+        if setting.Value != "" {
+                if _, err := fmt.Sscanf(setting.Value, "%d", &currentSchoolYear); err != nil {
+                        currentSchoolYear = now.Year()
+                }
+        }
+        if currentSchoolYear == 0 {
+                currentSchoolYear = now.Year()
+        }
+
+        // Archiver les sessions validated d'années strictement antérieures
+        systemActor := "system-cron"
+        result := database.DB.Model(&models.EvaluationSession{}).
+                Where("status = ? AND year < ?", "validated", currentSchoolYear).
+                Updates(map[string]interface{}{
+                        "status":      "archived",
+                        "archived_at": now,
+                        "archived_by": systemActor,
+                        "updated_at":  now,
+                })
+        return result.RowsAffected
 }
 
 // dbLabel retourne un label lisible pour la DB selon le driver utilisé.

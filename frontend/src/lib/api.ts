@@ -434,11 +434,17 @@ export const sessionsApi = {
     year?: number;
     month?: number;
     school_id?: string;
+    // Par défaut, le backend masque les sessions cancelled et archived pour
+    // garder l'UI active propre. Passer true pour les inclure (vue Archives).
+    include_archived?: boolean;
+    include_cancelled?: boolean;
   }) => {
     const qs = new URLSearchParams();
     if (params?.year) qs.set("year", String(params.year));
     if (params?.month) qs.set("month", String(params.month));
     if (params?.school_id) qs.set("school_id", params.school_id);
+    if (params?.include_archived) qs.set("include_archived", "true");
+    if (params?.include_cancelled) qs.set("include_cancelled", "true");
     const q = qs.toString();
     return apiFetch<{ sessions: SessionWithDetails[]; count: number }>(
       q ? `/api/sessions?${q}` : "/api/sessions",
@@ -496,6 +502,40 @@ export const sessionsApi = {
     apiFetch<EvaluationSession>(`/api/sessions/${id}/extend`, {
       method: "PUT",
       body: JSON.stringify({ new_close_at: newCloseAt }),
+    }),
+  /**
+   * Annule une session programmée (soft cancel — la session passe en statut
+   * "cancelled", elle n'est pas supprimée). La raison est obligatoire.
+   *
+   * Règles (côté backend) :
+   *   - Autorisé depuis draft librement.
+   *   - Autorisé depuis open : si des notes ont été saisies, il faut passer
+   *     deleteGrades=true pour confirmer leur suppression (sinon 409 Conflict).
+   *   - Refusé depuis closed/validated (utiliser l'archivage) et depuis
+   *     cancelled/archived (déjà terminal).
+   *
+   * RBAC : admin + director (son école).
+   */
+  cancel: (id: string, reason: string, deleteGrades = false) =>
+    apiFetch<EvaluationSession>(`/api/sessions/${id}/cancel`, {
+      method: "PUT",
+      body: JSON.stringify({ reason, delete_grades: deleteGrades }),
+    }),
+  /**
+   * Archive une session validée (soft archive — les notes sont CONSERVÉES et
+   * continuent de nourrir le bilan annuel élève + la comparaison inter-annuelle).
+   * La session passe en statut "archived" (lecture seule, masquée de l'UI active).
+   *
+   * Autorisé uniquement depuis "validated". L'archivage est aussi déclenché
+   * automatiquement par le cron de fin d'année scolaire (main.go) pour les
+   * sessions validated dont l'année < année scolaire courante.
+   *
+   * RBAC : admin + director (son école).
+   */
+  archive: (id: string) =>
+    apiFetch<EvaluationSession>(`/api/sessions/${id}/archive`, {
+      method: "PUT",
+      body: JSON.stringify({}),
     }),
   delete: (id: string) =>
     apiFetch<{ status: string }>(`/api/sessions/${id}`, {

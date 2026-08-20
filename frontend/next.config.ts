@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  turbopack: {
+    root: "/home/z/sygren/frontend",
+  },
 };
 
 export default nextConfig;

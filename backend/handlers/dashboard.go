@@ -33,11 +33,16 @@ import (
 // === Types de réponse ===
 
 type SessionStats struct {
-        Total    int `json:"total"`
-        Draft    int `json:"draft"`
-        Open     int `json:"open"`
-        Closed   int `json:"closed"`
+        Total     int `json:"total"`
+        Draft     int `json:"draft"`
+        Open      int `json:"open"`
+        Closed    int `json:"closed"`
         Validated int `json:"validated"`
+        // Statuts terminaux (annulation + archivage) — comptés séparément.
+        // Ils ne participent pas au taux de complétion (ce ne sont pas des
+        // sessions "actives" en cours de cycle).
+        Cancelled int `json:"cancelled"`
+        Archived  int `json:"archived"`
 }
 
 type MentionDistribution struct {
@@ -397,8 +402,10 @@ func getTeacherDashboard(w http.ResponseWriter, r *http.Request) {
 // === Helpers de calcul ===
 
 // completionRate calcule le taux de complétion d'une SessionStats.
-// Méthode : sessions non en draft / sessions total.
-// (draft = pas encore ouvertes, donc ne compte pas dans la complétion)
+// Méthode : sessions "complétées" (closed+validated) / sessions "actives"
+// (open+closed+validated). Les sessions draft (pas encore ouvertes),
+// cancelled (annulées — n'ont pas eu lieu) et archived (terminées d'une
+// année antérieure, hors cycle courant) sont exclues du dénominateur.
 func (s SessionStats) completionRate() float64 {
         active := s.Open + s.Closed + s.Validated
         if active == 0 {
@@ -459,6 +466,10 @@ func countSessionStatuses(sessions []models.EvaluationSession) SessionStats {
                         stats.Closed++
                 case "validated":
                         stats.Validated++
+                case "cancelled":
+                        stats.Cancelled++
+                case "archived":
+                        stats.Archived++
                 }
         }
         return stats

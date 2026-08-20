@@ -131,7 +131,27 @@ export function formatLevels(levels: SubjectClass[]): string {
   return levels.length === 0 ? "CP1,CP2,CE1,CE2,CM1,CM2" : levels.join(",");
 }
 
-export type SessionStatus = "draft" | "open" | "closed" | "validated";
+// Statuts d'une session de saisie.
+//
+// Cycle de vie :
+//   draft ──open──► open ──close──► closed ──validate──► validated ──archive──► archived
+//     │                  │
+//     └──cancel──► cancelled
+//
+// Statuts "actifs" (cycle en cours) : draft, open, closed, validated
+// Statuts "terminaux" (lecture seule, plus de modification) :
+//   - cancelled : session annulée (raison obligatoire). Les notes sont
+//     supprimées à l'annulation. Conservée pour l'audit.
+//   - archived  : session validée puis archivée (manuel ou cron fin d'année).
+//     Les notes sont CONSERVÉES et nourrissent le bilan annuel + la
+//     comparaison inter-annuelle. Masquée de l'UI active par défaut.
+export type SessionStatus =
+  | "draft"
+  | "open"
+  | "closed"
+  | "validated"
+  | "cancelled"
+  | "archived";
 export type EvalType = "composition" | "exam_blanc";
 
 export const EVAL_TYPE_LABELS: Record<EvalType, string> = {
@@ -153,6 +173,15 @@ export interface EvaluationSession {
   open_at: string | null;
   close_at: string | null;
   auto_open: boolean;
+  // Métadonnées d'annulation (renseignées si status === "cancelled")
+  cancel_reason?: string;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
+  // Métadonnées d'archivage (renseignées si status === "archived").
+  // archived_by = "system-cron" pour l'auto-archivage de fin d'année, sinon
+  // l'ID de l'utilisateur (admin/director) qui a archivé manuellement.
+  archived_at?: string | null;
+  archived_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -396,6 +425,9 @@ export interface SessionStats {
   open: number;
   closed: number;
   validated: number;
+  // Statuts terminaux (annulation + archivage) — exclus du taux de complétion
+  cancelled: number;
+  archived: number;
 }
 
 export interface MentionDistribution {

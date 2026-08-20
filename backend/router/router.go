@@ -119,6 +119,12 @@ func New(cfg *config.Config) http.Handler {
                 // permettent d'exclure des classes/niveaux d'une session.
                 // Lecture : tous les rôles (filtré par scope dans le handler)
                 // Création/Modification/Suppression : admin + director (RBAC director = son école)
+                //
+                // Statuts terminaux (annulation + archivage) :
+                //   PUT /api/sessions/{id}/cancel  → annule (soft, raison obligatoire)
+                //   PUT /api/sessions/{id}/archive  → archive (manuel, après validation)
+                // Les sessions cancelled/archived sont masquées de ListSessions par
+                // défaut (filtre include_archived/include_cancelled sur false).
                 r.Get("/api/sessions", handlers.ListSessions)
                 r.Group(func(r chi.Router) {
                         r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
@@ -126,6 +132,8 @@ func New(cfg *config.Config) http.Handler {
                         r.Post("/api/sessions/bulk", handlers.BulkCreateSessions)
                         r.Put("/api/sessions/{id}/status", handlers.UpdateSessionStatus)
                         r.Put("/api/sessions/{id}/extend", handlers.ExtendSession)
+                        r.Put("/api/sessions/{id}/cancel", handlers.CancelSession)
+                        r.Put("/api/sessions/{id}/archive", handlers.ArchiveSession)
                         r.Delete("/api/sessions/{id}", handlers.DeleteSession)
                 })
 

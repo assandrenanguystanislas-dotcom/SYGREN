@@ -19,6 +19,10 @@ import {
   Trash2,
   Layers,
   GraduationCap,
+  Ban,
+  Archive,
+  History,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,6 +44,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -113,10 +118,24 @@ export function SessionsView() {
   const [extendDate, setExtendDate] = useState("");
   // Gestion des exemptions (dialog dédié par session)
   const [exemptionTarget, setExemptionTarget] = useState<SessionWithDetails | null>(null);
+  // === Filtre de vue : "active" (défaut, masque cancelled + archived),
+  // "archived" (montre les archived), "all" (montre tout y compris cancelled).
+  // Permet de garder l'UI active propre tout en donnant accès à l'historique.
+  const [statusFilter, setStatusFilter] = useState<"active" | "archived" | "all">("active");
+  // === Annulation (dialog avec raison obligatoire + option delete_grades) ===
+  const [cancelTarget, setCancelTarget] = useState<SessionWithDetails | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelDeleteGrades, setCancelDeleteGrades] = useState(false);
+  // === Archivage (confirm dialog simple) ===
+  const [archiveTarget, setArchiveTarget] = useState<SessionWithDetails | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["sessions"],
-    queryFn: () => sessionsApi.list(),
+    queryKey: ["sessions", statusFilter],
+    queryFn: () =>
+      sessionsApi.list({
+        include_archived: statusFilter === "archived" || statusFilter === "all",
+        include_cancelled: statusFilter === "all",
+      }),
   });
   const { data: classesData } = useQuery({
     queryKey: ["classes"],
@@ -216,6 +235,54 @@ export function SessionsView() {
     },
   });
 
+  // === Annulation de session (soft cancel — raison obligatoire) ===
+  // Si la session "open" a des notes saisies, on envoie delete_grades=true
+  // (confirmé par l'utilisateur via checkbox dans le dialog).
+  const cancelMut = useMutation({
+    mutationFn: ({ id, reason, deleteGrades }: { id: string; reason: string; deleteGrades: boolean }) =>
+      sessionsApi.cancel(id, reason, deleteGrades),
+    onSuccess: async (_, vars) => {
+      toast.success("Session annulée", {
+        description: vars.deleteGrades
+          ? "Les notes saisies ont été supprimées."
+          : "La session est passée en statut « Annulée ».",
+      });
+      // Après annulation, la session disparaît de la vue "active" (filtre par
+      // défaut). On bascule sur "all" pour que l'utilisateur voit le résultat
+      // de son action et comprenne que la session existe toujours.
+      setStatusFilter((prev) => (prev === "active" ? "all" : prev));
+      setCancelTarget(null);
+      setCancelReason("");
+      setCancelDeleteGrades(false);
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+    onError: (e) => {
+      toast.error("Annulation échouée", {
+        description: e instanceof Error ? e.message : "Erreur inconnue",
+      });
+    },
+  });
+
+  // === Archivage de session (soft archive — notes conservées) ===
+  const archiveMut = useMutation({
+    mutationFn: (id: string) => sessionsApi.archive(id),
+    onSuccess: async () => {
+      toast.success("Session archivée", {
+        description: "Les notes sont conservées pour le bilan annuel.",
+      });
+      // Après archivage, la session disparaît de la vue "active". On bascule
+      // sur "archived" pour montrer le résultat.
+      setStatusFilter((prev) => (prev === "active" ? "archived" : prev));
+      setArchiveTarget(null);
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+    onError: (e) => {
+      toast.error("Archivage échoué", {
+        description: e instanceof Error ? e.message : "Erreur inconnue",
+      });
+    },
+  });
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
@@ -252,6 +319,45 @@ export function SessionsView() {
     } catch {
       /* toastée */
     }
+  }
+
+  async function onCancel() {
+    if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      toast.error("Motif obligatoire", {
+        description: "Veuillez indiquer la raison de l'annulation.",
+      });
+      return;
+    }
+    try {
+      await cancelMut.mutateAsync({
+        id: cancelTarget.id,
+        reason,
+        deleteGrades: cancelDeleteGrades,
+      });
+    } catch {
+      /* toastée */
+    }
+  }
+
+  async function onArchive() {
+    if (!archiveTarget) return;
+    try {
+      await archiveMut.mutateAsync(archiveTarget.id);
+    } catch {
+      /* toastée */
+    }
+  }
+
+  function openCancel(s: SessionWithDetails) {
+    setCancelTarget(s);
+    setCancelReason("");
+    setCancelDeleteGrades(s.status === "open" && s.graded_count > 0);
+  }
+
+  function openArchive(s: SessionWithDetails) {
+    setArchiveTarget(s);
   }
 
   function openCreate() {
@@ -291,12 +397,38 @@ export function SessionsView() {
               </p>
             </div>
           </div>
-          {canManage && (
-            <Button onClick={openCreate} size="sm" className="shadow-sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Programmer une session
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Filtre de vue : Actives / Archives / Tout
+                Les sessions cancelled + archived sont masquées par défaut
+                pour garder l'UI propre. L'utilisateur peut les afficher ici. */}
+            <div className="inline-flex items-center rounded-md border border-border bg-card p-0.5 text-xs">
+              {([
+                { key: "active", label: "Actives", icon: Calendar },
+                { key: "archived", label: "Archives", icon: History },
+                { key: "all", label: "Tout", icon: Layers },
+              ] as const).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStatusFilter(key)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${
+                    statusFilter === key
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="w-3 h-3" />
+                  <span className="font-medium">{label}</span>
+                </button>
+              ))}
+            </div>
+            {canManage && (
+              <Button onClick={openCreate} size="sm" className="shadow-sm">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Programmer une session
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -340,6 +472,45 @@ export function SessionsView() {
                     </Badge>
                   </div>
 
+                  {/* Bandeau d'annulation — affiché si la session est annulée.
+                      Montre la raison (obligatoire) + la date d'annulation.
+                      Les notes ont été supprimées à l'annulation, donc pas de
+                      stats ni de barre de complétion affichées plus bas. */}
+                  {s.status === "cancelled" && (
+                    <div className="mb-2 rounded-md border border-rose-200 bg-rose-50 p-2 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-rose-700">
+                        <Ban className="w-3 h-3" />
+                        Session annulée
+                        {s.cancelled_at && (
+                          <span className="text-rose-500 font-normal">
+                            · {new Date(s.cancelled_at).toLocaleDateString("fr-FR")}
+                          </span>
+                        )}
+                      </div>
+                      {s.cancel_reason && (
+                        <p className="text-[11px] text-rose-700/90 italic line-clamp-2">
+                          « {s.cancel_reason} »
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Bandeau d'archivage — affiché si la session est archivée.
+                      Indique que les notes sont conservées pour le bilan annuel. */}
+                  {s.status === "archived" && (
+                    <div className="mb-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 flex items-center gap-1.5 text-[11px] text-zinc-600">
+                      <Archive className="w-3 h-3 shrink-0" />
+                      <span>
+                        Archivée
+                        {s.archived_at && (
+                          <> le {new Date(s.archived_at).toLocaleDateString("fr-FR")}</>
+                        )}
+                        {s.archived_by === "system-cron" ? " (auto fin d'année)" : " (manuel)"}
+                        {" — notes conservées pour le bilan annuel"}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Badge exemption si présent */}
                   {s.exemption_count > 0 && (
                     <div
@@ -352,92 +523,140 @@ export function SessionsView() {
                     </div>
                   )}
 
-                  {/* Stats */}
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Users className="w-3 h-3" /> Élèves
-                      </span>
-                      <span className="font-medium">{s.student_count}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" /> Notes saisies
-                      </span>
-                      <span className="font-medium">
-                        {s.graded_count} / {s.student_count * s.subject_count}
-                      </span>
-                    </div>
-                    {s.draft_count > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> En brouillon
-                        </span>
-                        <span className="font-medium text-amber-600">
-                          {s.draft_count}
-                        </span>
+                  {/* Stats + complétion — masquées pour les sessions annulées
+                      (les notes ont été supprimées à l'annulation, donc les
+                      compteurs sont à 0 et n'ont pas de sens). Conservées
+                      pour les sessions archivées (les notes sont préservées). */}
+                  {s.status !== "cancelled" && (
+                    <>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <Users className="w-3 h-3" /> Élèves
+                          </span>
+                          <span className="font-medium">{s.student_count}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" /> Notes saisies
+                          </span>
+                          <span className="font-medium">
+                            {s.graded_count} / {s.student_count * s.subject_count}
+                          </span>
+                        </div>
+                        {s.draft_count > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> En brouillon
+                            </span>
+                            <span className="font-medium text-amber-600">
+                              {s.draft_count}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* Barre de complétion */}
-                  <div className="mt-3 space-y-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground">Complétion</span>
-                      <span className="font-medium">
-                        {s.completion_rate.toFixed(0)}%
-                      </span>
-                    </div>
-                    <Progress value={s.completion_rate} className="h-1.5" />
-                  </div>
-
-                  {/* Action de changement de statut */}
-                  {canManage && next.status && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-3 justify-between group"
-                      onClick={() => setStatusTarget(s)}
-                      disabled={statusMut.isPending}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        {next.status === "open" && <Unlock className="w-3.5 h-3.5" />}
-                        {next.status === "closed" && <Lock className="w-3.5 h-3.5" />}
-                        {next.status === "validated" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        {next.label}
-                      </span>
-                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                    </Button>
+                      {/* Barre de complétion */}
+                      <div className="mt-3 space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-muted-foreground">Complétion</span>
+                          <span className="font-medium">
+                            {s.completion_rate.toFixed(0)}%
+                          </span>
+                        </div>
+                        <Progress value={s.completion_rate} className="h-1.5" />
+                      </div>
+                    </>
                   )}
 
-                  {/* Prolongation (visible si session open ou closed) */}
-                  {canManage && (s.status === "open" || s.status === "closed") && (
+                  {/* === Actions de gestion (masquées pour les statuts terminaux) ===
+                      Les sessions cancelled et archived sont lecture seule :
+                      plus de changement de statut, plus de prolongation, plus
+                      d'exemption. Les actions dédiées (Annuler / Archiver)
+                      sont affichées plus bas selon le statut courant. */}
+                  {canManage && s.status !== "cancelled" && s.status !== "archived" && (
+                    <>
+                      {/* Action de changement de statut */}
+                      {next.status && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-3 justify-between group"
+                          onClick={() => setStatusTarget(s)}
+                          disabled={statusMut.isPending}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {next.status === "open" && <Unlock className="w-3.5 h-3.5" />}
+                            {next.status === "closed" && <Lock className="w-3.5 h-3.5" />}
+                            {next.status === "validated" && <CheckCircle2 className="w-3.5 h-3.5" />}
+                            {next.label}
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </Button>
+                      )}
+
+                      {/* Prolongation (visible si session open ou closed) */}
+                      {(s.status === "open" || s.status === "closed") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full mt-1.5 text-xs"
+                          onClick={() => {
+                            setExtendTarget(s);
+                            setExtendDate(s.close_at ? toLocalDatetime(new Date(s.close_at)) : nowPlusDays(7));
+                          }}
+                        >
+                          <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                          Prolonger la clôture
+                        </Button>
+                      )}
+
+                      {/* Gestion des exemptions (Approche A — par session) */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full mt-1 text-xs"
+                        onClick={() => setExemptionTarget(s)}
+                      >
+                        <ShieldOff className="w-3.5 h-3.5 mr-1.5" />
+                        {s.exemption_count > 0
+                          ? `Gérer les exemptions (${s.exemption_count})`
+                          : "Exempter des classes/niveaux"}
+                      </Button>
+                    </>
+                  )}
+
+                  {/* === Annulation — visible pour draft et open ===
+                      Soft cancel : la session passe en statut « Annulée » avec
+                      une raison obligatoire. Les notes saisies (si open) sont
+                      supprimées après confirmation (checkbox delete_grades). */}
+                  {canManage && (s.status === "draft" || s.status === "open") && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full mt-1.5 text-xs"
-                      onClick={() => {
-                        setExtendTarget(s);
-                        setExtendDate(s.close_at ? toLocalDatetime(new Date(s.close_at)) : nowPlusDays(7));
-                      }}
+                      className="w-full mt-1 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                      onClick={() => openCancel(s)}
+                      disabled={cancelMut.isPending}
                     >
-                      <Calendar className="w-3.5 h-3.5 mr-1.5" />
-                      Prolonger la clôture
+                      <Ban className="w-3.5 h-3.5 mr-1.5" />
+                      Annuler la session
                     </Button>
                   )}
 
-                  {/* Gestion des exemptions (Approche A — par session) */}
-                  {canManage && (
+                  {/* === Archivage — visible pour validated ===
+                      Soft archive : les notes sont CONSERVÉES et continuent
+                      de nourrir le bilan annuel + la comparaison inter-annuelle.
+                      La session disparaît de la vue « Actives » (filtre par défaut). */}
+                  {canManage && s.status === "validated" && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full mt-1 text-xs"
-                      onClick={() => setExemptionTarget(s)}
+                      className="w-full mt-1 text-xs text-zinc-600 hover:text-zinc-700 hover:bg-zinc-50"
+                      onClick={() => openArchive(s)}
+                      disabled={archiveMut.isPending}
                     >
-                      <ShieldOff className="w-3.5 h-3.5 mr-1.5" />
-                      {s.exemption_count > 0
-                        ? `Gérer les exemptions (${s.exemption_count})`
-                        : "Exempter des classes/niveaux"}
+                      <Archive className="w-3.5 h-3.5 mr-1.5" />
+                      Archiver la session
                     </Button>
                   )}
                 </CardContent>
@@ -456,6 +675,11 @@ export function SessionsView() {
           description="La session sera créée pour toutes les classes actives du périmètre choisi."
           icon={Calendar}
           loading={createMut.isPending}
+          // Le formulaire contient plusieurs grilles 2 colonnes (mois/année,
+          // type/numéro, dates) + la section exemptions — on élargit le dialog
+          // pour que les champs ne se tassent pas, et le corps défile si besoin
+          // (géré par EntityDialog : flex column + overflow-y-auto sur le corps).
+          maxWidth="sm:max-w-lg"
         >
           <form onSubmit={onSubmit} className="space-y-4 pt-2">
             {/* Périmètre : toutes les écoles ou une école spécifique */}
@@ -832,6 +1056,133 @@ export function SessionsView() {
           onClose={() => setExemptionTarget(null)}
         />
       )}
+
+      {/* === Dialog d'annulation (raison obligatoire + option delete_grades) ===
+          Soft cancel : la session passe en statut « Annulée ». Elle n'est pas
+          supprimée (conservée pour l'audit). Les notes saisies (si open) sont
+          supprimées après confirmation explicite de l'utilisateur. */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="py-6 space-y-4">
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-rose-100 text-rose-600">
+                  <Ban className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-base">Annuler la session</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {cancelTarget.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{cancelTarget.eval_number}
+                    {" — "}
+                    {monthLabel(cancelTarget.month)} {cancelTarget.year} · {cancelTarget.school_name ?? "École inconnue"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-[11px] text-rose-700 flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  La session sera marquée « Annulée ». Elle ne sera plus active
+                  mais restera visible dans l'historique (vue « Tout ») pour audit.
+                  {cancelTarget.status === "open" && cancelTarget.graded_count > 0 && (
+                    <>
+                      {" "}
+                      <strong>{cancelTarget.graded_count} note(s)</strong> ont déjà été saisies —
+                      cochez l'option ci-dessous pour les supprimer définitivement.
+                    </>
+                  )}
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cancel-reason">
+                  Motif de l&apos;annulation <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  id="cancel-reason"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Ex : Examen reporté (jour férié), erreur de planification, force majeure…"
+                  rows={3}
+                  required
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Le motif est obligatoire et sera conservé pour l&apos;audit pédagogique.
+                </p>
+              </div>
+
+              {cancelTarget.status === "open" && cancelTarget.graded_count > 0 && (
+                <label className="flex items-start gap-2 cursor-pointer rounded-md border border-rose-200 bg-rose-50/50 p-2.5">
+                  <Checkbox
+                    checked={cancelDeleteGrades}
+                    onCheckedChange={(v) => setCancelDeleteGrades(v === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <p className="font-medium text-rose-800">
+                      Supprimer les {cancelTarget.graded_count} note(s) saisie(s)
+                    </p>
+                    <p className="text-rose-600/80 mt-0.5">
+                      Recommandé — les notes n&apos;ont plus de sens si l&apos;évaluation
+                      n&apos;a pas lieu. Action irréversible.
+                    </p>
+                  </div>
+                </label>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setCancelTarget(null);
+                    setCancelReason("");
+                    setCancelDeleteGrades(false);
+                  }}
+                  disabled={cancelMut.isPending}
+                >
+                  Retour
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={onCancel}
+                  disabled={cancelMut.isPending || !cancelReason.trim()}
+                >
+                  {cancelMut.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Ban className="w-4 h-4 mr-1.5" />
+                  )}
+                  Annuler la session
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* === Dialog d'archivage (confirmation simple) ===
+          Soft archive : les notes sont CONSERVÉES. La session disparaît de la
+          vue « Actives » mais reste disponible dans « Archives » et continue de
+          nourrir le bilan annuel élève + la comparaison inter-annuelle. */}
+      <ConfirmDialog
+        open={!!archiveTarget}
+        onOpenChange={(o) => !o && setArchiveTarget(null)}
+        title="Archiver la session ?"
+        description={
+          archiveTarget
+            ? `${monthLabel(archiveTarget.month)} ${archiveTarget.year} — ${archiveTarget.school_name ?? "École inconnue"}. ` +
+              "La session sera marquée « Archivée » et masquée de la liste active. " +
+              "Les notes sont CONSERVÉES et resteront utilisées pour le bilan annuel élève " +
+              "et la comparaison inter-annuelle."
+            : ""
+        }
+        confirmLabel="Archiver"
+        icon={Archive}
+        onConfirm={onArchive}
+        loading={archiveMut.isPending}
+      />
     </div>
   );
 }

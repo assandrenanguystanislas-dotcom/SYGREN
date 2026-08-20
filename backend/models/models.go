@@ -143,7 +143,29 @@ func (s *Subject) BeforeCreate(tx *gorm.DB) error {
 }
 
 // === EvaluationSession ===
-// Session d'évaluation. Statuts : draft → open → closed → validated
+// Session d'évaluation. Cycle de vie complet :
+//
+//   draft ──open──► open ──close──► closed ──validate──► validated ──archive──► archived
+//     │                  │
+//     └──cancel──► cancelled
+//                   ▲
+//                   └── (cancel autorisé depuis open si 0 note saisie, sinon
+//                        suppression explicite des notes avec delete_grades=true)
+//
+// Statuts terminaux (lecture seule, plus de modification possible) :
+//   - cancelled : session annulée (examen reporté, erreur de planification, force
+//     majeure). Les notes saisies sont supprimées au moment de l'annulation. La
+//     session reste visible pour l'audit pédagogique (qui, quand, pourquoi).
+//   - archived   : session validée puis archivée (manuellement ou automatiquement
+//     en fin d'année scolaire via le cron de main.go). Les notes sont conservées
+//     et restent utilisées par le bilan annuel élève + la comparaison inter-annuelle.
+//     Masquée de l'UI active par défaut (filtre include_archived=false).
+//
+// RBAC annulation/archivage :
+//   - admin : toutes les sessions
+//   - director : uniquement les sessions de son école
+//   - inspector/teacher : lecture seule (pas d'annulation ni d'archivage)
+//
 // Type : "composition" (défaut) ou "exam_blanc" (réservé au CM2, inclut EPS)
 // Number : numéro de l'évaluation dans l'année (Composition N°1, etc.)
 // SchoolID : 1 session par ÉCOLE (pas par classe). Les notes sont rattachées
@@ -158,9 +180,16 @@ type EvaluationSession struct {
         Status     string     `gorm:"type:text;default:draft" json:"status"`
         EvalType   string     `gorm:"type:text;default:composition" json:"eval_type"`
         EvalNumber int        `gorm:"default:1" json:"eval_number"`
-        OpenAt     *time.Time `gorm:"type:timestamptz" json:"open_at"`
-        CloseAt    *time.Time `gorm:"type:timestamptz" json:"close_at"`
+        OpenAt     *time.Time `gorm:"type:timestamp" json:"open_at"`
+        CloseAt    *time.Time `gorm:"type:timestamp" json:"close_at"`
         AutoOpen   bool       `gorm:"default:false" json:"auto_open"`
+        // Champs d'annulation (soft cancel — pas de hard delete pour préserver l'audit)
+        CancelReason string     `gorm:"type:text" json:"cancel_reason,omitempty"`
+        CancelledBy  *string    `gorm:"type:text" json:"cancelled_by,omitempty"`
+        CancelledAt  *time.Time `gorm:"type:timestamp" json:"cancelled_at,omitempty"`
+        // Champs d'archivage (manuel ou auto via cron de fin d'année scolaire)
+        ArchivedAt *time.Time `gorm:"type:timestamp" json:"archived_at,omitempty"`
+        ArchivedBy *string    `gorm:"type:text" json:"archived_by,omitempty"`
         CreatedAt  time.Time  `json:"created_at"`
         UpdatedAt  time.Time  `json:"updated_at"`
 }

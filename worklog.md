@@ -1537,3 +1537,62 @@ Stage Summary:
 - Admin : scope "all" (toutes écoles) ou "school" (code école)
 - Director : scope forcé à son école
 - Bulk create gère l'unicité + skip automatique (examen blanc non-CM)
+
+---
+Task ID: 25 (Annulation + Archivage des sessions)
+Agent: Main (Z.ai Code)
+Task: Implémenter l'annulation (soft cancel avec raison) et l'archivage (manuel + cron annuel) des sessions de saisie, pour nettoyer l'UI active sans détruire les données.
+
+Work Log:
+- Étendu `models.EvaluationSession` avec 5 nouveaux champs : `CancelReason`, `CancelledBy`, `CancelledAt`, `ArchivedAt`, `ArchivedBy` (type:timestamp pour compat driver mattn/go-sqlite3 — voir fix DB ci-dessous).
+- Ajouté 2 handlers dans `handlers/sessions.go` :
+  - `CancelSession` (PUT /api/sessions/{id}/cancel) : autorise depuis draft (libre) et open (si 0 note, sinon exige `delete_grades=true`). Refuse depuis closed/validated (→archivage) et cancelled/archived (déjà terminal). Raison obligatoire. RBAC admin+director (son école).
+  - `ArchiveSession` (PUT /api/sessions/{id}/archive) : autorise uniquement depuis validated. Notes CONSERVÉES. Refuse depuis draft/open/closed (→valider d'abord) et cancelled/archived.
+- Mis à jour `UpdateSessionStatus` : rejette les transitions depuis cancelled/archived (statuts terminaux).
+- Mis à jour `ListSessions` : filtre `cancelled` + `archived` par défaut (hidden). Params `include_archived=true` et `include_cancelled=true` pour les afficher.
+- Enregistré les routes dans `router/router.go` : `PUT /api/sessions/{id}/cancel` et `PUT /api/sessions/{id}/archive` (RBAC admin+director).
+- Étendu le scheduler de `main.go` avec `autoArchivePastSessions` : 1x/jour (vers 03:00), archive les sessions validated dont l'année < `system.school_year`. Auteur = "system-cron". Notes conservées.
+- Mis à jour `handlers/dashboard.go` : `SessionStats` gagne `Cancelled` + `Archived` (exclus du `completionRate`).
+- Mis à jour `handlers/computation.go` : `GetStudentAnnualResults` exclut les sessions cancelled (l'examen n'a pas eu lieu) mais CONSERVE les archived (notes valides pour le bilan).
+- Côté frontend :
+  - `lib/types.ts` : `SessionStatus` étendu avec `"cancelled" | "archived"` + nouveaux champs sur `EvaluationSession` + `SessionStats`.
+  - `lib/session-utils.ts` : config + labels pour cancelled (rose) et archived (zinc), `nextStatus` retourne null pour les terminaux.
+  - `lib/api.ts` : `sessionsApi.cancel(id, reason, deleteGrades)` + `sessionsApi.archive(id)` + params `include_archived`/`include_cancelled` sur `list`.
+  - `components/views/sessions-view.tsx` : filtre segmenté (Actives/Archives/Tout), boutons "Annuler la session" (draft/open) et "Archiver la session" (validated), dialog d'annulation avec Textarea raison obligatoire + checkbox delete_grades (si notes présentes), dialog d'archivage (ConfirmDialog), bandeaux cancelled/archived dans les cartes, stats masquées pour cancelled.
+
+Fix DB (pré-requis pour test local SQLite) :
+- Le driver mattn/go-sqlite3 ne parse les TEXT→time.Time QUE si le type de colonne déclaré est "timestamp"/"datetime"/"date" (PAS "timestamptz").
+- Changé `type:timestamptz` → `type:timestamp` sur OpenAt/CloseAt/CancelledAt/ArchivedAt dans models.go.
+- Ajouté `_busy_timeout=5000&_journal_mode=WAL` au DSN SQLite dans database.go.
+- Note : ce bug était latent (pré-existant) — il ne se manifestait pas avant car le DB dev n'avait aucune session avec open_at/close_at renseignés.
+
+Fix frontend (pré-requis pour compilation Turbopack en sandbox) :
+- Multi-lockfiles (/home/z/sygren/bun.lock + frontend/bun.lock) → Turbopack scannait tout le monorepo (Go backend inclus) → OOM kill.
+- Ajouté `turbopack.root: "/home/z/sygren/frontend"` dans next.config.ts (fix officiel recommandé par Next.js).
+- Démarré avec `NODE_OPTIONS=--max-old-space-size=1024` pour rester sous la limite cgroup (4GB).
+
+Vérification E2E (Agent Browser via gateway port 81) :
+- ✅ Login admin@sygren.ci réussi
+- ✅ Sessions view affiche le filtre segmenté Actives/Archives/Tout
+- ✅ Bouton "Annuler la session" visible sur les sessions draft/open
+- ✅ Dialog d'annulation : champ raison obligatoire, bouton submit disabled quand vide
+- ✅ Submit cancel → session passe en "cancelled", disparaît de Actives
+- ✅ Filtre "Tout" montre les sessions annulées avec bandeau raison + date
+- ✅ Aucune erreur console / runtime
+
+Tests API backend (7/7 passés) :
+1. Cancel depuis draft → status=cancelled, raison + cancelled_by + cancelled_at renseignés
+2. Double-cancel → 409 "session déjà annulée"
+3. List default cache cancelled (count=0) ; include_cancelled=true l'affiche (count=1)
+4. Archive depuis open → 409 ; depuis validated → 200, archived_by=user_id
+5. List default cache cancelled+archived ; include both → count=2
+6. Cancel sans raison → 400 "reason est obligatoire"
+7. Cancel depuis closed → 409 "utilisez l'archivage"
+
+Stage Summary:
+- Approche validée par l'utilisateur : annulation SOFT (raison obligatoire, par statut) + archivage (manuel + cron annuel) SANS suppression automatique.
+- Le "manque d'espace" est un faux problème (Postgres gère des dizaines de Mo/an) — le vrai besoin (UI propre) est résolu par filtrage + archivage.
+- 2 nouveaux statuts terminaux : `cancelled` (notes supprimées, session conservée pour audit) et `archived` (notes conservées pour bilan annuel + comparaison inter-annuelle).
+- Cron quotidien auto-archive les sessions validated des années antérieures (auteur="system-cron").
+- Rétention : les notes des sessions archived nourrissent toujours le bilan annuel élève et la comparaison inter-annuelle.
+- Artifacts : backend binaire `sygren-api` reconstruit, DB SQLite `data/sygren.db` (avec nouvelles colonnes), 2 screenshots `/home/z/sygren-sessions*.png`.
