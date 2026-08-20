@@ -32,8 +32,12 @@ interface SyntheseData {
   totals: Totals;
 }
 
-const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1"];
+// FIX BUG #1 : CM2 était absent → le tableau ne montrait que 5 classes au lieu de 6.
+// Les 6 niveaux de l'école primaire ivoirienne : CP1, CP2, CE1, CE2, CM1, CM2.
+const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
 const NAVY = "#000080";
+// Nombre total de colonnes du tableau : 1 (label) + 6 classes × 3 (G/F/T) = 19.
+const TOTAL_COLS = 1 + CLASS_NAMES.length * 3;
 
 export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
   const { data, isLoading, error } = useQuery({
@@ -63,12 +67,70 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
   const fmt = (v: number) => v > 0 ? String(v) : "—";
   const fmtPct = (v: number) => v > 0 ? v.toFixed(2) : "—";
 
-  // Helper pour trouver un niveau par nom
+  // Helper pour trouver un niveau par nom de classe
   const getLevel = (name: string): LevelData => {
     return data.levels.find((l) => l.class_name === name) || {
       class_name: name, inscrits: [0, 0, 0], presents: [0, 0, 0], admis: [0, 0, 0], pct_admis: [0, 0, 0],
     };
   };
+
+  // Pré-calculer les données pour chaque classe (évite les lookups répétés)
+  const classLevels = CLASS_NAMES.map(getLevel);
+
+  // Styles communs
+  const headerStyle: React.CSSProperties = {
+    border: `1px solid ${NAVY}`,
+    background: NAVY,
+    color: "white",
+    padding: "4px",
+    textAlign: "center",
+    fontSize: "10px",
+  };
+  const labelCellStyle: React.CSSProperties = {
+    border: `1px solid ${NAVY}`,
+    padding: "6px 8px",
+    background: "#e8e8f0",
+    fontWeight: "bold",
+  };
+
+  // FIX BUG #2 : les valeurs G/F/T étaient brouillées dans le rendu.
+  // Cause : le composant RowCells utilisait un Fragment (<>...</>) pour rendre
+  // 3 cellules <td>, ce qui causait un bug de réordonnancement dans le DOM —
+  // les cellules étaient rendues colonne par colonne (tous les G, puis tous
+  // les F, puis tous les T) au lieu d'être groupées par classe.
+  // Solution : rendre les <td> directement via flatMap (pas de sous-composant,
+  // pas de Fragment). Chaque cellule a une key unique et explicite.
+  const renderDataRow = (
+    rowType: "inscrits" | "presents" | "admis" | "pct_admis",
+  ): React.ReactNode[] => {
+    const isPct = rowType === "pct_admis";
+    const fmtFn = isPct ? fmtPct : fmt;
+    return CLASS_NAMES.flatMap((cn, ci) => {
+      const lvl = classLevels[ci];
+      const vals = lvl[rowType];
+      return [
+        <td key={`${rowType}-${cn}-G`} style={{
+          border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center",
+          background: ci % 2 === 0 ? "#f5f5f8" : "transparent",
+        }}>{fmtFn(vals[0])}</td>,
+        <td key={`${rowType}-${cn}-F`} style={{
+          border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center",
+          background: ci % 2 === 0 ? "#f5f5f8" : "transparent",
+        }}>{fmtFn(vals[1])}</td>,
+        <td key={`${rowType}-${cn}-T`} style={{
+          border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center",
+          background: ci % 2 === 0 ? "#f5f5f8" : "transparent",
+        }}>{fmtFn(vals[2])}</td>,
+      ];
+    });
+  };
+
+  // Sous-en-têtes G/F/T pour chaque classe (même technique : flatMap)
+  const subHeaders: React.ReactNode[] = CLASS_NAMES.flatMap((cn) => [
+    <th key={`${cn}-G`} style={headerStyle}>G</th>,
+    <th key={`${cn}-F`} style={headerStyle}>F</th>,
+    <th key={`${cn}-T`} style={headerStyle}>T</th>,
+  ]);
 
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
@@ -109,7 +171,6 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
       >
         {/* En-tête */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-          {/* Gauche */}
           <div style={{ fontSize: "10px", fontWeight: "bold", lineHeight: "1.5", textAlign: "left" }}>
             <div>République de Côte d&apos;Ivoire</div>
             <div>Ministère de l&apos;Éducation Nationale</div>
@@ -119,7 +180,6 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
             <div>Préscolaire et Primaire de {data.iep_name}</div>
             <div>BP : {data.school_addr || "—"} / Tél : ............</div>
           </div>
-          {/* Droite */}
           <div style={{ fontSize: "10px", fontWeight: "bold", textAlign: "right" }}>
             <div style={{ marginBottom: "4px" }}>Union - Discipline - Travail</div>
             <img
@@ -151,53 +211,64 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
           </div>
         </div>
 
-        {/* Tableau */}
+        {/* Tableau de synthèse — 6 classes (CP1-CM2) × 3 colonnes (G/F/T) + 1 label = 19 colonnes */}
         <table style={{
           width: "100%",
           borderCollapse: "collapse",
           border: `1px solid ${NAVY}`,
           color: NAVY,
-          fontSize: "11px",
+          fontSize: "10px",
           fontWeight: "bold",
         }}>
           <thead>
+            {/* Ligne 1 : noms des classes (colSpan=3 pour chacune) */}
             <tr>
-              <th style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "6px", width: "8%" }}></th>
+              <th style={{ ...headerStyle, width: "5%" }}></th>
               {CLASS_NAMES.map((cn) => (
-                <th key={cn} colSpan={3} style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "6px", textAlign: "center" }}>
+                <th key={cn} colSpan={3} style={{ ...headerStyle, padding: "6px" }}>
                   {cn}
                 </th>
               ))}
             </tr>
+            {/* Ligne 2 : sous-en-têtes G/F/T pour chaque classe */}
             <tr>
-              <th style={{ border: `1px solid ${NAVY}`, background: NAVY, color: "white", padding: "4px" }}></th>
-              {CLASS_NAMES.map((cn) => (
-                <SubHeaders key={cn} />
-              ))}
+              <th style={headerStyle}></th>
+              {subHeaders}
             </tr>
           </thead>
           <tbody>
-            {["INSCRITS", "PRÉSENTS", "ADMIS", "% ADMIS"].map((label, rowIdx) => (
-              <DataRow
-                key={label}
-                label={label}
-                rowIdx={rowIdx}
-                levels={CLASS_NAMES.map(getLevel)}
-                fmt={fmt}
-                fmtPct={fmtPct}
-              />
-            ))}
-            {/* Récapitulatif */}
+            {/* Ligne INSCRITS */}
             <tr>
-              <td colSpan={8} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "13px" }}>
+              <td style={labelCellStyle}>INSCRITS</td>
+              {renderDataRow("inscrits")}
+            </tr>
+            {/* Ligne PRÉSENTS */}
+            <tr>
+              <td style={labelCellStyle}>PRÉSENTS</td>
+              {renderDataRow("presents")}
+            </tr>
+            {/* Ligne ADMIS */}
+            <tr>
+              <td style={labelCellStyle}>ADMIS</td>
+              {renderDataRow("admis")}
+            </tr>
+            {/* Ligne % ADMIS */}
+            <tr>
+              <td style={labelCellStyle}>% ADMIS</td>
+              {renderDataRow("pct_admis")}
+            </tr>
+            {/* FIX BUG #3 : colSpan étaient codés en dur (8+8=16) pour 5 classes.
+                Avec 6 classes, le total est 19 colonnes. On utilise TOTAL_COLS. */}
+            <tr>
+              <td colSpan={Math.floor(TOTAL_COLS / 2)} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "12px" }}>
                 FILLES : {fmtPct(data.totals.pct_f)} %
               </td>
-              <td colSpan={8} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "13px" }}>
+              <td colSpan={TOTAL_COLS - Math.floor(TOTAL_COLS / 2)} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "12px" }}>
                 GARÇONS : {fmtPct(data.totals.pct_g)} %
               </td>
             </tr>
             <tr>
-              <td colSpan={16} style={{ border: `1px solid ${NAVY}`, padding: "10px", textAlign: "center", fontSize: "16px" }}>
+              <td colSpan={TOTAL_COLS} style={{ border: `1px solid ${NAVY}`, padding: "10px", textAlign: "center", fontSize: "14px" }}>
                 {fmtPct(data.totals.pct_t)} %
               </td>
             </tr>
@@ -225,68 +296,5 @@ export function SyntheseDocument({ sessionId, onClose }: { sessionId: string; on
         </div>
       </div>
     </div>
-  );
-}
-
-// Sous-composant pour les en-têtes G/F/T
-function SubHeaders() {
-  const navy = "#000080";
-  const style = { border: `1px solid ${navy}`, background: navy, color: "white" as const, padding: "4px", textAlign: "center" as const, fontSize: "10px", width: "6%" };
-  return (
-    <>
-      <th style={style}>G</th>
-      <th style={style}>F</th>
-      <th style={style}>T</th>
-    </>
-  );
-}
-
-// Sous-composant pour une ligne de données
-function DataRow({
-  label,
-  rowIdx,
-  levels,
-  fmt,
-  fmtPct,
-}: {
-  label: string;
-  rowIdx: number;
-  levels: LevelData[];
-  fmt: (v: number) => string;
-  fmtPct: (v: number) => string;
-}) {
-  const navy = "#000080";
-  const bg = rowIdx % 2 === 0 ? "#f5f5f8" : "transparent";
-  const cellStyle = { border: `1px solid ${navy}`, padding: "6px", textAlign: "center" as const, background: bg };
-
-  return (
-    <tr>
-      <td style={{ border: `1px solid ${navy}`, padding: "6px 8px", background: bg }}>{label}</td>
-      {levels.map((lvl) => {
-        const vals = rowIdx === 0 ? lvl.inscrits : rowIdx === 1 ? lvl.presents : rowIdx === 2 ? lvl.admis : lvl.pct_admis;
-        const fmtFn = rowIdx === 3 ? fmtPct : fmt;
-        return (
-          <RowCells key={lvl.class_name} vals={vals} fmtFn={fmtFn} cellStyle={cellStyle} />
-        );
-      })}
-    </tr>
-  );
-}
-
-function RowCells({
-  vals,
-  fmtFn,
-  cellStyle,
-}: {
-  vals: [number, number, number];
-  fmtFn: (v: number) => string;
-  cellStyle: React.CSSProperties;
-}) {
-  return (
-    <>
-      <td style={cellStyle}>{fmtFn(vals[0])}</td>
-      <td style={cellStyle}>{fmtFn(vals[1])}</td>
-      <td style={cellStyle}>{fmtFn(vals[2])}</td>
-    </>
   );
 }
