@@ -67,13 +67,17 @@ export function StudentsView() {
   const isDirector = user?.role === "director";
   const isTeacher = user?.role === "teacher";
 
-  // === Filtres en cascade ===
-  // - admin : schoolFilter (toutes écoles) → classFilter (cascade selon école)
+  // === Filtres en cascade stricte ===
+  // - admin : schoolFilter démarre à "" (vide) → doit choisir une école
+  //   * tant qu'aucune école n'est choisie, le filtre classe est désactivé
+  //     et la liste des élèves est vide (avec un message invitant à choisir)
+  //   * une fois l'école choisie, "Toutes les classes" reste disponible pour
+  //     voir l'effectif complet de l'école (Option A validée par l'utilisateur)
   // - director : schoolFilter = son école (figé, non modifiable)
   // - teacher : pas de filtre école ni classe (sa classe est chargée auto)
   const [search, setSearch] = useState("");
   const [schoolFilter, setSchoolFilter] = useState<string>(
-    isDirector ? (user?.school_id ?? "all") : "all",
+    isDirector ? (user?.school_id ?? "") : "",
   );
   const [classFilter, setClassFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -90,22 +94,26 @@ export function StudentsView() {
     enabled: isAdmin,
   });
 
-  // === Classes : filtrées par école sélectionnée (admin/director) ===
-  // Pour teacher, on charge aussi les classes (pour lookup du nom de sa classe
-  // dans le tableau), mais le backend filtre déjà par teacher_id.
+  // === Classes : filtrées par école sélectionnée ===
+  // Cascade stricte : on ne charge les classes QUE si une école est choisie
+  // (admin) ou si l'utilisateur est director/teacher (école implicite).
+  // Tant que schoolFilter est vide (admin n'a rien choisi), on ne charge
+  // rien → le select classe reste désactivé et vide.
+  const hasSchoolSelected = schoolFilter !== "" && schoolFilter !== "all";
   const { data: classesData } = useQuery({
     queryKey: ["classes", "students-view", schoolFilter],
     queryFn: () =>
       classesApi.list({
-        schoolId: schoolFilter !== "all" ? schoolFilter : undefined,
+        schoolId: hasSchoolSelected ? schoolFilter : undefined,
       }),
-    // Teacher n'a pas besoin du filtre école (le backend filtre par teacher_id)
-    enabled: !isDirector || !!user?.school_id,
+    // enabled si : admin a choisi une école, OU director (son école est figée),
+    // OU teacher (le backend filtre par teacher_id — pas besoin d'école).
+    enabled: isTeacher || (isDirector && !!user?.school_id) || (isAdmin && hasSchoolSelected),
   });
 
   // === Élèves : le backend filtre déjà par rôle (RBAC) ===
-  // - admin : tous les élèves (pas de filtre scope)
-  // - director : élèves de son école
+  // - admin : doit avoir choisi une école (sinon pas de liste — cascade stricte)
+  // - director : élèves de son école (école figée)
   // - teacher : élèves de sa classe (teacher_id = classes.teacher_id)
   // On passe classFilter au backend pour filtrer côté serveur (plus performant
   // que de filtrer côté client sur de grosses listes).
@@ -113,6 +121,9 @@ export function StudentsView() {
     queryKey: ["students", schoolFilter, classFilter],
     queryFn: () =>
       studentsApi.list(classFilter !== "all" ? classFilter : undefined),
+    // Cascade stricte : admin doit avoir choisi une école pour charger les
+    // élèves. Director et teacher ont toujours leur scope (RBAC backend).
+    enabled: isTeacher || isDirector || (isAdmin && hasSchoolSelected),
   });
 
   const createMut = useCrudMutation(studentsApi.create, {
@@ -177,12 +188,16 @@ export function StudentsView() {
     }
   }
 
+  // État de chargement (uniquement si une requête est réellement en cours)
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState message={(error as Error).message} />;
 
   const allStudents = data?.students ?? [];
   const classes = classesData?.classes ?? [];
   const schools = (schoolsData?.schools ?? []) as SchoolWithStats[];
+  // Cascade stricte : admin doit choisir une école avant de voir quoi que ce
+  // soit. Director et teacher ont toujours leur scope (RBAC backend).
+  const waitingForSchool = isAdmin && !hasSchoolSelected;
 
   // Filtrage local : uniquement la recherche texte (le filtre école/classe est
   // déjà appliqué côté backend via les query params studentsApi.list(classId)
@@ -216,10 +231,12 @@ export function StudentsView() {
               <div>
                 <h2 className="font-semibold text-base">Élèves</h2>
                 <p className="text-xs text-muted-foreground">
-                  {allStudents.length} élève(s) affiché(s)
-                  {isTeacher && " · votre classe"}
-                  {isDirector && ` · ${directorSchoolName}`}
-                  {isAdmin && " · matricule fourni par le Ministère"}
+                  {waitingForSchool
+                    ? "Sélectionnez une école pour afficher les élèves"
+                    : `${allStudents.length} élève(s) affiché(s)`
+                      + (isTeacher ? " · votre classe" : "")
+                      + (isDirector ? ` · ${directorSchoolName}` : "")
+                      + (isAdmin ? " · matricule fourni par le Ministère" : "")}
                 </p>
               </div>
             </div>
@@ -251,10 +268,12 @@ export function StudentsView() {
                     }}
                   >
                     <SelectTrigger className="w-full overflow-hidden">
-                      <SelectValue placeholder="Toutes les écoles" />
+                      {/* Placeholder quand aucune école choisie (cascade stricte) */}
+                      <SelectValue placeholder="Choisir une école…" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Toutes les écoles</SelectItem>
+                      {/* Plus d'option "Toutes les écoles" — l'admin DOIT choisir
+                          une école précise (cascade stricte demandée par l'utilisateur). */}
                       {schools.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name}
@@ -277,7 +296,10 @@ export function StudentsView() {
                 </div>
               )}
 
-              {/* Filtre Classe (cascade selon école) */}
+              {/* Filtre Classe (cascade selon école) ===
+                  Désactivé tant qu'aucune école n'est sélectionnée (cascade
+                  stricte). Une fois l'école choisie, "Toutes les classes"
+                  reste disponible pour voir l'effectif complet (Option A). */}
               <div className="space-y-1.5 min-w-[160px] flex-1 max-w-[200px] min-w-0">
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <GraduationCap className="w-3 h-3" /> Classe
@@ -285,10 +307,16 @@ export function StudentsView() {
                 <Select
                   value={classFilter}
                   onValueChange={setClassFilter}
-                  disabled={classes.length === 0}
+                  disabled={!hasSchoolSelected || classes.length === 0}
                 >
                   <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Toutes les classes" />
+                    <SelectValue
+                      placeholder={
+                        hasSchoolSelected
+                          ? "Toutes les classes"
+                          : "Choisir une école d'abord"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Toutes les classes</SelectItem>
@@ -340,7 +368,24 @@ export function StudentsView() {
         </CardContent>
       </Card>
 
-      {filtered.length === 0 ? (
+      {/* === État vide selon le contexte ===
+          - admin sans école choisie : message "Sélectionnez une école"
+          - liste vide (école choisie mais 0 élève) : EmptyState avec bouton créer
+          - recherche sans résultat : message "Aucun élève ne correspond" */}
+      {waitingForSchool ? (
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="py-12 text-center">
+            <SchoolIcon className="w-8 h-8 mx-auto mb-3 text-primary/50" />
+            <p className="text-sm font-medium text-foreground">
+              Sélectionnez une école pour afficher les élèves
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Choisissez une école dans le filtre ci-dessus — la liste des
+              classes se mettra à jour automatiquement.
+            </p>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
         allStudents.length === 0 ? (
           <EmptyState onCreate={canEdit ? openCreate : undefined} />
         ) : (
