@@ -163,9 +163,10 @@ function getAvailableWidthForPrenoms(subjectCount: number): number {
 }
 
 // Estime la largeur d'affichage d'un texte (en mm) pour text-[10px].
-// Approximation : 1.6mm par caractère (moyenne pour police sans-serif 10px).
+// Approximation : 1.3mm par caractère (moyenne pour police sans-serif 10px,
+// calibré empiriquement pour que les prénoms CM2 tiennent sans abréviation).
 function estimateTextWidth(text: string): number {
-  return text.length * 1.6;
+  return text.length * 1.3;
 }
 
 // Abréviation progressive : initialise un prénom en "X." (première lettre + point).
