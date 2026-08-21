@@ -219,34 +219,14 @@ export function ResultsView() {
                   <FileText className="w-4 h-4 mr-1.5" />
                   Synthèse CM2
                 </Button>
-                {/* === Relevé de Notes (1 PDF par classe) ===
-                    Bouton activé uniquement si une classe précise est filtrée.
-                    Ouvre /releve?session_id=...&class_id=... dans un nouvel onglet.
-                    Le document est multi-pages A4 portrait avec en-tête institutionnel,
-                    tableau des élèves + notes par matière, stats G/F/T et signatures. */}
-                {classFilter !== "all" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      let token = "";
-                      try {
-                        const raw = localStorage.getItem("sygren-auth");
-                        if (raw) token = JSON.parse(raw)?.state?.token ?? "";
-                      } catch {}
-                      const url = `${window.location.origin}/releve?session_id=${autoSessionId}&class_id=${classFilter}&t=${encodeURIComponent(token)}`;
-                      window.open(url, "_blank");
-                    }}
-                  >
-                    <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-                    Relevé PDF
-                  </Button>
-                )}
-                {/* === Relevés PDF — Toutes les classes de la session (bulk) ===
+                {/* === Relevés PDF — Toutes les classes de la session ===
                     Ouvre /releve/batch?session_id=... dans un nouvel onglet.
-                    L'utilisateur peut imprimer un PDF par classe (iframes
-                    séquentiels + onafterprint). Visible dès qu'une session est
-                    sélectionnée (pas besoin de filtrer une classe précise). */}
+                    L'utilisateur sélectionne les classes (checkboxes) puis imprime :
+                    un PDF par classe (iframes séquentiels + onafterprint).
+                    Remplace l'ancien bouton "Relevé PDF" qui exigeait de filtrer
+                    une classe précise — la page batch gère le single ET le bulk
+                    (sélection d'1 seule classe possible). Visible dès qu'une
+                    session est sélectionnée (pas de classe à filtrer d'abord). */}
                 <Button
                   size="sm"
                   variant="outline"
@@ -261,7 +241,7 @@ export function ResultsView() {
                   }}
                 >
                   <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-                  Relevés (toutes classes)
+                  Relevés PDF
                 </Button>
               </div>
             )}

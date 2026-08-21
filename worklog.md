@@ -1955,3 +1955,32 @@ Stage Summary:
 - Déploiements finaux : Vercel ✅ READY (b0eafe57), Render ✅ live (6891587).
 - Auto-deploy Render a fonctionné pour les 2 commits (contrairement au push 59587d7 où il avait manqué — le webhook GitHub→Render semble maintenant stable).
 - Artifacts : screenshot-batch-page.png (gitignored).
+
+---
+Task ID: Releve-UX-Simplify-Single-Button
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Simplifier l'UX — supprimer le bouton "Relevé PDF" (qui exigeait de filtrer une classe) et garder uniquement "Relevés PDF" (page batch qui gère single + bulk).
+
+Work Log:
+- Constat utilisateur : la nouvelle page /releve/batch est supérieure à l'ancien bouton "Relevé PDF" car :
+  1. Pas besoin de filtrer une classe précise d'abord (visible dès qu'une session est sélectionnée).
+  2. Gère le single (sélection d'1 classe dans les checkboxes + Imprimer, OU lien "Aperçu") ET le bulk (toutes les classes).
+  3. L'ancien bouton "Relevé PDF" est donc redondant.
+- Suppression dans src/components/views/results-view.tsx :
+  * Retiré le bloc comment + `{classFilter !== "all" && (<Button>Relevé PDF</Button>)}` (23 lignes).
+  * Gardé le bouton bulk, renommé "Relevés (toutes classes)" → "Relevés PDF" (plus court, devenu le seul point d'entrée Relevé).
+  * Comment mis à jour pour expliquer le remplacement et la gestion single+bulk.
+- `classFilter` reste utilisé ailleurs (cascade de filtres + filtrage des résultats) — pas de variable inutilisée.
+
+Vérifications locales :
+- ESLint results-view.tsx → 0 erreur, 0 warning.
+- tsc --noEmit → EXIT 0.
+- Grep "Relev" → un seul bouton "Relevés PDF" (ligne 244), les autres occurrences sont dans le commentaire.
+
+Push + vérification déploiement :
+- (à compléter après vérification live)
+
+Stage Summary:
+- UX simplifiée : 1 bouton "Relevés PDF" au lieu de 2.
+- L'utilisateur n'a plus à filtrer une classe pour imprimer un Relevé — il clique "Relevés PDF" → la page batch liste toutes les classes → il sélectionne (1, quelques, ou toutes) → Imprimer.
+- Moins de friction, plus de flexibilité (single + bulk depuis le même point d'entrée).
