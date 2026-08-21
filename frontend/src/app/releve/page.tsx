@@ -430,10 +430,11 @@ export default function RelevePage() {
                       <th className="border border-black p-1">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
                           Quand il y a beaucoup de matières (CP = 9), on utilise
-                          une écriture diagonale (rotate -45°) pour garder la
-                          lisibilité tout en libérant de la largeur pour les
-                          prénoms. Les en-têtes de matières prennent moins de
-                          largeur horizontale car le texte est en biais. */}
+                          une écriture verticale (writing-mode) qui est plus
+                          fiable que transform:rotate pour l'impression.
+                          Le texte est lu de bas en haut, ce qui permet d'avoir
+                          des noms de matières complets et lisibles tout en
+                          ne prenant que ~22px de largeur par colonne. */}
                       {subjects.map((s, idx) => {
                         const isCompact = subjects.length > 6;
                         return (
@@ -441,28 +442,38 @@ export default function RelevePage() {
                             key={idx}
                             className={`border border-black p-0.5 text-center ${isEPS(s.name) ? "bg-yellow-300" : ""}`}
                             style={{
-                              minWidth: isCompact ? "24px" : "40px",
-                              maxWidth: isCompact ? "28px" : "50px",
-                              height: isCompact ? "60px" : "auto",
+                              minWidth: isCompact ? "22px" : "40px",
+                              maxWidth: isCompact ? "26px" : "50px",
+                              height: isCompact ? "70px" : "auto",
                               verticalAlign: "bottom",
                             }}
                           >
-                            <div
-                              style={isCompact ? {
-                                transform: "rotate(-45deg)",
-                                transformOrigin: "center",
-                                whiteSpace: "nowrap",
-                                fontSize: "9px",
-                                fontWeight: "bold",
-                                lineHeight: "1.2",
-                              } : {
-                                whiteSpace: "nowrap",
-                                fontSize: "9px",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              {s.display_name}
-                            </div>
+                            {isCompact ? (
+                              <div
+                                style={{
+                                  writingMode: "vertical-rl",
+                                  textOrientation: "mixed",
+                                  transform: "rotate(180deg)",
+                                  fontSize: "9px",
+                                  fontWeight: "bold",
+                                  lineHeight: "1.1",
+                                  whiteSpace: "nowrap",
+                                  letterSpacing: "0.2px",
+                                }}
+                              >
+                                {s.display_name}
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  whiteSpace: "nowrap",
+                                  fontSize: "9px",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                {s.display_name}
+                              </div>
+                            )}
                           </th>
                         );
                       })}
