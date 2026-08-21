@@ -287,6 +287,27 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, "erreur création session", http.StatusInternalServerError)
                 return
         }
+
+        // Examen Blanc : seul le CM2 passe l'Examen Blanc. On exempté
+        // automatiquement toutes les autres classes (CP1, CP2, CE1, CE2, CM1)
+        // pour qu'elles n'apparaissent pas dans les résultats ni la saisie.
+        if req.EvalType == "exam_blanc" {
+                var classes []models.Class
+                database.DB.Where("school_id = ? AND active = ? AND name != ?", req.SchoolID, true, "CM2").Find(&classes)
+                for _, c := range classes {
+                        exemption := models.SessionExemption{
+                                SessionID: session.ID,
+                                ClassID:   &c.ID,
+                                Level:     &c.Level,
+                                Reason:    "Examen Blanc réservé au CM2 — classe non concernée",
+                        }
+                        database.DB.Create(&exemption)
+                }
+                if len(classes) > 0 {
+                        log.Printf("[SESSION] Examen Blanc : %d classe(s) exemptée(s) automatiquement (CP1-CM1)", len(classes))
+                }
+        }
+
         jsonResponse(w, http.StatusCreated, session)
 }
 
@@ -481,6 +502,22 @@ func BulkCreateSessions(w http.ResponseWriter, r *http.Request) {
                         failed = append(failed, sch.Name)
                         continue
                 }
+
+                // Examen Blanc : exempter automatiquement les classes non-CM2
+                if req.EvalType == "exam_blanc" {
+                        var classes []models.Class
+                        database.DB.Where("school_id = ? AND active = ? AND name != ?", sch.ID, true, "CM2").Find(&classes)
+                        for _, c := range classes {
+                                exemption := models.SessionExemption{
+                                        SessionID: session.ID,
+                                        ClassID:   &c.ID,
+                                        Level:     &c.Level,
+                                        Reason:    "Examen Blanc réservé au CM2 — classe non concernée",
+                                }
+                                database.DB.Create(&exemption)
+                        }
+                }
+
                 created++
         }
 
