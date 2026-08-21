@@ -242,6 +242,10 @@
  * La dernière page n'a PAS la classe break-after-page → pas de page blanche.
  */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
   #releve-doc,
   #releve-doc * {
     visibility: visible !important;
