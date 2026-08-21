@@ -159,10 +159,11 @@ function getAvailableWidthForPrenoms(subjectCount: number): number {
   // Nouvelles largeurs fixes (px → mm à ~3.78px/mm) :
   // N°: 24px≈6mm, Matricule: 73px≈19mm, Nom: 60px≈16mm,
   // Total: 22px≈6mm, Moyenne: 22px≈6mm, Observat.: 22px≈6mm
-  // Total fixe = 6+19+16+6+6+6 = 59mm
-  // Matières compact: 22px≈6mm, normal: 40px≈11mm
+  // N°: 21px≈6mm, Matricule: 67px≈18mm, Nom: 52px≈14mm,
+  // Total: 22px≈6mm, Moyenne: 22px≈6mm, Observat.: 22px≈6mm
+  // Total fixe = 6+18+14+6+6+6 = 56mm
   const matiereWidth = subjectCount > 6 ? 6 : 11;
-  const fixedColumns = 59;
+  const fixedColumns = 56;
   const availableWidth = 194 - fixedColumns - subjectCount * matiereWidth;
   return Math.max(availableWidth, 20);
 }
@@ -426,9 +427,9 @@ export default function RelevePage() {
                 <table className="w-full border-collapse border border-black text-center text-[10px]">
                   <thead>
                     <tr className="bg-gray-50 font-bold">
-                      <th className="border border-black p-0.5 text-[9px]" style={{ minWidth: "20px", maxWidth: "28px" }}>N°</th>
-                      <th className="border border-black p-0.5 text-[8px] whitespace-nowrap" style={{ minWidth: "68px", maxWidth: "78px" }}>Matricule</th>
-                      <th className="border border-black p-0.5 text-[9px] whitespace-nowrap" style={{ minWidth: "50px", maxWidth: "70px" }}>Nom</th>
+                      <th className="border border-black p-0 text-[9px]" style={{ minWidth: "18px", maxWidth: "24px" }}>N°</th>
+                      <th className="border border-black p-0 text-[8px] whitespace-nowrap" style={{ minWidth: "62px", maxWidth: "72px" }}>Matricule</th>
+                      <th className="border border-black p-0 text-[9px] whitespace-nowrap" style={{ minWidth: "45px", maxWidth: "60px" }}>Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
                       <th className="border border-black p-0.5 text-[9px]">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
@@ -528,7 +529,7 @@ export default function RelevePage() {
                       const num = (isFirstPage ? 0 : PAGE_1_LIMIT + (pageIndex - 1) * OTHER_PAGE_LIMIT) + i + 1;
                       const isFille = e.gender === "F";
                       return (
-                        <tr key={num} className="h-5">
+                        <tr key={num} className="h-4">
                           <td className="border border-black p-0 font-semibold text-[9px]">{num}</td>
                           <td className="border border-black p-0 font-bold text-[8px] font-mono">{e.matricule}</td>
                           <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[9px] ${isFille ? 'text-red-600' : ''}`}>
