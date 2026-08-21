@@ -168,7 +168,7 @@ function getAvailableWidthForPrenoms(subjectCount: number): number {
   return Math.max(availableWidth, 20);
 }
 
-// Estime la largeur d'affichage d'un texte (en mm) pour text-[12px].
+// Estime la largeur d'affichage d'un texte (en mm) pour text-[11px].
 // Calibration : 1.1mm par caractère (compact pour CP, suffit pour CM).
 function estimateTextWidth(text: string): number {
   return text.length * 1.1;
@@ -367,7 +367,7 @@ export default function RelevePage() {
                   <div>
                     <div className="flex justify-between items-start">
                       {/* Inspection Gauche */}
-                      <div className="text-left space-y-0.5 text-[12px]">
+                      <div className="text-left space-y-0.5 text-[11px]">
                         <p className="font-semibold">Ministère de l&apos;Education Nationale</p>
                         <p className="font-semibold">Et de l&apos;Alphabétisation</p>
                         <p className="italic">Direction Régionale de {data.iep_region}</p>
@@ -390,7 +390,7 @@ export default function RelevePage() {
                       {/* Armoiries Droite */}
                       <div className="flex flex-col items-center text-center min-w-[200px]">
                         <p className="font-semibold text-xs">République de Côte d&apos;Ivoire</p>
-                        <p className="italic text-[12px] tracking-wide">Union-Discipline-Travail</p>
+                        <p className="italic text-[11px] tracking-wide">Union-Discipline-Travail</p>
                         <img
                           src="/ci-coat-of-arms.png"
                           alt="Armoiries Côte d'Ivoire"
@@ -409,7 +409,7 @@ export default function RelevePage() {
                         <div>CODE : {data.school_code}</div>
                       </div>
                       {/* Bloc droit : G/F/T + Date (alignés à droite, même hauteur que ÉCOLE) */}
-                      <div className="text-right text-[12px]">
+                      <div className="text-right text-[11px]">
                         <p className="tracking-widest">G {data.total_g} &nbsp; F {data.total_f} &nbsp; T {data.total_t}</p>
                         <p>Date: {data.date}</p>
                       </div>
@@ -417,21 +417,21 @@ export default function RelevePage() {
                   </div>
                 ) : (
                   /* Rappel de titre discret sur les pages suivantes */
-                  <div className="flex justify-between items-center border-b border-black pb-1 mb-3 text-[12px] font-bold">
+                  <div className="flex justify-between items-center border-b border-black pb-1 mb-3 text-[11px] font-bold">
                     <span>{data.school_name} — {data.title}</span>
                     <span>Page {pageIndex + 1} / {pages.length}</span>
                   </div>
                 )}
 
                 {/* === 3. TABLEAU DES NOTES (Colonnes dynamiques, sans barème) === */}
-                <table className="w-full border-collapse border border-black text-center text-[12px]">
+                <table className="w-full border-collapse border border-black text-center text-[11px]">
                   <thead>
                     <tr className="bg-gray-50 font-bold">
-                      <th className="border border-black p-0 text-[12px]" style={{ minWidth: "18px", maxWidth: "24px" }}>N°</th>
-                      <th className="border border-black p-0 text-[12px] whitespace-nowrap" style={{ minWidth: "65px", maxWidth: "75px" }}>Matricule</th>
-                      <th className="border border-black p-0 text-[12px] whitespace-nowrap" style={{ minWidth: "48px", maxWidth: "65px" }}>Nom</th>
+                      <th className="border border-black p-0 text-[11px]" style={{ minWidth: "18px", maxWidth: "24px" }}>N°</th>
+                      <th className="border border-black p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "65px", maxWidth: "75px" }}>Matricule</th>
+                      <th className="border border-black p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "48px", maxWidth: "65px" }}>Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
-                      <th className="border border-black p-0.5 text-[12px]">Prénoms</th>
+                      <th className="border border-black p-0.5 text-[11px]">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
                           Quand il y a beaucoup de matières (CP = 9), on utilise
                           une écriture verticale (writing-mode) qui est plus
@@ -457,7 +457,7 @@ export default function RelevePage() {
                                 style={{
                                   writingMode: "vertical-rl",
                                   textOrientation: "mixed",
-                                  fontSize: "11px",
+                                  fontSize: "9px",
                                   fontWeight: "bold",
                                   lineHeight: "1.1",
                                   whiteSpace: "nowrap",
@@ -471,7 +471,7 @@ export default function RelevePage() {
                               <div
                                 style={{
                                   whiteSpace: "nowrap",
-                                  fontSize: "11px",
+                                  fontSize: "9px",
                                   fontWeight: "bold",
                                 }}
                               >
@@ -499,7 +499,7 @@ export default function RelevePage() {
                               style={{
                                 writingMode: "vertical-rl",
                                 textOrientation: "mixed",
-                                fontSize: "11px",
+                                fontSize: "9px",
                                 fontWeight: "bold",
                                 lineHeight: "1",
                                 whiteSpace: "nowrap",
@@ -513,7 +513,7 @@ export default function RelevePage() {
                             <div
                               style={{
                                 whiteSpace: "nowrap",
-                                fontSize: "11px",
+                                fontSize: "9px",
                                 fontWeight: "bold",
                               }}
                             >
@@ -530,12 +530,12 @@ export default function RelevePage() {
                       const isFille = e.gender === "F";
                       return (
                         <tr key={num} className="h-4">
-                          <td className="border border-black p-0 font-semibold text-[12px]">{num}</td>
-                          <td className="border border-black p-0 font-bold text-[12px] font-mono">{e.matricule}</td>
-                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[12px] ${isFille ? 'text-red-600' : ''}`}>
+                          <td className="border border-black p-0 font-semibold text-[11px]">{num}</td>
+                          <td className="border border-black p-0 font-bold text-[11px] font-mono">{e.matricule}</td>
+                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
                             {e.last_name.toUpperCase()}
                           </td>
-                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[12px] ${isFille ? 'text-red-600' : ''}`}>
+                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
                             {smartAbbreviate(e.first_name, prenomWidth).toUpperCase()}
                           </td>
                           {subjects.map((subj, idx) => {
@@ -544,19 +544,19 @@ export default function RelevePage() {
                             return (
                               <td
                                 key={idx}
-                                className={`border border-black p-0 text-[12px] ${isEPS(subj.name) ? "bg-yellow-200 font-bold" : ""}`}
+                                className={`border border-black p-0 text-[11px] ${isEPS(subj.name) ? "bg-yellow-200 font-bold" : ""}`}
                               >
                                 {val}
                               </td>
                             );
                           })}
-                          <td className="border border-black p-0 font-bold text-[12px]">
+                          <td className="border border-black p-0 font-bold text-[11px]">
                             {e.has_average ? fmt(e.total, true) : "—"}
                           </td>
-                          <td className="border border-black p-0 font-bold text-[12px]">
+                          <td className="border border-black p-0 font-bold text-[11px]">
                             {e.has_average ? fmt(e.average, true) : "—"}
                           </td>
-                          <td className="border border-black p-0 font-bold text-[12px]">{e.observation}</td>
+                          <td className="border border-black p-0 font-bold text-[11px]">{e.observation}</td>
                         </tr>
                       );
                     })}
@@ -572,7 +572,7 @@ export default function RelevePage() {
                   {/* === Bloc Statistiques compact === */}
                   <div className="border-2 border-black rounded-lg overflow-hidden">
                     {/* En-tête avec images garçon/fille */}
-                    <div className="grid grid-cols-4 bg-white text-[12px] font-bold border-b-2 border-black">
+                    <div className="grid grid-cols-4 bg-white text-[11px] font-bold border-b-2 border-black">
                       <div className="px-1 py-0.5 text-left"></div>
                       <div className="px-1 py-0.5 flex items-center justify-center gap-0.5">
                         <img src="/homme.webp" alt="G" className="w-3 h-3 object-contain" />
@@ -589,7 +589,7 @@ export default function RelevePage() {
                     </div>
 
                     {/* Ligne Inscrits */}
-                    <div className="grid grid-cols-4 text-[12px] border-b border-gray-300 bg-gray-50">
+                    <div className="grid grid-cols-4 text-[11px] border-b border-gray-300 bg-gray-50">
                       <div className="px-1 py-0.5 text-left font-bold">Inscrits</div>
                       <div className="px-1 py-0.5 text-center text-blue-700 font-bold">{stats.inscrits_g}</div>
                       <div className="px-1 py-0.5 text-center text-red-600 font-bold">{stats.inscrits_f}</div>
@@ -597,7 +597,7 @@ export default function RelevePage() {
                     </div>
 
                     {/* Ligne Présents */}
-                    <div className="grid grid-cols-4 text-[12px] border-b border-gray-300 bg-gray-50">
+                    <div className="grid grid-cols-4 text-[11px] border-b border-gray-300 bg-gray-50">
                       <div className="px-1 py-0.5 text-left font-bold">Présents</div>
                       <div className="px-1 py-0.5 text-center text-blue-700 font-bold">{stats.presents_g}</div>
                       <div className="px-1 py-0.5 text-center text-red-600 font-bold">{stats.presents_f}</div>
@@ -605,7 +605,7 @@ export default function RelevePage() {
                     </div>
 
                     {/* Ligne Admis — vert */}
-                    <div className="grid grid-cols-4 text-[12px] border-b border-gray-300 bg-emerald-50">
+                    <div className="grid grid-cols-4 text-[11px] border-b border-gray-300 bg-emerald-50">
                       <div className="px-1 py-0.5 text-left font-bold flex items-center gap-0.5">
                         <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                         Admis
@@ -616,7 +616,7 @@ export default function RelevePage() {
                     </div>
 
                     {/* Ligne % par genre */}
-                    <div className="grid grid-cols-4 text-[12px] bg-gray-100">
+                    <div className="grid grid-cols-4 text-[11px] bg-gray-100">
                       <div className="px-1 py-0.5 text-left font-bold flex items-center gap-0.5">
                         <TrendingUp className="w-2.5 h-2.5 text-gray-500" />
                         % Admis
@@ -629,7 +629,7 @@ export default function RelevePage() {
                     {/* Barre de progression + % total */}
                     <div className="bg-white px-2 py-1 border-t-2 border-gray-800">
                       <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[12px] font-bold text-gray-700 flex items-center gap-0.5">
+                        <span className="text-[11px] font-bold text-gray-700 flex items-center gap-0.5">
                           <Award className="w-3 h-3 text-amber-500" />
                           Taux de Réussite
                         </span>
@@ -661,18 +661,18 @@ export default function RelevePage() {
 
                   {/* Bloc Directeur compact */}
                   <div className="border-2 border-black rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
-                    <span className="underline uppercase text-[12px]">Le Directeur</span>
+                    <span className="underline uppercase text-[11px]">Le Directeur</span>
                     <div className="flex-grow"></div>
-                    <span className="uppercase text-[12px] tracking-wide">
+                    <span className="uppercase text-[11px] tracking-wide">
                       {data.director_name || "................................"}
                     </span>
                   </div>
 
                   {/* Bloc Inspecteur compact */}
                   <div className="border-2 border-black rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
-                    <span className="underline uppercase text-[12px]">L&apos;Inspecteur</span>
+                    <span className="underline uppercase text-[11px]">L&apos;Inspecteur</span>
                     <div className="flex-grow"></div>
-                    <span className="uppercase text-[12px] tracking-wide">
+                    <span className="uppercase text-[11px] tracking-wide">
                       {data.inspector_name || "................................"}
                     </span>
                   </div>
