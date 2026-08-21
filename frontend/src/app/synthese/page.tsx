@@ -142,7 +142,7 @@ export default function SynthesePage() {
   }
 
   const fmt = (v: number) => (v > 0 ? String(v) : "—");
-  const fmtPct = (v: number) => (v > 0 ? v.toFixed(2) : "—");
+  const fmtPct = (v: number) => (v > 0 ? (Math.round(v * 100) / 100).toString() : "—");
 
   // CLASS_NAMES dynamique : dérivé de la réponse du backend (data.levels)
   // plutôt que codé en dur, pour s'adapter au périmètre du document.

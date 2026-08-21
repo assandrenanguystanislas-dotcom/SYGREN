@@ -87,7 +87,7 @@ export function SyntheseDocument({
   }
 
   const fmt = (v: number) => v > 0 ? String(v) : "—";
-  const fmtPct = (v: number) => v > 0 ? v.toFixed(2) : "—";
+  const fmtPct = (v: number) => v > 0 ? (Math.round(v * 100) / 100).toString() : "—";
 
   // CLASS_NAMES dynamique : dérivé de la réponse du backend (data.levels).
   // On garde l'ordre canonique (CP1, CP2, CE1, CE2, CM1, CM2) même si le
