@@ -1725,3 +1725,42 @@ Stage Summary:
 - Fix minimal et ciblé : 2 occurrences `verticalAlign: "bottom"` → `"middle"` + 2 `margin: auto` sur les div verticaux.
 - Concerne UNIQUEMENT le mode compact (CP = >6 matières). Le mode horizontal (CM) n'est pas touché.
 - Le texte vertical des en-têtes matières et Total/Moy./Obs. est désormais centré verticalement dans la cellule ET horizontalement dans la colonne.
+
+---
+Task ID: Releve-Vertical-Center-CP-Verification
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Vérification E2E live du fix de centrage vertical des en-têtes du Relevé PDF pour classe CP, après push + deploys Vercel (READY) + Render (live) pour sha 59587d7.
+
+Work Log:
+- Push GitHub : 71f420e..59587d7 main -> main (auteur assandrenanguystanislas <assandrenanguystanislas@gmail.com>, après configuration `gh auth setup-git` du credential helper global — le 1er push HTTPS avait échoué "could not read Username").
+- Déploiement Vercel : auto-déployé depuis le push GitHub. Deploy `dpl_G8JCNZ38FsseF7KUpyjfdMLNPnrH` créé pour sha 59587d7, state=READY, readySubstate=PROMOTED (production). URL preview = sygren-b174u2xpk-assandrenanguy.vercel.app.
+- Déploiement Render : auto-deploy GitHub→Render n'a PAS tiré pour ce push (webhook possiblement manqué — constaté sur l'historique : les deploys précédents étaient `trigger=new_commit` mais celui-ci n'a pas déclenché). Trigger manuel via POST /v1/services/{id}/deploys → deploy `dep-da4dbqjtqb8s73cpvle0` créé pour sha 59587d70, status=live en ~40s (build_in_progress 10s + update_in_progress 20s + live). Backend inchangé (seul frontend modifié) mais rebuild confirme la chaîne.
+- Vérification E2E via API backend live (https://sygren.onrender.com) :
+  * Login admin@sygren.ci → 200 + JWT (signé nouveau secret prod).
+  * GET /api/classes → 194 classes CP (level=CP, name=CP1/CP2).
+  * GET /api/sessions → 2 sessions validated (EPP COTIERE PALMERAIE, composition #1 et #2).
+  * Test case retenu : CP1 `19c81f9b-05ad-4baf-b91c-3eeb676beafd` (5 élèves) + session `57b954e3-ccc8-42bd-bcd6-cfc4ba704163` (composition #2, 12/2026, validated).
+  * GET /api/reports/releve-data?session_id=...&class_id=... → 200, données complètes :
+    - class_level="CP", class_name="CP1", school="EPP COTIERE PALMERAIE"
+    - title="RELEVE DE NOTES CP1", type_examen="COMPOSITION N°2"
+    - 5 élèves (Bamba, Coulibaly, Diabaté, Koné, Traoré) avec 9 matières chacun (Copie, Dessin, Dictée, EDHC, Ecriture, Expression Ecrites, Lecture, Mathématiques, Poesie & Chant)
+    - max_score=10 (échelle CP/CE), observations "A" (Admis), averages 5.19 à 9.01
+    - stats : 3G + 2F = 5 admis (100%)
+- Vérification visuelle via Agent Browser (agent-browser 0.32.3, viewport A4 portrait 794x1123) :
+  * URL : https://sygren.vercel.app/releve?session_id=...&class_id=...&t=<JWT>
+    (le param `t` injecte le token Bearer directement, cf. page.tsx lignes 242-250)
+  * Page chargée sans erreur console, network idle atteint, title="SYGREN — Gestion de Relevé Électronique de Note".
+  * Capture plein écran / capture viewport / PDF généré (691K) — artifacts sauvés dans screenshot-releve-cp-*.png (gitignored via /screenshot-*.png) et /tmp/releve_cp_artifact.pdf (hors repo car .pdf non couvert par le gitignore).
+- Vérification DOM (computed styles) :
+  * Les 12 cellules d'en-tête du thead (9 matières + Total/Moy./Obs.) ont toutes `verticalAlign: "middle"` ✓ (vs "bottom" avant le fix).
+  * Dimensions : cellules matières 26×50px (mode compact >6 matières), Total/Moy./Obs. 26-30×50px.
+  * Centrage HORIZONTAL confirmé : les divs verticaux ont `margin: 0px 5.547px` (margin:auto → 5.547px de chaque côté), largeur div=10px centrée dans cellule th=26px. (10 + 2×5.547 = 21.09 + padding ≈ 26 ✓).
+  * Centrage VERTICAL confirmé : verticalAlign=middle sur le th centre le div de 10px (largeur inline du texte vertical) dans la cellule de 50px de haut.
+
+Stage Summary:
+- Fix VALIDÉ E2E sur le live Vercel pour une classe CP réelle (CP1 EPP COTIERE PALMERAIE, 5 élèves, 9 matières, composition #2).
+- Les en-têtes matières (Copie, Dessin, Dictée, EDHC, Ecrit., Exp. écr., Lect., Maths, Chant) ET les en-têtes summary (Total/Moy./Obs.) sont désormais CENTRÉS verticalement (cellule 50px) ET horizontalement (colonne 26px) en mode vertical CP.
+- Aucun impact sur le mode horizontal CM (non-compact, ≤6 matières) — non touché par le fix.
+- Déploiements finaux : Vercel ✅ READY (dpl_G8JCNZ38Fss..., sha 59587d7), Render ✅ live (dep-da4dbqjtqb8s73cpvle0, sha 59587d7).
+- Limite constatée : l'auto-deploy Render GitHub→Render n'a pas tiré pour ce push (webhook manqué). Trigger manuel utilisé en fallback. À surveiller sur les prochains pushs — si récurrent, il faudra vérifier le webhook GitHub→Render dans le dashboard Render (Settings → Webhook).
+- Artifacts : screenshot-releve-cp-full.png, screenshot-releve-cp-p1.png, screenshot-releve-cp-table.png (gitignored), /tmp/releve_cp_artifact.pdf (PDF généré 691K, hors repo).
