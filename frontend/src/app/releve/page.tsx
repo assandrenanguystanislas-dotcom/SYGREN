@@ -156,10 +156,12 @@ function abbreviateSubject(name: string): string {
 // Colonnes matières : subjectCount × (8mm si >6 matières, sinon 12mm).
 // Reste pour Prénoms = 194 - 70 - (subjectCount × matiereWidth).
 function getAvailableWidthForPrenoms(subjectCount: number): number {
-  const matiereWidth = subjectCount > 6 ? 8 : 12; // mm par colonne matière
+  // En mode compact (CP, >6 matières), les en-têtes diagonaux prennent
+  // ~6mm de largeur (au lieu de 8mm) car le texte est en biais.
+  const matiereWidth = subjectCount > 6 ? 6 : 12;
   const fixedColumns = 70; // mm (N° + Matricule + Nom + Total + Moy + Obs)
   const availableWidth = 194 - fixedColumns - subjectCount * matiereWidth;
-  return Math.max(availableWidth, 20); // minimum 20mm
+  return Math.max(availableWidth, 20);
 }
 
 // Estime la largeur d'affichage d'un texte (en mm) pour text-[9px].
@@ -427,20 +429,46 @@ export default function RelevePage() {
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
                       <th className="border border-black p-1">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
-                          CP (9 matières) : w-8 + text-[7px] pour libérer
-                          maximum d'espace aux prénoms.
-                          CM (5 matières) : w-12 + text-[9px] normal. */}
-                      {subjects.map((s, idx) => (
-                        <th
-                          key={idx}
-                          className={`border border-black p-0.5 whitespace-nowrap ${isEPS(s.name) ? "w-8 bg-yellow-300" : subjects.length > 6 ? "w-8" : "w-12"} ${subjects.length > 6 ? "text-[7px]" : "text-[9px]"}`}
-                        >
-                          {s.display_name}
-                        </th>
-                      ))}
-                      <th className="border border-black p-0.5 w-8 text-[9px]">Total</th>
-                      <th className="border border-black p-0.5 w-7 text-[9px]">Moy</th>
-                      <th className="border border-black p-0.5 w-6 text-[9px]">Obs</th>
+                          Quand il y a beaucoup de matières (CP = 9), on utilise
+                          une écriture diagonale (rotate -45°) pour garder la
+                          lisibilité tout en libérant de la largeur pour les
+                          prénoms. Les en-têtes de matières prennent moins de
+                          largeur horizontale car le texte est en biais. */}
+                      {subjects.map((s, idx) => {
+                        const isCompact = subjects.length > 6;
+                        return (
+                          <th
+                            key={idx}
+                            className={`border border-black p-0.5 text-center ${isEPS(s.name) ? "bg-yellow-300" : ""}`}
+                            style={{
+                              minWidth: isCompact ? "24px" : "40px",
+                              maxWidth: isCompact ? "28px" : "50px",
+                              height: isCompact ? "60px" : "auto",
+                              verticalAlign: "bottom",
+                            }}
+                          >
+                            <div
+                              style={isCompact ? {
+                                transform: "rotate(-45deg)",
+                                transformOrigin: "center",
+                                whiteSpace: "nowrap",
+                                fontSize: "9px",
+                                fontWeight: "bold",
+                                lineHeight: "1.2",
+                              } : {
+                                whiteSpace: "nowrap",
+                                fontSize: "9px",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {s.display_name}
+                            </div>
+                          </th>
+                        );
+                      })}
+                      <th className="border border-black p-0.5 text-[9px]">Total</th>
+                      <th className="border border-black p-0.5 text-[9px]">Moy</th>
+                      <th className="border border-black p-0.5 text-[9px]">Obs</th>
                     </tr>
                   </thead>
                   <tbody>
