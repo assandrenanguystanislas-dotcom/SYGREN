@@ -584,8 +584,8 @@ export default function RelevePage() {
                     </div>
                   </div>
 
-                  {/* Bloc Directeur */}
-                  <div className="border border-black p-2 flex flex-col justify-between min-h-[120px]">
+                  {/* Bloc Directeur — même bordure que le bloc stats */}
+                  <div className="border-2 border-black rounded-lg p-2 flex flex-col justify-between min-h-[120px]">
                     <span className="underline uppercase text-[11px]">Le Directeur</span>
                     <div className="flex-grow"></div>
                     <span className="uppercase text-[11px] tracking-wide">
@@ -593,8 +593,8 @@ export default function RelevePage() {
                     </span>
                   </div>
 
-                  {/* Bloc Inspecteur */}
-                  <div className="border border-black p-2 flex flex-col justify-between min-h-[120px]">
+                  {/* Bloc Inspecteur — même bordure que le bloc stats */}
+                  <div className="border-2 border-black rounded-lg p-2 flex flex-col justify-between min-h-[120px]">
                     <span className="underline uppercase text-[11px]">L&apos;Inspecteur</span>
                     <div className="flex-grow"></div>
                     <span className="uppercase text-[11px] tracking-wide">
