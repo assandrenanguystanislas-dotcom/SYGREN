@@ -151,22 +151,21 @@ function abbreviateSubject(name: string): string {
 //   4. Sinon → abréger progressivement : 4ème+, puis 3ème+, puis 2ème+
 
 // Largeur disponible pour la colonne Prénoms (en mm, pour A4 portrait 210mm).
-// Contenu utile = 210 - 2×6mm (padding) = 198mm.
-// Colonnes fixes : N°(8) + Matricule(22) + Nom(24) + Total(12) + Moy(10) + Obs(8) = 84mm.
-// Colonnes matières : subjectCount × (10mm si >6 matières, sinon 14mm).
-// Reste pour Prénoms = 198 - 84 - (subjectCount × matiereWidth).
+// Contenu utile = 210 - 2×8mm (@page margin) = 194mm.
+// Colonnes fixes : N°(6) + Matricule(20) + Nom(20) + Total(10) + Moy(8) + Obs(6) = 70mm.
+// Colonnes matières : subjectCount × (8mm si >6 matières, sinon 12mm).
+// Reste pour Prénoms = 194 - 70 - (subjectCount × matiereWidth).
 function getAvailableWidthForPrenoms(subjectCount: number): number {
-  const matiereWidth = subjectCount > 6 ? 10 : 14; // mm par colonne matière
-  const fixedColumns = 84; // mm (N° + Matricule + Nom + Total + Moy + Obs)
-  const availableWidth = 198 - fixedColumns - subjectCount * matiereWidth;
-  return Math.max(availableWidth, 25); // minimum 25mm pour la lisibilité
+  const matiereWidth = subjectCount > 6 ? 8 : 12; // mm par colonne matière
+  const fixedColumns = 70; // mm (N° + Matricule + Nom + Total + Moy + Obs)
+  const availableWidth = 194 - fixedColumns - subjectCount * matiereWidth;
+  return Math.max(availableWidth, 20); // minimum 20mm
 }
 
-// Estime la largeur d'affichage d'un texte (en mm) pour text-[10px].
-// Approximation : 1.3mm par caractère (moyenne pour police sans-serif 10px,
-// calibré empiriquement pour que les prénoms CM2 tiennent sans abréviation).
+// Estime la largeur d'affichage d'un texte (en mm) pour text-[9px].
+// Calibration : 1.1mm par caractère (compact pour CP, suffit pour CM).
 function estimateTextWidth(text: string): number {
-  return text.length * 1.3;
+  return text.length * 1.1;
 }
 
 // Abréviation progressive : initialise un prénom en "X." (première lettre + point).
@@ -422,26 +421,26 @@ export default function RelevePage() {
                 <table className="w-full border-collapse border border-black text-center text-[10px]">
                   <thead>
                     <tr className="bg-gray-50 font-bold">
-                      <th className="border border-black p-1 w-6">N°</th>
-                      <th className="border border-black p-1 w-20">Matricule</th>
-                      <th className="border border-black p-1 w-24">Nom</th>
+                      <th className="border border-black p-0.5 w-5 text-[9px]">N°</th>
+                      <th className="border border-black p-0.5 w-16 text-[9px]">Matricule</th>
+                      <th className="border border-black p-0.5 w-20 text-[9px]">Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
                       <th className="border border-black p-1">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
-                          Quand il y a beaucoup de matières (CP = 9), on
-                          compacte davantage avec w-10 et text-[8px] pour
-                          libérer de la place pour les prénoms sur une ligne. */}
+                          CP (9 matières) : w-8 + text-[7px] pour libérer
+                          maximum d'espace aux prénoms.
+                          CM (5 matières) : w-12 + text-[9px] normal. */}
                       {subjects.map((s, idx) => (
                         <th
                           key={idx}
-                          className={`border border-black p-0.5 whitespace-nowrap ${isEPS(s.name) ? "w-10 bg-yellow-300" : subjects.length > 6 ? "w-10" : "w-14"} ${subjects.length > 6 ? "text-[8px]" : "text-[9px]"}`}
+                          className={`border border-black p-0.5 whitespace-nowrap ${isEPS(s.name) ? "w-8 bg-yellow-300" : subjects.length > 6 ? "w-8" : "w-12"} ${subjects.length > 6 ? "text-[7px]" : "text-[9px]"}`}
                         >
                           {s.display_name}
                         </th>
                       ))}
-                      <th className="border border-black p-0.5 w-10 text-[9px]">Total</th>
-                      <th className="border border-black p-0.5 w-8 text-[9px]">Moy</th>
-                      <th className="border border-black p-0.5 w-7 text-[9px]">Obs</th>
+                      <th className="border border-black p-0.5 w-8 text-[9px]">Total</th>
+                      <th className="border border-black p-0.5 w-7 text-[9px]">Moy</th>
+                      <th className="border border-black p-0.5 w-6 text-[9px]">Obs</th>
                     </tr>
                   </thead>
                   <tbody>
