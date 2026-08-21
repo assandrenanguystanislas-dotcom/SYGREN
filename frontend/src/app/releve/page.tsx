@@ -156,10 +156,13 @@ function abbreviateSubject(name: string): string {
 // Colonnes matières : subjectCount × (8mm si >6 matières, sinon 12mm).
 // Reste pour Prénoms = 194 - 70 - (subjectCount × matiereWidth).
 function getAvailableWidthForPrenoms(subjectCount: number): number {
-  // En mode compact (CP, >6 matières), les en-têtes diagonaux prennent
-  // ~6mm de largeur (au lieu de 8mm) car le texte est en biais.
-  const matiereWidth = subjectCount > 6 ? 6 : 12;
-  const fixedColumns = 70; // mm (N° + Matricule + Nom + Total + Moy + Obs)
+  // Nouvelles largeurs fixes (px → mm à ~3.78px/mm) :
+  // N°: 24px≈6mm, Matricule: 73px≈19mm, Nom: 60px≈16mm,
+  // Total: 22px≈6mm, Moyenne: 22px≈6mm, Observat.: 22px≈6mm
+  // Total fixe = 6+19+16+6+6+6 = 59mm
+  // Matières compact: 22px≈6mm, normal: 40px≈11mm
+  const matiereWidth = subjectCount > 6 ? 6 : 11;
+  const fixedColumns = 59;
   const availableWidth = 194 - fixedColumns - subjectCount * matiereWidth;
   return Math.max(availableWidth, 20);
 }
@@ -423,9 +426,9 @@ export default function RelevePage() {
                 <table className="w-full border-collapse border border-black text-center text-[10px]">
                   <thead>
                     <tr className="bg-gray-50 font-bold">
-                      <th className="border border-black p-0.5 w-6 text-[9px]">N°</th>
-                      <th className="border border-black p-0.5 text-[9px] whitespace-nowrap" style={{ minWidth: "90px" }}>Matricule</th>
-                      <th className="border border-black p-0.5 text-[9px] whitespace-nowrap" style={{ minWidth: "55px" }}>Nom</th>
+                      <th className="border border-black p-0.5 text-[9px]" style={{ minWidth: "20px", maxWidth: "28px" }}>N°</th>
+                      <th className="border border-black p-0.5 text-[8px] whitespace-nowrap" style={{ minWidth: "68px", maxWidth: "78px" }}>Matricule</th>
+                      <th className="border border-black p-0.5 text-[9px] whitespace-nowrap" style={{ minWidth: "50px", maxWidth: "70px" }}>Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
                       <th className="border border-black p-0.5 text-[9px]">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
@@ -525,13 +528,13 @@ export default function RelevePage() {
                       const num = (isFirstPage ? 0 : PAGE_1_LIMIT + (pageIndex - 1) * OTHER_PAGE_LIMIT) + i + 1;
                       const isFille = e.gender === "F";
                       return (
-                        <tr key={num} className="h-6">
-                          <td className="border border-black font-semibold">{num}</td>
-                          <td className="border border-black font-bold">{e.matricule}</td>
-                          <td className={`border border-black text-left px-1 font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px] ${isFille ? 'text-red-600' : ''}`}>
+                        <tr key={num} className="h-5">
+                          <td className="border border-black p-0 font-semibold text-[9px]">{num}</td>
+                          <td className="border border-black p-0 font-bold text-[8px] font-mono">{e.matricule}</td>
+                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[9px] ${isFille ? 'text-red-600' : ''}`}>
                             {e.last_name}
                           </td>
-                          <td className={`border border-black text-left px-1 font-bold whitespace-nowrap overflow-hidden text-ellipsis ${isFille ? 'text-red-600' : ''}`}>
+                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[9px] ${isFille ? 'text-red-600' : ''}`}>
                             {smartAbbreviate(e.first_name, prenomWidth)}
                           </td>
                           {subjects.map((subj, idx) => {
@@ -540,19 +543,19 @@ export default function RelevePage() {
                             return (
                               <td
                                 key={idx}
-                                className={`border border-black ${isEPS(subj.name) ? "bg-yellow-200 font-bold" : ""}`}
+                                className={`border border-black p-0 text-[9px] ${isEPS(subj.name) ? "bg-yellow-200 font-bold" : ""}`}
                               >
                                 {val}
                               </td>
                             );
                           })}
-                          <td className="border border-black font-bold">
+                          <td className="border border-black p-0 font-bold text-[9px]">
                             {e.has_average ? fmt(e.total, true) : "—"}
                           </td>
-                          <td className="border border-black font-bold">
+                          <td className="border border-black p-0 font-bold text-[9px]">
                             {e.has_average ? fmt(e.average, true) : "—"}
                           </td>
-                          <td className="border border-black font-bold">{e.observation}</td>
+                          <td className="border border-black p-0 font-bold text-[9px]">{e.observation}</td>
                         </tr>
                       );
                     })}
