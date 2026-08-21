@@ -1808,3 +1808,50 @@ Stage Summary:
 - Num = rang pour le mérite (1 = meilleur élève), Num = position alpha pour CM2.
 - Cas edge gérés : élèves sans note repoussés en fin (HasAverage=false), ex-aequo départagés alphabétiquement.
 - Aucun changement frontend requis (le frontend affiche déjà `num` tel quel).
+
+---
+Task ID: Releve-Ranking-Verification
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Vérification E2E live du classement par mérite (CP1→CM1) vs alphabétique (CM2) après push sha c902646c.
+
+Work Log:
+- Push GitHub : 2 commits (bad97de5 = feat tri + c902646c = style gofmt normalize tabs). Le 1er commit avait converti tabs→espaces (effet de bord de l'éditeur), gofmt a tout normalisé en tabs (convention Go). Build local OK post-gofmt.
+- Déploiement Vercel : auto-déployé depuis GitHub pour c902646c, state=READY (immédiat, frontend non touché par ce commit mais rebuild quand même).
+- Déploiement Render : AUTO-DEPLOY GitHub→Render a BIEN tiré cette fois (trigger=new_commit, contrairement au push précédent 59587d7). Deploy c902646c : update_in_progress → live en ~20s. Backend /api/health 200 OK.
+
+Tests E2E (3 classes, session 57b954e3 composition #2 validated, école EPP COTIERE PALMERAIE) :
+
+TEST 1 — CM1 `f3f2ecd4-3cf7-4d56-8ff1-2b0bbad8cb55` (5 élèves, level=CM) — RÈGLE MÉRITE :
+  Num=1 Coulibaly avg=18.25  ← moyenne la + haute = rang 1 ✓
+  Num=2 Bamba     avg=17.25
+  Num=3 Traoré    avg=15.25
+  Num=4 Diabaté   avg=14.3
+  Num=5 Koné      avg=11.6   ← moyenne la + basse = rang 5
+  → Tri par average DESC confirmé. Les noms (Coulibaly, Bamba, Traoré, Diabaté, Koné) ne sont PAS alphabétiques → tri par mérite et non alpha.
+
+TEST 2 — CM2 `2966ef61-90e7-407b-975d-fdaa236b282c` (5 élèves, level=CM) — RÈGLE ALPHABÉTIQUE :
+  Num=1 Camara   (avg=0, obs=R — pas de note saisie)
+  Num=2 Cissé
+  Num=3 Doumbia
+  Num=4 Sangaré
+  Num=5 Touré
+  → Tri alphabétique par last_name confirmé (C<C<D<S<T). CM2 correctement ignoré par le tri mérite (if normalizedName != "CM2").
+
+TEST 3 — CP1 `19c81f9b-05ad-4baf-b91c-3eeb676beafd` (5 élèves, level=CP, scale=10) — RÈGLE MÉRITE :
+  AVANT le fix (mesuré plus tôt) :           APRÈS le fix :
+  Num=1 Bamba    avg=7.56                    Num=1 Diabaté  avg=9.01  ← rang 1 (meilleur) ✓
+  Num=2 Coulibaly avg=6.99                   Num=2 Bamba    avg=7.56
+  Num=3 Diabaté  avg=9.01  ← meilleur mais  Num=3 Coulibaly avg=6.99
+                num=3 (alpha) !             Num=4 Koné     avg=6.81
+  Num=4 Koné     avg=6.81                   Num=5 Traoré   avg=5.19
+  Num=5 Traoré   avg=5.19
+  → Diabaté passe de num=3 (alphabétique) à num=1 (rang de mérite). Démonstration avant/après claire.
+
+Stage Summary:
+- Règle du cahier des charges VALIDÉE E2E sur 3 classes (CP1, CM1, CM2) :
+  * CP1, CM1 (et implicitement CP2, CE1, CE2) → tri par MÉRITE (average DESC, Num=rang).
+  * CM2 → tri ALPHABÉTIQUE (last_name ASC, Num=position).
+- Tri côté backend (source unique de vérité) — le frontend n'a besoin d'aucun changement (il affiche `num` tel quel).
+- Cas edge gérés : élèves sans note (HasAverage=false) repoussés en fin pour CP1-CM1, ex-aequo départagés alphabétiquement (non testé ici car les 5 moyennes sont distinctes, mais le code le prévoit).
+- Déploiements finaux : Vercel ✅ READY (c902646c), Render ✅ live (c902646c, auto-deploy GitHub→Render a fonctionné).
+- Artifacts : aucun (tests API via curl, pas de screenshot nécessaire — les données JSON suffisent à valider l'ordre).
