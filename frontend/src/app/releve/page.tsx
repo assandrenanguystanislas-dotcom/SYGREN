@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Printer, X, Loader2 } from "lucide-react";
+import { Printer, X, Loader2, User, Users, CheckCircle2, Award, TrendingUp } from "lucide-react";
 
 // === Types ===
 interface ReleveSubjectGrade {
@@ -489,25 +489,98 @@ export default function RelevePage() {
                   Uniquement sur la dernière page. */}
               {isLastPage && (
                 <div className="mt-4 grid grid-cols-3 gap-4 text-center font-bold text-xs break-inside-avoid">
-                  {/* Bloc Statistiques */}
-                  <div className="border border-black p-3 text-left space-y-2 text-[10px]">
-                    <div className="flex justify-between">
-                      <span>Inscrits G: {stats.inscrits_g}</span>
-                      <span>F: {stats.inscrits_f}</span>
-                      <span>T: {stats.inscrits_t}</span>
+                  {/* === Bloc Statistiques — Option A (icônes + couleurs + barre) ===
+                      Tableau structuré avec :
+                      - Icônes G (bleu) / F (rouge) / T (gris)
+                      - Ligne Admis en vert
+                      - Barre de progression + % total en gros */}
+                  <div className="border-2 border-black rounded-lg overflow-hidden">
+                    {/* En-tête avec icônes */}
+                    <div className="grid grid-cols-4 bg-gray-800 text-white text-[9px] font-bold">
+                      <div className="p-1.5 text-left"></div>
+                      <div className="p-1.5 flex items-center justify-center gap-0.5">
+                        <User className="w-3 h-3 text-blue-400" />
+                        <span className="text-blue-400">G</span>
+                      </div>
+                      <div className="p-1.5 flex items-center justify-center gap-0.5">
+                        <User className="w-3 h-3 text-red-400" />
+                        <span className="text-red-400">F</span>
+                      </div>
+                      <div className="p-1.5 flex items-center justify-center gap-0.5">
+                        <Users className="w-3 h-3 text-gray-300" />
+                        <span className="text-gray-300">T</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Présents: G {stats.presents_g}</span>
-                      <span>F {stats.presents_f}</span>
-                      <span>T {stats.presents_t}</span>
+
+                    {/* Ligne Inscrits */}
+                    <div className="grid grid-cols-4 text-[10px] border-b border-gray-300 bg-gray-50">
+                      <div className="p-1.5 text-left font-bold">Inscrits</div>
+                      <div className="p-1.5 text-center text-blue-700 font-bold">{stats.inscrits_g}</div>
+                      <div className="p-1.5 text-center text-red-600 font-bold">{stats.inscrits_f}</div>
+                      <div className="p-1.5 text-center font-bold">{stats.inscrits_t}</div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Admis: G {stats.admis_g}</span>
-                      <span>F {stats.admis_f}</span>
-                      <span>T {stats.admis_t}</span>
+
+                    {/* Ligne Présents */}
+                    <div className="grid grid-cols-4 text-[10px] border-b border-gray-300 bg-gray-50">
+                      <div className="p-1.5 text-left font-bold">Présents</div>
+                      <div className="p-1.5 text-center text-blue-700 font-bold">{stats.presents_g}</div>
+                      <div className="p-1.5 text-center text-red-600 font-bold">{stats.presents_f}</div>
+                      <div className="p-1.5 text-center font-bold">{stats.presents_t}</div>
                     </div>
-                    <div className="pt-2 text-[9px]">
-                      % des Admis G {stats.pct_g.toFixed(2)}% | F {stats.pct_f.toFixed(2)}% | T {stats.pct_t.toFixed(2)}%
+
+                    {/* Ligne Admis — vert */}
+                    <div className="grid grid-cols-4 text-[10px] border-b border-gray-300 bg-emerald-50">
+                      <div className="p-1.5 text-left font-bold flex items-center gap-0.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Admis
+                      </div>
+                      <div className="p-1.5 text-center text-emerald-700 font-bold">{stats.admis_g}</div>
+                      <div className="p-1.5 text-center text-emerald-700 font-bold">{stats.admis_f}</div>
+                      <div className="p-1.5 text-center text-emerald-700 font-bold">{stats.admis_t}</div>
+                    </div>
+
+                    {/* Ligne % par genre */}
+                    <div className="grid grid-cols-4 text-[9px] bg-gray-100">
+                      <div className="p-1.5 text-left font-bold flex items-center gap-0.5">
+                        <TrendingUp className="w-3 h-3 text-gray-500" />
+                        % Admis
+                      </div>
+                      <div className="p-1.5 text-center text-blue-700 font-bold">{stats.pct_g.toFixed(1)}%</div>
+                      <div className="p-1.5 text-center text-red-600 font-bold">{stats.pct_f.toFixed(1)}%</div>
+                      <div className="p-1.5 text-center font-bold">{stats.pct_t.toFixed(1)}%</div>
+                    </div>
+
+                    {/* Barre de progression + % total en gros */}
+                    <div className="bg-white p-2 border-t-2 border-gray-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] font-bold text-gray-700 flex items-center gap-0.5">
+                          <Award className="w-3.5 h-3.5 text-amber-500" />
+                          Taux de Réussite
+                        </span>
+                        <span className="text-2xl font-black text-emerald-600 leading-none">
+                          {stats.pct_t.toFixed(1)}%
+                        </span>
+                      </div>
+                      {/* Barre de progression */}
+                      <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-1"
+                          style={{
+                            width: `${Math.min(stats.pct_t, 100)}%`,
+                            background: stats.pct_t >= 75
+                              ? "linear-gradient(90deg, #10b981, #059669)"
+                              : stats.pct_t >= 50
+                                ? "linear-gradient(90deg, #f59e0b, #d97706)"
+                                : "linear-gradient(90deg, #ef4444, #dc2626)",
+                          }}
+                        >
+                          {stats.pct_t >= 20 && (
+                            <span className="text-[8px] text-white font-bold">
+                              {stats.admis_t}/{stats.presents_t}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
