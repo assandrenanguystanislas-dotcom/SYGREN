@@ -424,7 +424,7 @@ export default function RelevePage() {
                   <thead>
                     <tr className="bg-gray-50 font-bold">
                       <th className="border border-black p-0.5 w-5 text-[9px]">N°</th>
-                      <th className="border border-black p-0.5 w-16 text-[9px]">Matricule</th>
+                      <th className="border border-black p-0.5 w-24 text-[9px]">Matricule</th>
                       <th className="border border-black p-0.5 w-20 text-[9px]">Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
                       <th className="border border-black p-1">Prénoms</th>
@@ -477,9 +477,38 @@ export default function RelevePage() {
                           </th>
                         );
                       })}
-                      <th className="border border-black p-0.5 text-[9px]">Total</th>
-                      <th className="border border-black p-0.5 text-[9px]">Moy</th>
-                      <th className="border border-black p-0.5 text-[9px]">Obs</th>
+                      {/* Total, Moy, Obs : aussi en vertical quand compact */}
+                      {["Total", "Moy", "Obs"].map((label) => (
+                        <th
+                          key={label}
+                          className={`border border-black p-0.5 text-center`}
+                          style={{
+                            minWidth: subjects.length > 6 ? "22px" : "auto",
+                            maxWidth: subjects.length > 6 ? "26px" : "auto",
+                            height: subjects.length > 6 ? "70px" : "auto",
+                            verticalAlign: "bottom",
+                          }}
+                        >
+                          {subjects.length > 6 ? (
+                            <div
+                              style={{
+                                writingMode: "vertical-rl",
+                                textOrientation: "mixed",
+                                fontSize: "9px",
+                                fontWeight: "bold",
+                                lineHeight: "1.1",
+                                whiteSpace: "nowrap",
+                                letterSpacing: "0.2px",
+                                paddingBottom: "4px",
+                              }}
+                            >
+                              {label}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: "9px", fontWeight: "bold" }}>{label}</div>
+                          )}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
