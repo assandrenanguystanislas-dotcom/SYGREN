@@ -453,12 +453,12 @@ export default function RelevePage() {
                                 style={{
                                   writingMode: "vertical-rl",
                                   textOrientation: "mixed",
-                                  transform: "rotate(180deg)",
                                   fontSize: "9px",
                                   fontWeight: "bold",
                                   lineHeight: "1.1",
                                   whiteSpace: "nowrap",
                                   letterSpacing: "0.2px",
+                                  paddingBottom: "4px",
                                 }}
                               >
                                 {s.display_name}
