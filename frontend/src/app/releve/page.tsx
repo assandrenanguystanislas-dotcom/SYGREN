@@ -503,7 +503,7 @@ export default function RelevePage() {
                         <span className="text-blue-700">G</span>
                       </div>
                       <div className="p-1 flex items-center justify-center gap-0.5">
-                        <img src="/femme.png" alt="Fille" className="w-4 h-4 object-contain" />
+                        <img src="/femme.webp" alt="Fille" className="w-4 h-4 object-contain" />
                         <span className="text-red-600">F</span>
                       </div>
                       <div className="p-1.5 flex items-center justify-center gap-0.5">
