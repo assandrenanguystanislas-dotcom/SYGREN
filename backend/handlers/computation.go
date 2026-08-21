@@ -242,12 +242,20 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 var subjects []models.Subject
                 // Filtrage par Subject.levels : la matière doit contenir le nom de la classe
                 // (ex: "CP1") OU le niveau (ex: "CP" — ancien format rétrocompatible)
-                // + exclusion EPS pour les compositions (sauf si EPS configurée pour cette classe)
+                // Filtrage par Subject.levels : la matière doit contenir le nom de la classe
+                // (ex: "CP1") OU le niveau (ex: "CP" — ancien format rétrocompatible).
+                //
+                // EPS : règle stricte (cahier des charges) — EPS n'apparaît QUE
+                // pour la classe de CM2 ET uniquement pour le type "exam_blanc".
+                // En composition, EPS est toujours exclue (même pour CM2).
+                // Pour les autres classes (CP1-CM1), EPS est toujours exclue
+                // (même en exam_blanc), car l'EPS n'est configurée que pour CM2.
                 subjectQuery := database.DB.Order("name ASC").
                         Where("levels LIKE ? OR levels LIKE ?", "%"+className+"%", "%"+level+"%")
-                if session.EvalType != "exam_blanc" {
-                        // Composition : exclure EPS sauf si configurée pour cette classe
-                        subjectQuery = subjectQuery.Where("name != ? OR levels LIKE ?", "EPS", "%"+className+"%")
+                // EPS est incluse SEULEMENT si : exam_blanc ET className == "CM2"
+                if !(session.EvalType == "exam_blanc" && className == "CM2") {
+                        // Pas un exam_blanc CM2 → exclure EPS totalement
+                        subjectQuery = subjectQuery.Where("name != ?", "EPS")
                 }
                 if err := subjectQuery.Find(&subjects).Error; err != nil {
                         return []models.Subject{}
