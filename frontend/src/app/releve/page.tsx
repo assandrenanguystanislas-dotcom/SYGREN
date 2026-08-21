@@ -495,20 +495,20 @@ export default function RelevePage() {
                       - Ligne Admis en vert
                       - Barre de progression + % total en gros */}
                   <div className="border-2 border-black rounded-lg overflow-hidden">
-                    {/* En-tête avec icônes */}
-                    <div className="grid grid-cols-4 bg-gray-800 text-white text-[9px] font-bold">
+                    {/* En-tête avec images garçon/fille — fond blanc */}
+                    <div className="grid grid-cols-4 bg-white text-[9px] font-bold border-b-2 border-black">
                       <div className="p-1.5 text-left"></div>
-                      <div className="p-1.5 flex items-center justify-center gap-0.5">
-                        <User className="w-3 h-3 text-blue-400" />
-                        <span className="text-blue-400">G</span>
+                      <div className="p-1 flex items-center justify-center gap-0.5">
+                        <img src="/homme.webp" alt="Garçon" className="w-4 h-4 object-contain" />
+                        <span className="text-blue-700">G</span>
+                      </div>
+                      <div className="p-1 flex items-center justify-center gap-0.5">
+                        <img src="/femme.png" alt="Fille" className="w-4 h-4 object-contain" />
+                        <span className="text-red-600">F</span>
                       </div>
                       <div className="p-1.5 flex items-center justify-center gap-0.5">
-                        <User className="w-3 h-3 text-red-400" />
-                        <span className="text-red-400">F</span>
-                      </div>
-                      <div className="p-1.5 flex items-center justify-center gap-0.5">
-                        <Users className="w-3 h-3 text-gray-300" />
-                        <span className="text-gray-300">T</span>
+                        <Users className="w-3 h-3 text-gray-600" />
+                        <span className="text-gray-600">T</span>
                       </div>
                     </div>
 
