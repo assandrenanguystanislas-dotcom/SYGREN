@@ -359,18 +359,21 @@ export default function RelevePage() {
                       <th className="border border-black p-1 w-24">Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
                       <th className="border border-black p-1">Prénoms</th>
-                      {/* Matières dynamiques : abrégées, sans barème /50 */}
+                      {/* Matières dynamiques : abrégées, sans barème.
+                          Quand il y a beaucoup de matières (CP = 9), on
+                          compacte davantage avec w-10 et text-[8px] pour
+                          libérer de la place pour les prénoms sur une ligne. */}
                       {subjects.map((s, idx) => (
                         <th
                           key={idx}
-                          className={`border border-black p-1 ${isEPS(s.name) ? "w-12 bg-yellow-300" : "w-14"} text-[9px]`}
+                          className={`border border-black p-0.5 whitespace-nowrap ${isEPS(s.name) ? "w-10 bg-yellow-300" : subjects.length > 6 ? "w-10" : "w-14"} ${subjects.length > 6 ? "text-[8px]" : "text-[9px]"}`}
                         >
                           {s.display_name}
                         </th>
                       ))}
-                      <th className="border border-black p-1 w-12">Total</th>
-                      <th className="border border-black p-1 w-10">Moy</th>
-                      <th className="border border-black p-1 w-8">Obs</th>
+                      <th className="border border-black p-0.5 w-10 text-[9px]">Total</th>
+                      <th className="border border-black p-0.5 w-8 text-[9px]">Moy</th>
+                      <th className="border border-black p-0.5 w-7 text-[9px]">Obs</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -381,10 +384,10 @@ export default function RelevePage() {
                         <tr key={num} className="h-6">
                           <td className="border border-black font-semibold">{num}</td>
                           <td className="border border-black font-bold">{e.matricule}</td>
-                          <td className={`border border-black text-left px-1.5 font-bold ${isFille ? 'text-red-600' : ''}`}>
+                          <td className={`border border-black text-left px-1 font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px] ${isFille ? 'text-red-600' : ''}`}>
                             {e.last_name}
                           </td>
-                          <td className={`border border-black text-left px-1.5 font-bold ${isFille ? 'text-red-600' : ''}`}>
+                          <td className={`border border-black text-left px-1 font-bold whitespace-nowrap overflow-hidden text-ellipsis ${isFille ? 'text-red-600' : ''}`}>
                             {abbreviateFirstNames(e.first_name)}
                           </td>
                           {subjects.map((subj, idx) => {
