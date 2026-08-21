@@ -137,21 +137,84 @@ function abbreviateSubject(name: string): string {
   }
 }
 
-// Abrège le prénom d'un élève : garde les 3 premiers prénoms entiers,
-// abrège le 4ème et suivants en initiale pointée (ex: "Yao" → "Y.").
-// "Kouassi Bertrand Yves Aristide" → "Kouassi Bertrand Yves A."
-// "Moussa Issoufou Aboubacar Sidiki" → "Moussa Issoufou Aboubacar S."
-function abbreviateFirstNames(fullName: string): string {
+// === Système d'abréviation dynamique des prénoms ===
+//
+// Au lieu d'abréger aveuglément à partir du 4ème prénom, on calcule l'espace
+// disponible pour la colonne Prénoms en fonction du nombre de matières (plus
+// il y a de matières, moins il y a de place), puis on décide dynamiquement
+// combien de prénoms abréger.
+//
+// Étapes :
+//   1. Calculer la largeur disponible (mm) selon le nombre de matières
+//   2. Estimer la largeur du texte complet des prénoms
+//   3. Si tout tient → afficher tel quel
+//   4. Sinon → abréger progressivement : 4ème+, puis 3ème+, puis 2ème+
+
+// Largeur disponible pour la colonne Prénoms (en mm, pour A4 portrait 210mm).
+// Contenu utile = 210 - 2×6mm (padding) = 198mm.
+// Colonnes fixes : N°(8) + Matricule(22) + Nom(24) + Total(12) + Moy(10) + Obs(8) = 84mm.
+// Colonnes matières : subjectCount × (10mm si >6 matières, sinon 14mm).
+// Reste pour Prénoms = 198 - 84 - (subjectCount × matiereWidth).
+function getAvailableWidthForPrenoms(subjectCount: number): number {
+  const matiereWidth = subjectCount > 6 ? 10 : 14; // mm par colonne matière
+  const fixedColumns = 84; // mm (N° + Matricule + Nom + Total + Moy + Obs)
+  const availableWidth = 198 - fixedColumns - subjectCount * matiereWidth;
+  return Math.max(availableWidth, 25); // minimum 25mm pour la lisibilité
+}
+
+// Estime la largeur d'affichage d'un texte (en mm) pour text-[10px].
+// Approximation : 1.6mm par caractère (moyenne pour police sans-serif 10px).
+function estimateTextWidth(text: string): number {
+  return text.length * 1.6;
+}
+
+// Abréviation progressive : initialise un prénom en "X." (première lettre + point).
+function toInitial(name: string): string {
+  return name.charAt(0).toUpperCase() + ".";
+}
+
+// Décide dynamiquement combien de prénoms abréger selon l'espace disponible.
+// Stratégie :
+//   - Si tout tient → afficher tel quel
+//   - Sinon → abréger le 4ème+ en initiales, re-tester
+//   - Si ça ne suffit pas → abréger aussi le 3ème+, re-tester
+//   - En dernier recours → abréger le 2ème+ (garder seulement le 1er entier)
+function smartAbbreviate(fullName: string, availableWidthMm: number): string {
   const parts = fullName.trim().split(/\s+/);
-  if (parts.length <= 3) return fullName;
-  // Garder les 3 premiers entiers, abréger le reste
-  const first3 = parts.slice(0, 3);
-  const rest = parts.slice(3).map(p => {
-    // Première lettre + point (ex: "Aristide" → "A.")
-    const initial = p.charAt(0).toUpperCase();
-    return initial + ".";
-  });
-  return [...first3, ...rest].join(" ");
+
+  // Cas simple : 1-3 prénoms, on teste si ça tient
+  const fullWidth = estimateTextWidth(fullName);
+  if (fullWidth <= availableWidthMm) return fullName;
+
+  // Si 4 prénoms ou plus : abréger progressivement
+  if (parts.length >= 4) {
+    // Niveau 1 : garder 3 premiers entiers, abréger le reste
+    const lvl1 = [...parts.slice(0, 3), ...parts.slice(3).map(toInitial)].join(" ");
+    if (estimateTextWidth(lvl1) <= availableWidthMm) return lvl1;
+
+    // Niveau 2 : garder 2 premiers, abréger le reste
+    const lvl2 = [...parts.slice(0, 2), ...parts.slice(2).map(toInitial)].join(" ");
+    if (estimateTextWidth(lvl2) <= availableWidthMm) return lvl2;
+
+    // Niveau 3 : garder 1 seul, abréger le reste
+    const lvl3 = [parts[0], ...parts.slice(1).map(toInitial)].join(" ");
+    return lvl3;
+  }
+
+  // 2-3 prénoms qui ne tiennent pas : abréger le dernier
+  if (parts.length === 3) {
+    const lvl1 = [parts[0], parts[1], toInitial(parts[2])].join(" ");
+    if (estimateTextWidth(lvl1) <= availableWidthMm) return lvl1;
+    const lvl2 = [parts[0], toInitial(parts[1]), toInitial(parts[2])].join(" ");
+    return lvl2;
+  }
+
+  if (parts.length === 2) {
+    const lvl1 = [parts[0], toInitial(parts[1])].join(" ");
+    return lvl1;
+  }
+
+  return fullName;
 }
 
 function fmt(v: number, hasGrade: boolean): string {
@@ -250,6 +313,10 @@ export default function RelevePage() {
       max_score: g.max_score,
     })) ?? [];
   const stats = data.stats;
+  // Largeur disponible pour la colonne Prénoms (dépend du nombre de matières).
+  // CP a 9 matières → peu de place → abréviation agressive.
+  // CM a 5 matières → beaucoup de place → prénoms souvent entiers.
+  const prenomWidth = getAvailableWidthForPrenoms(subjects.length);
 
   return (
     <div className="bg-gray-100 min-h-screen py-8 print:bg-white print:p-0 print:py-0">
@@ -388,7 +455,7 @@ export default function RelevePage() {
                             {e.last_name}
                           </td>
                           <td className={`border border-black text-left px-1 font-bold whitespace-nowrap overflow-hidden text-ellipsis ${isFille ? 'text-red-600' : ''}`}>
-                            {abbreviateFirstNames(e.first_name)}
+                            {smartAbbreviate(e.first_name, prenomWidth)}
                           </td>
                           {subjects.map((subj, idx) => {
                             const g = e.grades[idx];
