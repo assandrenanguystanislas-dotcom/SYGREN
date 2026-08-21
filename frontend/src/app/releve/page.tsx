@@ -423,11 +423,11 @@ export default function RelevePage() {
                 <table className="w-full border-collapse border border-black text-center text-[10px]">
                   <thead>
                     <tr className="bg-gray-50 font-bold">
-                      <th className="border border-black p-0.5 w-5 text-[9px]">N°</th>
-                      <th className="border border-black p-0.5 w-24 text-[9px]">Matricule</th>
-                      <th className="border border-black p-0.5 w-20 text-[9px]">Nom</th>
+                      <th className="border border-black p-0.5 w-6 text-[9px]">N°</th>
+                      <th className="border border-black p-0.5 text-[9px] whitespace-nowrap" style={{ minWidth: "90px" }}>Matricule</th>
+                      <th className="border border-black p-0.5 text-[9px] whitespace-nowrap" style={{ minWidth: "55px" }}>Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
-                      <th className="border border-black p-1">Prénoms</th>
+                      <th className="border border-black p-0.5 text-[9px]">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
                           Quand il y a beaucoup de matières (CP = 9), on utilise
                           une écriture verticale (writing-mode) qui est plus
@@ -444,7 +444,7 @@ export default function RelevePage() {
                             style={{
                               minWidth: isCompact ? "22px" : "40px",
                               maxWidth: isCompact ? "26px" : "50px",
-                              height: isCompact ? "70px" : "auto",
+                              height: isCompact ? "65px" : "auto",
                               verticalAlign: "bottom",
                             }}
                           >
@@ -477,15 +477,16 @@ export default function RelevePage() {
                           </th>
                         );
                       })}
-                      {/* Total, Moy, Obs : aussi en vertical quand compact */}
-                      {["Total", "Moy", "Obs"].map((label) => (
+                      {/* Total, Moyenne, Observation : vertical quand compact.
+                          Hauteur ajustée pour ne pas avoir de vide vertical. */}
+                      {[{ label: "Total", short: "Total" }, { label: "Moyenne", short: "Moyenne" }, { label: "Observat.", short: "Observat." }].map(({ label, short }) => (
                         <th
                           key={label}
                           className={`border border-black p-0.5 text-center`}
                           style={{
                             minWidth: subjects.length > 6 ? "22px" : "auto",
                             maxWidth: subjects.length > 6 ? "26px" : "auto",
-                            height: subjects.length > 6 ? "70px" : "auto",
+                            height: subjects.length > 6 ? "65px" : "auto",
                             verticalAlign: "bottom",
                           }}
                         >
@@ -496,16 +497,24 @@ export default function RelevePage() {
                                 textOrientation: "mixed",
                                 fontSize: "9px",
                                 fontWeight: "bold",
-                                lineHeight: "1.1",
+                                lineHeight: "1",
                                 whiteSpace: "nowrap",
-                                letterSpacing: "0.2px",
-                                paddingBottom: "4px",
+                                letterSpacing: "0.1px",
+                                paddingBottom: "2px",
+                              }}
+                            >
+                              {short}
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                whiteSpace: "nowrap",
+                                fontSize: "9px",
+                                fontWeight: "bold",
                               }}
                             >
                               {label}
                             </div>
-                          ) : (
-                            <div style={{ fontSize: "9px", fontWeight: "bold" }}>{label}</div>
                           )}
                         </th>
                       ))}
