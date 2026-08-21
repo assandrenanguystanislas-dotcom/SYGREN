@@ -94,8 +94,10 @@ function isEPS(name: string): boolean {
 // Dictée, EDHC, Ecriture, Exp. écrit, Lecture, Maths) — il faut libérer
 // un maximum de place pour la colonne Prénoms.
 function abbreviateSubject(name: string): string {
+  // Normaliser : majuscules SANS accents pour la comparaison
   const n = name.trim();
-  switch (n.toUpperCase()) {
+  const norm = n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  switch (norm) {
     case "EXPLOITATION DE TEXTE":
       return "Expl. texte";
     case "ETUDE DU MILIEU":
@@ -103,7 +105,6 @@ function abbreviateSubject(name: string): string {
     case "MATHEMATIQUES":
       return "Maths";
     case "DICTEE":
-    case "DICTÉE":
       return "Dictée";
     case "EPS":
       return "EPS";
@@ -124,9 +125,12 @@ function abbreviateSubject(name: string): string {
     case "LECT.":
       return "Lect.";
     case "POES./CHANT":
+    case "POESIE":
       return "Poés./ch.";
     case "CHANT":
-    case "POESIE":
+      return "Chant";
+    case "POESIE & CHANT":
+    case "CHANT ET DESSIN":
       return "Chant";
     default:
       return n;
