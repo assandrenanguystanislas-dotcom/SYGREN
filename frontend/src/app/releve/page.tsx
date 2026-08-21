@@ -449,7 +449,8 @@ export default function RelevePage() {
                               minWidth: isCompact ? "22px" : "40px",
                               maxWidth: isCompact ? "26px" : "50px",
                               height: isCompact ? "50px" : "auto",
-                              verticalAlign: "bottom",
+                              // Centrage vertical du texte vertical (CP = 9 matières → mode compact)
+                              verticalAlign: "middle",
                             }}
                           >
                             {isCompact ? (
@@ -463,6 +464,8 @@ export default function RelevePage() {
                                   whiteSpace: "nowrap",
                                   letterSpacing: "0.2px",
                                   paddingBottom: "0px",
+                                  // Garantit le centrage vertical aussi dans le flux flex du th
+                                  margin: "auto",
                                 }}
                               >
                                 {s.display_name}
@@ -491,7 +494,8 @@ export default function RelevePage() {
                             minWidth: subjects.length > 6 ? "22px" : "auto",
                             maxWidth: subjects.length > 6 ? "26px" : "auto",
                             height: subjects.length > 6 ? "50px" : "auto",
-                            verticalAlign: "bottom",
+                            // Centrage vertical du texte vertical (Total/Moy./Obs. en mode compact)
+                            verticalAlign: "middle",
                           }}
                         >
                           {subjects.length > 6 ? (
@@ -505,6 +509,8 @@ export default function RelevePage() {
                                 whiteSpace: "nowrap",
                                 letterSpacing: "0.1px",
                                 paddingBottom: "0px",
+                                // Garantit le centrage vertical aussi dans le flux flex du th
+                                margin: "auto",
                               }}
                             >
                               {short}

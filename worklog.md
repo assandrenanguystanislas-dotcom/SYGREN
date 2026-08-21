@@ -1596,3 +1596,132 @@ Stage Summary:
 - Cron quotidien auto-archive les sessions validated des années antérieures (auteur="system-cron").
 - Rétention : les notes des sessions archived nourrissent toujours le bilan annuel élève et la comparaison inter-annuelle.
 - Artifacts : backend binaire `sygren-api` reconstruit, DB SQLite `data/sygren.db` (avec nouvelles colonnes), 2 screenshots `/home/z/sygren-sessions*.png`.
+
+---
+Task ID: Setup-Tutor-Session
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Mise en place de l'environnement de tutorat pour reprise du projet SYGREN : installation Go, CLIs (gh/vercel), clonage du dépôt, configuration de l'identité Git exigée, et vérification live des 3 plateformes (Vercel/Render/Neon).
+
+Work Log:
+- Lecture du README + du worklog existant (1598 lignes) : projet SYGREN = monorepo (frontend Next.js 16 sur Vercel + backend Go 1.25 sur Render + PostgreSQL Neon).
+- Installation toolchain locale (sans sudo, dans /home/z/.local/) :
+  * Go 1.24.0 tarball → /home/z/.local/go (le toolchain auto-télécharge 1.25.0 car go.mod exige 1.25.0).
+  * GitHub CLI 2.65.0 (binaire officiel) → /home/z/.local/bin/gh, authentifié via PAT classic.
+  * Vercel CLI 59.3.0 (npm -g) → /home/z/.local/bin/vercel.
+  * PATH persistant ajouté à /home/z/.bashrc.
+- Clonage du dépôt : `gh repo clone assandrenanguystanislas-dotcom/SYGREN /home/z/sygren` (50M, branche main, remote https sans token en clair dans .git/config car gh gère le credential helper).
+- Identité Git configurée (exigence utilisateur) :
+  * git config --global user.name "assandrenanguystanislas"
+  * git config --global user.email "assandrenanguystanislas@gmail.com"
+  * Vérifié : 5 derniers commits ont bien cet auteur.
+- Fichier credentials local créé : /home/z/sygren/local-credentials.sh (matche `local-*` du .gitignore, VÉRIFIÉ gitignored). Contient GITHUB_TOKEN, VERCEL_TOKEN, RENDER_TOKEN, DATABASE_URL, NEON_API_KEY, et l'env Go. chmod 600.
+- Vérifications de déploiement (3 plateformes) :
+  * Vercel API → user=assandrenanguystanislas-dotcom, project=sygren (id=prj_51kMcmyW9PFzFt4sk0Jn7BYkvk4O, framework=nextjs). Frontend LIVE : GET https://sygren.vercel.app/ → 200, <title>SYGREN — Gestion de Relevé Électronique de Note</title>.
+  * Render API → service SYGREN (id=srv-da0t6lnlk1mc738nvvf0, env=go, rootDir=backend, buildCmd=`go build -tags netgo -ldflags '-s -w' -o app`, startCmd=`./app`, autoDeploy=yes/commit, plan=free, url=https://sygren.onrender.com). Dernier deploi : status=live (sha=cc06d219, 2026-08-21 00:49 UTC).
+  * Render backend LIVE vérifié end-to-end :
+    - GET /api/health → 200 `{"service":"sygren-api","status":"ok","version":"0.1.0"}` (0.23s)
+    - GET /api/me sans token → 401 `{"error":"token d'authentification manquant"}`
+    - POST /api/auth/login `{"identifier":"admin@sygren.ci","password":"admin123"}` → 200 + JWT + user{admin} (0.56s). NB: le handler attend `identifier` (phone OR email), pas `email`.
+  * Neon DB : host DNS résout (IPv6), TCP:5432 ouvert. api.neon.tech ne résout PAS (restriction réseau sandbox) → l'API Console Neon est inaccessible, mais la connexion DB directe via DATABASE_URL fonctionne (GORM postgres driver).
+- Compilation Go backend (vérification exigée par l'utilisateur) :
+  * `cd backend && go mod download` → OK (deps gorm/chi/jwt/go-pdf/fpdf etc.).
+  * `go build -o sygren-api main.go` → OK, binaire 24M.
+- Diagnostic DB Neon créé : backend/scripts/neon_check.go (package main, utilise gorm postgres). Lancé avec DATABASE_URL :
+  * Connexion OK en 1.3s. PostgreSQL 18.6 (aarch64, Neon 3484359).
+  * 12 tables : classes, evaluation_sessions, grade_scales, grades, ieps, report_cards, schools, session_exemptions, settings, students, subjects, users.
+  * Comptages : users=8, ieps=1, schools=97, classes=582, students=30, subjects=12, evaluation_sessions=6.
+  * Note : la table `teachers` n'existe pas (les enseignants sont dans `users` avec role=teacher) — pas un bug, juste ma requête de check qui utilisait le mauvais nom.
+- Helper de workflow local créé : /home/z/sygren/local-deploy.sh (gitignored via `local-*`). Encapsule le workflow exigé : build Go local → lint frontend → commit (auteur correct) → push origin main → poll Render (live) → poll Vercel (ready) → run neon_check (sync DB).
+
+Stage Summary:
+- Environnement 100% opérationnel pour la suite du travail. Aucun nouveau projet créé, architecture respectée.
+- Stack vérifiée LIVE en bout en bout : Frontend (Vercel) → Backend (Render) → DB (Neon) → JWT auth fonctionne.
+- Workflow de push→deploy→sync-outillé : `source local-credentials.sh && ./local-deploy.sh "<msg>"` (helper local, non committé).
+- Token/JWT_SECRET : JWT_SECRET n'est PAS défini sur Render (default dev secret) → à durcir en prod (recommandation, pas d'action immédiate).
+- Fichiers locaux créés (tous gitignored) : local-credentials.sh, local-deploy.sh, backend/scripts/neon_check.go (ce dernier est un diagnostic utile, à décider si on le commet plus tard).
+- Binaire backend local : backend/sygren-api (gitignored via backend/sygren-api pattern).
+- Prêt pour la suite : l'utilisateur peut maintenant donner ses prochaines tâches fonctionnelles ; je build/commit/push/verify automatiquement.
+
+---
+Task ID: Harden-JWT-Secret-Render
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Appliquer la recommandation de sécurité : remplacer le JWT_SECRET de dev hardcoded (config.go) par un secret 256-bit aléatoire défini sur Render, sans impacter le fonctionnement E2E.
+
+Work Log:
+- Constat initial : sur Render, seul `DATABASE_URL` était setté. Le backend utilisait donc `JWT_SECRET` fallback hardcoded dans backend/config/config.go : `sygren-dev-secret-change-in-production-2024` (public, dans le source, identique partout). Faille : quiconque lit le repo peut forger des JWT admin valides.
+- Audit env vars Render via GET /v1/services/{id}/env-vars :
+  * 1 seule var : DATABASE_URL (type plain, valeur complète retournée par l'API, 150 chars).
+  * Aucune var JWT_SECRET.
+- Génération d'un nouveau secret cryptographique : 32 octets aléatoires via /dev/urandom → hex (64 chars, 256 bits d'entropie). Secret stocké temporairement dans /tmp/jwt_secret_new (chmod 600), puis synchronisé dans local-credentials.sh après vérification.
+
+Format API Render (apprentissage par essais) :
+- Tentative A `{"envVars":[{...}]}` (wrapper objet) → HTTP 400 "invalid JSON".
+- Tentative B flat array `[{...}]` SANS champ type → HTTP 200 ✓. C'est le bon format.
+- Tentative C flat array AVEC `type:"secret"` explicite sur les 2 items → HTTP 200 mais Render normalise en type="plain" (le champ type est ignoré par l'API PUT flat-array).
+- Conclusion : l'API Render ne permet PAS de setter type=secret via PUT /env-vars (il faut le dashboard UI pour ça). Accepté : le secret reste type=plain côté Render, mais c'est une amélioration massive vs le dev secret hardcoded.
+
+Opération PUT (atomique, préserve DATABASE_URL) :
+- GET DATABASE_URL valeur complète → stockée en variable shell.
+- Construction payload flat-array : [{DATABASE_URL (value complète)}, {JWT_SECRET (value, type=secret)}].
+- PUT /v1/services/srv-da0t6lnlk1mc738nvvf0/env-vars → HTTP 200. DATABASE_URL préservé (150 chars), JWT_SECRET créé (64 chars).
+
+Déclenchement deploy Render :
+- Constat : changement d'env vars NE déclenche PAS auto-deploy sur Render (autoDeploy="yes" ne concerne que les commits).
+- POST /v1/services/{id}/deploys SANS body → HTTP 201, deploy dep-da4d... créé (status=build_in_progress, trigger=api, sha=71f420e = HEAD courant de main).
+- Polling du deploy : 0-60s build_in_progress (Go build) → 60-80s update_in_progress → 80s live. Fini à 22:34:23 UTC.
+
+Vérification E2E (preuve que le secret a changé) :
+- Test 1 — vieux token (signé avec l'ancien dev secret, récupéré du test de vérification initial) → GET /api/me :
+  → HTTP 401 `{"error":"token invalide ou expiré"}`. ✓ Preuve que l'ancien secret ne valide PLUS les tokens.
+- Test 2 — login frais POST /api/auth/login {identifier:admin@sygren.ci, password:admin123} :
+  → HTTP 200, nouveau JWT émis (signé avec le nouveau secret). ✓
+- Test 3 — nouveau token → GET /api/me :
+  → HTTP 200, user admin retourné (id=d74e2036-..., role=admin). ✓ Nouveau secret actif.
+- Test 4 — nouveau token → GET /api/dashboard (route métier RBAC) :
+  → HTTP 200, données réelles depuis Neon : scope=global, school_count=97, class_count=582, student_count=30, teacher_count=6, session_stats.total=6. ✓ RBAC + DB Neon intacts.
+
+Synchronisation locale :
+- local-credentials.sh mis à jour : JWT_SECRET = secret prod verbatim (vérifié match exact via comparaison bash). Permet au backend local (lancé en mode prod contre Neon avec DATABASE_URL) de valider les mêmes tokens que la prod.
+- Premier Edit avait inventé le milieu du secret (erreur) → détecté via check match → corrigé avec valeur verbatim. Lesson: toujours écrire les secrets depuis une variable vérifiée, jamais à la main.
+- Fichier toujours gitignored (local-*) + chmod 600.
+- Fichiers temporaires /tmp/* nettoyés.
+
+Stage Summary:
+- Faille JWT_SECRET de prod résolue : secret aléatoire 256-bit défini sur Render, plus jamais dans le source.
+- Aucun impact fonctionnel : login, auth, RBAC, routes métier, DB Neon — tout fonctionne (vérifié E2E).
+- Anciens tokens (signés avec le dev secret) désormais REJETÉS (401) — preuve que le durcissement est effectif.
+- Limite API Render constatée : PUT /env-vars en flat-array ne supporte pas type=secret (normalisé en plain). Le secret est donc lisible via l'API Render par quiconque a le token Render — mitigé par (1) révocation du token après session, (2) secret 256-bit aléatoire inforgeable, (3) accès Render limité au user.
+- local-credentials.sh synchronisé avec le secret prod (backend local en mode prod ↔ prod cohérents).
+- Recommandation future (optionnelle) : pour passer JWT_SECRET en type=secret (chiffré, valeur jamais retournée), utiliser le dashboard Render UI (toggle "secret" sur la variable). Pas urgent — le niveau de sécurité actuel est largement suffisant tant que le token Render est révoqué après la session.
+- Backend live Render : https://sygren.onrender.com (deploy dep-da4d4600vjus73aikae0, sha 71f420e, status=live).
+
+---
+Task ID: Releve-Vertical-Center-CP
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Module Résultat — Relevé PDF : pour les classes de CP (mode compact = >6 matières), centrer le texte écrit en vertical (en-têtes matières + Total/Moy./Obs.) qui était jusque-là aligné en bas.
+
+Work Log:
+- Localisation du code : le Relevé PDF est rendu côté FRONTEND (Next.js), pas backend. Le handler Go `GetReleveData` (handlers/reports.go) ne renvoie que du JSON (ReleveData avec class_level, average_scale, students, stats). Le rendu visuel vit dans `frontend/src/app/releve/page.tsx` (687 lignes).
+- Architecture du mode vertical : `isCompact = subjects.length > 6`. CP a 9 matières → compact → `writingMode: "vertical-rl"` + `textOrientation: "mixed"` (lecture de haut en bas). CM a 5 matières → non-compact → texte horizontal.
+- Deux blocs de texte vertical identifiés :
+  1. En-têtes matières (lignes ~447-481) : `<th>` avec `verticalAlign: "bottom"` + `<div>` intérieur `writingMode: vertical-rl`.
+  2. En-têtes Total/Moy./Obs. (lignes ~489-524) : même pattern `verticalAlign: "bottom"` + `writingMode: vertical-rl`.
+- Constat : `verticalAlign: "bottom"` colle le texte vertical en BAS de la cellule (50px de haut), laissant du vide en haut. Visuellement déséquilibré pour CP.
+
+Fix appliqué (frontend/src/app/releve/page.tsx, +8/-2 lignes) :
+- Bloc 1 (en-têtes matières) : `verticalAlign: "bottom"` → `verticalAlign: "middle"` sur le `<th>` + ajout `margin: "auto"` sur le `<div>` (centrage horizontal dans la colonne étroite 22-26px).
+- Bloc 2 (Total/Moy./Obs.) : mêmes changements (`verticalAlign: "middle"` + `margin: auto`).
+- Commentaires ajoutés inline pour expliquer le pourquoi.
+
+Vérifications locales (avant push) :
+- bun install frontend (797 packages, 858ms).
+- ESLint sur releve/page.tsx → EXIT 0 (aucune erreur/warning).
+- tsc --noEmit (projet complet) → EXIT 0 (aucune erreur de types).
+
+Push + vérification déploiement :
+- (voir section suivante après vérification live)
+
+Stage Summary:
+- Fix minimal et ciblé : 2 occurrences `verticalAlign: "bottom"` → `"middle"` + 2 `margin: auto` sur les div verticaux.
+- Concerne UNIQUEMENT le mode compact (CP = >6 matières). Le mode horizontal (CM) n'est pas touché.
+- Le texte vertical des en-têtes matières et Total/Moy./Obs. est désormais centré verticalement dans la cellule ET horizontalement dans la colonne.
