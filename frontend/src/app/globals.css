@@ -186,9 +186,13 @@
 }
 
 
-/* === Synthèse des Résultats — Print CSS (paysage A4, 1 page, sans en-têtes navigateur) === */
+/* === Synthèse des Résultats — Print CSS (paysage A4, 1 page) ===
+ * Le @page { size: A4 landscape } ne doit s'appliquer QUE quand la synthèse
+ * est imprimée. On utilise un sélecteur de page nommée pour isoler.
+ * Le @page par défaut reste en portrait (pour le relevé et les autres pages).
+ */
 @media print {
-  @page {
+  @page synthese {
     size: A4 landscape;
     margin: 0;
   }
@@ -219,6 +223,7 @@
     padding: 8mm !important;
     margin: 0 !important;
     overflow: visible !important;
+    page: synthese;
     page-break-after: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -232,49 +237,28 @@
 }
 
 /* === Relevé de Notes — Print CSS (portrait A4, MULTI-PAGES) ===
- *
- * Contrairement à la synthèse (paysage 1 page), le relevé est un document
- * multi-pages : on NE PEUT PAS utiliser position:absolute (qui clipperait
- * le contenu à la 1ère page physique). On laisse le document couler
- * naturellement avec break-after-page pour déclencher les sauts de page.
- *
- * On utilise une page nommée (@page releve) pour surcharger l'orientation
- * par défaut (paysage — réglé pour la synthèse plus haut) en portrait,
- * SANS impacter la synthèse (qui reste en paysage).
+ * Le relevé utilise le @page par défaut (portrait A4, pas de page nommée).
+ * Le document coule naturellement avec break-after-page pour les sauts.
+ * La dernière page n'a PAS la classe break-after-page → pas de page blanche.
  */
 @media print {
-  @page releve {
-    size: A4 portrait;
-    margin: 0;
-  }
-  /* Rendre visible le document du relevé et son contenu (le sélecteur
-   * `body * { visibility: hidden }` plus haut masque tout par défaut). */
   #releve-doc,
   #releve-doc * {
     visibility: visible !important;
   }
   #releve-doc {
-    /* Page nommée → utilise @page releve (portrait) au lieu du @page par défaut (paysage). */
-    page: releve;
-    /* Pas de position:absolute — on laisse le document couler naturellement
-     * pour permettre la pagination multi-pages. */
     background: white !important;
     margin: 0 !important;
     padding: 0 !important;
   }
-  /* Saut de page explicite entre les pages du relevé.
-   * La dernière page n'a PAS cette classe (gérée côté React) pour éviter
-   * une page blanche en queue d'impression. */
   .break-after-page {
     page-break-after: always;
     break-after: page;
   }
-  /* Éviter qu'une ligne du tableau soit coupée entre deux pages physiques. */
   .break-inside-avoid {
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  /* Forcer le rendu des couleurs de fond (jaune pour EPS, rouge pour les filles). */
   #releve-doc * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
