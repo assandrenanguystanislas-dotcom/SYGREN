@@ -1984,3 +1984,32 @@ Stage Summary:
 - UX simplifiée : 1 bouton "Relevés PDF" au lieu de 2.
 - L'utilisateur n'a plus à filtrer une classe pour imprimer un Relevé — il clique "Relevés PDF" → la page batch liste toutes les classes → il sélectionne (1, quelques, ou toutes) → Imprimer.
 - Moins de friction, plus de flexibilité (single + bulk depuis le même point d'entrée).
+
+---
+Task ID: Releve-UX-Simplify-Verification
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Vérification E2E live de la simplification UX (sha 2cbf8547) — un seul bouton "Relevés PDF".
+
+Work Log:
+- Push GitHub : 2cbf8547 (refactor UX — suppression bouton "Relevé PDF" + renommage "Relevés (toutes classes)" → "Relevés PDF").
+- Déploiement Vercel : auto-déployé pour 2cbf8547 → READY (frontend, le seul impacté).
+- Déploiement Render : auto-deploy GitHub→Render n'a PAS tiré pour ce push (2e fois — le webhook est flaky). Trigger manuel via POST /deploys → deploy dep-da4ea4m417fc73fqvei0, sha 2cbf8547, status=live en ~50s (build cache chaud). Backend non impacté (commit frontend-only) mais SHA tracé pour la règle "render live per push".
+
+Test E2E via Agent Browser (https://sygren.vercel.app/) :
+- Login admin@sygren.ci / admin123 → 200, page d'accueil avec menu latéral.
+- Clic "Résultats" → vue Résultats & Classement.
+- Cascade : Sélecteur école (combobox) → ouvert, 2 options "EPP COTIERE PALMERAIE" trouvées (index 34 et 35 — incohérence de données connue : 2 écoles même nom, IDs différents). Clic index 34 → session selector activé.
+- Sélecteur session → 2 options : "Décembre 2026 — EPP COTIERE PALMERAIE (Validée)" et "Novembre 2026". Clic Décembre 2026.
+- Boutons apparus dans la barre d'actions (visible dès qu'une session est sélectionnée, SANS besoin de filtrer une classe) :
+  * "Synthèse CP1-CM1"
+  * "Synthèse CM2"
+  * "Relevés PDF" ← UN SEUL bouton Relevé (l'ancien "Relevé PDF" qui exigeait classFilter !== "all" est SUPPRIMÉ) ✓
+- Vérification DOM : body.innerText contient "Relevés PDF" (pluriel) = true, NE contient PAS "Relevé PDF" (singulier) = false ✓.
+- Screenshot sauvé : screenshot-results-buttons.png (gitignored).
+
+Stage Summary:
+- UX simplifiée VALIDÉE E2E sur le live Vercel : 1 bouton "Relevés PDF" au lieu de 2.
+- L'utilisateur n'a plus à filtrer une classe pour imprimer un Relevé : il sélectionne école + session → clique "Relevés PDF" → la page batch liste toutes les classes → il sélectionne (1, quelques, ou toutes) → Imprimer.
+- Déploiements finaux : Vercel ✅ READY (2cbf8547), Render ✅ live (2cbf8547, trigger manuel car auto-deploy webhook a manqué).
+- Pattern récurrent constaté : le webhook GitHub→Render rate ~1 push sur 2. À surveiller — si persistant, vérifier le webhook dans le dashboard Render (Settings → Webhook). Vercel, lui, auto-déploie à chaque push sans fail.
+- Artifacts : screenshot-results-buttons.png (gitignored via /screenshot-*.png).
