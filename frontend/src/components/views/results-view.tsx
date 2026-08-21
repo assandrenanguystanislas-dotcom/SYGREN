@@ -242,6 +242,27 @@ export function ResultsView() {
                     Relevé PDF
                   </Button>
                 )}
+                {/* === Relevés PDF — Toutes les classes de la session (bulk) ===
+                    Ouvre /releve/batch?session_id=... dans un nouvel onglet.
+                    L'utilisateur peut imprimer un PDF par classe (iframes
+                    séquentiels + onafterprint). Visible dès qu'une session est
+                    sélectionnée (pas besoin de filtrer une classe précise). */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    let token = "";
+                    try {
+                      const raw = localStorage.getItem("sygren-auth");
+                      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+                    } catch {}
+                    const url = `${window.location.origin}/releve/batch?session_id=${autoSessionId}&t=${encodeURIComponent(token)}`;
+                    window.open(url, "_blank");
+                  }}
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                  Relevés (toutes classes)
+                </Button>
               </div>
             )}
           </div>

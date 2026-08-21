@@ -1855,3 +1855,62 @@ Stage Summary:
 - Cas edge gérés : élèves sans note (HasAverage=false) repoussés en fin pour CP1-CM1, ex-aequo départagés alphabétiquement (non testé ici car les 5 moyennes sont distinctes, mais le code le prévoit).
 - Déploiements finaux : Vercel ✅ READY (c902646c), Render ✅ live (c902646c, auto-deploy GitHub→Render a fonctionné).
 - Artifacts : aucun (tests API via curl, pas de screenshot nécessaire — les données JSON suffisent à valider l'ordre).
+
+---
+Task ID: Releve-Bulk-Download-Session
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Permettre le téléchargement de l'ensemble des Relevés PDF d'une session pour une école (un PDF par classe, séquentiel).
+
+Work Log:
+- Analyse des options d'implémentation (4 options comparées) :
+  A. Backend génère ZIP de PDFs en Go (fpdf) → rejeté (réimplémenter le layout vertical/stats en Go = énorme + qualité incertaine).
+  B. jsPDF + html2canvas + JSZip (client) → rejeté (html2canvas gère mal writing-mode:vertical-rl utilisé pour CP).
+  C. Iframes séquentiels + print() (client, réutilise /releve tel quel) → RETENU (qualité native moteur navigateur, PDFs séparés par classe, pas de refactor du rendu).
+  D. Refactor <ReleveDocument> + doc concaténé (1 PDF) → écarté (effort refactor moyen, 1 gros PDF au lieu de N séparés).
+
+Backend (handlers/reports.go) :
+- Nouveau handler ListReleveClasses(w, r) :
+  * Lit session_id du query param.
+  * RBAC : réutilise getSessionForUser (admin/director/inspector/teacher — même périmètre que GetReleveData).
+  * Charge les classes actives de l'école de la session : WHERE school_id = session.SchoolID AND active = true, ORDER BY level ASC, name ASC (CP1 < CP2 < CE1 < CE2 < CM1 < CM2).
+  * Pour chaque classe, compte les élèves (database.DB.Model(&Student{}).Where(class_id).Count).
+  * Réponse JSON : { classes: [{id, name, level, student_count}], count, school_id }.
+- Router (router/router.go) : route GET /api/reports/releve-classes enregistrée dans le groupe authentifié, juste après /api/reports/releve-data.
+- Build Go : EXIT 0, go vet OK (handlers + router), gofmt OK.
+
+Frontend (src/app/releve/batch/page.tsx — nouveau fichier, 320 lignes) :
+- Page client (/releve/batch?session_id=X&t=TOKEN) accessible via bouton "Relevés (toutes classes)".
+- Helper getParams() : lit session_id + token depuis l'URL (ou localStorage sygren-auth) — pas de state, pas de re-render, évite react-hooks/set-state-in-effect.
+- Helper waitForReleveReady(iframe, 30s) : poll iframe.contentDocument.querySelector("#releve-doc") jusqu'à ce que le contenu soit rendu (gère la latence de fetch de l'API + rendu).
+- État : classes (liste), selected (Set de checkboxes, toutes cochées par défaut), loading, error, progress (current/total/status).
+- printSelected() : boucle séquentielle sur les classes sélectionnées :
+  1. Crée un iframe caché (offscreen right:-9999px, pas display:none pour ne pas casser le rendu print) pointant vers /releve?session_id=X&class_id=Y&t=TOKEN.
+  2. Attend #releve-doc présent (waitForReleveReady).
+  3. +800ms pour le rendu complet (polices, images).
+  4. iframe.contentWindow.focus() + print() — ouvre le dialog d'impression du navigateur.
+  5. Attend onafterprint (= l'utilisateur a fermé le dialog : imprimé/sauvé/annulé) via Promise.
+  6. Fallback 5min si onafterprint ne fire pas (navigateur exotique).
+  7. Supprime l'iframe, passe à la classe suivante.
+- UI : barre d'outils sticky (titre + fermer), encart d'explication, bouton "Imprimer les Relevés sélectionnés (N)" + "Tout cocher/décocher", barre de progression (current/total + status), table des classes (checkbox + nom + niveau + nb élèves + lien Aperçu qui ouvre /releve dans un nouvel onglet).
+- Lien Aperçu : ouvre /releve?session_id=X&class_id=Y&t=TOKEN dans un nouvel onglet pour impression manuelle d'une seule classe.
+- Print CSS : tous les éléments d'UI ont print:hidden → seule la barre d'outils du /releve imprimé est visible (déjà géré par la page /releve existante).
+
+Frontend (src/components/views/results-view.tsx) :
+- Nouveau bouton "Relevés (toutes classes)" ajouté dans le bloc {sessionCfg && selectedSession && canShowSynthese}, après le bouton "Relevé PDF" existant.
+- Visible dès qu'une session est sélectionnée (pas besoin de filtrer une classe précise, contrairement au bouton "Relevé PDF").
+- onClick : lit token depuis localStorage, ouvre /releve/batch?session_id=X&t=TOKEN dans un nouvel onglet.
+
+Vérifications locales :
+- ESLint (batch/page.tsx + results-view.tsx) → 0 erreur, 0 warning.
+- tsc --noEmit (projet complet) → EXIT 0.
+- Premier jet avait react-hooks/set-state-in-effect (setState sync de sessionId/token dans useEffect) → refactor avec helper getParams() (lecture à la demande, pas de state pour les params) → lint clean.
+
+Push + vérification déploiement + test E2E :
+- (à compléter après vérification live)
+
+Stage Summary:
+- Feature bulk téléchargement implémentée via iframes séquentiels + print() (Option C) : qualité native, PDFs séparés par classe, réutilise /releve existant sans refactor.
+- Backend : 1 nouveau handler + 1 nouvelle route (GET /api/reports/releve-classes).
+- Frontend : 1 nouvelle page (/releve/batch) + 1 nouveau bouton (results-view).
+- RBAC hérité de getSessionForUser : un director/teacher ne peut télécharger que les Relevés de sa session (= son école), un inspector que son IEP, un admin toutes.
+- UX : l'utilisateur sélectionne les classes (checkboxes), clique "Imprimer", et le navigateur ouvre successivement N dialogs d'impression (un par classe) → l'utilisateur "Enregistrer au format PDF" à chaque fois → N PDFs.

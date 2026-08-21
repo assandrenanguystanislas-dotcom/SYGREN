@@ -372,3 +372,63 @@ func GetReleveData(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse(w, http.StatusOK, data)
 }
+
+// ListReleveClasses returns the list of classes for the session's school.
+// Used by the frontend to drive the batch Relevé download (one PDF per class
+// of the école, for the session — "télécharger l'ensemble des Relevés PDF").
+//
+// Paramètre :
+//   - session_id (requis) : ID de la session (couvre toute l'école — Approche A)
+//
+// RBAC : hérité de getSessionForUser (admin = toutes, director = son école,
+// inspector = son IEP, teacher = son école — accès implicite via la session).
+// La session porte le school_id ; on ne renvoie QUE les classes de cette école.
+func ListReleveClasses(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		middleware.JSONError(w, "session_id est requis", http.StatusBadRequest)
+		return
+	}
+
+	// Charger la session + vérifier RBAC (même périmètre que GetReleveData).
+	session, err := getSessionForUser(r, sessionID)
+	if err != nil {
+		middleware.JSONError(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	// Lister toutes les classes actives de l'école de la session, triées par
+	// niveau puis nom (CP1 < CP2 < CE1 < CE2 < CM1 < CM2).
+	var classes []models.Class
+	if err := database.DB.Where("school_id = ? AND active = ?", session.SchoolID, true).
+		Order("level ASC, name ASC").Find(&classes).Error; err != nil {
+		middleware.JSONError(w, "erreur récupération classes", http.StatusInternalServerError)
+		return
+	}
+
+	// Construire la réponse avec le compte d'élèves par classe (utile côté
+	// frontend pour afficher "5 élèves" et permettre de dé/sélectionner).
+	type ClassInfo struct {
+		ID           string `json:"id"`
+		Name         string `json:"name"`
+		Level        string `json:"level"`
+		StudentCount int64  `json:"student_count"`
+	}
+	result := make([]ClassInfo, 0, len(classes))
+	for _, c := range classes {
+		var count int64
+		database.DB.Model(&models.Student{}).Where("class_id = ?", c.ID).Count(&count)
+		result = append(result, ClassInfo{
+			ID:           c.ID,
+			Name:         c.Name,
+			Level:        c.Level,
+			StudentCount: count,
+		})
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"classes":   result,
+		"count":     len(result),
+		"school_id": session.SchoolID,
+	})
+}
