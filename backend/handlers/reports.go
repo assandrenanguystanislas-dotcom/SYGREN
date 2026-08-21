@@ -398,10 +398,13 @@ func ListReleveClasses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Lister toutes les classes actives de l'école de la session, triées par
-	// niveau puis nom (CP1 < CP2 < CE1 < CE2 < CM1 < CM2).
+	// ordre scolaire naturel (CP1 < CP2 < CE1 < CE2 < CM1 < CM2).
+	// NB : ORDER BY level ASC donnerait CE<CM<CP (alphabétique) — pas la
+	// progression scolaire. On utilise un CASE pour forcer CP<CE<CM.
 	var classes []models.Class
 	if err := database.DB.Where("school_id = ? AND active = ?", session.SchoolID, true).
-		Order("level ASC, name ASC").Find(&classes).Error; err != nil {
+		Order("CASE level WHEN 'CP' THEN 1 WHEN 'CE' THEN 2 WHEN 'CM' THEN 3 ELSE 4 END, name ASC").
+		Find(&classes).Error; err != nil {
 		middleware.JSONError(w, "erreur récupération classes", http.StatusInternalServerError)
 		return
 	}
