@@ -488,83 +488,78 @@ export default function RelevePage() {
                   Pas de justify-between → le bloc remonte juste sous le tableau.
                   Uniquement sur la dernière page. */}
               {isLastPage && (
-                <div className="mt-4 grid grid-cols-3 gap-4 text-center font-bold text-xs break-inside-avoid">
-                  {/* === Bloc Statistiques — Option A (icônes + couleurs + barre) ===
-                      Tableau structuré avec :
-                      - Icônes G (bleu) / F (rouge) / T (gris)
-                      - Ligne Admis en vert
-                      - Barre de progression + % total en gros */}
+                <div className="mt-3 grid grid-cols-3 gap-3 text-center font-bold text-xs break-inside-avoid">
+                  {/* === Bloc Statistiques compact === */}
                   <div className="border-2 border-black rounded-lg overflow-hidden">
-                    {/* En-tête avec images garçon/fille — fond blanc */}
-                    <div className="grid grid-cols-4 bg-white text-[9px] font-bold border-b-2 border-black">
-                      <div className="p-1.5 text-left"></div>
-                      <div className="p-1 flex items-center justify-center gap-0.5">
-                        <img src="/homme.webp" alt="Garçon" className="w-4 h-4 object-contain" />
+                    {/* En-tête avec images garçon/fille */}
+                    <div className="grid grid-cols-4 bg-white text-[8px] font-bold border-b-2 border-black">
+                      <div className="px-1 py-0.5 text-left"></div>
+                      <div className="px-1 py-0.5 flex items-center justify-center gap-0.5">
+                        <img src="/homme.webp" alt="G" className="w-3 h-3 object-contain" />
                         <span className="text-blue-700">G</span>
                       </div>
-                      <div className="p-1 flex items-center justify-center gap-0.5">
-                        <img src="/femme.webp" alt="Fille" className="w-4 h-4 object-contain" />
+                      <div className="px-1 py-0.5 flex items-center justify-center gap-0.5">
+                        <img src="/femme.webp" alt="F" className="w-3 h-3 object-contain" />
                         <span className="text-red-600">F</span>
                       </div>
-                      <div className="p-1.5 flex items-center justify-center gap-0.5">
-                        <Users className="w-3 h-3 text-gray-600" />
+                      <div className="px-1 py-0.5 flex items-center justify-center gap-0.5">
+                        <Users className="w-2.5 h-2.5 text-gray-600" />
                         <span className="text-gray-600">T</span>
                       </div>
                     </div>
 
                     {/* Ligne Inscrits */}
-                    <div className="grid grid-cols-4 text-[10px] border-b border-gray-300 bg-gray-50">
-                      <div className="p-1.5 text-left font-bold">Inscrits</div>
-                      <div className="p-1.5 text-center text-blue-700 font-bold">{stats.inscrits_g}</div>
-                      <div className="p-1.5 text-center text-red-600 font-bold">{stats.inscrits_f}</div>
-                      <div className="p-1.5 text-center font-bold">{stats.inscrits_t}</div>
+                    <div className="grid grid-cols-4 text-[9px] border-b border-gray-300 bg-gray-50">
+                      <div className="px-1 py-0.5 text-left font-bold">Inscrits</div>
+                      <div className="px-1 py-0.5 text-center text-blue-700 font-bold">{stats.inscrits_g}</div>
+                      <div className="px-1 py-0.5 text-center text-red-600 font-bold">{stats.inscrits_f}</div>
+                      <div className="px-1 py-0.5 text-center font-bold">{stats.inscrits_t}</div>
                     </div>
 
                     {/* Ligne Présents */}
-                    <div className="grid grid-cols-4 text-[10px] border-b border-gray-300 bg-gray-50">
-                      <div className="p-1.5 text-left font-bold">Présents</div>
-                      <div className="p-1.5 text-center text-blue-700 font-bold">{stats.presents_g}</div>
-                      <div className="p-1.5 text-center text-red-600 font-bold">{stats.presents_f}</div>
-                      <div className="p-1.5 text-center font-bold">{stats.presents_t}</div>
+                    <div className="grid grid-cols-4 text-[9px] border-b border-gray-300 bg-gray-50">
+                      <div className="px-1 py-0.5 text-left font-bold">Présents</div>
+                      <div className="px-1 py-0.5 text-center text-blue-700 font-bold">{stats.presents_g}</div>
+                      <div className="px-1 py-0.5 text-center text-red-600 font-bold">{stats.presents_f}</div>
+                      <div className="px-1 py-0.5 text-center font-bold">{stats.presents_t}</div>
                     </div>
 
                     {/* Ligne Admis — vert */}
-                    <div className="grid grid-cols-4 text-[10px] border-b border-gray-300 bg-emerald-50">
-                      <div className="p-1.5 text-left font-bold flex items-center gap-0.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <div className="grid grid-cols-4 text-[9px] border-b border-gray-300 bg-emerald-50">
+                      <div className="px-1 py-0.5 text-left font-bold flex items-center gap-0.5">
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                         Admis
                       </div>
-                      <div className="p-1.5 text-center text-emerald-700 font-bold">{stats.admis_g}</div>
-                      <div className="p-1.5 text-center text-emerald-700 font-bold">{stats.admis_f}</div>
-                      <div className="p-1.5 text-center text-emerald-700 font-bold">{stats.admis_t}</div>
+                      <div className="px-1 py-0.5 text-center text-emerald-700 font-bold">{stats.admis_g}</div>
+                      <div className="px-1 py-0.5 text-center text-emerald-700 font-bold">{stats.admis_f}</div>
+                      <div className="px-1 py-0.5 text-center text-emerald-700 font-bold">{stats.admis_t}</div>
                     </div>
 
                     {/* Ligne % par genre */}
-                    <div className="grid grid-cols-4 text-[9px] bg-gray-100">
-                      <div className="p-1.5 text-left font-bold flex items-center gap-0.5">
-                        <TrendingUp className="w-3 h-3 text-gray-500" />
+                    <div className="grid grid-cols-4 text-[8px] bg-gray-100">
+                      <div className="px-1 py-0.5 text-left font-bold flex items-center gap-0.5">
+                        <TrendingUp className="w-2.5 h-2.5 text-gray-500" />
                         % Admis
                       </div>
-                      <div className="p-1.5 text-center text-blue-700 font-bold">{fmt(stats.pct_g, true)}%</div>
-                      <div className="p-1.5 text-center text-red-600 font-bold">{fmt(stats.pct_f, true)}%</div>
-                      <div className="p-1.5 text-center font-bold">{fmt(stats.pct_t, true)}%</div>
+                      <div className="px-1 py-0.5 text-center text-blue-700 font-bold">{fmt(stats.pct_g, true)}%</div>
+                      <div className="px-1 py-0.5 text-center text-red-600 font-bold">{fmt(stats.pct_f, true)}%</div>
+                      <div className="px-1 py-0.5 text-center font-bold">{fmt(stats.pct_t, true)}%</div>
                     </div>
 
-                    {/* Barre de progression + % total en gros */}
-                    <div className="bg-white p-2 border-t-2 border-gray-800">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-bold text-gray-700 flex items-center gap-0.5">
-                          <Award className="w-3.5 h-3.5 text-amber-500" />
+                    {/* Barre de progression + % total */}
+                    <div className="bg-white px-2 py-1 border-t-2 border-gray-800">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[8px] font-bold text-gray-700 flex items-center gap-0.5">
+                          <Award className="w-3 h-3 text-amber-500" />
                           Taux de Réussite
                         </span>
-                        <span className="text-2xl font-black text-emerald-600 leading-none">
+                        <span className="text-lg font-black text-emerald-600 leading-none">
                           {fmt(stats.pct_t, true)}%
                         </span>
                       </div>
-                      {/* Barre de progression */}
-                      <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-1"
+                          className="h-full rounded-full flex items-center justify-end pr-1"
                           style={{
                             width: `${Math.min(stats.pct_t, 100)}%`,
                             background: stats.pct_t >= 75
@@ -575,7 +570,7 @@ export default function RelevePage() {
                           }}
                         >
                           {stats.pct_t >= 20 && (
-                            <span className="text-[8px] text-white font-bold">
+                            <span className="text-[7px] text-white font-bold">
                               {stats.admis_t}/{stats.presents_t}
                             </span>
                           )}
@@ -584,20 +579,20 @@ export default function RelevePage() {
                     </div>
                   </div>
 
-                  {/* Bloc Directeur — même bordure que le bloc stats */}
-                  <div className="border-2 border-black rounded-lg p-2 flex flex-col justify-between min-h-[120px]">
-                    <span className="underline uppercase text-[11px]">Le Directeur</span>
+                  {/* Bloc Directeur compact */}
+                  <div className="border-2 border-black rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
+                    <span className="underline uppercase text-[10px]">Le Directeur</span>
                     <div className="flex-grow"></div>
-                    <span className="uppercase text-[11px] tracking-wide">
+                    <span className="uppercase text-[10px] tracking-wide">
                       {data.director_name || "................................"}
                     </span>
                   </div>
 
-                  {/* Bloc Inspecteur — même bordure que le bloc stats */}
-                  <div className="border-2 border-black rounded-lg p-2 flex flex-col justify-between min-h-[120px]">
-                    <span className="underline uppercase text-[11px]">L&apos;Inspecteur</span>
+                  {/* Bloc Inspecteur compact */}
+                  <div className="border-2 border-black rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
+                    <span className="underline uppercase text-[10px]">L&apos;Inspecteur</span>
                     <div className="flex-grow"></div>
-                    <span className="uppercase text-[11px] tracking-wide">
+                    <span className="uppercase text-[10px] tracking-wide">
                       {data.inspector_name || "................................"}
                     </span>
                   </div>
