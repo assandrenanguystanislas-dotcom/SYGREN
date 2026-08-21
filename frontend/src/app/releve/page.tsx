@@ -483,7 +483,7 @@ export default function RelevePage() {
                       })}
                       {/* Total, Moyenne, Observation : vertical quand compact.
                           Hauteur ajustée pour ne pas avoir de vide vertical. */}
-                      {[{ label: "Total", short: "Total" }, { label: "Moyenne", short: "Moy." }, { label: "Observat.", short: "Obs." }].map(({ label, short }) => (
+                      {[{ label: "Total", short: "Total" }, { label: "Moy.", short: "Moy." }, { label: "Obs.", short: "Obs." }].map(({ label, short }) => (
                         <th
                           key={label}
                           className={`border border-black p-0.5 text-center`}
