@@ -1764,3 +1764,47 @@ Stage Summary:
 - Déploiements finaux : Vercel ✅ READY (dpl_G8JCNZ38Fss..., sha 59587d7), Render ✅ live (dep-da4dbqjtqb8s73cpvle0, sha 59587d7).
 - Limite constatée : l'auto-deploy Render GitHub→Render n'a pas tiré pour ce push (webhook manqué). Trigger manuel utilisé en fallback. À surveiller sur les prochains pushs — si récurrent, il faudra vérifier le webhook GitHub→Render dans le dashboard Render (Settings → Webhook).
 - Artifacts : screenshot-releve-cp-full.png, screenshot-releve-cp-p1.png, screenshot-releve-cp-table.png (gitignored), /tmp/releve_cp_artifact.pdf (PDF généré 691K, hors repo).
+
+---
+Task ID: Releve-Ranking-Merit-CP1-CM1-Alpha-CM2
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Appliquer la règle de classement du Relevé PDF : CP1→CM1 triés par ordre de mérite (moyenne décroissante), CM2 triés par ordre alphabétique.
+
+Work Log:
+- Analyse du code actuel (handlers/reports.go GetReleveData) :
+  * Lignes 178-183 : élèves chargés via `Order("last_name ASC, first_name ASC")` → ordre ALPHABÉTIQUE pour TOUTES les classes.
+  * Lignes 199-201 (ancien commentaire) : "On garde l'ordre alphabétique des élèves (pour le numéro d'ordre) plutôt que le classement — c'est ce que fait le document de référence."
+  * Ligne 205 : `Num: i + 1` = position alphabétique (pas un rang).
+  * `class.Name` = "CP1"/"CP2"/"CE1"/"CE2"/"CM1"/"CM2" (spécifique), `class.Level` = "CP"/"CE"/"CM" (large). Détection CM2 doit utiliser class.Name (pas class.Level qui englobe CM1+CM2).
+- ReleveStudent struct (lignes 47-60) : champs `Num int`, `LastName string`, `FirstName string`, `Average float64`, `HasAverage bool` (tous exposés en JSON).
+
+Implémentation (handlers/reports.go, +31 lignes net) :
+- Import ajouté : `sort`.
+- Commentaire ligne 199-202 mis à jour pour refléter le nouveau comportement (ordre initial alphabétique garanti par DB, tri final appliqué à l'étape 7b).
+- Nouvelle étape 7b (lignes 246-275) insérée après la construction de `releveStudents`, AVANT le calcul des stats :
+  * `normalizedName := strings.ToUpper(strings.TrimSpace(class.Name))` — robuste aux variations de casse/espaces.
+  * `if normalizedName != "CM2"` — CM2 garde l'ordre alphabétique (déjà garanti par la requête DB, aucun tri).
+  * `sort.SliceStable(releveStudents, ...)` pour CP1/CP2/CE1/CE2/CM1 :
+    - Critère 1 : `HasAverage` DESC (élèves avec moyenne AVANT élèves sans note — un élève sans note ne doit pas être "1er").
+    - Critère 2 : `Average` DESC (moyenne la plus élevée = rang 1 = meilleur).
+    - Critère 3 (ex-aequo) : `LastName` ASC puis `FirstName` ASC (départage alphabétique).
+  * Re-numérotation `for i := range releveStudents { releveStudents[i].Num = i + 1 }` : Num devient le RANG (1 = meilleur élève).
+- CM2 : pas de tri, Num reste = position alphabétique (comportement inchangé).
+
+Vérifications locales (avant push) :
+- `go build -o sygren-api main.go` → EXIT 0, binaire 24M.
+- `go vet ./...` → warning sur scripts/neon_check.go (non-committé, conflit local de func main dans scripts/) — n'affecte PAS le build Render (buildCmd compile `main.go` seul, pas `./...`).
+
+Test cases identifiés (école EPP COTIERE PALMERAIE, session 57b954e3 composition #2 validated) :
+- CM1 `f3f2ecd4-3cf7-4d56-8ff1-2b0bbad8cb55` (5 élèves) → doit être trié par mérite (Average DESC).
+- CM2 `2966ef61-90e7-407b-975d-fdaa236b282c` (5 élèves) → doit rester alphabétique.
+
+Push + vérification déploiement + test E2E :
+- (à compléter après vérification live)
+
+Stage Summary:
+- Règle du cahier des charges implémentée : mérite (CP1→CM1) vs alphabétique (CM2).
+- Tri côté BACKEND (source unique de vérité, cohérent pour tout client frontend).
+- Num = rang pour le mérite (1 = meilleur élève), Num = position alpha pour CM2.
+- Cas edge gérés : élèves sans note repoussés en fin (HasAverage=false), ex-aequo départagés alphabétiquement.
+- Aucun changement frontend requis (le frontend affiche déjà `num` tel quel).
