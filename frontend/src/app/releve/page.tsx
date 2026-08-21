@@ -545,9 +545,9 @@ export default function RelevePage() {
                         <TrendingUp className="w-3 h-3 text-gray-500" />
                         % Admis
                       </div>
-                      <div className="p-1.5 text-center text-blue-700 font-bold">{stats.pct_g.toFixed(1)}%</div>
-                      <div className="p-1.5 text-center text-red-600 font-bold">{stats.pct_f.toFixed(1)}%</div>
-                      <div className="p-1.5 text-center font-bold">{stats.pct_t.toFixed(1)}%</div>
+                      <div className="p-1.5 text-center text-blue-700 font-bold">{fmt(stats.pct_g, true)}%</div>
+                      <div className="p-1.5 text-center text-red-600 font-bold">{fmt(stats.pct_f, true)}%</div>
+                      <div className="p-1.5 text-center font-bold">{fmt(stats.pct_t, true)}%</div>
                     </div>
 
                     {/* Barre de progression + % total en gros */}
@@ -558,7 +558,7 @@ export default function RelevePage() {
                           Taux de Réussite
                         </span>
                         <span className="text-2xl font-black text-emerald-600 leading-none">
-                          {stats.pct_t.toFixed(1)}%
+                          {fmt(stats.pct_t, true)}%
                         </span>
                       </div>
                       {/* Barre de progression */}
