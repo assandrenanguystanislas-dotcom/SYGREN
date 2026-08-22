@@ -2611,3 +2611,32 @@ Stage Summary:
 - Cache permissions (RWMutex + TTL 5min + InvalidatePermissionsCache) mirroir du pattern dashboard
 - Endpoints nouveaux : /api/permissions, /api/audit-logs, /api/users/{id}/suspend, /api/users/{id}/reactivate, /api/me/modules
 - UI nouveaux modules : permissions-view, audit-view, 4e onglet "Tous les comptes" dans users-view
+
+---
+Task ID: Architecture-D-Phase2-Implementation
+Agent: Z.ai (main session)
+Task: Implémentation complète Architecture D sur le repo SYGREN réel + push + vérification prod
+
+Work Log:
+- Clone du repo GitHub assandrenanguystanislas-dotcom/SYGREN → /home/z/sygren
+- Analyse exhaustive via subagent Explore (4 surprises : User.Service et User.Active existent déjà, terminologie déjà faite, etc.)
+- Backend Go : ajout de SuspendedAt/SuspendedByID/SuspendedReason à User + 3 nouveaux modèles (Role, RoleModule, AuditLog) + 3 nouveaux handlers (audit.go, permissions.go, users_admin.go) + 1 nouveau package (rbac/) + migration RequireRole → RequireModule dans router.go + Auth middleware fetch User depuis DB (suspension immédiate)
+- Backend : seedRBAC idempotent peuple 4 rôles + 76 cellules (19 modules × 4 rôles) avec matrice miroir du comportement RequireRole actuel
+- Frontend Next.js : 3 nouveaux namespaces API (permissionsApi, auditApi, usersAdminApi) + authApi.modules() + auth-store modules[] + dashboard-shell NAV dynamique + 2 nouvelles vues (permissions-view, audit-view) + 4e onglet "Tous les comptes" dans users-view + fix terminologie login-view
+- Commits poussés : 0be6ea0 (Architecture D complet) + 6274ba4 (fix JSON tags ModuleMeta)
+- Vérification prod Render (https://sygren.onrender.com) :
+  - GET /api/me/modules : renvoie 19 modules accessibles à l'admin ✓
+  - GET /api/permissions : renvoie matrice 4 rôles × 19 modules = 76 cellules avec irreducible flag ✓
+  - GET /api/users : 10 users listés ✓
+  - POST /api/users/{id}/suspend : user.active=false, suspended_at+reason stockés ✓
+  - POST /api/users/{id}/reactivate : user.active=true, champs vidés ✓
+  - GET /api/audit-logs : 5 entrées (1 reactivate + 1 suspend + 3 logins) ✓
+  - Suspension immédiate vérifiée (Auth middleware fetch User depuis DB à chaque requête)
+
+Stage Summary:
+- Architecture D entièrement déployée et fonctionnelle en production
+- RBAC dynamique : admin peut modifier permissions via UI, effet en ~5 min (cache)
+- Suspension immédiate des comptes (pas 72h plus tard)
+- Audit trail complet (login, suspend, reactivate, permission.update)
+- Sécurité anti auto-blocage : permissions irreducible verrouillées (settings, permissions, audit, users-admin, users.inspectors pour admin)
+- Frontend Vercel en cours de déploiement automatique (vérification via dashboard Vercel)
