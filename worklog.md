@@ -2490,3 +2490,29 @@ Stage Summary :
 - Session cancel = hard delete (supprime session + notes + exemptions + moyennes précalculées). Plus de soft-cancel qui gardait les sessions en base.
 - 4 anciennes sessions cancelled nettoyées de la DB.
 - Le dashboard ne compte plus les sessions cancelled (Fix C cache + Fix E SQL aggregation ne les voient plus).
+
+---
+Task ID: Session-View-Reorg-Workflow
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Réorganiser les vues du module Sessions : Actives/Archives/Tout → En cours/Validées/Archives (aligné sur le workflow).
+
+Work Log:
+- Problème : "Actives" montrait draft+open+closed+validated — les sessions validées (finalisées) étaient mélangées avec les sessions en cours (saisie). Confusion pour l'utilisateur.
+- Réorg : 3 vues alignées sur le cycle de vie : En cours (draft+open+closed) → Validées (validated) → Archives (archived). "Tout" supprimé (source de confusion).
+- Backend (handlers/sessions.go ListSessions) : remplacé le filtre include_archived/include_cancelled par un paramètre view :
+  * view=active → draft+open+closed (exclut validated+archived+cancelled)
+  * view=validated → validated uniquement
+  * view=archived → archived uniquement
+  * Sans view → rétrocompatible (draft+open+closed+validated, sans archived/cancelled)
+- Frontend (lib/api.ts) : sessionsApi.list accepte view?: "active"|"validated"|"archived" (remplace include_archived+include_cancelled).
+- Frontend (sessions-view.tsx) :
+  * statusFilter type : "active"|"validated"|"archived" (défaut "active"). "all" supprimé.
+  * useQuery : sessionsApi.list({ view: statusFilter }).
+  * 3 onglets : "En cours" (Calendar) / "Validées" (CheckCircle2) / "Archives" (History). "Tout" (Layers) supprimé.
+  * archiveMut onSuccess : setStatusFilter("archived") (après archivage, bascule sur Archives — la session y apparaît).
+  * cancelMut onSuccess : pas de setStatusFilter (la session hard-deletée disparaît de toutes les vues).
+
+Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
+
+Push + vérification (backend + frontend → Render + Vercel) :
+- (à vérifier après push)

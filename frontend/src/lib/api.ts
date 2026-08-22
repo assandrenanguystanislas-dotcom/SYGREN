@@ -478,17 +478,13 @@ export const sessionsApi = {
     year?: number;
     month?: number;
     school_id?: string;
-    // Par défaut, le backend masque les sessions cancelled et archived pour
-    // garder l'UI active propre. Passer true pour les inclure (vue Archives).
-    include_archived?: boolean;
-    include_cancelled?: boolean;
+    view?: "active" | "validated" | "archived";
   }) => {
     const qs = new URLSearchParams();
     if (params?.year) qs.set("year", String(params.year));
     if (params?.month) qs.set("month", String(params.month));
     if (params?.school_id) qs.set("school_id", params.school_id);
-    if (params?.include_archived) qs.set("include_archived", "true");
-    if (params?.include_cancelled) qs.set("include_cancelled", "true");
+    if (params?.view) qs.set("view", params.view);
     const q = qs.toString();
     return apiFetch<{ sessions: SessionWithDetails[]; count: number }>(
       q ? `/api/sessions?${q}` : "/api/sessions",

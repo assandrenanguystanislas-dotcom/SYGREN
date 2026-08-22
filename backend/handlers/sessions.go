@@ -111,20 +111,21 @@ func ListSessions(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("evaluation_sessions.school_id = ?", v)
 	}
 
-	// Filtres d'archivage/annulation :
-	//   - Par défaut (sans paramètre), on masque les sessions cancelled et
-	//     archived pour garder l'UI active propre. C'est le comportement
-	//     attendu : les sessions terminées ne polluent pas la liste active.
-	//   - include_archived=true  → inclut les sessions archivées
-	//   - include_cancelled=true → inclut les sessions annulées
-	//   - Le filtre "toutes" (include_archived=true&include_cancelled=true)
-	//     affiche tout, utile pour la vue Archives / l'audit.
-	includeArchived := r.URL.Query().Get("include_archived") == "true"
-	includeCancelled := r.URL.Query().Get("include_cancelled") == "true"
-	if !includeArchived {
+	// Filtres de vue : view=active|validated|archived
+	//   - view=active (défaut) : draft + open + closed (sessions en cours de travail)
+	//   - view=validated : validated uniquement (sessions finalisées)
+	//   - view=archived : archived uniquement (historique)
+	//   - Sans view : rétrocompatibilité (draft+open+closed+validated, sans archived/cancelled)
+	view := r.URL.Query().Get("view")
+	switch view {
+	case "active":
+		query = query.Where("evaluation_sessions.status IN ?", []string{"draft", "open", "closed"})
+	case "validated":
+		query = query.Where("evaluation_sessions.status = ?", "validated")
+	case "archived":
+		query = query.Where("evaluation_sessions.status = ?", "archived")
+	default:
 		query = query.Where("evaluation_sessions.status != ?", "archived")
-	}
-	if !includeCancelled {
 		query = query.Where("evaluation_sessions.status != ?", "cancelled")
 	}
 

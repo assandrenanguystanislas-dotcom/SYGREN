@@ -118,10 +118,11 @@ export function SessionsView() {
   const [extendDate, setExtendDate] = useState("");
   // Gestion des exemptions (dialog dédié par session)
   const [exemptionTarget, setExemptionTarget] = useState<SessionWithDetails | null>(null);
-  // === Filtre de vue : "active" (défaut, masque cancelled + archived),
-  // "archived" (montre les archived), "all" (montre tout y compris cancelled).
-  // Permet de garder l'UI active propre tout en donnant accès à l'historique.
-  const [statusFilter, setStatusFilter] = useState<"active" | "archived" | "all">("active");
+  // === Filtre de vue : "active" (draft+open+closed, défaut), "validated"
+  // (validated uniquement), "archived" (archived uniquement). Aligné sur le
+  // workflow : En cours → Validées → Archives. Plus de "Tout" (source de
+  // confusion — mélangeait validées + en cours).
+  const [statusFilter, setStatusFilter] = useState<"active" | "validated" | "archived">("active");
   // === Annulation (dialog avec raison obligatoire + option delete_grades) ===
   const [cancelTarget, setCancelTarget] = useState<SessionWithDetails | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -132,10 +133,7 @@ export function SessionsView() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["sessions", statusFilter],
     queryFn: () =>
-      sessionsApi.list({
-        include_archived: statusFilter === "archived" || statusFilter === "all",
-        include_cancelled: statusFilter === "all",
-      }),
+      sessionsApi.list({ view: statusFilter }),
   });
   const { data: classesData } = useQuery({
     queryKey: ["classes"],
@@ -264,7 +262,7 @@ export function SessionsView() {
       });
       // Après archivage, la session disparaît de la vue "active". On bascule
       // sur "archived" pour montrer le résultat.
-      setStatusFilter((prev) => (prev === "active" ? "archived" : prev));
+      setStatusFilter("archived");
       setArchiveTarget(null);
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
@@ -383,14 +381,14 @@ export function SessionsView() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Filtre de vue : Actives / Archives / Tout
-                Les sessions cancelled + archived sont masquées par défaut
-                pour garder l'UI propre. L'utilisateur peut les afficher ici. */}
+            {/* Filtre de vue : En cours / Validées / Archives
+                Aligné sur le workflow : draft+open+closed / validated / archived.
+                Chaque vue = une étape du cycle de vie de la session. */}
             <div className="inline-flex items-center rounded-md border border-border bg-card p-0.5 text-xs">
               {([
-                { key: "active", label: "Actives", icon: Calendar },
+                { key: "active", label: "En cours", icon: Calendar },
+                { key: "validated", label: "Validées", icon: CheckCircle2 },
                 { key: "archived", label: "Archives", icon: History },
-                { key: "all", label: "Tout", icon: Layers },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
