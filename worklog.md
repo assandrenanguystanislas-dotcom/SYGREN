@@ -2316,3 +2316,22 @@ Stage Summary:
 - Invalidation sur écriture (13 handlers) → cache dashboard toujours frais après mutation.
 - Fix B (in-request cache computeSessionResults) NON implémenté (reporté) — sur cache-miss (1× toutes les 5 min), le dashboard prend encore ~8.7s. À faire si le cache-miss est ressenti.
 - Fix E (SQL aggregation) NON implémenté (long terme, refonte).
+
+Vérification E2E (après déploiement 638eaaa6 + 8a01e5e3) :
+- /api/health : 0.50s (baseline réseau).
+- /api/classes?limit=600 : 2.75s → 2.27s (Fix A partiel student_count seul) → 0.64s (Fix A complet + school/teacher batch). 4× plus rapide.
+- /api/dashboard cache MISS (1er appel après deploy) : ~9-12s (Fix D marginal, Fix B non implémenté — le bottleneck computeSessionResults × 6 fonctions compute* reste).
+- /api/dashboard cache HIT (2e, 3e appels) : 0.22s, 0.39s, 0.27s — 35× plus rapide que le miss. Le cache in-memory (TTL 5 min) fonctionne.
+
+Bilan final :
+- Fix A (ListClasses) : 2.75s → 0.64s (4×). 3 N+1 éliminés (student_count, school, teacher) — 4 queries total au lieu de ~1746.
+- Fix C (dashboard cache 5 min + invalidation écriture) : cache HIT 8.71s → 0.25s (35×). Cache MISS reste ~9-12s (Fix B non implémenté).
+- Fix D (isExempted in-call cache) : marginal sur cache-miss (isExempted n'est qu'une partie du bottleneck — le vrai est computeSessionResults appelé 6× par les 6 fonctions compute*).
+- Invalidation : defer InvalidateDashboardCache() dans 13 handlers write → cache toujours frais après mutation (session/grade/student).
+
+Reste à faire (optionnel) :
+- Fix B (in-request cache de computeSessionResults) : réduireait le cache-MISS de ~9s à ~1.5s (computeSessionResults appelé 1× par session au lieu de 6×). Non implémenté car l'utilisateur a choisi A+C+D. À faire si le cache-miss (1× / 5 min) est ressenti.
+- Fix E (SQL aggregation) : refonte long terme.
+
+Stage Summary :
+- 3 fixes perf appliqués + validés en prod. Le dashboard est rapidissime sur cache hit (0.25s). ListClasses 4× plus rapide. L'utilisateur ne devrait plus ressentir de lenteur sur le dashboard (sauf 1× / 5 min sur cache-miss, ou après une écriture).
