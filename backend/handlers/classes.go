@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"sygren-api/database"
@@ -187,6 +188,14 @@ func CreateClass(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "école introuvable — créez l'école avant d'y ajouter une classe", http.StatusBadRequest)
 		return
 	}
+	// Garde-fou : un enseignant/directeur ne peut être affecté qu'à une classe
+	// de SON école (cahier des charges §3 Module 1 — règle d'affectation).
+	if req.TeacherID != nil && *req.TeacherID != "" {
+		if err := validateTeacherSameSchool(*req.TeacherID, req.SchoolID); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	if req.Level == "" {
 		req.Level = level
 	}
@@ -201,6 +210,39 @@ func CreateClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusCreated, cls)
+}
+
+// validateTeacherSameSchool vérifie que l'utilisateur affecté comme enseignant
+// d'une classe appartient bien à la même école que la classe.
+// Règle métier : un enseignant ou directeur ne peut être affecté qu'à une
+// classe de SON école. Sans cette validation, un admin pourrait (via l'API)
+// affecter un enseignant d'une école A à une classe d'une école B.
+//
+// Cas particuliers :
+//   - teacherID == "" → pas d'enseignant, on valide rien (OK)
+//   - user introuvable en base → erreur 400
+//   - user sans SchoolID (admin, inspector) → erreur 400 (admin/inspector ne
+//     peuvent pas être affectés comme enseignants de classe)
+//   - user.SchoolID ≠ schoolID → erreur 400
+//   - user.SchoolID == schoolID → OK (même directeur de l'école peut tenir
+//     une classe, c'est le cas d'usage explicite)
+func validateTeacherSameSchool(teacherID, schoolID string) error {
+	if teacherID == "" || schoolID == "" {
+		return nil
+	}
+	var user models.User
+	if err := database.DB.First(&user, "id = ?", teacherID).Error; err != nil {
+		return fmt.Errorf("utilisateur affecté introuvable")
+	}
+	// L'utilisateur doit avoir un SchoolID (donc être teacher ou director).
+	if user.SchoolID == nil || *user.SchoolID == "" {
+		return fmt.Errorf("cet utilisateur (%s, rôle %s) n'est rattaché à aucune école — impossible de l'affecter à une classe",
+			user.FullName, user.Role)
+	}
+	if *user.SchoolID != schoolID {
+		return fmt.Errorf("cet utilisateur appartient à une autre école — un enseignant/directeur ne peut être affecté qu'à une classe de son école")
+	}
+	return nil
 }
 
 // UpdateClass updates a class (notamment affectation enseignant + toggle active).
@@ -227,6 +269,14 @@ func UpdateClass(w http.ResponseWriter, r *http.Request) {
 		cls.Level = ValidClassNames[req.Name]
 	}
 	// Affectation dynamique enseignant (cahier des charges §3 Module 1)
+	// Garde-fou : un enseignant/directeur ne peut être affecté qu'à une classe
+	// de SON école.
+	if req.TeacherID != nil && *req.TeacherID != "" {
+		if err := validateTeacherSameSchool(*req.TeacherID, cls.SchoolID); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	cls.TeacherID = req.TeacherID
 	// Toggle active (soft-delete) avec garde-fou élèves
 	if req.Active != nil {

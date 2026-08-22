@@ -581,7 +581,12 @@ function SchoolClassesPanel({
   });
 
   const classes = data?.classes ?? [];
-  const teachers = teachersData?.teachers ?? [];
+  const allTeachers = teachersData?.teachers ?? [];
+  // Règle métier : un enseignant/directeur ne peut être affecté qu'à une
+  // classe de SON école. On filtre donc la liste côté frontend pour ne
+  // montrer que les users rattachés à cette école (UX + cohérence avec la
+  // validation backend qui refuse les affectations hors-école).
+  const teachers = allTeachers.filter((t) => t.school_id === schoolId);
 
   // Trier par ordre standard : CP1, CP2, CE1, CE2, CM1, CM2
   const CLASS_ORDER = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"];

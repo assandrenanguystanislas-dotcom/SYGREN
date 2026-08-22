@@ -156,9 +156,19 @@ export function ClassesView() {
   const classes = data?.classes ?? [];
   const schools = schoolsData?.schools ?? [];
   const teachers = teachersData?.teachers ?? [];
-  // Enseignants disponibles (non déjà affectés, ou celui en cours d'édition)
+  // Règle métier : un enseignant/directeur ne peut être affecté qu'à une
+  // classe de SON école. On filtre la liste par school_id de la classe en
+  // cours d'édition/création. Le backend valide aussi cette règle (refuse
+  // les affectations hors-école via validateTeacherSameSchool).
+  const targetSchoolId = editing ? editing.school_id : form.school_id;
+  // Enseignants disponibles (de la même école + non déjà affectés, ou
+  // celui en cours d'édition)
   const availableTeachers = teachers.filter(
-    (t) => !t.class_name || (editing && t.id === editing.teacher_id),
+    (t) =>
+      // Même école que la classe (si school_id connu)
+      (!targetSchoolId || t.school_id === targetSchoolId) &&
+      // Pas déjà affecté ailleurs (sauf si c'est la classe en cours d'édition)
+      (!t.class_name || (editing && t.id === editing.teacher_id)),
   );
 
   return (
