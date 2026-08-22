@@ -24,7 +24,7 @@ export function UsersView() {
   const [tab, setTab] = useState("teachers");
 
   const canSeeTeachers = user?.role === "admin" || user?.role === "director" || user?.role === "inspector";
-  const canSeeDirectors = user?.role === "admin";
+  const canSeeDirectors = user?.role === "admin" || user?.role === "inspector";
   const canSeeInspectors = user?.role === "admin";
 
   const visibleTabs = [

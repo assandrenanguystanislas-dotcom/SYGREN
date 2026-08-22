@@ -207,10 +207,12 @@ export function DirectorsView() {
                 </p>
               </div>
             </div>
-            <Button onClick={openCreate} size="sm" className="shadow-sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Créer un directeur
-            </Button>
+            {isAdmin && (
+              <Button onClick={openCreate} size="sm" className="shadow-sm">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Créer un directeur
+              </Button>
+            )}
           </div>
           {/* === Filtres en cascade : IEP → École → recherche ===
               - admin : IEP (tous) → École (cascade selon IEP) → recherche
