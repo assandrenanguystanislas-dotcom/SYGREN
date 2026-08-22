@@ -2269,3 +2269,22 @@ Stage Summary final :
 - Lesson : Go nil slice → JSON null (pas []). Toujours init les slices de réponse à [] pour que le frontend .length ne crash pas. Le tsc ne catch pas ça (null est assignable au type array|undefined selon la sérialisation).
 - Déploiements finaux : Vercel ✅ READY (9a16e10), Render ✅ live (9a16e10).
 - DB Neon : 155 étudiants réels importés pour EPP COTIERE PALMERAIE (données du fichier ELEVES (6).xls de l'utilisateur).
+
+---
+Task ID: Students-Import-Cleanup-Prod
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Supprimer les 155 étudiants importés du fichier ELEVES (6).xls pour que l'utilisateur puisse tester l'import lui-même en production.
+
+Work Log:
+- Demande utilisateur : supprimer les 155 données ajoutées lors du test E2E pour refaire le test soi-même.
+- Méthode : extraction des 155 matricules du CSV (extrait du .xls via libreoffice) → pour chaque, lookup de l'ID via GET /api/students + filtre jq par matricule → DELETE /api/students/{id}.
+- 155 DELETE exécutés, 0 non trouvés, 0 échecs (tous HTTP 200).
+- Vérif post-cleanup :
+  * Total EPP COTIERE PALMERAIE : 30 étudiants (revenu à l'état initial).
+  * Distribution : 5 par classe (CE1, CE2, CM1, CM2, CP1, CP2) = les 30 étudiants originaux.
+  * 0 matricule du fichier ELEVES (6).xls reste en base.
+
+Stage Summary:
+- DB Neon nettoyée : les 155 étudiants du test E2E sont supprimés. L'utilisateur peut maintenant tester l'import Excel lui-même en production (le feature est live sur https://sygren.vercel.app → Élèves → Importer Excel).
+- Les 30 étudiants originaux (5 par classe × 6 classes) sont intacts.
+- Aucun changement de code — opération de données uniquement.
