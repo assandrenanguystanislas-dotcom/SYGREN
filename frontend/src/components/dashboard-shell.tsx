@@ -11,6 +11,7 @@ import {
   FileText,
   BarChart3,
   Settings,
+  KeyRound,
   LogOut,
   Menu,
   Trophy,
@@ -94,6 +95,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Bulletins",
     icon: <FileText className="w-4 h-4" />,
     roles: ["admin", "director", "inspector"],
+  },
+  {
+    id: "reset-requests",
+    label: "Réinitialisations",
+    icon: <KeyRound className="w-4 h-4" />,
+    roles: ["admin"],
   },
   {
     id: "settings",

@@ -21,6 +21,7 @@ import { SubjectsView } from "@/components/views/subjects-view";
 import { EvaluationsView } from "@/components/views/evaluations-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
+import { ResetRequestsView } from "@/components/views/reset-requests-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
 import { SettingsView } from "@/components/views/settings-view";
 import { PlaceholderView } from "@/components/views/placeholder-view";
@@ -151,6 +152,7 @@ function AppContent() {
       {view === "evaluations" && <EvaluationsView />}
       {view === "results" && <ResultsView />}
       {view === "bulletins" && <BulletinsView />}
+      {view === "reset-requests" && <ResetRequestsView />}
       {view === "settings" && <SettingsView />}
     </DashboardShell>
   );
