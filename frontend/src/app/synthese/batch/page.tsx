@@ -72,18 +72,20 @@ export default function SyntheseBatchPage() {
   // 1. Vérification session_id au montage (pas de state pour les params —
   // getParams() lu à la demande dans le render, APRÈS le guard loading
   // pour éviter "window is not defined" pendant le pre-render SSR).
+  // setState wrappés en microtask (Promise.resolve) pour éviter
+  // react-hooks/set-state-in-effect (même pattern que le batch Relevé).
   useEffect(() => {
     const { sid } = getParams();
-    if (!sid) {
-      Promise.resolve().then(() => {
+    Promise.resolve().then(() => {
+      if (!sid) {
         setError("session_id est requis dans l'URL");
         setLoading(false);
-      });
-      return;
-    }
-    // document.title indicatif pour l'onglet.
-    document.title = `Synthèses PDF — ${DOCUMENTS.length} document(s)`;
-    setLoading(false);
+        return;
+      }
+      // document.title indicatif pour l'onglet.
+      document.title = `Synthèses PDF — ${DOCUMENTS.length} document(s)`;
+      setLoading(false);
+    });
   }, []);
 
   // 2. Toggle d'un document
