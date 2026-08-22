@@ -126,11 +126,10 @@ function buildBulletinEleve(
     notes[slot] = g.has_grade ? g.value : "";
   }
 
-  // Pour CE/CM : si pas de matière "Éveil au Milieu" dédiée en DB, on
-  // calcule la note combinée = moyenne des 3 sous-matières (Hist-Géo +
-  // EDHC + Sciences). Pour CP, on garde les 3 sous-matières séparées.
-  const isCP = (className || classLevel).toUpperCase().startsWith("CP");
-  if (!isCP && notes.eveilMilieu === undefined) {
+  // La note "Éveil au Milieu" est maintenant fusionnée (1 cellule unique)
+  // pour TOUS les niveaux (CP, CE, CM). Si la DB n'a pas de matière dédiée
+  // "Éveil au Milieu", on calcule la moyenne des 3 sous-matières.
+  if (notes.eveilMilieu === undefined) {
     const combined = computeEveilMilieu(notes);
     if (combined !== undefined) {
       notes.eveilMilieu = combined;
