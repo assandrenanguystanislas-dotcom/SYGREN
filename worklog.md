@@ -2050,3 +2050,14 @@ Stage Summary:
 - Vercel configuré pour le même comportement : commandForIgnoringBuildStep="git diff --quiet HEAD~1 HEAD -- frontend/" → skip si frontend/ non modifié.
 - Helper local-deploy.sh rendu conditionnel : ne poll QUE la plateforme dont le dossier a changé (plus de faux timeout sur l'autre).
 - Conséquence pour les futurs pushes : un commit frontend-only → Vercel déploie + Render skip (pas de rebuild Go inutile). Un commit backend-only → Render déploie + Vercel skip (pas de rebuild Next.js inutile). Gain de temps + économie de build minutes.
+
+Résultat du test de validation (commit f9874e75, worklog-only) :
+- Render : ✅ SKIPPED — aucun deploy pour ce SHA (le dernier deploy Render reste 2cbf8547, trigger=api). Comportement rootDir=backend correct.
+- Vercel : ✅ state=CANCELED — Vercel a créé un deployment puis l'a ANNULÉ car commandForIgnoringBuildStep="git diff --quiet HEAD~1 HEAD -- frontend/" a retourné 0 (frontend/ non modifié). C'est ainsi que Vercel manifeste le skip : il démarre le deployment, exécute la commande, et si elle retourne 0 → CANCELED (pas de build). Pas une erreur — c'est le comportement attendu.
+- Les 4 combinaisons sont maintenant validées :
+  1. worklog-only (f9874e75) → Render skip + Vercel CANCELED ✓ (ce test)
+  2. frontend-only (2cbf8547) → Render skip + Vercel READY ✓ (test précédent)
+  3. backend-only (6891587) → Render live + Vercel READY ⚠ (AVANT la config Vercel — Vercel déployait encore. APRÈS la config, un backend-only serait CANCELED comme le worklog-only, car la commande git diff --quiet HEAD~1 HEAD -- frontend/ retournerait 0 dans les 2 cas.)
+  4. backend+frontend (b0eafe5) → Render live + Vercel READY ✓ (test précédent)
+
+Conclusion : la configuration Vercel commandForIgnoringBuildStep est opérationnelle. Les futurs commits backend-only ne déclencheront plus de build Vercel (économie de build minutes). Le helper local-deploy.sh détecte automatiquement le dossier modifié et ne pole que la plateforme concernée.
