@@ -8,23 +8,22 @@
 // Couleurs institutionnelles (pixel-perfect vs modèle de référence) :
 //   - Bordures tableau : rgb(40,100,200) (bleu roi)
 //   - Texte titres du tableau : rgb(20,50,140) (bleu foncé)
-//   - Bordures externes : rgb(40,100,200)
-//   - Fond en-tête colonnes : bg-[rgb(40,100,200)]/10
 //
 // Tailles de police très petites (8-11px) pour tenir dans A5.
 // Image armoiries CI : /ci-coat-of-arms.png (asset local — plus fiable qu'une
 // URL Wikimedia externe, déjà utilisé par /releve).
 //
-// L'utilisateur fournit un tableau d'élèves ; le composant rend N pages A4
-// paysage avec 2 bulletins côte à côte par page (chunked par paquets de 2).
+// Rendu conditionnel Éveil au Milieu :
+//   - CP : 3 sous-matières (Hist-Géo / EDHC / Sciences) avec accolade "{"
+//   - CE/CM : une seule ligne "Éveil au Milieu" avec note globale eveilMilieu
 //
-// Layout du tableau (grid-cols-12) :
-//   - Colonne gauche (8/12) : Matières (6/8) + Notes (2/8)
-//   - Colonne droite (4/12) : Visa Directeur / Visa Parents / TOTAL / Moyenne / Rang
+// Barème de la Moyenne dynamique :
+//   - CP : /10
+//   - CE/CM : /20
 //
-// Bloc "Éveil au Milieu" : accolade `{` verticale (col-span-1, gros caractère
-// bleu, centré verticalement) qui relie visuellement les 3 sous-matières
-// (Hist-Géo, EDHC milieu, Sciences) placées dans une sous-colonne (col-span-5).
+// Format du Rang :
+//   - Avec valeur : "1er / 5" ou "2ème / 25" (rang/effectif)
+//   - Sans valeur : "..... / 5" (pointillés + effectif)
 
 // === Types ===
 
@@ -32,17 +31,18 @@ export interface BulletinEleve {
   id: number | string;
   nomPrenoms: string;
   matricule: string;
-  classe: string;
+  classe: string; // "CP1", "CP2", "CE1", "CE2", "CM1", "CM2"
   effectif: number;
-  sexe: "M" | "F";
+  sexe: string; // "M" ou "F"
   anneeScolaire: string;
-  session: string;
-  mois: string;
+  typeExamen: string; // ex: "COMPOSITION N°1"
+  mois?: string;
   notes: {
     explText?: number | string;
-    histGeo?: number | string;
-    edhcMilieu?: number | string;
-    sciences?: number | string;
+    eveilMilieu?: number | string; // Note unique pour CE et CM
+    histGeo?: number | string; // Détail CP
+    edhcMilieu?: number | string; // Détail CP
+    sciences?: number | string; // Détail CP
     maths?: number | string;
     dictee?: number | string;
     eps?: number | string;
@@ -55,16 +55,15 @@ export interface BulletinEleve {
     poesieChant?: number | string;
     edhcBase?: number | string;
   };
-  total?: string;
-  moyenne?: string;
-  rang?: string;
-  appreciation?: string;
+  total?: number | string;
+  moyenne?: number | string;
+  rangNum?: number | string; // ex: 1 ou "1er"
 }
 
 export interface IEPInfo {
-  name?: string; // "Dabou-1"
-  region?: string; // "Dabou"
-  bp?: string; // "317 Dabou"
+  name?: string;
+  region?: string;
+  bp?: string;
   inspector_name?: string;
   inspector_email?: string;
   inspector_phone?: string;
@@ -89,7 +88,10 @@ const DEFAULT_IEP: Required<Omit<IEPInfo, "school_name">> = {
 
 const DEFAULT_SCHOOL_NAME = "École";
 
-// Découpe un tableau en chunks de taille `size`.
+// Couleurs institutionnelles (pixel-perfect)
+const BORDER_BLUE = "border-[rgb(40,100,200)]";
+const TEXT_BLUE = "text-[rgb(20,50,140)]";
+
 function chunk<T>(arr: T[], size: number): T[][] {
   if (arr.length === 0) return [];
   const out: T[][] = [];
@@ -99,7 +101,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-// Affiche une note : si vide → "" (cellule vide), sinon valeur brute.
+// Affiche une note : si vide → "" (cellule vide), sinon valeur formatée.
 function renderNote(v: number | string | undefined): string {
   if (v === undefined || v === null || v === "") return "";
   if (typeof v === "number") {
@@ -108,22 +110,6 @@ function renderNote(v: number | string | undefined): string {
   }
   return String(v);
 }
-
-// Rang → label lisible (ex: "1er" / "2e" / "15e").
-function renderRang(r: string | undefined): string {
-  if (!r) return "";
-  if (/^\d+$/.test(r)) {
-    const num = parseInt(r, 10);
-    if (num === 1) return "1er";
-    return `${num}e`;
-  }
-  return r;
-}
-
-// === Constantes de couleurs (pixel-perfect vs modèle de référence) ===
-const BORDER_BLUE = "border-[rgb(40,100,200)]";
-const TEXT_BLUE = "text-[rgb(20,50,140)]";
-const BG_BLUE_LIGHT = "bg-[rgb(40,100,200)]/10";
 
 // === Composant principal ===
 
@@ -155,7 +141,7 @@ export function BulletinsA5Landscape({
             style={{ pageBreakAfter: isLastPage ? "auto" : "always" }}
           >
             <div className="grid grid-cols-2 w-full">
-              {/* === BULLETIN GAUCHE === */}
+              {/* BULLETIN GAUCHE */}
               <div className="p-2 pr-3">
                 {pageEleves[0] && (
                   <BulletinA5
@@ -165,8 +151,7 @@ export function BulletinsA5Landscape({
                   />
                 )}
               </div>
-
-              {/* === BULLETIN DROITE === (séparé par la ligne pointillée) */}
+              {/* BULLETIN DROITE — séparé par la ligne pointillée */}
               <div className="p-2 pl-3 border-l-2 border-dashed border-gray-400">
                 {pageEleves[1] && (
                   <BulletinA5
@@ -185,41 +170,6 @@ export function BulletinsA5Landscape({
 }
 
 // === Bulletin A5 individuel ===
-//
-// Structure pixel-perfect vs le modèle de référence :
-//
-//   ┌── ENTÊTE INSTITUTIONNEL CI ────────────────────────────┐
-//   │ Ministère + Direction + IEP + BP + Tel + Courriel    │  République + armoiries
-//   └── ────────────────────────────────────────────────────┘
-//   ┌── BULLETIN DE NOTES — Session de {session} ───────────┐
-//   │ Élève: …    Matricule: …                              │
-//   │ Classe: …   Effectif: …                                │
-//   │ Sexe: …     Année scolaire: …                          │
-//   └────────────────────────────────────────────────────────┘
-//   ┌── TABLEAU ENCADRÉ BLEU rgb(40,100,200) ────────────────┐
-//   │ MOIS DE : {mois} 20..  (centré bold)                  │
-//   ├────────────────────────────────────────────────────────┤
-//   │ MATIÈRES | NOTES | Visa du Directeur                  │
-//   ├────────────────────────────────────────────────────────┤
-//   │ Exploitation de Texte            | <note>             │
-//   │ ┌─Éveil─┐ { ┌─ Hist-Géo.   ────┐│                    │
-//   │ │ au   │  │ ├─ EDHC        ────┤│  [Visa Directeur]  │
-//   │ │Milieu│  │ └─ Sciences    ────┘│                    │
-//   │ └──────┘                        │                    │
-//   │ Mathématiques                    │                    │
-//   │ Dictée                           │  [Visa des Parents]│
-//   │ EPS                              │                    │
-//   │ Copie                            │  TOTAL : ..../..  │
-//   │ Écriture                         │  Moyenne : ..../..│
-//   │ Expression Écrite                │  Rang : ..../..   │
-//   │ Dessin                           │                    │
-//   │ EDHC                             │                    │
-//   │ Lecture                          │                    │
-//   │ Poésie/ Chant                    │                    │
-//   │ E.D.H.C                          │                    │
-//   ├────────────────────────────────────────────────────────┤
-//   │ Appréciation et Visa du Maître (centré souligné)      │
-//   └────────────────────────────────────────────────────────┘
 
 function BulletinA5({
   eleve,
@@ -232,7 +182,22 @@ function BulletinA5({
 }) {
   const n = eleve.notes;
 
-  // Liste ordonnée des matières simples (hors Éveil au Milieu).
+  // Détection du niveau : CP → 3 sous-matières avec accolade, CE/CM → 1 ligne
+  const isCP = eleve.classe.toUpperCase().startsWith("CP");
+
+  // Barème de la Moyenne : CP → /10, CE/CM → /20
+  const baremeMoyenne = isCP ? "/10" : "/20";
+
+  // Format du Rang : "1er / 5" ou "2ème / 25" (rang/effectif)
+  // Si pas de rang → "..... / {effectif}" (pointillés + effectif)
+  const rangValue = eleve.rangNum;
+  const rangSuffix =
+    rangValue === 1 || rangValue === "1" ? "er" : "ème";
+  const rangDisplay = rangValue
+    ? `${rangValue}${rangSuffix} / ${eleve.effectif}`
+    : `..... / ${eleve.effectif}`;
+
+  // Liste ordonnée des matières simples (hors Éveil au Milieu)
   const SIMPLE_SUBJECTS: { name: string; key: keyof typeof n; bold?: boolean }[] = [
     { name: "Mathématiques", key: "maths", bold: true },
     { name: "Dictée", key: "dictee" },
@@ -251,7 +216,6 @@ function BulletinA5({
     <div className="w-full flex flex-col text-[10px] leading-tight text-black">
       {/* === ENTÊTE INSTITUTIONNEL CI === */}
       <header className="flex justify-between items-start gap-2 mb-1">
-        {/* Bloc gauche : Ministère + IEP */}
         <div className="text-left leading-[1.2]">
           <p className="font-semibold text-[8px]">
             Ministère de l&apos;Éducation Nationale et de l&apos;Alphabétisation
@@ -276,8 +240,6 @@ function BulletinA5({
             </a>
           </p>
         </div>
-
-        {/* Bloc droit : République de CI + armoiries */}
         <div className="flex flex-col items-center text-center min-w-[60px]">
           <p className="font-semibold text-[8px]">
             République de Côte d&apos;Ivoire
@@ -296,54 +258,47 @@ function BulletinA5({
         <h2 className={`font-bold text-[12px] tracking-wide uppercase ${TEXT_BLUE}`}>
           Bulletin de Notes
         </h2>
-        <p className={`text-[9px] italic font-semibold ${TEXT_BLUE}`}>
-          Session de {eleve.session}
+        {/* Affiche directement le type d'examen (ex: "COMPOSITION N°1") sans préfixe */}
+        <p className={`text-[9px] font-semibold uppercase ${TEXT_BLUE}`}>
+          {eleve.typeExamen || "COMPOSITION N°1"}
         </p>
       </div>
 
       {/* === INFOS ÉLÈVE === */}
+      {/* Layout grid 2-colonnes avec labels gauche-alignés et valeurs
+          droite-alignées pour aligner verticalement les libellés
+          (Matricule/Effectif/Année scolaire sur la même ligne verticale). */}
       <div className="grid grid-cols-2 gap-x-2 text-[9px] font-semibold mb-1 leading-snug">
-        <div>
-          <p>
-            Élève : <span className="font-normal">{eleve.nomPrenoms}</span>
-          </p>
-          <p>
-            Classe : <span className="font-normal">{eleve.classe}</span>
-          </p>
-          <p>
-            Sexe :{" "}
-            <span className="font-normal">
-              {eleve.sexe === "F" ? "Féminin" : "Masculin"}
-            </span>
-          </p>
+        {/* Colonne gauche : Élève / Classe / Sexe */}
+        <div className="grid grid-cols-[auto_1fr] gap-x-1 gap-y-0.5">
+          <span>Élève :</span>
+          <span className="font-normal">{eleve.nomPrenoms}</span>
+          <span>Classe :</span>
+          <span className="font-normal">{eleve.classe}</span>
+          <span>Sexe :</span>
+          <span className="font-normal">{eleve.sexe}</span>
         </div>
-        <div className="text-right">
-          <p>
-            Matricule : <span className="font-normal">{eleve.matricule || "—"}</span>
-          </p>
-          <p>
-            Effectif : <span className="font-normal">{eleve.effectif}</span>
-          </p>
-          <p>
-            Année scolaire :{" "}
-            <span className="font-normal">{eleve.anneeScolaire}</span>
-          </p>
+        {/* Colonne droite : Matricule / Effectif / Année scolaire
+            Labels alignés à gauche, valeurs alignées à droite. */}
+        <div className="grid grid-cols-[auto_1fr] gap-x-1 gap-y-0.5">
+          <span>Matricule :</span>
+          <span className="text-right font-normal">{eleve.matricule || "—"}</span>
+          <span>Effectif :</span>
+          <span className="text-right font-normal">{eleve.effectif}</span>
+          <span>Année scolaire :</span>
+          <span className="text-right font-normal">{eleve.anneeScolaire}</span>
         </div>
       </div>
 
       {/* === TABLEAU ENCADRÉ BLEU === */}
       <div className={`border-2 ${BORDER_BLUE} flex-grow flex flex-col justify-between`}>
         {/* LIGNE DU MOIS */}
-        <div
-          className={`border-b-2 ${BORDER_BLUE} text-center font-bold ${TEXT_BLUE} py-0.5 text-[11px] ${BG_BLUE_LIGHT}`}
-        >
+        <div className={`border-b-2 ${BORDER_BLUE} text-center font-bold ${TEXT_BLUE} py-0.5 text-[11px]`}>
           MOIS DE : {eleve.mois || "........................................................20......"}
         </div>
 
         {/* EN-TÊTE TABLEAU */}
-        <div
-          className={`grid grid-cols-12 border-b-2 ${BORDER_BLUE} text-center font-bold ${TEXT_BLUE} text-[10px]`}
-        >
+        <div className={`grid grid-cols-12 border-b-2 ${BORDER_BLUE} text-center font-bold ${TEXT_BLUE} text-[10px]`}>
           <div className={`col-span-6 border-r-2 ${BORDER_BLUE} py-0.5 text-left pl-2`}>
             MATIÈRES
           </div>
@@ -357,7 +312,7 @@ function BulletinA5({
         <div className="grid grid-cols-12 flex-grow text-[9px]">
           {/* === COLONNE GAUCHE (8/12) : MATIÈRES + NOTES === */}
           <div className={`col-span-8 border-r-2 ${BORDER_BLUE} flex flex-col justify-between`}>
-            {/* Ligne 1 : Exploitation de Texte (bold blue) */}
+            {/* Ligne 1 : Exploitation de Texte */}
             <div className={`grid grid-cols-8 border-b ${BORDER_BLUE} py-0.5`}>
               <span className={`col-span-6 font-bold ${TEXT_BLUE} pl-2`}>
                 Exploitation de Texte
@@ -367,50 +322,57 @@ function BulletinA5({
               </span>
             </div>
 
-            {/* Ligne 2 : Éveil au Milieu AVEC ACCOLADE */}
-            {/* Layout : col-span-2 (label vertical "Éveil/au/Milieu")
-                        col-span-1 (accolade "{" gros caractère bleu, centré verticalement)
-                        col-span-5 (3 sous-matières empilées : Hist-Géo, EDHC, Sciences) */}
-            <div className={`grid grid-cols-8 border-b ${BORDER_BLUE}`}>
-              {/* Label "Éveil au Milieu" — vertical sur 3 lignes */}
-              <div className={`col-span-2 pl-1 flex items-center justify-center font-bold ${TEXT_BLUE} leading-tight text-[9px] text-center border-r ${BORDER_BLUE}`}>
-                Éveil<br />au<br />Milieu
-              </div>
-              {/* Accolade "{" — gros caractère bleu, centré verticalement */}
-              <div className={`col-span-1 flex items-center justify-center text-[20px] ${TEXT_BLUE} border-r ${BORDER_BLUE}`}>
-                {"{"}
-              </div>
-              {/* Sous-colonne 5/8 avec les 3 sous-matières */}
-              <div className="col-span-5">
-                {/* Hist – Géo. */}
-                <div className={`grid grid-cols-5 border-b ${BORDER_BLUE} py-0.5`}>
-                  <span className="col-span-3 font-semibold text-[8px] pl-1">
-                    Hist – Géo.
-                  </span>
-                  <span className={`col-span-2 border-l ${BORDER_BLUE} text-center font-semibold`}>
-                    {renderNote(n.histGeo)}
-                  </span>
+            {/* Ligne 2 : Éveil au Milieu — CONDITIONNEL par niveau */}
+            {isCP ? (
+              // CP : 3 sous-matières avec accolade "{"
+              <div className={`grid grid-cols-8 border-b ${BORDER_BLUE}`}>
+                {/* Label "Éveil au Milieu" — vertical sur 3 lignes */}
+                <div className={`col-span-2 pl-1 flex items-center justify-center font-bold ${TEXT_BLUE} leading-tight text-[9px] text-center border-r ${BORDER_BLUE}`}>
+                  Éveil<br />au<br />Milieu
                 </div>
-                {/* EDHC (milieu) */}
-                <div className={`grid grid-cols-5 border-b ${BORDER_BLUE} py-0.5`}>
-                  <span className="col-span-3 font-semibold text-[8px] pl-1">
-                    EDHC
-                  </span>
-                  <span className={`col-span-2 border-l ${BORDER_BLUE} text-center font-semibold`}>
-                    {renderNote(n.edhcMilieu)}
-                  </span>
+                {/* Accolade "{" — gros caractère bleu, centré verticalement */}
+                <div className={`col-span-1 flex items-center justify-center text-[20px] ${TEXT_BLUE} border-r ${BORDER_BLUE}`}>
+                  {"{"}
                 </div>
-                {/* Sciences */}
-                <div className={`grid grid-cols-5 py-0.5`}>
-                  <span className="col-span-3 font-semibold text-[8px] pl-1">
-                    Sciences
-                  </span>
-                  <span className={`col-span-2 border-l ${BORDER_BLUE} text-center font-semibold`}>
-                    {renderNote(n.sciences)}
-                  </span>
+                {/* Sous-colonne 5/8 avec les 3 sous-matières */}
+                <div className="col-span-5">
+                  <div className={`grid grid-cols-5 border-b ${BORDER_BLUE} py-0.5`}>
+                    <span className="col-span-3 font-semibold text-[8px] pl-1">
+                      Hist – Géo.
+                    </span>
+                    <span className={`col-span-2 border-l ${BORDER_BLUE} text-center font-semibold`}>
+                      {renderNote(n.histGeo)}
+                    </span>
+                  </div>
+                  <div className={`grid grid-cols-5 border-b ${BORDER_BLUE} py-0.5`}>
+                    <span className="col-span-3 font-semibold text-[8px] pl-1">
+                      EDHC
+                    </span>
+                    <span className={`col-span-2 border-l ${BORDER_BLUE} text-center font-semibold`}>
+                      {renderNote(n.edhcMilieu)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 py-0.5">
+                    <span className="col-span-3 font-semibold text-[8px] pl-1">
+                      Sciences
+                    </span>
+                    <span className={`col-span-2 border-l ${BORDER_BLUE} text-center font-semibold`}>
+                      {renderNote(n.sciences)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              // CE/CM : une seule ligne "Éveil au Milieu" avec note globale
+              <div className={`grid grid-cols-8 border-b ${BORDER_BLUE} py-0.5`}>
+                <span className={`col-span-6 font-bold ${TEXT_BLUE} pl-2`}>
+                  Éveil au Milieu
+                </span>
+                <span className={`col-span-2 border-l ${BORDER_BLUE} text-center font-semibold`}>
+                  {renderNote(n.eveilMilieu)}
+                </span>
+              </div>
+            )}
 
             {/* Lignes 3-13 : Autres matières */}
             {SIMPLE_SUBJECTS.map((m, i) => {
@@ -444,25 +406,27 @@ function BulletinA5({
               <div className="h-12" />
             </div>
 
-            {/* TOTAL / Moyenne / Rang — pointillés */}
+            {/* TOTAL / Moyenne / Rang */}
             <div className={`border-t-2 ${BORDER_BLUE} pt-1 space-y-1.5 text-[9px] pb-1.5`}>
               <div>
                 <p className={`font-bold ${TEXT_BLUE}`}>TOTAL :</p>
-                <p className="font-semibold text-gray-700">
-                  {eleve.total || "............/.........."}
+                <p className="font-semibold text-gray-800">
+                  {eleve.total !== undefined && eleve.total !== null && eleve.total !== ""
+                    ? renderNote(eleve.total)
+                    : "............/.........."}
                 </p>
               </div>
               <div>
                 <p className={`font-bold ${TEXT_BLUE}`}>Moyenne :</p>
-                <p className="font-semibold text-gray-700">
-                  {eleve.moyenne || "............/.........."}
+                <p className="font-semibold text-gray-800">
+                  {eleve.moyenne !== undefined && eleve.moyenne !== null && eleve.moyenne !== ""
+                    ? `${renderNote(eleve.moyenne)} ${baremeMoyenne}`
+                    : `............ ${baremeMoyenne}`}
                 </p>
               </div>
               <div>
                 <p className={`font-bold ${TEXT_BLUE}`}>Rang :</p>
-                <p className="font-semibold text-gray-700">
-                  {renderRang(eleve.rang) || "........../ ......."}
-                </p>
+                <p className="font-semibold text-gray-800">{rangDisplay}</p>
               </div>
             </div>
           </div>

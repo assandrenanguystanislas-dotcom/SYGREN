@@ -53,13 +53,16 @@ interface ClassInfo {
 // Si une matière n'est pas mappée, le slot reste vide (note "").
 //
 // Clés du BulletinEleve.notes :
-//   explText, histGeo, edhcMilieu, sciences, maths, dictee, eps, copie,
-//   ecriture, expressionEcrite, dessin, edhc, lecture, poesieChant, edhcBase
+//   explText, eveilMilieu, histGeo, edhcMilieu, sciences, maths, dictee,
+//   eps, copie, ecriture, expressionEcrite, dessin, edhc, lecture,
+//   poesieChant, edhcBase
 
 type BulletinNoteKey = keyof BulletinEleve["notes"];
 
 function mapSubjectName(name: string): BulletinNoteKey | null {
   const n = name.toLowerCase();
+  // "Éveil au Milieu" (matière unique en CE/CM) → eveilMilieu
+  if (n.includes("éveil") || n.includes("eveil")) return "eveilMilieu";
   if (n.includes("français") || n.includes("francais") || n.includes("exploit"))
     return "explText";
   if (n.includes("math")) return "maths";
@@ -85,13 +88,29 @@ function mapSubjectName(name: string): BulletinNoteKey | null {
   return null; // sujet non mappé — slot reste vide
 }
 
+// Calcule la note combinée "Éveil au Milieu" pour CE/CM = moyenne des 3
+// sous-matières (Hist-Géo + EDHC + Sciences). Seules les notes non-vides
+// sont comptées. Si les 3 sont vides → undefined (slot non rempli).
+function computeEveilMilieu(n: BulletinEleve["notes"]): number | undefined {
+  const values: number[] = [];
+  for (const v of [n.histGeo, n.edhcMilieu, n.sciences]) {
+    if (v !== undefined && v !== null && v !== "") {
+      const num = typeof v === "number" ? v : parseFloat(String(v));
+      if (!isNaN(num)) values.push(num);
+    }
+  }
+  if (values.length === 0) return undefined;
+  const sum = values.reduce((a, b) => a + b, 0);
+  return Math.round((sum / values.length) * 100) / 100;
+}
+
 // Construit un BulletinEleve à partir d'un élève du backend.
 function buildBulletinEleve(
   student: ReleveData["students"][number],
   className: string,
   classLevel: string,
   effectif: number,
-  session: string,
+  typeExamen: string,
   mois: string,
   anneeScolaire: string,
 ): BulletinEleve {
@@ -107,9 +126,20 @@ function buildBulletinEleve(
     notes[slot] = g.has_grade ? g.value : "";
   }
 
+  // Pour CE/CM : si pas de matière "Éveil au Milieu" dédiée en DB, on
+  // calcule la note combinée = moyenne des 3 sous-matières (Hist-Géo +
+  // EDHC + Sciences). Pour CP, on garde les 3 sous-matières séparées.
+  const isCP = (className || classLevel).toUpperCase().startsWith("CP");
+  if (!isCP && notes.eveilMilieu === undefined) {
+    const combined = computeEveilMilieu(notes);
+    if (combined !== undefined) {
+      notes.eveilMilieu = combined;
+    }
+  }
+
   // Formatage des valeurs numériques en chaînes lisibles.
   const fmtNum = (v: number | undefined, ok: boolean): string => {
-    if (!ok || v === undefined) return "—";
+    if (!ok || v === undefined) return "";
     const r = Math.round(v * 100) / 100;
     return r.toFixed(2).replace(/\.?0+$/, "");
   };
@@ -122,13 +152,12 @@ function buildBulletinEleve(
     effectif,
     sexe: student.gender === "F" ? "F" : "M",
     anneeScolaire,
-    session,
+    typeExamen,
     mois,
     notes,
     total: fmtNum(student.total, student.has_average),
     moyenne: fmtNum(student.average, student.has_average),
-    rang: "", // Pas de rang dans releve-data ; on laisse vide (sera rempli manuellement)
-    appreciation: student.observation || "",
+    rangNum: "", // Pas de rang dans releve-data ; sera rempli manuellement
   };
 }
 
