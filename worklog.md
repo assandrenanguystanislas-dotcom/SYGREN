@@ -2478,3 +2478,15 @@ Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
 
 Push + vérification (backend + frontend → Render + Vercel) :
 - (à vérifier après push)
+
+Vérification E2E + cleanup (après déploiement e28a0a5) :
+- Render live + Vercel READY (backend + frontend déployés).
+- /api/health OK (0.22s).
+- Cleanup : 4 sessions "cancelled" (soft-cancelled avant le fix) hard-deletées via DELETE /api/sessions/{id} (toutes HTTP 200). Ces sessions étaient le résidu de l'ancien soft-cancel — elles sont maintenant supprimées de la DB.
+- Après cleanup : 2 sessions validées + 0 annulées + 0 draft. Plus aucune session "cancelled" en base → plus de surcharge du système.
+- Comportement futur : CancelSession = hard delete (grades + exemptions + student_session_results + session supprimées). Une session annulée n'apparaît plus dans aucune vue + ne surcharge plus le dashboard.
+
+Stage Summary :
+- Session cancel = hard delete (supprime session + notes + exemptions + moyennes précalculées). Plus de soft-cancel qui gardait les sessions en base.
+- 4 anciennes sessions cancelled nettoyées de la DB.
+- Le dashboard ne compte plus les sessions cancelled (Fix C cache + Fix E SQL aggregation ne les voient plus).
