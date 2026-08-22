@@ -42,14 +42,45 @@ function AppContent() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const setHydrated = useAuthStore((s) => s.setHydrated);
   const refreshUser = useAuthStore((s) => s.refreshUser);
-  const [activeView, setActiveView] = useState("dashboard");
+  // Active view persistée dans l'URL hash (#students, #sessions, etc.) pour
+  // survivre au refresh + intégrer le bouton back/forward du navigateur.
+  // Lazy init : lit le hash au premier render (survit au refresh).
+  const [activeView, setActiveView] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.slice(1); // enlève le '#'
+      const navItem = NAV_ITEMS.find((n) => n.id === hash);
+      if (navItem) return hash;
+    }
+    return "dashboard";
+  });
 
   // Marque le store comme hydraté après le premier render client.
-  // setHydrated est un setter Zustand (pas un useState), donc pas concerné
-  // par la règle react-hooks/set-state-in-effect.
   useEffect(() => {
     setHydrated(true);
   }, [setHydrated]);
+
+  // Met à jour l'URL hash quand la vue change (replaceState = pas de hashchange,
+  // évite une boucle setActiveView → hashchange → setActiveView).
+  useEffect(() => {
+    if (activeView !== "dashboard") {
+      window.history.replaceState(null, "", `#${activeView}`);
+    } else if (window.location.hash) {
+      // Dashboard = URL propre (sans hash).
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [activeView]);
+
+  // Écoute le bouton back/forward du navigateur (hashchange) → met à jour
+  // activeView pour suivre la navigation du navigateur.
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.slice(1);
+      const navItem = NAV_ITEMS.find((n) => n.id === hash);
+      setActiveView(navItem ? hash : "dashboard");
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   // Si on a un token mais pas d'utilisateur (après rafraîchissement de page),
   // on recharge le profil depuis l'API. Effet légitime : synchronisation avec
