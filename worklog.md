@@ -2441,3 +2441,14 @@ Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
 
 Push + vérification (backend + frontend → Render + Vercel déploient) :
 - (à vérifier après push)
+
+Vérification E2E (après déploiement 21c3aba5) :
+- /api/students?school_id=EPP_COTIERE_PALMERAIE (30 élèves) → count=30, tous de "EPP COTIERE PALMERAIE" ✓ (filtré par école).
+- /api/students?school_id=<école avec 0 élèves> → count=0 ✓ (ne montre plus les autres écoles — c'était le bug).
+- /api/students (sans school_id, admin) → count=30 (tous, comportement attendu) ✓.
+- Render live + Vercel READY (backend + frontend déployés).
+
+Stage Summary :
+- Bug module Élèves corrigé : le filtre école (dropdown admin) filtre maintenant réellement la liste des élèves côté backend (query param school_id). Avant, l'admin voyait les élèves de TOUTES les écoles même après en avoir choisi une.
+- Même fix appliqué au grades-view (même bug).
+- welcome-dashboard inchangé (list() sans args = RBAC seul = correct pour un dashboard global).
