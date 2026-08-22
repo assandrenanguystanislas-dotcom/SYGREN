@@ -2089,3 +2089,24 @@ Stage Summary:
 - Format D retenu (séparateurs — et parenthèses, lisible, sûr filesystem).
 - 1 ligne ajoutée (document.title = ...) dans le .then() du fetch.
 - Frontend-only commit → Vercel déploie, Render skip (comportement conditionnel validé la semaine passée).
+
+---
+Task ID: Vercel-Filter-Debug-And-Restore
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Debug du commandForIgnoringBuildStep Vercel qui skippait ABUSIVEMENT les commits frontend (6278fbb4 + 07f8f5a8 CANCELED → document.title non déployé en prod).
+
+Work Log:
+- Constat critique : après activation de commandForIgnoringBuildStep="git diff --quiet HEAD~1 HEAD -- frontend/", Vercel a CANCELED les commits frontend 6278fbb4 (document.title) et 07f8f5a8 (batch title). Le dernier deployment production READY est a73ff4b5 → la feature document.title N'ÉTAIT PAS EN LIVE.
+- Diagnostic : la commande `git diff --quiet HEAD~1 HEAD -- frontend/` retourne 1 (build) en local mais 0 (skip) côté Vercel. Tests avec 2 variantes (HEAD~1, puis pattern robuste `! git show --name-only HEAD -- frontend/ | grep -q .`) → toutes les 2 CANCELED côté Vercel malgré tests locaux OK.
+- Hypothèse principale : Vercel exécute la commande DANS le rootDirectory (frontend/), donc `-- frontend/` cherche `frontend/frontend/` → introuvable → diff vide → exit 0 → skip abusif. La doc Vercel dit "run in the root of your Project directory" (= rootDirectory = frontend/), ce qui confirme l'hypothèse.
+- Fix correct (à valider) : utiliser `-- .` au lieu de `-- frontend/` (puisque la commande tourne dans frontend/) → `git diff --quiet HEAD^ HEAD -- .` ou `test -z "$(git show --name-only --pretty=format: HEAD -- .)"`.
+
+Action prioritaire — restaurer le déploiement fonctionnel :
+- PATCH Vercel project : commandForIgnoringBuildStep = null → Vercel déploie sur chaque push (comportement original, wasteful mais fonctionnel).
+- Commit worklog pushé → déclenche un deployment Vercel qui embarquera le code document.title déjà sur main (6278fbb4 + 07f8f5a8) → la feature va enfin passer en prod.
+
+Stage Summary:
+- PRIORITÉ : fonctionnalité restaurée. Le filtre Vercel est désactivé (null) pour ne plus casser les déploiements frontend.
+- Le document.title dynamique va enfin être live après ce push (le code était sur main mais non déployé à cause du filtre cassé).
+- TODO secondaire : re-debugguer la bonne commande commandForIgnoringBuildStep (avec `-- .` pour tenir compte du cwd=frontend/), la tester rigoureusement en simulant l'environnement Vercel, et la réactiver SEULEMENT quand confiant. Pour l'instant, Vercel déploie sur chaque push (y compris backend-only) — c'est le compromis safe.
+- Lesson learned : toujours vérifier qu'un filtre de déploiement ne skipp pas ABUSIVEMENT avant de le considérer "OK". Le test worklog-only (f9874e75, 8138ee1) était passé parce qu'il SKIPPAIT correctement (pas de frontend/ modifié), mais le test frontend-only a révélé que le filtre skipppait TOUT. Le test "skip" n'est pas suffisant — il faut aussi tester le "build".
