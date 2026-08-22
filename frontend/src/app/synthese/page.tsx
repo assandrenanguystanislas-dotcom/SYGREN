@@ -113,6 +113,19 @@ export default function SynthesePage() {
       .then((d) => {
         setData(d);
         setLoading(false);
+        // Nom du PDF dynamique (comme pour le Relevé) : le navigateur utilise
+        // document.title comme nom de fichier par défaut dans "Enregistrer au
+        // format PDF". Format D cohérent avec le Relevé :
+        //   Synthèse CP1-CM1 — EPP COTIERE PALMERAIE (COMPOSITION N°2 — 2026)
+        //   Synthèse CM2 — EPP COTIERE PALMERAIE (COMPOSITION N°2 — 2026)
+        // level_group → libellé court (CP1-CM1 / CM2 / Toutes classes).
+        // eval_label.toUpperCase() pour matcher le style du Relevé (type_examen
+        // est en majuscules). month non peuplé pour la synthèse (year seul).
+        const levelShort =
+          d.level_group === "primary" ? "CP1-CM1"
+          : d.level_group === "cm2" ? "CM2"
+          : "Toutes classes";
+        document.title = `Synthèse ${levelShort} — ${d.school_name} (${d.eval_label.toUpperCase()} N°${d.eval_number} — ${d.year})`;
       })
       .catch((e) => {
         setError(e.message);
