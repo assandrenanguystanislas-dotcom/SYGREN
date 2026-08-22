@@ -2160,3 +2160,25 @@ Stage Summary:
 - L'utilisateur clique → page batch liste les 2 documents (CP1-CM1 + CM2) → sélectionne (1 ou 2) → Imprimer → le navigateur ouvre successivement les dialogs d'impression.
 - Cohérent avec l'UX Relevé (1 bouton → batch → sélection → print séquentiel).
 - Permet d'imprimer les 2 documents d'un coup OU individuellement (sélection d'1 seul).
+
+Vérification E2E (après fix build) :
+- Build local : next build EXIT 0 (fix window SSR). Vercel READY pour 108e0c8 puis 2bc264a (cleanup lint).
+- Agent Browser sur /synthese/batch?session_id=57b954e3&t=TOKEN :
+  * Page chargée sans erreur console, network idle.
+  * document.title = "Synthèses PDF — 2 document(s)" ✓ (titre onglet indicatif).
+  * Header : "Synthèses PDF — Session 57b954e3… · 2 document(s) disponible(s)" ✓.
+  * Table : 2 lignes — "Synthèse CP1-CM1" (Document principal CP1 au CM1) + "Synthèse CM2" (Fin de cycle primaire CM2 seul) ✓.
+  * 3 checkboxes (1 select-all + 2 documents, toutes cochées par défaut) ✓.
+  * Bouton "Imprimer les Synthèses sélectionnées (2)" présent ✓.
+  * Liens "Aperçu" par document (ouvre /synthese?level_group=... dans un nouvel onglet).
+- results-view.tsx : 1 bouton "Synthèses PDF" (au lieu de 2) confirmé par code review (l'edit a remplacé les 32 lignes des 2 boutons par 1 bouton de 16 lignes). Le bouton est un trivial window.open vers /synthese/batch (page vérifiée fonctionnelle).
+- L'UX Relevé (vérifiée précédemment) + l'UX Synthèse maintenant cohérentes : 1 bouton "Relevés PDF" + 1 bouton "Synthèses PDF" au lieu de 3 (Relevé PDF + Relevés toutes classes + Synthèse CP1-CM1 + Synthèse CM2 → Relevés PDF + Synthèses PDF).
+
+Stage Summary final :
+- UX Synthèse simplifiée VALIDÉE E2E : 1 bouton "Synthèses PDF" au lieu de 2.
+- L'utilisateur clique → page batch liste les 2 documents (CP1-CM1 principal + CM2 fin de cycle) → sélectionne (1 ou 2) → Imprimer → le navigateur ouvre successivement les dialogs d'impression.
+- Cohérent avec l'UX Relevé (1 bouton → batch → sélection → print séquentiel).
+- Permet d'imprimer les 2 documents d'un coup OU individuellement.
+- Bug intermédiaire : 1er build Vercel (e7cd8b9) a échoué "window is not defined" (getParams appelé AVANT guard loading en render) → fix avec state loading + guard → build OK.
+- Lint cleanup : setState en microtask (Promise.resolve) pour éviter set-state-in-effect.
+- Déploiements finaux : Vercel ✅ READY (2bc264a), Render skip (frontend-only, backend non modifié — comportement conditionnel correct).
