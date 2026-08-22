@@ -2741,3 +2741,64 @@ Stage Summary:
   1. frontend/src/components/views/settings-view.tsx (refonte complète : 4e onglet Barèmes + Cards séparées + skeletons + badge count + animations + header amélioré + empty/error states).
   2. frontend/src/app/page.tsx (resolveView étendu avec "baremes" + settingsTab case "baremes" + commentaires Phase3 → Phase4).
 - Aucun commit/push effectué (laissé à l'utilisateur pour validation).
+
+---
+Task ID: Architecture-D-Phase6-Bulletins-A5-Landscape
+Agent: frontend-styling-expert
+Task: Module Bulletins A5 paysage — 2 bulletins/page A4 + entête CI + print client-side
+
+Work Log:
+- Lecture des fichiers existants : worklog.md (200 dernières lignes — contexte Architecture D + Phases 1-5), bulletins-view.tsx (module Bulletins actuel qui appelle le backend fpdf), releve/page.tsx (pattern client-side qui fetch via t=token + window.print()), releve/layout.tsx (layout minimal Suspense + force-dynamic), releve/batch/page.tsx (pattern batch + iframes séquentiels — non recopié), globals.css (règles @page synthese/releve existantes), api.ts (reportsApi + getReleveData), auth-store.ts (format localStorage "sygren-auth" = {state: {token, user, ...}, version}).
+- Création de /home/z/sygren/frontend/src/app/bulletins/layout.tsx : layout minimal (Suspense + force-dynamic), copie du pattern releve/layout.tsx. Pas de sidebar, pas de header SYGREN — uniquement le document brut.
+- Ajout de `listReleveClasses(sessionId)` dans `reportsApi` (api.ts) — wrap du endpoint existant `/api/reports/releve-classes?session_id=`. Renvoie `{ classes: [{id, name, level, student_count}], count }`. Aucune modification backend Go (l'endpoint existait déjà, seul le wrapper frontend manquait).
+- Création de /home/z/sygren/frontend/src/components/bulletins-a5-landscape.tsx : composant `BulletinsA5Landscape` qui accepte `eleves: BulletinEleve[]` + `iepInfo?` optionnel. Découpe par chunks de 2 (un page A4 paysage = 2 bulletins A5 côte à côte). Ligne pointillée centrale via `border-l-2 border-dashed border-gray-400` entre les 2 colonnes. Couleur primaire document = blue-700 (border) + blue-900 (texte titres) + blue-50/30 (fond en-tête colonnes) — conforme spec, PAS d'emerald. Tailles de police 7-11px pour tenir en A5. Armoiries CI via /ci-coat-of-arms.png (asset local déjà utilisé par /releve — plus fiable que l'URL Wikimedia externe spécifiée). Layout du tableau : grid-cols-12 avec 8/12 gauche (Matières 6/12 + Notes 2/12) + 4/12 droite (Visa Directeur h-64px + Visa Parents h-36px + TOTAL + Moyenne + Rang empilés verticalement). Ligne pleine sous le tableau : Appréciation + Visa du Maître centrés soulignés bold blue-900. Sous-composant `BulletinRow` pour les 13 matières dans l'ordre exact (Exploitation de Texte bold blue-900, Éveil au Milieu avec 3 sous-blocs indentés Hist-Géo/EDHC-Sciences, Mathématiques bold, Dictée, EPS, Copie, Écriture, Expression Écrite, Dessin, EDHC, Lecture, Poésie/Chant, E.D.H.C).
+- Création de /home/z/sygren/frontend/src/app/bulletins/page.tsx : page client-side qui fetch et rend. URL : /bulletins?session_id=ID&t=TOKEN. Au mount : lit URL params, stocke le token dans localStorage["sygren-auth"] au format zustand-persist minimal en préservant les autres champs (user, modules) si l'entrée existe déjà (pour ne pas déconnecter l'onglet principal). Fetch parallèle : `reportsApi.listReleveClasses(sessionId)` → pour chaque classe `reportsApi.getReleveData(sessionId, classId)` en `Promise.all`. Une classe qui échoue ne casse pas tout (console.error + continue). Mapping matières via helper `mapSubjectName(name)` (case-insensitive, partial match — voir détail dans Stage Summary). Si IEP n'est pas Dabou-1, le texte s'adapte automatiquement depuis `iep_name` / `iep_region` / `iep_bp` / `inspector_email` / `inspector_phone` de la réponse API. Année scolaire calculée : si month >= 9 → year/year+1, sinon year-1/year (septembre = rentrée). États : loading (Loader2 + texte), erreur (AlertCircle + boutons Réessayer/Fermer), vide (AlertCircle amber + Fermer), succès (barre sticky + <BulletinsA5Landscape>). Barre d'actions sticky : titre "Bulletins A5 — {school_name} — {session_label}" + bouton "Imprimer / PDF" (icône Printer, onClick window.print()) + bouton "Fermer" (icône X). Barre cachée en impression via `print:hidden` Tailwind. `document.title` mis à jour pour le nom du PDF auto ("Bulletins A5 — {school} — {session}").
+- Modification de /home/z/sygren/frontend/src/components/views/bulletins-view.tsx : ajout du bouton "Imprimer les bulletins (A5)" à côté de "Générer tous les bulletins" (les 2 dans un div flex items-center gap-2). Bouton : variant=outline, size=sm, icône Printer, ouvre `${window.location.origin}/bulletins?session_id=${selectedSession.id}&t=${encodeURIComponent(token)}` dans un nouvel onglet via window.open(url, "_blank"). Token lu directement depuis localStorage (pattern identique à results-view.tsx pour les boutons Relevés PDF / Synthèses PDF — robuste même si le store n'est pas hydraté). Bouton visible uniquement si `canGenerate` (= admin ou director) ET `selectedSession` sélectionné. Import `Printer` ajouté à lucide-react.
+- Modification de /home/z/sygren/frontend/src/app/globals.css : ajout d'un nouveau bloc `@media print { @page bulletins { size: A4 landscape; margin: 0 } ... }` à la suite des règles @page synthese et @page releve existantes. Règles : `.page-bulletins { page: bulletins; page-break-after: always; break-after: page; }` + `:last-child` sans break (pas de page blanche finale). Visibilité : `#bulletins-doc, #bulletins-doc * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }` + `#bulletins-doc { background: white !important; margin: 0 !important; padding: 0 !important; }`. Cache aussi `.print:hidden { display: none !important; }` (barre d'outils sticky) et `.min-h-screen { min-height: auto !important; background: white !important; }` (container extérieur). La page nommée "bulletins" force A4 paysage marges 0 ; le composant gère son propre padding intérieur.
+- Vérifications finales (exécutées dans /home/z/sygren/frontend/) :
+  * `bun run lint` → EXIT 0 (aucune sortie, aucune erreur, aucun warning).
+  * `bun x tsc --noEmit` → EXIT 0 (aucune erreur de type).
+  * `bun run build` → EXIT 0 (Next.js 16.1.3 Turbopack — compiled successfully in 18.7s, 10 pages statiques générées dont /bulletins en nouvelle route).
+
+Stage Summary:
+- Module Bulletins A5 paysage entièrement fonctionnel côté client (aucune modification backend Go).
+- URL d'accès : `/bulletins?session_id=ID&t=TOKEN` (ouvre dans un nouvel onglet via le bouton dans bulletins-view.tsx).
+- Format : A4 paysage (297×210mm) avec 2 bulletins A5 (148×210mm) côte à côte + ligne pointillée centrale pour la découpe.
+- Entête institutionnel CI complet : Ministère + Direction Régionale + Inspection + BP/Tel + Email + République de Côte d'Ivoire + Devise + Armoiries. Toutes les valeurs IEP viennent de la réponse API releve-data (iep_name, iep_region, iep_bp, inspector_email, inspector_phone) — s'adapte automatiquement si l'IEP n'est pas Dabou-1.
+- Tableau bleu (border-blue-700) avec fond en-tête bg-blue-50/30, 13 matières dans l'ordre exact spec (Exploitation de Texte bold, Éveil au Milieu avec 3 sous-blocs indentés, Mathématiques bold, Dictée, EPS, Copie, Écriture, Expression Écrite, Dessin, EDHC, Lecture, Poésie/Chant, E.D.H.C).
+- Colonne droite (4/12) : Visa Directeur (h-64px) + Visa Parents (h-36px) + TOTAL + Moyenne + Rang empilés verticalement, sous le bloc matière.
+- Ligne pleine sous le tableau : Appréciation + Visa du Maître (centré, souligné, bold blue-900).
+- Helper mapSubjectName() : mapping case-insensitive, partial match, 13 slots → notes SYGREN. Détail du mapping :
+  * français/francais/exploit → explText
+  * math → maths
+  * hist/géo/geo → histGeo
+  * science → sciences
+  * eps/sport → eps
+  * dictée/dictee → dictee
+  * copie → copie
+  * expression + écrit/ecrit → expressionEcrite
+  * écrit/ecrit (sans "expression") → ecriture
+  * dessin → dessin
+  * poés/poes/chant → poesieChant
+  * lect → lecture
+  * edhc + milieu → edhcMilieu, edhc + base → edhcBase, edhc seul → edhc
+  * sujet non mappé → null (slot reste vide).
+- Impression via window.print() : la page nommée @page bulletins force A4 paysage marges 0 ; chaque .page-bulletins est une page séparée (break-after-page) ; la dernière page n'a pas de break (pas de page blanche finale).
+- 1 wrapper API ajouté (reportsApi.listReleveClasses) — 0 modification backend.
+- Bouton d'accès : "Imprimer les bulletins (A5)" (variant outline, size sm, icône Printer) dans bulletins-view.tsx, visible si canGenerate (admin/director) ET session sélectionnée.
+- Fichiers créés (3) :
+  1. frontend/src/app/bulletins/layout.tsx (layout minimal Suspense + force-dynamic)
+  2. frontend/src/app/bulletins/page.tsx (page client-side : fetch + map + render)
+  3. frontend/src/components/bulletins-a5-landscape.tsx (composant A5 paysage + type BulletinEleve + IEPInfo)
+- Fichiers modifiés (3) :
+  1. frontend/src/lib/api.ts (ajout reportsApi.listReleveClasses wrapper)
+  2. frontend/src/components/views/bulletins-view.tsx (ajout bouton Imprimer les bulletins A5 + import Printer)
+  3. frontend/src/app/globals.css (ajout @page bulletins + règles .page-bulletins + #bulletins-doc)
+- Aucun commit/push effectué (laissé à l'utilisateur pour validation).
+- Limitations/risques à connaître avant commit :
+  * Le bouton "Imprimer les bulletins (A5)" est un raccourci client-side — il ne génère pas de bulletin PDF côté backend (contrairement au bouton "Générer tous les bulletins" qui stocke des PDF via fpdf). Les 2 approches coexistent : le bouton PDF server-side (archivage + download individuel) et le bouton A5 paysage client-side (impression directe navigateur, 2 bulletins/page A4 paysage).
+  * Le bouton est visible uniquement si canGenerate (admin/director) — pas pour inspector ni teacher. Si on souhaite l'ouvrir à inspector, il faut modifier la condition `canGenerate` dans bulletins-view.tsx.
+  * Le mapping mapSubjectName() est heuristique (partial match case-insensitive). Si l'utilisateur a créé une matière personnalisée avec un nom qui matche partiellement un slot existant (ex: "Mathématiques Appliquées"), elle sera mappée sur le slot "maths" — c'est le comportement attendu (le bulletin CI a un slot fixe par matière).
+  * Si l'IEP de l'école n'est pas Dabou-1, l'entête s'adapte automatiquement mais l'email par défaut (iep1dabou@gmail.com) est conservé si l'API ne renvoie pas inspector_email. Vérifier que le backend renvoie bien ces champs pour les autres IEP.
+  * Le Rang n'est pas calculé par le backend releve-data (qui renvoie juste student.observation = "A"/"R"). Le slot rang reste vide — l'enseignant le remplit manuellement après impression. Si on veut le rang auto, il faudrait étendre le backend pour l'inclure dans releve-data (mais la spec disait NE PAS modifier le backend Go).
+  * La page /bulletins réécrit localStorage["sygren-auth"] en préservant les champs existants (user, modules) si l'entrée existe déjà. Si l'onglet principal est ouvert simultanément et que l'utilisateur rafraîchit, le store se réhydrate depuis la version modifiée (avec le token URL qui est identique à celui déjà en place — donc pas de déconnexion effective). Effet de bord mineur : si l'utilisateur a un token différent en URL (ex: token admin passé en URL par un director), le store de l'onglet principal verra ce nouveau token après refresh et pourrait changer de comportement (mais en pratique le bouton "Imprimer" passe toujours le token courant — pas de changement effectif).
