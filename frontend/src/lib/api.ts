@@ -13,6 +13,7 @@
 
 import type {
   LoginResponse,
+  PasswordResetRequest,
   Subject,
   User,
   ApiError,
@@ -135,7 +136,7 @@ async function apiFetch<T>(
 // === Authentification (§4.1 du cahier des charges) ===
 
 export const authApi = {
-  /** Connexion via téléphone OU email + mot de passe. */
+  /** Connexion via email, téléphone OU code école + mot de passe. */
   login: (identifier: string, password: string) =>
     apiFetch<LoginResponse>("/api/auth/login", {
       method: "POST",
@@ -144,6 +145,58 @@ export const authApi = {
 
   /** Récupère le profil de l'utilisateur connecté. */
   me: () => apiFetch<User>("/api/me"),
+
+  // === Reset Password ===
+
+  /** User soumet une demande de réinitialisation (PUBLIC). */
+  resetRequest: (data: { identifier: string; role_hint: string; message?: string }) =>
+    apiFetch<{ status: string; message: string; id: string }>("/api/auth/reset-request", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /** User change son mot de passe (AUTH — première connexion ou volontaire). */
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    apiFetch<{ status: string }>("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /** User réinitialise via un reset link token (PUBLIC). */
+  resetPasswordWithToken: (data: { token: string; new_password: string }) =>
+    apiFetch<{ status: string }>("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // === Reset Password — Admin management ===
+
+  /** Admin liste les demandes (pending par défaut). */
+  listResetRequests: (status?: string) =>
+    apiFetch<{ requests: PasswordResetRequest[]; count: number }>(
+      `/api/auth/reset-requests${status ? `?status=${status}` : ""}`,
+    ),
+
+  /** Admin approuve une demande (option 1: temp_password, option 2: reset_link). */
+  approveResetRequest: (id: string, data: { method: string; note?: string }) =>
+    apiFetch<{
+      status: string;
+      method: string;
+      temp_password?: string;
+      reset_link?: string;
+      user_name: string;
+      message: string;
+    }>(`/api/auth/reset-requests/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /** Admin rejette une demande. */
+  rejectResetRequest: (id: string, data: { note?: string }) =>
+    apiFetch<{ status: string }>(`/api/auth/reset-requests/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // === Santé du service ===

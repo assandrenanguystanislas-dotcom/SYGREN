@@ -2579,3 +2579,10 @@ Work Log:
   * Help text : "Identifiez-vous avec votre email ou numéro de téléphone" → "Admin/IEP : email · Directeur : code école · Enseignant : téléphone".
 
 Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
+---
+Task ID: Password-Reset-Feature
+Task: Reset password : modal login (demande) + admin validation + first-login change.
+
+Backend : handlers/password_reset.go (6 endpoints) + models PasswordResetRequest + User.MustChangePassword + routes publiques/auth/admin.
+Frontend : login modal (role selector + identifier) + ForceChangePassword dialog + auth store mustChangePassword flag.
+Build : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.

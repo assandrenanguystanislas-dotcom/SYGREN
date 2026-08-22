@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Loader2, GraduationCap } from "lucide-react";
+import { Loader2, GraduationCap, Lock } from "lucide-react";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { authApi } from "@/lib/api";
 
 import { Providers } from "@/components/providers";
 import { useAuthStore } from "@/lib/auth-store";
@@ -42,6 +47,8 @@ function AppContent() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const setHydrated = useAuthStore((s) => s.setHydrated);
   const refreshUser = useAuthStore((s) => s.refreshUser);
+  const mustChangePassword = useAuthStore((s) => s.mustChangePassword);
+  const clearMustChangePassword = useAuthStore((s) => s.clearMustChangePassword);
   // Active view persistée dans l'URL hash (#students, #sessions, etc.) pour
   // survivre au refresh + intégrer le bouton back/forward du navigateur.
   // Lazy init : lit le hash au premier render (survit au refresh).
@@ -116,6 +123,11 @@ function AppContent() {
     return <LoginView />;
   }
 
+  // Mot de passe temporaire → forcer le changement
+  if (mustChangePassword) {
+    return <ForceChangePassword onDone={clearMustChangePassword} />;
+  }
+
   // Connecté → tableau de bord
   const navItem = NAV_ITEMS.find((n) => n.id === activeView);
   const allowed = navItem?.roles.includes(user.role) ?? false;
@@ -141,6 +153,69 @@ function AppContent() {
       {view === "bulletins" && <BulletinsView />}
       {view === "settings" && <SettingsView />}
     </DashboardShell>
+  );
+}
+
+/** Force le changement de mot de passe (première connexion avec mdp temporaire). */
+function ForceChangePassword({ onDone }: { onDone: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit() {
+    if (!current || !next || next !== confirm) {
+      toast.error("Erreur", { description: "Le nouveau mot de passe et la confirmation doivent être identiques." });
+      return;
+    }
+    if (next.length < 6) {
+      toast.error("Mot de passe trop court", { description: "6 caractères minimum." });
+      return;
+    }
+    setLoading(true);
+    try {
+      await authApi.changePassword({ current_password: current, new_password: next });
+      toast.success("Mot de passe changé", { description: "Vous pouvez maintenant utiliser l'application." });
+      onDone();
+    } catch (e) {
+      toast.error("Erreur", { description: e instanceof Error ? e.message : "Erreur inconnue" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="absolute inset-x-0 top-0 h-1.5 ci-flag-stripe" />
+      <div className="w-full max-w-md">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30 mx-auto mb-4">
+          <Lock className="w-7 h-7" />
+        </div>
+        <h1 className="text-xl font-bold text-center mb-1">Changez votre mot de passe</h1>
+        <p className="text-sm text-muted-foreground text-center mb-6">
+          Vous êtes connecté avec un mot de passe temporaire. Pour des raisons de sécurité,
+          vous devez définir un nouveau mot de passe.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium mb-1 block">Mot de passe actuel (temporaire)</label>
+            <Input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="••••••••" disabled={loading} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Nouveau mot de passe (6 caractères min.)</label>
+            <Input type="password" value={next} onChange={(e) => setNext(e.target.value)} placeholder="••••••••" disabled={loading} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Confirmer le nouveau mot de passe</label>
+            <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" disabled={loading} />
+          </div>
+          <Button onClick={submit} disabled={loading || !current || !next || !confirm} className="w-full">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Lock className="w-4 h-4 mr-1.5" />}
+            Changer le mot de passe
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

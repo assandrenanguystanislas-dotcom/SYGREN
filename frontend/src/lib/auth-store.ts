@@ -20,6 +20,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   hydrated: boolean;
+  mustChangePassword: boolean;
 
   /** Tente une connexion et stocke le token. */
   login: (identifier: string, password: string) => Promise<User>;
@@ -29,6 +30,8 @@ interface AuthState {
   refreshUser: () => Promise<User | null>;
   /** Marque le store comme hydraté (appelé par useHydrateAuth). */
   setHydrated: (v: boolean) => void;
+  /** Efface le flag mustChangePassword (après changement de mot de passe). */
+  clearMustChangePassword: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -38,12 +41,13 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       loading: false,
       hydrated: false,
+      mustChangePassword: false,
 
       login: async (identifier, password) => {
         set({ loading: true });
         try {
-          const { token, user } = await authApi.login(identifier, password);
-          set({ token, user, loading: false });
+          const { token, user, must_change_password } = await authApi.login(identifier, password);
+          set({ token, user, loading: false, mustChangePassword: must_change_password });
           return user;
         } catch (e) {
           set({ loading: false });
@@ -52,7 +56,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({ token: null, user: null });
+        set({ token: null, user: null, mustChangePassword: false });
       },
 
       refreshUser: async () => {
@@ -70,10 +74,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setHydrated: (v) => set({ hydrated: v }),
+      clearMustChangePassword: () => set({ mustChangePassword: false }),
     }),
     {
       name: "sygren-auth",
-      partialize: (state) => ({ token: state.token, user: state.user }),
+      partialize: (state) => ({ token: state.token, user: state.user, mustChangePassword: state.mustChangePassword }),
     },
   ),
 );

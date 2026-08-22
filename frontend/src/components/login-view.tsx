@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { GraduationCap, Loader2, Lock, User as UserIcon, ShieldCheck } from "lucide-react";
+import { GraduationCap, Loader2, Lock, User as UserIcon, ShieldCheck, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthStore } from "@/lib/auth-store";
+import { authApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -38,6 +40,27 @@ type LoginValues = z.infer<typeof loginSchema>;
 export function LoginView() {
   const login = useAuthStore((s) => s.login);
   const [submitting, setSubmitting] = useState(false);
+
+  // === Reset password modal ===
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetRole, setResetRole] = useState<"admin" | "inspector" | "director" | "teacher">("director");
+  const [resetId, setResetId] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+
+  async function handleReset() {
+    if (!resetId.trim()) return;
+    setResetLoading(true);
+    try {
+      await authApi.resetRequest({ identifier: resetId.trim(), role_hint: resetRole });
+      setResetDone(true);
+      toast.success("Demande envoyée", { description: "L'administrateur va traiter votre demande." });
+    } catch (e) {
+      toast.error("Erreur", { description: e instanceof Error ? e.message : "Erreur inconnue" });
+    } finally {
+      setResetLoading(false);
+    }
+  }
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -175,6 +198,74 @@ export function LoginView() {
                 </Button>
               </form>
             </Form>
+
+            {/* Mot de passe oublié */}
+            <div className="text-center mt-3">
+              <button
+                type="button"
+                onClick={() => { setResetOpen(true); setResetDone(false); setResetId(""); }}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              >
+                <KeyRound className="w-3 h-3" />
+                Mot de passe oublié ?
+              </button>
+            </div>
+
+            {/* === Modal reset password === */}
+            <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <KeyRound className="w-5 h-5" />
+                    Réinitialiser le mot de passe
+                  </DialogTitle>
+                  <DialogDescription>
+                    Sélectionnez votre fonction + saisissez votre identifiant.
+                    L'administrateur recevra votre demande.
+                  </DialogDescription>
+                </DialogHeader>
+                {resetDone ? (
+                  <div className="py-6 text-center space-y-3">
+                    <p className="text-sm font-medium text-emerald-600">Demande envoyée</p>
+                    <p className="text-xs text-muted-foreground">
+                      L'administrateur va traiter votre demande et vous communiquer
+                      votre nouveau mot de passe ou un lien de réinitialisation.
+                    </p>
+                    <Button onClick={() => setResetOpen(false)} size="sm">Fermer</Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-medium mb-1.5 block">Votre fonction</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([
+                          { v: "admin" as const, l: "Admin/IEP" },
+                          { v: "director" as const, l: "Directeur" },
+                          { v: "teacher" as const, l: "Enseignant" },
+                        ]).map(({ v, l }) => (
+                          <button key={v} type="button" onClick={() => setResetRole(v)}
+                            className={`px-2 py-2 rounded text-xs border ${resetRole === v ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium mb-1.5 block">
+                        {resetRole === "admin" || resetRole === "inspector" ? "Email" : resetRole === "director" ? "Code école" : "Téléphone"}
+                      </label>
+                      <Input value={resetId} onChange={(e) => setResetId(e.target.value)}
+                        placeholder={resetRole === "director" ? "ex: EPPCP001" : resetRole === "teacher" ? "ex: 0700000000" : "ex: email@sygren.ci"}
+                        disabled={resetLoading} />
+                    </div>
+                    <Button onClick={handleReset} disabled={resetLoading || !resetId.trim()} className="w-full">
+                      {resetLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <KeyRound className="w-4 h-4 mr-1.5" />}
+                      Envoyer la demande
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
 
             {/* Identifiants de démonstration */}
             <div className="mt-5 rounded-lg border border-border/60 bg-muted/40 p-3 text-xs space-y-1.5">

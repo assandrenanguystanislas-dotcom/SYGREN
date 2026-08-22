@@ -19,8 +19,9 @@ type LoginRequest struct {
 
 // LoginResponse
 type LoginResponse struct {
-	Token string      `json:"token"`
-	User  models.User `json:"user"`
+	Token              string      `json:"token"`
+	User               models.User `json:"user"`
+	MustChangePassword bool        `json:"must_change_password"`
 }
 
 // Login authenticates a user and returns a JWT.
@@ -83,7 +84,7 @@ func Login(cfg *config.Config) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(LoginResponse{Token: token, User: user})
+		json.NewEncoder(w).Encode(LoginResponse{Token: token, User: user, MustChangePassword: user.MustChangePassword})
 	}
 }
 

@@ -510,6 +510,21 @@ export const MENTION_COLOR_CLASSES: Record<string, string> = {
 export interface LoginResponse {
   token: string;
   user: User;
+  must_change_password: boolean;
+}
+
+export interface PasswordResetRequest {
+  id: string;
+  identifier: string;
+  role_hint: string;
+  user_id?: string;
+  user_name?: string;
+  status: "pending" | "approved" | "rejected";
+  reset_token?: string;
+  message?: string;
+  admin_note?: string;
+  created_at: string;
+  resolved_at?: string;
 }
 
 export interface ApiError {

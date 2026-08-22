@@ -32,6 +32,7 @@ type User struct {
         IEPID      *string        `gorm:"type:text" json:"iep_id,omitempty"`      // inspecteur / admin scope
         SchoolID   *string        `gorm:"type:text" json:"school_id,omitempty"`  // directeur / teacher scope
         Active     bool           `gorm:"default:true" json:"active"`
+        MustChangePassword bool  `gorm:"default:false" json:"must_change_password"` // temp password → user must change on first login
         CreatedAt  time.Time      `json:"created_at"`
         UpdatedAt  time.Time      `json:"updated_at"`
         DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
@@ -373,6 +374,32 @@ func (r *StudentSessionResult) BeforeCreate(tx *gorm.DB) error {
         return nil
 }
 
+// === PasswordResetRequest — demandes de réinitialisation de mot de passe ===
+// Workflow : user soumet une demande (identifier) → admin valide (option 1:
+// temp password, option 2: reset link) → user change son mot de passe.
+type PasswordResetRequest struct {
+        ID           string     `gorm:"primaryKey;type:text" json:"id"`
+        Identifier   string     `gorm:"type:text" json:"identifier"`           // email, phone, ou code école
+        RoleHint     string     `gorm:"type:text" json:"role_hint"`            // rôle sélectionné par l'utilisateur
+        UserID       *string    `gorm:"type:text" json:"user_id,omitempty"`    // user résolu (si trouvé)
+        UserName     string     `gorm:"type:text" json:"user_name,omitempty"`  // nom du user résolu (pour l'admin)
+        Status       string     `gorm:"type:text;default:pending" json:"status"` // pending | approved | rejected
+        TempPassword *string    `gorm:"type:text" json:"-"`                     // option 1: mdp temporaire en clair (jamais sérialisé)
+        ResetToken   *string    `gorm:"type:text;index" json:"reset_token,omitempty"` // option 2: token pour reset link
+        Message      string     `gorm:"type:text" json:"message,omitempty"`    // message optionnel du user
+        AdminNote    string     `gorm:"type:text" json:"admin_note,omitempty"`  // note de l'admin
+        CreatedAt    time.Time  `json:"created_at"`
+        ResolvedAt   *time.Time `json:"resolved_at,omitempty"`
+        ResolvedBy   *string    `gorm:"type:text" json:"resolved_by,omitempty"` // admin user ID
+}
+
+func (r *PasswordResetRequest) BeforeCreate(tx *gorm.DB) error {
+        if r.ID == "" {
+                r.ID = uuid.NewString()
+        }
+        return nil
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
         return []interface{}{
@@ -380,5 +407,6 @@ func AllModels() []interface{} {
                 &Subject{}, &EvaluationSession{}, &Grade{}, &ReportCard{},
                 &Setting{}, &GradeScale{}, &SessionExemption{},
                 &StudentSessionResult{},
+                &PasswordResetRequest{},
         }
 }
