@@ -218,19 +218,27 @@ function BulletinFragment({
             </p>
           </div>
 
-          {/* INFOS ÉLÈVE */}
-          <div className="grid grid-cols-2 text-[9px] font-semibold mb-1 leading-tight">
-            <div className="space-y-0.5">
-              <p>Élève : <span className="font-normal">{eleve.nomPrenoms}</span></p>
-              <p>Classe : <span className="font-normal">{eleve.classe}</span></p>
-              <p>Sexe : <span className="font-normal">{eleve.sexe}</span></p>
+          {/* INFOS ÉLÈVE — grid-cols-[auto_1fr] sur LES DEUX colonnes
+              Labels droite-alignés (text-right) pour que les ':' s'alignent
+              verticalement. Valeurs droite-alignées (text-right) pour que
+              les valeurs s'alignent verticalement. */}
+          <div className="grid grid-cols-2 gap-x-2 text-[9px] font-semibold mb-1 leading-tight">
+            {/* Colonne gauche : Élève / Classe / Sexe */}
+            <div className="grid grid-cols-[auto_1fr] gap-x-1 gap-y-0.5">
+              <span className="font-bold text-right">Élève :</span>
+              <span className="font-normal text-right">{eleve.nomPrenoms}</span>
+              <span className="font-bold text-right">Classe :</span>
+              <span className="font-normal text-right">{eleve.classe}</span>
+              <span className="font-bold text-right">Sexe :</span>
+              <span className="font-normal text-right">{eleve.sexe}</span>
             </div>
-            <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
-              <span className="font-bold">Matricule :</span>
+            {/* Colonne droite : Matricule / Effectif / Année scolaire */}
+            <div className="grid grid-cols-[auto_1fr] gap-x-1 gap-y-0.5">
+              <span className="font-bold text-right">Matricule :</span>
               <span className="font-normal text-right">{eleve.matricule || "—"}</span>
-              <span className="font-bold">Effectif :</span>
+              <span className="font-bold text-right">Effectif :</span>
               <span className="font-normal text-right">{eleve.effectif}</span>
-              <span className="font-bold">Année scolaire :</span>
+              <span className="font-bold text-right">Année scolaire :</span>
               <span className="font-normal text-right">{eleve.anneeScolaire}</span>
             </div>
           </div>
