@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Loader2, GraduationCap } from "lucide-react";
 
 import { Providers } from "@/components/providers";
@@ -54,32 +54,44 @@ function AppContent() {
     return "dashboard";
   });
 
+  // Ref pour skip le 1er mount (le hash est déjà dans l'URL — pas de pushState).
+  const skipPush = useRef(true);
+
   // Marque le store comme hydraté après le premier render client.
   useEffect(() => {
     setHydrated(true);
   }, [setHydrated]);
 
-  // Met à jour l'URL hash quand la vue change (replaceState = pas de hashchange,
-  // évite une boucle setActiveView → hashchange → setActiveView).
+  // Met à jour l'URL hash quand la vue change (pushState = ajoute une entrée
+  // d'historique → le navigateur peut y revenir avec back/forward).
+  // Skip au 1er mount (le hash vient de la lazy init — déjà dans l'URL).
   useEffect(() => {
+    if (skipPush.current) {
+      skipPush.current = false;
+      return;
+    }
     if (activeView !== "dashboard") {
-      window.history.replaceState(null, "", `#${activeView}`);
+      window.history.pushState(null, "", `#${activeView}`);
     } else if (window.location.hash) {
-      // Dashboard = URL propre (sans hash).
-      window.history.replaceState(null, "", window.location.pathname);
+      // Dashboard = URL propre (sans hash). pushState pour que back y revienne.
+      window.history.pushState(null, "", window.location.pathname);
     }
   }, [activeView]);
 
-  // Écoute le bouton back/forward du navigateur (hashchange) → met à jour
+  // Écoute back/forward du navigateur (popstate + hashchange) → met à jour
   // activeView pour suivre la navigation du navigateur.
   useEffect(() => {
-    const onHashChange = () => {
+    const onNav = () => {
       const hash = window.location.hash.slice(1);
       const navItem = NAV_ITEMS.find((n) => n.id === hash);
       setActiveView(navItem ? hash : "dashboard");
     };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    window.addEventListener("popstate", onNav);
+    window.addEventListener("hashchange", onNav);
+    return () => {
+      window.removeEventListener("popstate", onNav);
+      window.removeEventListener("hashchange", onNav);
+    };
   }, []);
 
   // Si on a un token mais pas d'utilisateur (après rafraîchissement de page),
