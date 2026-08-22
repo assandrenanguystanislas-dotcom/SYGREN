@@ -68,7 +68,7 @@ export function InspectorsView() {
 
   const createMut = useCrudMutation(inspectorsApi.create, {
     invalidateKeys: [["inspectors"], ["iep"]],
-    successMessage: "Inspecteur créé avec succès",
+    successMessage: "Admin IEP créé avec succès",
     actionLabel: "Création",
   });
   const updateMut = useCrudMutation(
@@ -82,13 +82,13 @@ export function InspectorsView() {
       }),
     {
       invalidateKeys: [["inspectors"], ["iep"]],
-      successMessage: "Inspecteur modifié avec succès",
+      successMessage: "Admin IEP modifié avec succès",
       actionLabel: "Modification",
     },
   );
   const deleteMut = useCrudMutation(inspectorsApi.delete, {
     invalidateKeys: [["inspectors"], ["iep"]],
-    successMessage: "Inspecteur supprimé",
+    successMessage: "Admin IEP supprimé",
     actionLabel: "Suppression",
   });
 
@@ -156,9 +156,9 @@ export function InspectorsView() {
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="font-semibold text-base">Inspecteurs IEP</h2>
+              <h2 className="font-semibold text-base">Admins IEP</h2>
               <p className="text-xs text-muted-foreground">
-                {inspectors.length} inspecteur(s) · un inspecteur par IEP
+                {inspectors.length} admin IEP · un admin IEP par circonscription
               </p>
             </div>
           </div>
