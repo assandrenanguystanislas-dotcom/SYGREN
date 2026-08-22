@@ -2401,3 +2401,25 @@ Stage Summary :
 - Fix E implémenté : les moyennes sont précalculées dans student_session_results (maintenues à chaque saisie/suppression de note + backfill au démarrage).
 - Les 3 aggregates du dashboard font maintenant 1 query SQL chacun (au lieu de boucler sessions × computeSessionResultsCached). Le dashboard ne dépend PLUS de computeSessionResults du tout → cache-miss attendu ~0.3-0.5s (au lieu de 2.89s avec Fix B).
 - Risque : cohérence des données — si le backfill n'a pas tourné OU une note est saisie mais le recompute échoue, le dashboard afficherait des moyennes stale. Mitigation : le backfill au démarrage + le recompute synchrone sur chaque grade write.
+
+Vérification E2E Fix E (après déploiement 0382e81 + fix bug type 7c08d91) :
+- Bug trouvé en test : avg_performance=0, pass_rate=0 (mais mentions avaient des valeurs). Cause : GORM Raw passait t10/t20 (float) comme TEXT dans le CASE WHEN → PostgreSQL "operator does not exist: numeric >= text". aggregateMentions marchait car elle utilisait déjà la normalisation (avg * 20/scale >= ?).
+- Fix : aggregateSessionsPerformance refactoré pour normaliser (avg * 20.0 / average_scale >= passThreshold) avec 1 seul paramètre (/20), comme aggregateMentions.
+- Après fix : avg_performance=9.148 (correct, correspond au debug direct), pass_rate=100, mentions_total=55 (cohérent avec totalStudents=55).
+- Timing :
+  * Cache MISS : 0.6s (was 2.89s Fix B → 4.8× plus rapide ; was 8.71s original → 14.5× plus rapide !).
+  * Cache HIT : 0.23s (was 0.25s — stable, 4 appels consécutifs à 0.23-0.24s).
+  * /api/health baseline : 0.25s.
+
+Bilan perf final (tous fixes A+B+C+D+E) :
+| Endpoint | Original | Maintenant (HIT) | Maintenant (MISS) | Gain total |
+|----------|----------|-----------------|--------------------|-----------| 
+| /api/classes | 2.75s | 0.64s | 0.64s | 4× |
+| /api/dashboard | 8.71s | 0.23s | 0.6s | 38× hit / 14.5× miss |
+
+Stage Summary :
+- Fix E implémenté + validé : les moyennes sont précalculées dans student_session_results (backfill au démarrage + recompute sur chaque saisie/suppression de note). Les 3 aggregates du dashboard font maintenant 1 query SQL chacun au lieu de boucler sessions × computeSessionResults.
+- Cache-miss dashboard : 8.71s → 0.6s (14.5× plus rapide). Le dashboard ne dépend PLUS de computeSessionResults du tout.
+- Cache-hit : 0.23s (38× plus rapide que l'original).
+- Bug intermédiaire (GORM Raw type TEXT) trouvé en test + corrigé (normalisation /20).
+- Risque géré : backfill au démarrage (goroutine) + recompute synchrone sur grade writes + invalidation cache (Fix C defer) → données toujours fraîches.
