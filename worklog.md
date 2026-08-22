@@ -2061,3 +2061,31 @@ Résultat du test de validation (commit f9874e75, worklog-only) :
   4. backend+frontend (b0eafe5) → Render live + Vercel READY ✓ (test précédent)
 
 Conclusion : la configuration Vercel commandForIgnoringBuildStep est opérationnelle. Les futurs commits backend-only ne déclencheront plus de build Vercel (économie de build minutes). Le helper local-deploy.sh détecte automatiquement le dossier modifié et ne pole que la plateforme concernée.
+
+---
+Task ID: Releve-PDF-Dynamic-Filename
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Nom de PDF Relevé indicatif (classe + école + session) au lieu du titre global de l'app.
+
+Work Log:
+- Constat : quand on imprime un Relevé en PDF, le navigateur utilise document.title comme nom de fichier par défaut. Le titre était "SYGREN — Gestion de Relevé Électronique de Note" (global, layout racine) → identique pour toutes écoles/classes.
+- Fix dans frontend/src/app/releve/page.tsx : après chargement des données (useEffect fetch releve-data), set document.title dynamiquement.
+- Format choisi (D, avec accents gardés) :
+    `Relevé {class_name} — {school_name} ({type_examen} — {month}-{year})`
+  Exemple : `Relevé CP1 — EPP COTIÈRE PALMERAIE (COMPOSITION N°2 — 12-2026)`
+- Sécurité filesystem : "—" (em dash U+2014) au lieu de ":" ou "/" comme séparateurs ; "-" au lieu de "/" dans la date (12-2026 au lieu de 12/2026 pour éviter le séparateur de chemin).
+- Accents gardés (COTIÈRE, Février, NOTRE DAME) — navigateurs gèrent les accents dans les noms de fichiers (macOS/Windows/Linux).
+- Cas batch automatiquement géré : la page /releve/batch charge N iframes de /releve, chaque iframe a son propre document.title (CP1, CP2, ...), donc chaque PDF bulk a automatiquement le bon nom.
+
+Vérifications locales :
+- ESLint releve/page.tsx → 0 erreur.
+- tsc --noEmit → EXIT 0.
+
+Push + vérification déploiement (frontend-only → Vercel déploie, Render skip) :
+- (à vérifier après push)
+
+Stage Summary:
+- Nom de PDF Relevé maintenant indicatif : contient classe + école + type_examen + mois-année.
+- Format D retenu (séparateurs — et parenthèses, lisible, sûr filesystem).
+- 1 ligne ajoutée (document.title = ...) dans le .then() du fetch.
+- Frontend-only commit → Vercel déploie, Render skip (comportement conditionnel validé la semaine passée).

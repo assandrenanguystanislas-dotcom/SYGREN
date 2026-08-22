@@ -279,6 +279,14 @@ export default function RelevePage() {
       .then((d: ReleveData) => {
         setData(d);
         setLoading(false);
+        // Nom du PDF dynamique : le navigateur utilise document.title comme nom
+        // de fichier par défaut dans le dialog "Enregistrer au format PDF".
+        // Format D : "Relevé CP1 — EPP COTIERE PALMERAIE (COMPOSITION N°2 — 12-2026)"
+        // — "—" (em dash) sûr pour les filesystems, "-" au lieu de "/" dans la date,
+        // accents gardés (COTIÈRE, Février, etc.) pour la lisibilité.
+        // NB : la page /releve/batch charge N iframes de /releve → chaque iframe
+        // a son propre document.title → chaque PDF bulk a aussi le bon nom auto.
+        document.title = `Relevé ${d.class_name} — ${d.school_name} (${d.type_examen} — ${d.month}-${d.year})`;
       })
       .catch((e: Error) => {
         setError(e.message);
