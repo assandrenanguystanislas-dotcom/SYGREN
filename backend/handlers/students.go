@@ -345,7 +345,13 @@ func BulkCreateStudents(w http.ResponseWriter, r *http.Request) {
 
 	// Transaction pour insérer tous les élèves valides d'un coup.
 	tx := database.DB.Begin()
-	result := BulkImportResult{Total: len(req.Students)}
+	// Skipped/Failed initialisés à slice vide (pas nil) pour que le JSON
+	// renvoie [] et non null — sinon le frontend .length crash (null.length).
+	result := BulkImportResult{
+		Total:   len(req.Students),
+		Skipped: []BulkImportDetail{},
+		Failed:  []BulkImportDetail{},
+	}
 	// Map des matricules déjà vus dans CE fichier (pour skip intra-fichier).
 	seenInFile := make(map[string]bool)
 

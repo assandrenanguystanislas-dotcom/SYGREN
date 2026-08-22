@@ -321,11 +321,11 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                   <div className="text-xs text-gray-600">Créés</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-amber-600">{result.skipped.length}</div>
+                  <div className="text-2xl font-bold text-amber-600">{result.skipped?.length ?? 0}</div>
                   <div className="text-xs text-gray-600">Ignorés (doublons)</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{result.failed.length}</div>
+                  <div className="text-2xl font-bold text-red-600">{result.failed?.length ?? 0}</div>
                   <div className="text-xs text-gray-600">Échoués</div>
                 </div>
                 <div className="text-center">
@@ -333,13 +333,13 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                   <div className="text-xs text-gray-600">Total</div>
                 </div>
               </div>
-              {result.failed.length > 0 && (
+              {(result.failed?.length ?? 0) > 0 && (
                 <details className="text-xs">
                   <summary className="cursor-pointer text-red-600 font-medium">
                     {result.failed.length} échec(s) — cliquer pour détails
                   </summary>
                   <ul className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
-                    {result.failed.slice(0, 50).map((f, i) => (
+                    {result.failed?.slice(0, 50).map((f, i) => (
                       <li key={i} className="text-red-700">
                         Ligne {f.row} {f.matricule ? `(${f.matricule})` : ""} : {f.reason}
                       </li>
@@ -347,13 +347,13 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                   </ul>
                 </details>
               )}
-              {result.skipped.length > 0 && (
+              {(result.skipped?.length ?? 0) > 0 && (
                 <details className="text-xs">
                   <summary className="cursor-pointer text-amber-600 font-medium">
                     {result.skipped.length} ignoré(s) — cliquer pour détails
                   </summary>
                   <ul className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
-                    {result.skipped.slice(0, 50).map((s, i) => (
+                    {result.skipped?.slice(0, 50).map((s, i) => (
                       <li key={i} className="text-amber-700">
                         Ligne {s.row} {s.matricule ? `(${s.matricule})` : ""} : {s.reason}
                       </li>
