@@ -13,6 +13,7 @@ import {
   MapPin,
   BarChart3,
   CheckCircle2,
+  Briefcase,
 } from "lucide-react";
 
 import { inspectorsApi, iepApi } from "@/lib/api";
@@ -39,6 +40,7 @@ interface FormData {
   phone: string;
   password: string;
   iep_id: string;
+  service: string;
 }
 
 const EMPTY: FormData = {
@@ -47,6 +49,7 @@ const EMPTY: FormData = {
   phone: "",
   password: "",
   iep_id: "",
+  service: "",
 };
 
 export function InspectorsView() {
@@ -79,6 +82,7 @@ export function InspectorsView() {
         phone: data.phone || null,
         password: data.password || undefined,
         iep_id: data.iep_id || null,
+        service: data.service || undefined,
       }),
     {
       invalidateKeys: [["inspectors"], ["iep"]],
@@ -104,6 +108,7 @@ export function InspectorsView() {
       phone: i.phone ?? "",
       password: "",
       iep_id: i.iep_id ?? "",
+      service: i.service ?? "",
     });
     setEditing(i);
     setDialogOpen(true);
@@ -123,6 +128,7 @@ export function InspectorsView() {
             phone: form.phone || undefined,
             password: form.password,
             iep_id: form.iep_id || undefined,
+            service: form.service || undefined,
           },
         ]);
       }
@@ -158,13 +164,13 @@ export function InspectorsView() {
             <div>
               <h2 className="font-semibold text-base">Admins IEP</h2>
               <p className="text-xs text-muted-foreground">
-                {inspectors.length} admin IEP · un admin IEP par circonscription
+                {inspectors.length} admin IEP · plusieurs admins par IEP (service différencié)
               </p>
             </div>
           </div>
           <Button onClick={openCreate} size="sm" className="shadow-sm">
             <Plus className="w-4 h-4 mr-1.5" />
-            Créer un inspecteur
+            Créer un Admin IEP
           </Button>
         </CardContent>
       </Card>
@@ -214,6 +220,11 @@ export function InspectorsView() {
                           <BarChart3 className="w-3 h-3" /> IEP {i.iep_name}
                         </p>
                       )}
+                      {i.service && (
+                        <p className="flex items-center gap-1.5">
+                          <Briefcase className="w-3 h-3" /> {i.service}
+                        </p>
+                      )}
                       {!i.iep_name && (
                         <p className="flex items-center gap-1.5 italic">
                           <MapPin className="w-3 h-3" /> Aucune IEP affectée
@@ -249,11 +260,11 @@ export function InspectorsView() {
       <EntityDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        title={editing ? "Modifier l'inspecteur" : "Créer un inspecteur"}
+        title={editing ? "Modifier l'Admin IEP" : "Créer un Admin IEP"}
         description={
           editing
-            ? "Modifiez les informations du compte inspecteur."
-            : "Créez un compte inspecteur (login par email OU téléphone)."
+            ? "Modifiez les informations du compte Admin IEP."
+            : "Créez un compte Admin IEP (fonctionnaire de l'IEP, login par email OU téléphone)."
         }
         icon={ShieldCheck}
         loading={createMut.isPending || updateMut.isPending}
@@ -324,8 +335,17 @@ export function InspectorsView() {
                 ))}
               </SelectContent>
             </Select>
+            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="inspector-service">Service au sein de l'IEP</Label>
+            <Input
+              id="inspector-service"
+              value={form.service}
+              onChange={(e) => setForm({ ...form, service: e.target.value })}
+              placeholder="Ex : Examen & Concours, Statistique, Pédagogie…"
+            />
             <p className="text-[11px] text-muted-foreground">
-              Un seul inspecteur actif par IEP.
+              Plusieurs Admins IEP par IEP sont autorisés (service différencié).
             </p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -340,7 +360,7 @@ export function InspectorsView() {
               type="submit"
               disabled={!editing && (!form.full_name || !form.password || (!form.email && !form.phone))}
             >
-              {editing ? "Enregistrer" : "Créer l'inspecteur"}
+              {editing ? "Enregistrer" : "Créer l'Admin IEP"}
             </Button>
           </div>
         </form>
@@ -349,7 +369,7 @@ export function InspectorsView() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Supprimer l'inspecteur ?"
+        title="Supprimer l'Admin IEP ?"
         description={
           deleteTarget
             ? `Supprimer le compte de "${deleteTarget.full_name}" ? Cette action est irréversible.`
@@ -370,7 +390,7 @@ function LoadingState() {
     <Card>
       <CardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        <p className="text-sm">Chargement des inspecteurs…</p>
+        <p className="text-sm">Chargement des Admins IEP…</p>
       </CardContent>
     </Card>
   );
@@ -381,7 +401,7 @@ function ErrorState({ message }: { message: string }) {
     <Card className="border-destructive/40">
       <CardContent className="py-10 text-center">
         <p className="text-sm text-destructive font-medium">
-          Impossible de charger les inspecteurs
+          Impossible de charger les Admins IEP
         </p>
         <p className="text-xs text-muted-foreground mt-1">{message}</p>
       </CardContent>
@@ -394,16 +414,16 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
     <Card className="border-dashed">
       <CardContent className="py-12 text-center">
         <ShieldCheck className="w-8 h-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm font-medium">Aucun inspecteur enregistré</p>
+        <p className="text-sm font-medium">Aucun Admin IEP enregistré</p>
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           {onCreate
-            ? "Créez des comptes inspecteurs pour superviser les IEP."
-            : "Les inspecteurs apparaîtront ici."}
+            ? "Créez des comptes Admins IEP pour gérer les circonscriptions."
+            : "Les Admins IEP apparaîtront ici."}
         </p>
         {onCreate && (
           <Button onClick={onCreate} size="sm">
             <Plus className="w-4 h-4 mr-1.5" />
-            Créer un inspecteur
+            Créer un Admin IEP
           </Button>
         )}
       </CardContent>

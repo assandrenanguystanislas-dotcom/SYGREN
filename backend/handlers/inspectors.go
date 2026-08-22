@@ -56,13 +56,14 @@ func ListInspectors(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CreateInspectorRequest — payload pour créer un compte inspecteur
+// CreateInspectorRequest — payload pour créer un compte Admin IEP
 type CreateInspectorRequest struct {
 	FullName string  `json:"full_name"`
 	Phone    *string `json:"phone,omitempty"`
 	Email    *string `json:"email,omitempty"`
 	Password string  `json:"password"`
-	IEPID    *string `json:"iep_id,omitempty"` // IEP supervisé (optionnel à la création)
+	IEPID    *string `json:"iep_id,omitempty"`  // IEP supervisé
+	Service  string  `json:"service,omitempty"` // service au sein de l'IEP (ex: "Examen & Concours")
 }
 
 // CreateInspector creates an inspector account.
@@ -104,18 +105,11 @@ func CreateInspector(w http.ResponseWriter, r *http.Request) {
 	if req.IEPID != nil && *req.IEPID != "" {
 		var iep models.IEP
 		if err := database.DB.First(&iep, "id = ?", *req.IEPID).Error; err != nil {
-			middleware.JSONError(w, "IEP introuvable — créez l'inspection avant d'y affecter un inspecteur", http.StatusBadRequest)
+			middleware.JSONError(w, "IEP introuvable — créez l'inspection avant d'y affecter un Admin IEP", http.StatusBadRequest)
 			return
 		}
-		// Vérifier qu'aucun autre inspecteur n'est déjà affecté à cette IEP
-		var existing int64
-		database.DB.Model(&models.User{}).
-			Where("role = ? AND iep_id = ? AND active = ?", models.RoleInspector, *req.IEPID, true).
-			Count(&existing)
-		if existing > 0 {
-			middleware.JSONError(w, "cette IEP a déjà un inspecteur actif — désactivez-le ou modifiez-le avant d'en affecter un nouveau", http.StatusConflict)
-			return
-		}
+		// Plusieurs Admins IEP par IEP sont autorisés (service différencié).
+		// Pas de vérification d'unicité par IEP.
 	}
 
 	hashed, err := utils.HashPassword(req.Password)
@@ -131,10 +125,11 @@ func CreateInspector(w http.ResponseWriter, r *http.Request) {
 		Password: hashed,
 		Role:     models.RoleInspector,
 		IEPID:    req.IEPID,
+		Service:  req.Service,
 		Active:   true,
 	}
 	if err := database.DB.Create(&inspector).Error; err != nil {
-		middleware.JSONError(w, "erreur création inspecteur", http.StatusInternalServerError)
+		middleware.JSONError(w, "erreur création Admin IEP", http.StatusInternalServerError)
 		return
 	}
 	inspector.Password = ""
@@ -150,6 +145,7 @@ func UpdateInspector(w http.ResponseWriter, r *http.Request) {
 		Email    *string `json:"email,omitempty"`
 		Password string  `json:"password,omitempty"`
 		IEPID    *string `json:"iep_id,omitempty"`
+		Service  *string `json:"service,omitempty"`
 		Active   *bool   `json:"active,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -158,7 +154,7 @@ func UpdateInspector(w http.ResponseWriter, r *http.Request) {
 	}
 	var inspector models.User
 	if err := database.DB.First(&inspector, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "inspecteur introuvable", http.StatusNotFound)
+		middleware.JSONError(w, "Admin IEP introuvable", http.StatusNotFound)
 		return
 	}
 	if req.FullName != "" {
@@ -179,18 +175,11 @@ func UpdateInspector(w http.ResponseWriter, r *http.Request) {
 		inspector.Password = hashed
 	}
 	if req.IEPID != nil {
-		// Vérifier qu'aucun autre inspecteur n'est déjà affecté à cette IEP
-		if *req.IEPID != "" {
-			var existing int64
-			database.DB.Model(&models.User{}).
-				Where("role = ? AND iep_id = ? AND id != ? AND active = ?", models.RoleInspector, *req.IEPID, id, true).
-				Count(&existing)
-			if existing > 0 {
-				middleware.JSONError(w, "cette IEP a déjà un autre inspecteur actif", http.StatusConflict)
-				return
-			}
-		}
+		// Plusieurs Admins IEP par IEP autorisés — pas de vérification d'unicité.
 		inspector.IEPID = req.IEPID
+	}
+	if req.Service != nil {
+		inspector.Service = *req.Service
 	}
 	if req.Active != nil {
 		inspector.Active = *req.Active

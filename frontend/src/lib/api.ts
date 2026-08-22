@@ -494,6 +494,7 @@ export const inspectorsApi = {
     email?: string;
     password: string;
     iep_id?: string;
+    service?: string;
   }) =>
     apiFetch<User>("/api/inspectors", {
       method: "POST",
@@ -507,6 +508,7 @@ export const inspectorsApi = {
       email: string | null;
       password: string;
       iep_id: string | null;
+      service: string;
       active: boolean;
     }>,
   ) =>

@@ -26,6 +26,8 @@ export interface User {
   iep_id?: string | null;
   school_id?: string | null;
   active: boolean;
+  must_change_password?: boolean;
+  service?: string;
   created_at: string;
   updated_at: string;
 }
