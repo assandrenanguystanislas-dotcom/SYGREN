@@ -65,21 +65,25 @@ async function waitForSyntheseReady(
 // === Composant principal ===
 export default function SyntheseBatchPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set(DOCUMENTS.map((d) => d.id)));
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
 
   // 1. Vérification session_id au montage (pas de state pour les params —
-  // getParams() lu à la demande, évite react-hooks/set-state-in-effect).
+  // getParams() lu à la demande dans le render, APRÈS le guard loading
+  // pour éviter "window is not defined" pendant le pre-render SSR).
   useEffect(() => {
     const { sid } = getParams();
     if (!sid) {
       Promise.resolve().then(() => {
         setError("session_id est requis dans l'URL");
+        setLoading(false);
       });
       return;
     }
     // document.title indicatif pour l'onglet.
     document.title = `Synthèses PDF — ${DOCUMENTS.length} document(s)`;
+    setLoading(false);
   }, []);
 
   // 2. Toggle d'un document
@@ -175,6 +179,14 @@ export default function SyntheseBatchPage() {
   }, [selected]);
 
   // === Rendu ===
+  // Guard loading AVANT getParams() — sinon "window is not defined" en SSR.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+      </div>
+    );
+  }
   const { sid, tok } = getParams();
   if (error) {
     return (
