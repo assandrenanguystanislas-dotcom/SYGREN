@@ -349,11 +349,36 @@ func (e *SessionExemption) BeforeCreate(tx *gorm.DB) error {
         return nil
 }
 
+// === StudentSessionResult (Fix E) ===
+// Table de moyennes PRÉCALCULÉES par élève × session. Alimentée par
+// recomputeStudentSessionResult (appelée à chaque saisie/suppression de note)
+// + backfill au démarrage. Permet au dashboard d'agréger en SQL (AVG, COUNT
+// FILTER) au lieu de tout recalculer en Go (Fix E : ~9s → ~0.3s sur cache-miss).
+type StudentSessionResult struct {
+        ID           string    `gorm:"primaryKey;type:text" json:"id"`
+        StudentID    string    `gorm:"type:text;index" json:"student_id"`
+        SessionID    string    `gorm:"type:text;index" json:"session_id"`
+        ClassID      string    `gorm:"type:text" json:"class_id"`
+        ClassLevel   string    `gorm:"type:text" json:"class_level"`    // CP|CE|CM
+        Average      float64   `gorm:"type:numeric" json:"average"`    // moyenne pondérée (sur average_scale)
+        AverageScale int       `gorm:"type:int" json:"average_scale"`  // 10 (CP/CE) ou 20 (CM)
+        HasAverage   bool      `gorm:"type:boolean" json:"has_average"`
+        CreatedAt    time.Time `json:"created_at"`
+}
+
+func (r *StudentSessionResult) BeforeCreate(tx *gorm.DB) error {
+        if r.ID == "" {
+                r.ID = uuid.NewString()
+        }
+        return nil
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
         return []interface{}{
                 &User{}, &IEP{}, &School{}, &Class{}, &Student{},
                 &Subject{}, &EvaluationSession{}, &Grade{}, &ReportCard{},
                 &Setting{}, &GradeScale{}, &SessionExemption{},
+                &StudentSessionResult{},
         }
 }

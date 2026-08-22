@@ -2372,3 +2372,32 @@ Stage Summary :
 - Le dashboard est maintenant rapidissime sur cache HIT (0.25s, 35× plus rapide) ET acceptable sur cache MISS (2.89s, 3× plus rapide qu'avant).
 - L'utilisateur ne devrait plus ressentir de lenteur sur le dashboard (cache hit = 0.25s dans 95% des cas ; cache miss = 2.89s 1× / 5 min ou après écriture).
 - Fix E (SQL aggregation, refonte long terme) non implémenté — nécessaire seulement si >50 sessions OU si le 2.89s cache-miss est encore ressenti.
+
+---
+Task ID: Perf-Fix-E-SQL-Aggregation
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Fix E — SQL aggregation (refonte long terme). Précalcule les moyennes par élève×session + agrège en SQL au lieu de Go.
+
+Work Log:
+- Nouveau modèle StudentSessionResult (models/models.go) : table student_session_results avec student_id, session_id, class_id, class_level, average, average_scale (10/20), has_average. Inscrit dans AllModels() → AutoMigrate au démarrage.
+- recomputeStudentSessionResult(studentID, sessionID) (computation.go) : réutilise computeSessionResults (qui gère coefficients + exemptions) + extrait le résultat de l'élève + upsert (delete+create). Appelée par les hooks de saisie/suppression de notes.
+- recomputeSessionResults(sessionID) (batch) : recompute tous les élèves d'une session. Utilisé par BulkUpsertGrades (1 session) + le backfill.
+- Hooks grade writes : UpsertGrade → recomputeStudentSessionResult(req.StudentID, req.SessionID). BulkUpsertGrades → recomputeSessionResults(req.SessionID). DeleteGrade → recomputeStudentSessionResult(grade.StudentID, grade.SessionID).
+- BackfillStudentSessionResults() (computation.go, exporté) : au démarrage (goroutine dans main.go après database.Init), si la table est vide → itère toutes les sessions closed/validated/open + recomputeSessionResults (batch). Non-bloquant (goroutine).
+- 3 aggregates réécrits en SQL (dashboard.go) :
+  * aggregateSessionsPerformance : 1 query SQL (AVG(average) + SUM(CASE WHEN average >= threshold THEN 1 ELSE 0 END) pour passed). Filtres level/gender en SQL (subquery students pour gender). Threshold scale-dépendant (CASE WHEN average_scale=10 THEN threshold/2 ELSE threshold).
+  * aggregateMentions : 1 query SQL avec mention calculée en SQL (normalise average sur /20 : avg*20/scale, puis CASE WHEN >= seuil /20). GROUP BY mention.
+  * aggregateMonthlyTrend : 1 query SQL GROUP BY month/year (AVG(average), COUNT(DISTINCT student_id)). CompletionRate via countSessionStatuses (Go, léger).
+  * Compatibilité SQLite dev + PostgreSQL prod : SUM(CASE WHEN...) au lieu de COUNT(*) FILTER (PostgreSQL-only). Subquery pour gender (compatible les 2).
+- Wrappers restaurés (computeGlobalMentions, computeIEPMentions, computeSchoolMentions, computeClassMentions, computePerformanceFromSessions, computeMonthlyTrend + variants ForIEP/ForSchool/ForClass) — ils chargent les sessions puis délèguent aux aggregates SQL.
+- main.go : import handlers ajouté + go handlers.BackfillStudentSessionResults() en goroutine.
+
+Vérifications locales : gofmt OK, go build . EXIT 0, go vet ./handlers/ EXIT 0.
+
+Push + vérification (backend-only → Render déploie) :
+- (à mesurer après push : le backfill tourne au startup, puis cache-miss dashboard doit être ~0.3-0.5s au lieu de 2.89s)
+
+Stage Summary :
+- Fix E implémenté : les moyennes sont précalculées dans student_session_results (maintenues à chaque saisie/suppression de note + backfill au démarrage).
+- Les 3 aggregates du dashboard font maintenant 1 query SQL chacun (au lieu de boucler sessions × computeSessionResultsCached). Le dashboard ne dépend PLUS de computeSessionResults du tout → cache-miss attendu ~0.3-0.5s (au lieu de 2.89s avec Fix B).
+- Risque : cohérence des données — si le backfill n'a pas tourné OU une note est saisie mais le recompute échoue, le dashboard afficherait des moyennes stale. Mitigation : le backfill au démarrage + le recompute synchrone sur chaque grade write.

@@ -690,124 +690,102 @@ func computeClassPerformance(classID string) (avgPerf, passRate float64) {
 }
 
 func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf, passRate float64) {
-	if len(sessions) == 0 {
-		return 0, 0
-	}
+	// Fix E : SQL aggregation sur student_session_results (précalculé).
+	// Avant : boucle sessions × computeSessionResultsCached × iterate results
+	// + 1 query/student (filtre gender) = N+1. Maintenant : 1 query SQL.
 	f := dashboardFilters
-	totalAvg := 0.0
-	totalPass := 0
-	totalStudents := 0
-	_, passThreshold, _ := GetSystemSettings()
+	var sIDs []string
 	for _, s := range sessions {
-		// Filtre par année
 		if f.Year > 0 && s.Year != f.Year {
 			continue
 		}
-		results, err := computeSessionResultsCached(s.ID)
-		if err != nil {
-			continue
-		}
-		// Approche A : la session couvre plusieurs classes (CP1, CP2, ..., CM2).
-		// Le niveau est désormais porté par chaque StudentResult (r.ClassLevel).
-		// On applique donc le filtre niveau + le seuil effectif PAR ÉLÈVE.
-		for _, r := range results.Results {
-			if !r.HasAverage {
-				continue
-			}
-			level := r.ClassLevel
-			if level == "" {
-				level = "CM" // défaut
-			}
-			// Filtre par niveau (par élève)
-			if f.Level != "" && level != f.Level {
-				continue
-			}
-			// Filtre par genre
-			if f.Gender != "" {
-				var stu models.Student
-				if err := database.DB.First(&stu, "id = ?", r.StudentID).Error; err != nil {
-					continue
-				}
-				if stu.Gender != f.Gender {
-					continue
-				}
-			}
-			// Seuil effectif selon l'échelle du niveau de l'élève
-			ratio := 20.0
-			if level == "CP" || level == "CE" {
-				ratio = 10.0
-			}
-			effectivePassThreshold := passThreshold * ratio / 20.0
-			totalAvg += r.Average
-			totalStudents++
-			if r.Average >= effectivePassThreshold {
-				totalPass++
-			}
-		}
+		sIDs = append(sIDs, s.ID)
 	}
-	if totalStudents == 0 {
+	if len(sIDs) == 0 {
 		return 0, 0
 	}
-	return totalAvg / float64(totalStudents), float64(totalPass) / float64(totalStudents) * 100
-}
-
-func computePerformanceFromSessions(scope string) (avgPerf, passRate float64) {
-	var sessions []models.EvaluationSession
-	database.DB.Find(&sessions)
-	return aggregateSessionsPerformance(sessions)
-}
-
-// === Distribution des mentions ===
-
-// computeGlobalMentions : distribution des mentions sur toutes les sessions
-func computeGlobalMentions() MentionDistribution {
-	var sessions []models.EvaluationSession
-	database.DB.Find(&sessions)
-	return aggregateMentions(sessions)
-}
-func computeIEPMentions(iepID string) MentionDistribution {
-	// Approche A : JOIN schools sur evaluation_sessions.school_id.
-	var sessions []models.EvaluationSession
-	database.DB.
-		Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
-		Where("schools.iep_id = ?", iepID).
-		Find(&sessions)
-	return aggregateMentions(sessions)
-}
-func computeSchoolMentions(schoolID string) MentionDistribution {
-	var sessions []models.EvaluationSession
-	database.DB.Where("evaluation_sessions.school_id = ?", schoolID).Find(&sessions)
-	return aggregateMentions(sessions)
-}
-func computeClassMentions(classID string) MentionDistribution {
-	// Approche A : on remonte à l'école de la classe pour trouver les sessions.
-	var cls models.Class
-	if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
-		return MentionDistribution{Labels: []string{}, Values: []int{}}
+	_, passThreshold, _ := GetSystemSettings()
+	// CP/CE scale=10 → threshold = passThreshold * 10/20 = passThreshold/2.
+	// CM scale=20 → threshold = passThreshold.
+	t10 := passThreshold * 10.0 / 20.0
+	t20 := passThreshold
+	var result struct {
+		AvgPerf       *float64
+		TotalStudents int64
+		Passed        int64
 	}
-	var sessions []models.EvaluationSession
-	database.DB.Where("school_id = ?", cls.SchoolID).Find(&sessions)
-	return aggregateMentions(sessions)
+	query := `SELECT AVG(average) as avg_perf, COUNT(*) as total_students,
+		SUM(CASE WHEN average >= CASE WHEN average_scale = 10 THEN ? ELSE ? END THEN 1 ELSE 0 END) as passed
+		FROM student_session_results
+		WHERE session_id IN ? AND has_average = true`
+	args := []interface{}{t10, t20, sIDs}
+	if f.Level != "" {
+		query += " AND class_level = ?"
+		args = append(args, f.Level)
+	}
+	if f.Gender != "" {
+		query += " AND student_id IN (SELECT id FROM students WHERE gender = ?)"
+		args = append(args, f.Gender)
+	}
+	database.DB.Raw(query, args...).Scan(&result)
+	if result.TotalStudents == 0 {
+		return 0, 0
+	}
+	if result.AvgPerf != nil {
+		avgPerf = *result.AvgPerf
+	}
+	passRate = float64(result.Passed) * 100 / float64(result.TotalStudents)
+	return
 }
 
 func aggregateMentions(sessions []models.EvaluationSession) MentionDistribution {
-	dist := make(map[string]int)
+	// Fix E : SQL sur student_session_results avec mention calculée en SQL
+	// (normalise average sur /20 : avg * 20 / scale, puis compare aux seuils /20).
+	f := dashboardFilters
+	var sIDs []string
 	for _, s := range sessions {
-		results, err := computeSessionResultsCached(s.ID)
-		if err != nil {
+		if f.Year > 0 && s.Year != f.Year {
 			continue
 		}
-		for _, r := range results.Results {
-			if r.HasAverage {
-				dist[r.Mention]++
-			}
-		}
+		sIDs = append(sIDs, s.ID)
 	}
-	// Ordre canonique des mentions
-	order := []string{
-		"Très Bien", "Bien", "Assez Bien", "Passable",
-		"Faible", "Insuffisant", "Très Insuffisant",
+	if len(sIDs) == 0 {
+		return MentionDistribution{Labels: []string{}, Values: []int{}}
 	}
+	tresBien, bien, assezBien, passable, faible, insuffisant := GetMentionThresholds()
+	query := `SELECT mention, COUNT(*) as cnt FROM (
+		SELECT CASE
+			WHEN average * 20.0 / average_scale >= ? THEN 'Très Bien'
+			WHEN average * 20.0 / average_scale >= ? THEN 'Bien'
+			WHEN average * 20.0 / average_scale >= ? THEN 'Assez Bien'
+			WHEN average * 20.0 / average_scale >= ? THEN 'Passable'
+			WHEN average * 20.0 / average_scale >= ? THEN 'Faible'
+			WHEN average * 20.0 / average_scale >= ? THEN 'Insuffisant'
+			ELSE 'Très Insuffisant'
+		END AS mention
+		FROM student_session_results
+		WHERE session_id IN ? AND has_average = true`
+	args := []interface{}{tresBien, bien, assezBien, passable, faible, insuffisant, sIDs}
+	if f.Level != "" {
+		query += " AND class_level = ?"
+		args = append(args, f.Level)
+	}
+	if f.Gender != "" {
+		query += " AND student_id IN (SELECT id FROM students WHERE gender = ?)"
+		args = append(args, f.Gender)
+	}
+	query += ") sub GROUP BY mention"
+	type mentionCount struct {
+		Mention string
+		Cnt     int
+	}
+	var rows []mentionCount
+	database.DB.Raw(query, args...).Scan(&rows)
+	dist := make(map[string]int, len(rows))
+	for _, r := range rows {
+		dist[r.Mention] = r.Cnt
+	}
+	order := []string{"Très Bien", "Bien", "Assez Bien", "Passable", "Faible", "Insuffisant", "Très Insuffisant"}
 	labels := []string{}
 	values := []int{}
 	for _, m := range order {
@@ -819,84 +797,67 @@ func aggregateMentions(sessions []models.EvaluationSession) MentionDistribution 
 	return MentionDistribution{Labels: labels, Values: values}
 }
 
-// === Tendance mensuelle ===
-
-func computeMonthlyTrend(scope string) []MonthlyTrend {
-	var sessions []models.EvaluationSession
-	database.DB.Order("year ASC, month ASC").Find(&sessions)
-	return aggregateMonthlyTrend(sessions)
-}
-func computeMonthlyTrendForIEP(iepID string) []MonthlyTrend {
-	// Approche A : JOIN schools directement.
-	var sessions []models.EvaluationSession
-	database.DB.
-		Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
-		Where("schools.iep_id = ?", iepID).
-		Order("evaluation_sessions.year ASC, evaluation_sessions.month ASC").
-		Find(&sessions)
-	return aggregateMonthlyTrend(sessions)
-}
-func computeMonthlyTrendForSchool(schoolID string) []MonthlyTrend {
-	var sessions []models.EvaluationSession
-	database.DB.Where("evaluation_sessions.school_id = ?", schoolID).
-		Order("year ASC, month ASC").Find(&sessions)
-	return aggregateMonthlyTrend(sessions)
-}
-func computeMonthlyTrendForClass(classID string) []MonthlyTrend {
-	// Approche A : remonte à l'école de la classe.
-	var cls models.Class
-	if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+func aggregateMonthlyTrend(sessions []models.EvaluationSession) []MonthlyTrend {
+	// Fix E : SQL GROUP BY month/year sur student_session_results.
+	f := dashboardFilters
+	var sIDs []string
+	for _, s := range sessions {
+		if f.Year > 0 && s.Year != f.Year {
+			continue
+		}
+		sIDs = append(sIDs, s.ID)
+	}
+	if len(sIDs) == 0 {
 		return []MonthlyTrend{}
 	}
-	var sessions []models.EvaluationSession
-	database.DB.Where("school_id = ?", cls.SchoolID).
-		Order("year ASC, month ASC").Find(&sessions)
-	return aggregateMonthlyTrend(sessions)
-}
-
-func aggregateMonthlyTrend(sessions []models.EvaluationSession) []MonthlyTrend {
-	// Grouper par mois/année
+	type trendRow struct {
+		Month        int
+		Year         int
+		AvgPerf      *float64
+		StudentCount int64
+	}
+	query := `SELECT es.month, es.year, AVG(r.average) as avg_perf,
+		COUNT(DISTINCT r.student_id) as student_count
+		FROM student_session_results r
+		JOIN evaluation_sessions es ON es.id = r.session_id
+		WHERE r.session_id IN ? AND r.has_average = true`
+	args := []interface{}{sIDs}
+	if f.Level != "" {
+		query += " AND r.class_level = ?"
+		args = append(args, f.Level)
+	}
+	if f.Gender != "" {
+		query += " AND r.student_id IN (SELECT id FROM students WHERE gender = ?)"
+		args = append(args, f.Gender)
+	}
+	query += " GROUP BY es.month, es.year ORDER BY es.year ASC, es.month ASC"
+	var rows []trendRow
+	database.DB.Raw(query, args...).Scan(&rows)
+	// Group sessions par month/year pour CompletionRate (countSessionStatuses).
 	type key struct{ month, year int }
 	grouped := make(map[key][]models.EvaluationSession)
 	for _, s := range sessions {
+		if f.Year > 0 && s.Year != f.Year {
+			continue
+		}
 		k := key{s.Month, s.Year}
 		grouped[k] = append(grouped[k], s)
 	}
-	// Trier par ordre chronologique
-	var keys []key
-	for k := range grouped {
-		keys = append(keys, k)
-	}
-	// Tri simple (bubble sort suffisant pour petite liste)
-	for i := 0; i < len(keys); i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[j].year < keys[i].year ||
-				(keys[j].year == keys[i].year && keys[j].month < keys[i].month) {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
+	result := make([]MonthlyTrend, 0, len(rows))
+	for _, r := range rows {
+		k := key{r.Month, r.Year}
+		var ap float64
+		if r.AvgPerf != nil {
+			ap = *r.AvgPerf
 		}
-	}
-
-	result := make([]MonthlyTrend, 0, len(keys))
-	for _, k := range keys {
-		sessions := grouped[k]
-		avgPerf, _ := aggregateSessionsPerformance(sessions)
-		ss := countSessionStatuses(sessions)
-		// Compter les élèves concernés
-		studentCount := 0
-		for _, s := range sessions {
-			results, err := computeSessionResultsCached(s.ID)
-			if err == nil {
-				studentCount += results.Statistics.StudentCount
-			}
-		}
+		ss := countSessionStatuses(grouped[k])
 		result = append(result, MonthlyTrend{
-			Month:          k.month,
-			Year:           k.year,
-			Label:          monthLabelFR(k.month) + " " + intToStr(k.year),
+			Month:          r.Month,
+			Year:           r.Year,
+			Label:          monthLabelFR(r.Month) + " " + intToStr(r.Year),
 			CompletionRate: ss.completionRate(),
-			AvgPerformance: avgPerf,
-			StudentCount:   studentCount,
+			AvgPerformance: ap,
+			StudentCount:   int(r.StudentCount),
 		})
 	}
 	return result
@@ -920,4 +881,75 @@ func intToStr(n int) string {
 		digits = append([]byte{'-'}, digits...)
 	}
 	return string(digits)
+}
+
+// === Wrappers (chargent les sessions puis délèguent aux aggregates SQL) ===
+
+func computePerformanceFromSessions(scope string) (avgPerf, passRate float64) {
+	var sessions []models.EvaluationSession
+	database.DB.Find(&sessions)
+	return aggregateSessionsPerformance(sessions)
+}
+
+// === Distribution des mentions ===
+
+func computeGlobalMentions() MentionDistribution {
+	var sessions []models.EvaluationSession
+	database.DB.Find(&sessions)
+	return aggregateMentions(sessions)
+}
+func computeIEPMentions(iepID string) MentionDistribution {
+	var sessions []models.EvaluationSession
+	database.DB.
+		Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
+		Where("schools.iep_id = ?", iepID).
+		Find(&sessions)
+	return aggregateMentions(sessions)
+}
+func computeSchoolMentions(schoolID string) MentionDistribution {
+	var sessions []models.EvaluationSession
+	database.DB.Where("evaluation_sessions.school_id = ?", schoolID).Find(&sessions)
+	return aggregateMentions(sessions)
+}
+func computeClassMentions(classID string) MentionDistribution {
+	var cls models.Class
+	if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+		return MentionDistribution{Labels: []string{}, Values: []int{}}
+	}
+	var sessions []models.EvaluationSession
+	database.DB.Where("school_id = ?", cls.SchoolID).Find(&sessions)
+	return aggregateMentions(sessions)
+}
+
+// === Tendance mensuelle ===
+
+func computeMonthlyTrend(scope string) []MonthlyTrend {
+	var sessions []models.EvaluationSession
+	database.DB.Order("year ASC, month ASC").Find(&sessions)
+	return aggregateMonthlyTrend(sessions)
+}
+func computeMonthlyTrendForIEP(iepID string) []MonthlyTrend {
+	var sessions []models.EvaluationSession
+	database.DB.
+		Joins("JOIN schools ON schools.id = evaluation_sessions.school_id").
+		Where("schools.iep_id = ?", iepID).
+		Order("evaluation_sessions.year ASC, evaluation_sessions.month ASC").
+		Find(&sessions)
+	return aggregateMonthlyTrend(sessions)
+}
+func computeMonthlyTrendForSchool(schoolID string) []MonthlyTrend {
+	var sessions []models.EvaluationSession
+	database.DB.Where("evaluation_sessions.school_id = ?", schoolID).
+		Order("year ASC, month ASC").Find(&sessions)
+	return aggregateMonthlyTrend(sessions)
+}
+func computeMonthlyTrendForClass(classID string) []MonthlyTrend {
+	var cls models.Class
+	if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+		return []MonthlyTrend{}
+	}
+	var sessions []models.EvaluationSession
+	database.DB.Where("school_id = ?", cls.SchoolID).
+		Order("year ASC, month ASC").Find(&sessions)
+	return aggregateMonthlyTrend(sessions)
 }
