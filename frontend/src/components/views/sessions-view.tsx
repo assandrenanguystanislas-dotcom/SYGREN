@@ -416,7 +416,7 @@ export function SessionsView() {
       </Card>
 
       {sessions.length === 0 ? (
-        <EmptyState onCreate={canManage ? openCreate : undefined} />
+        <EmptyState view={statusFilter} onCreate={canManage ? openCreate : undefined} />
       ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {sessions.map((s, i) => {
@@ -1149,18 +1149,38 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
-function EmptyState({ onCreate }: { onCreate?: () => void }) {
+function EmptyState({ view, onCreate }: { view: "active" | "validated" | "archived"; onCreate?: () => void }) {
+  // Message adapté à chaque vue (aligné sur le workflow).
+  const config = {
+    active: {
+      icon: Calendar,
+      title: "Aucune session en cours",
+      desc: onCreate
+        ? "Ouvrez une session mensuelle pour permettre la saisie des notes."
+        : "Les sessions apparaîtront ici une fois ouvertes par le directeur.",
+      showButton: true,
+    },
+    validated: {
+      icon: CheckCircle2,
+      title: "Aucune session validée",
+      desc: "Les sessions validées apparaîtront ici une fois les notes saisies et validées.",
+      showButton: false,
+    },
+    archived: {
+      icon: History,
+      title: "Aucune session archivée",
+      desc: "Aucune session archivée pour cette année scolaire.",
+      showButton: false,
+    },
+  }[view];
+  const Icon = config.icon;
   return (
     <Card className="border-dashed">
       <CardContent className="py-12 text-center">
-        <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm font-medium">Aucune session de saisie</p>
-        <p className="text-xs text-muted-foreground mt-1 mb-4">
-          {onCreate
-            ? "Ouvrez une session mensuelle pour permettre la saisie des notes."
-            : "Les sessions apparaîtront ici une fois ouvertes par le directeur."}
-        </p>
-        {onCreate && (
+        <Icon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        <p className="text-sm font-medium">{config.title}</p>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">{config.desc}</p>
+        {config.showButton && onCreate && (
           <Button onClick={onCreate} size="sm">
             <Plus className="w-4 h-4 mr-1.5" />
             Ouvrir une session
