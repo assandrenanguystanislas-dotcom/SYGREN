@@ -2586,3 +2586,28 @@ Task: Reset password : modal login (demande) + admin validation + first-login ch
 Backend : handlers/password_reset.go (6 endpoints) + models PasswordResetRequest + User.MustChangePassword + routes publiques/auth/admin.
 Frontend : login modal (role selector + identifier) + ForceChangePassword dialog + auth store mustChangePassword flag.
 Build : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
+
+---
+Task ID: Architecture-D-Phase1-Analysis
+Agent: Z.ai (main session)
+Task: Analyse architecture réelle SYGREN + plan d'implémentation Architecture D (RBAC dynamique + suspension + audit)
+
+Work Log:
+- Clone du repo GitHub assandrenanguystanislas-dotcom/SYGREN vers /home/z/sygren
+- Analyse exhaustive du codebase via subagent Explore (très approfondi)
+- Vérification du `gh` CLI authentifié avec token complet (repo, delete_repo, admin:org, workflow scopes)
+- Découverte : User.Service et User.Active existent DÉJÀ (contrairement au summary initial)
+- Découverte : auth utilise Authorization: Bearer (pas cookies), JWT 72h
+- Découverte : AutoMigrate est le seul mécanisme de migration (pas de SQL)
+- Découverte : 1 seul fix de terminologie restant — login-view.tsx:95 "Inspecteur" → "Admin IEP"
+- Découverte : 14 handlers existent, cache dashboard pattern clair à imiter (handlers/dashboard.go:128-160)
+
+Stage Summary:
+- Architecture D plan finalisé : 11 tâches backend + 10 tâches frontend
+- 3 nouveaux modèles à créer : Role, RoleModule, AuditLog
+- 3 champs à ajouter à User : SuspendedAt, SuspendedByID, SuspendedReason
+- Migration RequireRole(...) → RequireModule(moduleKey) avec seed de la matrice actuelle (zéro changement comportemental initial)
+- Suspension immédiate via middleware Auth qui fetch l'user depuis DB (vérifie Active)
+- Cache permissions (RWMutex + TTL 5min + InvalidatePermissionsCache) mirroir du pattern dashboard
+- Endpoints nouveaux : /api/permissions, /api/audit-logs, /api/users/{id}/suspend, /api/users/{id}/reactivate, /api/me/modules
+- UI nouveaux modules : permissions-view, audit-view, 4e onglet "Tous les comptes" dans users-view

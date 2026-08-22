@@ -12,19 +12,33 @@ import (
 )
 
 // New builds the main HTTP router with all SYGREN routes.
-// Structure mirrors the cahier des charges modules:
+//
+// Architecture D — migration du RBAC statique (RequireRole) vers le RBAC
+// dynamique (RequireModule). La matrice seedée dans la DB reflète EXACTEMENT
+// le comportement RequireRole précédent — aucun changement visible au
+// premier déploiement. Le super admin peut ensuite éditer la matrice via
+// le module Permissions (UI).
+//
+// Routes :
 //
 //	/api/auth          → authentification (§4.1)
-//	/api/iep           → gestion des IEP (Super-Admin)
+//	/api/iep           → gestion des IEP (Super-Admin + Admin IEP)
 //	/api/schools       → gestion des écoles (Module 1)
 //	/api/classes       → gestion des classes (Module 1)
 //	/api/students      → gestion des élèves (Module 1)
 //	/api/teachers      → gestion des enseignants (Module 1)
-//	/api/subjects       → gestion des matières (Module 1)
-//	/api/sessions       → sessions de saisie mensuelle (Module 2 — à venir)
-//	/api/grades         → saisie des notes (Module 2 — à venir)
-//	/api/dashboard      → tableaux de bord (Module 5 — à venir)
-//	/api/me             → profil utilisateur connecté
+//	/api/subjects      → gestion des matières (Module 1)
+//	/api/sessions      → sessions de saisie mensuelle (Module 2)
+//	/api/grades        → saisie des notes (Module 2)
+//	/api/dashboard     → tableaux de bord (Module 5)
+//	/api/me            → profil utilisateur connecté
+//
+// Architecture D — nouveaux modules :
+//
+//	/api/permissions   → matrice RBAC (admin only)
+//	/api/audit-logs    → journal d'audit (admin only)
+//	/api/users         → gestion admin des comptes (suspend/reactivate) (admin only)
+//	/api/me/modules    → liste des modules accessibles au user (pour nav dynamique)
 func New(cfg *config.Config) http.Handler {
 	r := chi.NewRouter()
 
@@ -44,9 +58,15 @@ func New(cfg *config.Config) http.Handler {
 		r.Get("/api/me", handlers.Me)
 		r.Post("/api/auth/change-password", handlers.ChangePassword)
 
+		// === Architecture D — Modules dynamiques pour le user connecté ===
+		// Pas de middleware RequireModule : on renvoie juste la liste filtrée
+		// par le rôle. C'est l'endpoint qui alimente la nav frontend.
+		r.Get("/api/me/modules", handlers.ListUserModules)
+
 		// === Reset Password — gestion admin des demandes ===
+		// Anciennement RequireRole(RoleAdmin) → RequireModule("reset-requests", "write")
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin))
+			r.Use(middleware.RequireModule(models.ModuleResetRequests, "write"))
 			r.Get("/api/auth/reset-requests", handlers.ListResetRequests)
 			r.Post("/api/auth/reset-requests/{id}/approve", handlers.ApproveResetRequest)
 			r.Post("/api/auth/reset-requests/{id}/reject", handlers.RejectResetRequest)
@@ -54,93 +74,88 @@ func New(cfg *config.Config) http.Handler {
 
 		// === Module 1 — Gestion Administrative ===
 
-		// IEP — Super-Admin uniquement (cahier des charges §2)
+		// IEP — admin + inspector (CRUD)
+		// Anciennement RequireRole(RoleAdmin, RoleInspector) → RequireModule("iep", "write")
+		r.Get("/api/iep", handlers.ListIEP)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector))
-			r.Get("/api/iep", handlers.ListIEP)
+			r.Use(middleware.RequireModule(models.ModuleIEP, "write"))
 			r.Post("/api/iep", handlers.CreateIEP)
 			r.Put("/api/iep/{id}", handlers.UpdateIEP)
 			r.Delete("/api/iep/{id}", handlers.DeleteIEP)
 		})
 
-		// Écoles — admin (CRUD), inspector (lecture), director/teacher (lecture son école)
+		// Écoles — lecture ouverte (handler scope), écriture admin + inspector
 		r.Get("/api/schools", handlers.ListSchools)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector))
+			r.Use(middleware.RequireModule(models.ModuleSchools, "write"))
 			r.Post("/api/schools", handlers.CreateSchool)
 			r.Put("/api/schools/{id}", handlers.UpdateSchool)
 			r.Delete("/api/schools/{id}", handlers.DeleteSchool)
 		})
 
-		// Classes — admin+director (CRUD), inspector+teacher (lecture)
+		// Classes — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/classes", handlers.ListClasses)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector, models.RoleDirector))
+			r.Use(middleware.RequireModule(models.ModuleClasses, "write"))
 			r.Post("/api/classes", handlers.CreateClass)
 			r.Put("/api/classes/{id}", handlers.UpdateClass)
 			r.Delete("/api/classes/{id}", handlers.DeleteClass)
 		})
 
-		// Élèves — admin+director (CRUD), inspector+teacher (lecture)
+		// Élèves — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/students", handlers.ListStudents)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector, models.RoleDirector))
+			r.Use(middleware.RequireModule(models.ModuleStudents, "write"))
 			r.Post("/api/students", handlers.CreateStudent)
 			r.Post("/api/students/bulk", handlers.BulkCreateStudents)
 			r.Put("/api/students/{id}", handlers.UpdateStudent)
 			r.Delete("/api/students/{id}", handlers.DeleteStudent)
 		})
 
-		// Enseignants — admin (CRUD), director (CRUD limité son école), inspector (lecture)
+		// Enseignants — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/teachers", handlers.ListTeachers)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector, models.RoleDirector))
+			r.Use(middleware.RequireModule(models.ModuleUsersTeachers, "write"))
 			r.Post("/api/teachers", handlers.CreateTeacher)
 			r.Put("/api/teachers/{id}", handlers.UpdateTeacher)
 			r.Delete("/api/teachers/{id}", handlers.DeleteTeacher)
 		})
 
-		// Directeurs d'école — super admin uniquement (CRUD)
+		// Directeurs d'école — lecture ouverte, écriture admin seulement
 		r.Get("/api/directors", handlers.ListDirectors)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin))
+			r.Use(middleware.RequireModule(models.ModuleUsersDirectors, "write"))
 			r.Post("/api/directors", handlers.CreateDirector)
 			r.Put("/api/directors/{id}", handlers.UpdateDirector)
 			r.Delete("/api/directors/{id}", handlers.DeleteDirector)
 		})
 
-		// Admins IEP (inspecteurs) — super admin uniquement (CRUD)
+		// Admins IEP (inspecteurs) — lecture + écriture admin seulement
+		// (lecture fermée car la liste expose des emails pro)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin))
+			r.Use(middleware.RequireModule(models.ModuleUsersInspectors, "read"))
 			r.Get("/api/inspectors", handlers.ListInspectors)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleUsersInspectors, "write"))
 			r.Post("/api/inspectors", handlers.CreateInspector)
 			r.Put("/api/inspectors/{id}", handlers.UpdateInspector)
 			r.Delete("/api/inspectors/{id}", handlers.DeleteInspector)
 		})
 
-		// Matières — admin (CRUD), director (CRUD), teacher+inspector (lecture)
+		// Matières — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/subjects", handlers.ListSubjects)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector, models.RoleDirector))
+			r.Use(middleware.RequireModule(models.ModuleSubjects, "write"))
 			r.Post("/api/subjects", handlers.CreateSubject)
 			r.Put("/api/subjects/{id}", handlers.UpdateSubject)
 			r.Delete("/api/subjects/{id}", handlers.DeleteSubject)
 		})
 
-		// === Module 2 — Sessions de saisie mensuelle (cahier des charges §3) ===
-		// Approche A — 1 session par ÉCOLE (pas par classe). Les exemptions
-		// permettent d'exclure des classes/niveaux d'une session.
-		// Lecture : tous les rôles (filtré par scope dans le handler)
-		// Création/Modification/Suppression : admin + director (RBAC director = son école)
-		//
-		// Statuts terminaux (annulation + archivage) :
-		//   PUT /api/sessions/{id}/cancel  → annule (soft, raison obligatoire)
-		//   PUT /api/sessions/{id}/archive  → archive (manuel, après validation)
-		// Les sessions cancelled/archived sont masquées de ListSessions par
-		// défaut (filtre include_archived/include_cancelled sur false).
+		// === Module 2 — Sessions de saisie mensuelle ===
 		r.Get("/api/sessions", handlers.ListSessions)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector, models.RoleDirector))
+			r.Use(middleware.RequireModule(models.ModuleSessions, "write"))
 			r.Post("/api/sessions", handlers.CreateSession)
 			r.Post("/api/sessions/bulk", handlers.BulkCreateSessions)
 			r.Put("/api/sessions/{id}/status", handlers.UpdateSessionStatus)
@@ -150,88 +165,96 @@ func New(cfg *config.Config) http.Handler {
 			r.Delete("/api/sessions/{id}", handlers.DeleteSession)
 		})
 
-		// === Exemptions de session (Approche A) ===
-		// Permettent d'exempter des classes/niveaux d'une session.
-		// Lecture : tous les rôles (filtré par scope dans le handler)
-		// Création/Suppression : admin + director (RBAC director = son école)
+		// === Exemptions de session ===
 		r.Get("/api/sessions/{id}/exemptions", handlers.ListExemptions)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector, models.RoleDirector))
+			r.Use(middleware.RequireModule(models.ModuleSessions, "write"))
 			r.Post("/api/sessions/{id}/exemptions", handlers.CreateExemption)
 			r.Delete("/api/sessions/{id}/exemptions/{eid}", handlers.DeleteExemption)
 		})
 
 		// === Module 2 — Saisie des notes ===
-		// Lecture : tous les rôles (filtré par scope dans le handler)
-		// Saisie (upsert/bulk/delete) : teacher + director + admin (vérification statut session dans handler)
+		// Lecture : tous les rôles (scope dans le handler)
+		// Saisie (upsert/bulk/delete) : teacher + director + admin + inspector
 		r.Get("/api/grades", handlers.ListGrades)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleTeacher, models.RoleDirector, models.RoleAdmin, models.RoleInspector))
+			r.Use(middleware.RequireModule(models.ModuleGrades, "write"))
 			r.Post("/api/grades", handlers.UpsertGrade)
 			r.Post("/api/grades/bulk", handlers.BulkUpsertGrades)
 			r.Delete("/api/grades/{id}", handlers.DeleteGrade)
 		})
 
-		// === Barèmes de notation (cahier des charges §3 Module 2) ===
-		// Lecture : tous les rôles (pour afficher les placeholders /max)
-		// Création/Modification/Suppression : admin uniquement
+		// === Barèmes de notation ===
 		r.Get("/api/grade-scales", handlers.ListGradeScales)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector))
+			r.Use(middleware.RequireModule(models.ModuleGradeScales, "write"))
 			r.Post("/api/grade-scales", handlers.CreateGradeScale)
 			r.Put("/api/grade-scales/{id}", handlers.UpdateGradeScale)
 			r.Delete("/api/grade-scales/{id}", handlers.DeleteGradeScale)
 		})
 
-		// === Module 3 — Traitement mathématique (cahier des charges §3) ===
-		// Calcul des moyennes, classement, mentions — accessible à tous les rôles
-		// (RBAC par périmètre vérifié dans getSessionForUser)
+		// === Module 3 — Traitement mathématique ===
+		// Read-only for all authed (RBAC par périmètre dans getSessionForUser)
 		r.Get("/api/computation/session/{id}", handlers.GetSessionResults)
 		r.Get("/api/computation/student/{id}/annual", handlers.GetStudentAnnualResults)
 
-		// === Module 4 — Bulletins PDF (cahier des charges §3) ===
-		// Lecture + téléchargement : tous les rôles (RBAC par périmètre)
-		// Génération (unitaire + lot) : admin + director
+		// === Module 4 — Bulletins PDF ===
 		r.Get("/api/report-cards/session/{sessionId}", handlers.ListReportCards)
 		r.Get("/api/report-cards/{id}/download", handlers.DownloadReportCard)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector, models.RoleDirector))
+			r.Use(middleware.RequireModule(models.ModuleReportCards, "write"))
 			r.Post("/api/report-cards/generate/{sessionId}/{studentId}", handlers.GenerateReportCard)
 			r.Post("/api/report-cards/generate-batch/{sessionId}", handlers.GenerateBatchReportCards)
 		})
 
-		// === Synthèse des Résultats (cahier des charges §3 Module 5) ===
-		// Données JSON pour rendu HTML frontend (document officiel paysage)
-		// RBAC : admin (toutes), director (son école), inspector (son IEP)
+		// === Synthèse + Relevé (données JSON pour rendu HTML frontend) ===
+		// RBAC : scope vérifié dans le handler (admin = toutes, director = son école, etc.)
 		r.Get("/api/reports/synthese-data", handlers.GetSyntheseData)
-
-		// === Relevé de Notes par classe (cahier des charges §3 Module 5) ===
-		// Document A4 portrait multi-pages (1 PDF par classe) listant tous
-		// les élèves avec leurs notes par matière, total, moyenne, observation
-		// (A=Admis, R=Refusé) + stats Inscrits/Présents/Admis G/F/T + signatures.
-		// RBAC : admin (toutes), director (son école), inspector (son IEP),
-		// teacher (son école — RBAC implicite via la session).
 		r.Get("/api/reports/releve-data", handlers.GetReleveData)
-
-		// === Liste des classes d'une session (pour téléchargement bulk) ===
-		// Renvoie les classes actives de l'école de la session avec le
-		// compte d'élèves. Le frontend l'utilise pour itérer et imprimer
-		// un Relevé PDF par classe (iframes séquentiels + print()).
 		r.Get("/api/reports/releve-classes", handlers.ListReleveClasses)
 
-		// === Module 5 — Tableaux de bord analytiques ===
-		// GET /api/dashboard : renvoie des KPIs agrégés selon le rôle/scope
+		// === Module 5 — Tableau de bord analytique ===
 		r.Get("/api/dashboard", handlers.GetDashboard)
 
 		// === Paramètres système (admin uniquement) ===
-		// GET /api/settings         → liste tous les paramètres groupés
-		// GET /api/settings/{key}  → récupère un paramètre
-		// PUT /api/settings/{key}  → met à jour un paramètre
+		// Anciennement RequireRole(RoleAdmin) → RequireModule("settings", "read"|"write")
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin))
+			r.Use(middleware.RequireModule(models.ModuleSettings, "read"))
 			r.Get("/api/settings", handlers.ListSettings)
 			r.Get("/api/settings/{key}", handlers.GetSetting)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleSettings, "write"))
 			r.Put("/api/settings/{key}", handlers.UpdateSetting)
+		})
+
+		// === Architecture D — Nouveaux modules ===
+
+		// Matrice des permissions (admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModulePermissions, "read"))
+			r.Get("/api/permissions", handlers.ListPermissions)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModulePermissions, "write"))
+			r.Put("/api/permissions", handlers.UpdatePermission)
+		})
+
+		// Journal d'audit (admin only, lecture seule)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleAudit, "read"))
+			r.Get("/api/audit-logs", handlers.ListAuditLogs)
+		})
+
+		// Gestion admin des comptes (suspend/reactivate)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleUsersAdmin, "read"))
+			r.Get("/api/users", handlers.ListAllUsers)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleUsersAdmin, "write"))
+			r.Post("/api/users/{id}/suspend", handlers.SuspendUser)
+			r.Post("/api/users/{id}/reactivate", handlers.ReactivateUser)
 		})
 	})
 

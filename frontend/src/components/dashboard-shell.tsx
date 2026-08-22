@@ -17,6 +17,8 @@ import {
   Trophy,
   ChevronRight,
   UserCog,
+  ShieldCheck,
+  History,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -36,77 +38,109 @@ export interface NavItem {
   id: string;
   label: string;
   icon: ReactNode;
-  roles: Role[];
+  roles: Role[]; // fallback legacy (utilisé si modules[] est vide)
+  // Architecture D — module keys (le nav item est visible si AU MOINS UN
+  // de ces keys est dans l'array `modules[]` du user). Pour les items qui
+  // correspondent à un seul module, c'est un seul key. Pour "users" (qui
+  // regroupe teachers + directors + inspectors), c'est plusieurs.
+  moduleKeys: string[];
   badge?: string;
 }
 
-// Navigation RBAC — chaque item n'est visible que pour les rôles autorisés
+// Navigation RBAC — chaque item n'est visible que pour les modules accessibles
+// du user courant (Architecture D — nav dynamique).
 export const NAV_ITEMS: NavItem[] = [
   {
     id: "dashboard",
     label: "Tableau de bord",
     icon: <LayoutDashboard className="w-4 h-4" />,
     roles: ["admin", "director", "inspector", "teacher"],
+    moduleKeys: ["dashboard"],
   },
   {
     id: "iep",
     label: "Inspections (IEP)",
     icon: <BarChart3 className="w-4 h-4" />,
     roles: ["admin", "inspector"],
+    moduleKeys: ["iep"],
   },
   {
     id: "schools",
     label: "Écoles",
     icon: <School className="w-4 h-4" />,
     roles: ["admin", "inspector", "director"],
+    moduleKeys: ["schools", "classes"],
   },
   {
     id: "students",
     label: "Élèves",
     icon: <Users className="w-4 h-4" />,
     roles: ["admin", "inspector", "director", "teacher"],
+    moduleKeys: ["students"],
   },
   {
     id: "users",
     label: "Utilisateurs",
     icon: <UserCog className="w-4 h-4" />,
     roles: ["admin", "inspector", "director"],
+    moduleKeys: ["users.teachers", "users.directors", "users.inspectors", "users-admin"],
   },
   {
     id: "subjects",
     label: "Matières",
     icon: <BookOpen className="w-4 h-4" />,
     roles: ["admin", "director", "teacher", "inspector"],
+    moduleKeys: ["subjects"],
   },
   {
     id: "evaluations",
     label: "Évaluations",
     icon: <ClipboardList className="w-4 h-4" />,
     roles: ["admin", "director", "inspector", "teacher"],
+    moduleKeys: ["sessions", "grades"],
   },
   {
     id: "results",
     label: "Résultats",
     icon: <Trophy className="w-4 h-4" />,
     roles: ["teacher", "director", "admin", "inspector"],
+    moduleKeys: ["reports"],
   },
   {
     id: "bulletins",
     label: "Bulletins",
     icon: <FileText className="w-4 h-4" />,
     roles: ["admin", "director", "inspector"],
+    moduleKeys: ["report-cards"],
   },
   {
     id: "reset-requests",
     label: "Réinitialisations",
     icon: <KeyRound className="w-4 h-4" />,
     roles: ["admin"],
+    moduleKeys: ["reset-requests"],
   },
   {
     id: "settings",
     label: "Paramètres",
     icon: <Settings className="w-4 h-4" />,
     roles: ["admin"],
+    moduleKeys: ["settings"],
+  },
+  // === Architecture D — nouveaux modules admin ===
+  {
+    id: "permissions",
+    label: "Permissions",
+    icon: <ShieldCheck className="w-4 h-4" />,
+    roles: ["admin"],
+    moduleKeys: ["permissions"],
+  },
+  {
+    id: "audit",
+    label: "Journal d'audit",
+    icon: <History className="w-4 h-4" />,
+    roles: ["admin"],
+    moduleKeys: ["audit"],
   },
 ];
 
@@ -114,6 +148,15 @@ interface DashboardShellProps {
   activeView: string;
   onViewChange: (view: string) => void;
   children: ReactNode;
+}
+
+// Helper : détermine si un nav item doit être affiché selon l'array modules
+function isItemVisible(item: NavItem, modules: string[], role: Role): boolean {
+  // Si modules[] est vide (still loading ou premier render), fallback au legacy
+  if (modules.length === 0) {
+    return item.roles.includes(role);
+  }
+  return item.moduleKeys.some((k) => modules.includes(k));
 }
 
 function SidebarContent({
@@ -124,10 +167,11 @@ function SidebarContent({
   onViewChange: (v: string) => void;
 }) {
   const user = useAuthStore((s) => s.user);
+  const modules = useAuthStore((s) => s.modules);
   const logout = useAuthStore((s) => s.logout);
   if (!user) return null;
 
-  const items = NAV_ITEMS.filter((i) => i.roles.includes(user.role));
+  const items = NAV_ITEMS.filter((i) => isItemVisible(i, modules, user.role));
 
   return (
     <div className="flex h-full flex-col text-sidebar-foreground">
@@ -189,6 +233,7 @@ function SidebarContent({
             <p className="text-sm font-medium truncate">{user.full_name}</p>
             <p className="text-[11px] opacity-70 truncate">
               {ROLE_LABELS[user.role]}
+              {user.service ? ` · ${user.service}` : ""}
             </p>
           </div>
         </div>
@@ -288,7 +333,7 @@ export function DashboardShell({
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
             <span>© {new Date().getFullYear()} SYGREN — Côte d'Ivoire</span>
             <span className="text-[11px]">
-              v0.1.0 · Backend Go sur port 8080
+              v0.1.0 · Architecture D · RBAC dynamique + Audit
             </span>
           </div>
         </footer>

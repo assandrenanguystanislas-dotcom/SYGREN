@@ -42,6 +42,13 @@ import type {
   DashboardData,
   Setting,
   SettingsByCategory,
+  // Architecture D
+  PermissionsMatrixResponse,
+  UpdatePermissionResponse,
+  UserModulesResponse,
+  AuditLogsResponse,
+  AuditLog,
+  UserAdminRow,
 } from "./types";
 
 // En production (Vercel), NEXT_PUBLIC_API_URL pointe vers le backend déployé.
@@ -145,6 +152,9 @@ export const authApi = {
 
   /** Récupère le profil de l'utilisateur connecté. */
   me: () => apiFetch<User>("/api/me"),
+
+  /** Architecture D — Liste des modules accessibles au user (pour nav dynamique). */
+  modules: () => apiFetch<UserModulesResponse>("/api/me/modules"),
 
   // === Reset Password ===
 
@@ -937,6 +947,75 @@ export const settingsApi = {
 };
 
 // Export par défaut groupé
+// === Architecture D — Permissions (matrice RBAC) ===
+
+export const permissionsApi = {
+  /** Récupère la matrice complète role × module. */
+  list: () => apiFetch<PermissionsMatrixResponse>("/api/permissions"),
+
+  /** Met à jour une cellule (role_id, module_key, can_read/can_write). */
+  update: (data: {
+    role_id: string;
+    module_key: string;
+    can_read?: boolean;
+    can_write?: boolean;
+  }) =>
+    apiFetch<UpdatePermissionResponse>("/api/permissions", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+};
+
+// === Architecture D — Journal d'audit ===
+
+export const auditApi = {
+  /** Liste les entrées du journal avec filtres optionnels. */
+  list: (params?: {
+    action?: string;
+    entity_type?: string;
+    actor_id?: string;
+    target_id?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.action) q.set("action", params.action);
+    if (params?.entity_type) q.set("entity_type", params.entity_type);
+    if (params?.actor_id) q.set("actor_id", params.actor_id);
+    if (params?.target_id) q.set("target_id", params.target_id);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+    const qs = q.toString();
+    return apiFetch<AuditLogsResponse>(`/api/audit-logs${qs ? "?" + qs : ""}`);
+  },
+};
+
+// === Architecture D — Gestion admin des comptes (suspend/reactivate) ===
+
+export const usersAdminApi = {
+  /** Liste tous les utilisateurs avec leur statut de suspension. */
+  list: () =>
+    apiFetch<{ users: UserAdminRow[]; admin_iep_services: string[] }>("/api/users"),
+
+  /** Suspend un utilisateur (active=false, suspended_at, reason). */
+  suspend: (id: string, reason?: string) =>
+    apiFetch<{ ok: boolean; user: UserAdminRow }>(`/api/users/${id}/suspend`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? "" }),
+    }),
+
+  /** Réactive un utilisateur suspendu. */
+  reactivate: (id: string) =>
+    apiFetch<{ ok: boolean; user: UserAdminRow }>(`/api/users/${id}/reactivate`, {
+      method: "POST",
+    }),
+};
+
+// Barrel agrégé pour rétro-compat
 export const api = {
   auth: authApi,
   health: healthApi,
@@ -954,4 +1033,8 @@ export const api = {
   reportCards: reportCardsApi,
   dashboard: dashboardApi,
   settings: settingsApi,
+  // Architecture D
+  permissions: permissionsApi,
+  audit: auditApi,
+  usersAdmin: usersAdminApi,
 };

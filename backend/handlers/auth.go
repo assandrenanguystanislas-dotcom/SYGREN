@@ -83,6 +83,25 @@ func Login(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
+		// === Architecture D — audit login ===
+		// Note : on ne peut pas utiliser LogAction(r, ...) car à ce stade
+		// le contexte de la requête ne contient pas encore l'utilisateur
+		// (le middleware Auth n'a pas tourné — c'est une route publique).
+		// On insère directement l'AuditLog.
+		uid := user.ID
+		ip := getClientIP(r)
+		ua := r.UserAgent()
+		_ = database.DB.Create(&models.AuditLog{
+			ActorID:    &uid,
+			ActorRole:  user.Role,
+			Action:     "auth.login",
+			EntityType: "user",
+			EntityID:   &uid,
+			Details:    `{"method":"email_or_phone_or_school_code"}`,
+			IP:         ip,
+			UserAgent:  ua,
+		}).Error
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(LoginResponse{Token: token, User: user, MustChangePassword: user.MustChangePassword})
 	}

@@ -28,6 +28,10 @@ export interface User {
   active: boolean;
   must_change_password?: boolean;
   service?: string;
+  // Architecture D — Suspension
+  suspended_at?: string | null;
+  suspended_by_id?: string | null;
+  suspended_reason?: string;
   created_at: string;
   updated_at: string;
 }
@@ -536,3 +540,83 @@ export interface ApiError {
 // Listes valides (cahier des charges §3 — école primaire ivoirienne)
 export const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
 export const CLASS_LEVELS = ["CP", "CE", "CM"] as const;
+
+// === Architecture D — Dynamic RBAC + Audit ===
+
+// Module metadata (mirrors backend models.AllModuleMetas())
+export interface ModuleMeta {
+  key: string;
+  label: string;
+  description: string;
+  icon_hint: string;
+}
+
+// Cellule de la matrice (role × module)
+export interface PermissionCell {
+  key: string;
+  label: string;
+  description: string;
+  icon_hint: string;
+  can_read: boolean;
+  can_write: boolean;
+  irreducible: boolean; // true = ne peut pas être décoché (sécurité anti auto-blocage)
+}
+
+// Un rôle avec sa liste de cellules
+export interface PermissionRole {
+  id: string;
+  name: string;
+  label: string;
+  description: string;
+  is_system: boolean;
+  sort_order: number;
+  modules: PermissionCell[];
+}
+
+// Réponse de GET /api/permissions
+export interface PermissionsMatrixResponse {
+  roles: PermissionRole[];
+  modules: ModuleMeta[];
+}
+
+// Réponse de PUT /api/permissions
+export interface UpdatePermissionResponse {
+  ok: boolean;
+  role_id: string;
+  module_key: string;
+  can_read: boolean;
+  can_write: boolean;
+}
+
+// Réponse de GET /api/me/modules
+export interface UserModulesResponse {
+  modules: string[];
+  role: string;
+}
+
+// Une entrée du journal d'audit (GET /api/audit-logs)
+export interface AuditLog {
+  id: string;
+  actor_id?: string;
+  actor_role: string;
+  actor_name?: string;
+  actor_email?: string;
+  action: string;
+  entity_type: string;
+  entity_id?: string;
+  details?: string;
+  ip?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
+export interface AuditLogsResponse {
+  logs: AuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+}
+
+// User vu par l'admin (GET /api/users) — même structure que User, plus rien de sensible
+export type UserAdminRow = User;

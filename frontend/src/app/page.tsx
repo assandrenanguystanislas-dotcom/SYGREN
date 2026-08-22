@@ -24,7 +24,24 @@ import { BulletinsView } from "@/components/views/bulletins-view";
 import { ResetRequestsView } from "@/components/views/reset-requests-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
 import { SettingsView } from "@/components/views/settings-view";
-import { PlaceholderView } from "@/components/views/placeholder-view";
+import { PermissionsView } from "@/components/views/permissions-view";
+import { AuditView } from "@/components/views/audit-view";
+import type { NavItem } from "@/components/dashboard-shell";
+import type { User } from "@/lib/types";
+
+/**
+ * Helper : détermine si une vue est autorisée pour le user.
+ * Architecture D — utilise la liste dynamique `modules[]` (fetch depuis
+ * /api/me/modules) avec fallback au legacy `navItem.roles` si modules[]
+ * est encore vide (pendant le chargement initial).
+ */
+function isViewAllowed(item: NavItem, user: User | null, modules: string[]): boolean {
+  if (!user) return false;
+  if (modules.length === 0) {
+    return item.roles.includes(user.role);
+  }
+  return item.moduleKeys.some((k) => modules.includes(k));
+}
 
 /** Écran de chargement pendant la vérification de l'auth. */
 function FullScreenLoader() {
@@ -45,6 +62,7 @@ function FullScreenLoader() {
 function AppContent() {
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
+  const modules = useAuthStore((s) => s.modules);
   const hydrated = useAuthStore((s) => s.hydrated);
   const setHydrated = useAuthStore((s) => s.setHydrated);
   const refreshUser = useAuthStore((s) => s.refreshUser);
@@ -131,7 +149,7 @@ function AppContent() {
 
   // Connecté → tableau de bord
   const navItem = NAV_ITEMS.find((n) => n.id === activeView);
-  const allowed = navItem?.roles.includes(user.role) ?? false;
+  const allowed = navItem ? isViewAllowed(navItem, user, modules) : false;
 
   // Vue par défaut si la vue active n'est pas autorisée pour ce rôle
   const view = allowed ? activeView : "dashboard";
@@ -154,6 +172,8 @@ function AppContent() {
       {view === "bulletins" && <BulletinsView />}
       {view === "reset-requests" && <ResetRequestsView />}
       {view === "settings" && <SettingsView />}
+      {view === "permissions" && <PermissionsView />}
+      {view === "audit" && <AuditView />}
     </DashboardShell>
   );
 }

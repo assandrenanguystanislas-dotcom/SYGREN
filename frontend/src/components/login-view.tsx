@@ -92,7 +92,7 @@ export function LoginView() {
             : user.role === "director"
               ? "Directeur"
               : user.role === "inspector"
-                ? "Inspecteur"
+                ? "Admin IEP"
                 : "Instituteur"
         }`,
       });

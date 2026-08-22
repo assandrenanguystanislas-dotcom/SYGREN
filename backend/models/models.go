@@ -23,20 +23,24 @@ func AllRoles() []string {
 // === User ===
 // Base authentication entity. Login via phone OR email (cahier des charges §4.1).
 type User struct {
-	ID                 string         `gorm:"primaryKey;type:text" json:"id"`
-	Phone              *string        `gorm:"uniqueIndex;type:text" json:"phone,omitempty"`
-	Email              *string        `gorm:"uniqueIndex;type:text" json:"email,omitempty"`
-	Password           string         `gorm:"type:text" json:"-"` // bcrypt hash, never serialized
-	FullName           string         `gorm:"type:text" json:"full_name"`
-	Role               string         `gorm:"type:text;index" json:"role"`
-	IEPID              *string        `gorm:"type:text" json:"iep_id,omitempty"`    // inspecteur / admin scope
-	SchoolID           *string        `gorm:"type:text" json:"school_id,omitempty"` // directeur / teacher scope
-	Active             bool           `gorm:"default:true" json:"active"`
-	MustChangePassword bool           `gorm:"default:false" json:"must_change_password"` // temp password → user must change on first login
-	Service            string         `gorm:"type:text" json:"service,omitempty"`        // service au sein de l'IEP (ex: "Examen & Concours", "Statistique") — pour les Admins IEP
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
-	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                 string  `gorm:"primaryKey;type:text" json:"id"`
+	Phone              *string `gorm:"uniqueIndex;type:text" json:"phone,omitempty"`
+	Email              *string `gorm:"uniqueIndex;type:text" json:"email,omitempty"`
+	Password           string  `gorm:"type:text" json:"-"` // bcrypt hash, never serialized
+	FullName           string  `gorm:"type:text" json:"full_name"`
+	Role               string  `gorm:"type:text;index" json:"role"`
+	IEPID              *string `gorm:"type:text" json:"iep_id,omitempty"`    // inspecteur / admin scope
+	SchoolID           *string `gorm:"type:text" json:"school_id,omitempty"` // directeur / teacher scope
+	Active             bool    `gorm:"default:true" json:"active"`
+	MustChangePassword bool    `gorm:"default:false" json:"must_change_password"` // temp password → user must change on first login
+	Service            string  `gorm:"type:text" json:"service,omitempty"`        // service au sein de l'IEP (ex: "Examen & Concours", "Statistique") — pour les Admins IEP
+	// Architecture D — Suspension (Palier 1)
+	SuspendedAt     *time.Time     `gorm:"index" json:"suspended_at,omitempty"`
+	SuspendedByID   *string        `gorm:"type:text;index" json:"suspended_by_id,omitempty"`
+	SuspendedReason string         `gorm:"type:text" json:"suspended_reason,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // BeforeCreate generates a UUID for new users.
@@ -403,6 +407,73 @@ func (r *PasswordResetRequest) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// === Role (Architecture D — Dynamic RBAC) ===
+// Représente un rôle éditable dans la matrice de permissions. Les 4 rôles
+// système (admin, inspector, director, teacher) sont seedés au démarrage et
+// ne peuvent pas être supprimés (IsSystem = true).
+type Role struct {
+	ID          string    `gorm:"primaryKey;type:text" json:"id"`
+	Name        string    `gorm:"uniqueIndex;type:text" json:"name"` // "admin", "inspector", "director", "teacher"
+	Label       string    `gorm:"type:text" json:"label"`            // "Super Admin", "Admin IEP", etc.
+	Description string    `gorm:"type:text" json:"description"`
+	IsSystem    bool      `gorm:"default:false" json:"is_system"`
+	SortOrder   int       `gorm:"default:0" json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (r *Role) BeforeCreate(tx *gorm.DB) error {
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	return nil
+}
+
+// === RoleModule — cellule de la matrice rôle × module ===
+// Représente les permissions d'accès (read/write) d'un rôle sur un module.
+// CanRead  = visible dans la nav + peut appeler les GET du module
+// CanWrite = peut appeler les POST/PUT/DELETE du module
+type RoleModule struct {
+	ID        string    `gorm:"primaryKey;type:text" json:"id"`
+	RoleID    string    `gorm:"type:text;index" json:"role_id"`
+	ModuleKey string    `gorm:"type:text;index" json:"module_key"` // ex: "dashboard", "users", "settings"
+	CanRead   bool      `gorm:"default:false" json:"can_read"`
+	CanWrite  bool      `gorm:"default:false" json:"can_write"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (rm *RoleModule) BeforeCreate(tx *gorm.DB) error {
+	if rm.ID == "" {
+		rm.ID = uuid.NewString()
+	}
+	return nil
+}
+
+// === AuditLog — Journal d'audit (Architecture D) ===
+// Trace toute action sensible (suspension, changement de permission, création
+// de user, validation de session, etc.). Append-only : aucune mise à jour
+// ni suppression depuis l'app.
+type AuditLog struct {
+	ID         string    `gorm:"primaryKey;type:text" json:"id"`
+	ActorID    *string   `gorm:"type:text;index" json:"actor_id,omitempty"` // user qui effectue l'action
+	ActorRole  string    `gorm:"type:text" json:"actor_role"`               // snapshot du rôle au moment de l'action
+	Action     string    `gorm:"type:text;index" json:"action"`             // ex: "user.suspend", "permission.update"
+	EntityType string    `gorm:"type:text;index" json:"entity_type"`        // "user", "permission", "session", "setting"
+	EntityID   *string   `gorm:"type:text;index" json:"entity_id,omitempty"`
+	Details    string    `gorm:"type:text" json:"details,omitempty"` // blob JSON (before/after, reason)
+	IP         string    `gorm:"type:text" json:"ip,omitempty"`
+	UserAgent  string    `gorm:"type:text" json:"user_agent,omitempty"`
+	CreatedAt  time.Time `gorm:"index" json:"created_at"`
+}
+
+func (a *AuditLog) BeforeCreate(tx *gorm.DB) error {
+	if a.ID == "" {
+		a.ID = uuid.NewString()
+	}
+	return nil
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
 	return []interface{}{
@@ -411,5 +482,7 @@ func AllModels() []interface{} {
 		&Setting{}, &GradeScale{}, &SessionExemption{},
 		&StudentSessionResult{},
 		&PasswordResetRequest{},
+		// Architecture D — Dynamic RBAC + Audit
+		&Role{}, &RoleModule{}, &AuditLog{},
 	}
 }

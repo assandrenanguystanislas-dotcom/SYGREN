@@ -6,6 +6,9 @@ import (
 	"strings"
 
 	"sygren-api/config"
+	"sygren-api/database"
+	"sygren-api/models"
+	"sygren-api/rbac"
 	"sygren-api/utils"
 )
 
@@ -21,6 +24,9 @@ const (
 	CtxSchoolID ctxKey = "school_id"
 	// CtxIEPID stores the authenticated user's IEP scope (if any).
 	CtxIEPID ctxKey = "iep_id"
+	// CtxUser stores the full User record (Architecture D) — fetched once per request
+	// by the Auth middleware so handlers don't need to re-query.
+	CtxUser ctxKey = "user"
 )
 
 // JSONError writes a JSON error response.
@@ -31,6 +37,11 @@ func JSONError(w http.ResponseWriter, message string, code int) {
 }
 
 // Auth verifies the JWT token and loads the user identity into the context.
+//
+// Architecture D : fetch également l'utilisateur depuis la DB à chaque requête
+// pour vérifier que le compte est toujours Actif (suspension immédiate, sans
+// attendre l'expiration du JWT 72h). Met l'objet User complet dans le contexte
+// pour que les handlers puissent l'utiliser sans re-requêter la DB.
 func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -46,9 +57,21 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Architecture D — vérifier Active à chaque requête
+			var user models.User
+			if err := database.DB.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+				JSONError(w, "compte introuvable", http.StatusUnauthorized)
+				return
+			}
+			if !user.Active {
+				JSONError(w, "compte suspendu — contactez un administrateur", http.StatusForbidden)
+				return
+			}
+
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, CtxUserID, claims.UserID)
 			ctx = context.WithValue(ctx, CtxRole, claims.Role)
+			ctx = context.WithValue(ctx, CtxUser, &user)
 			if claims.SchoolID != "" {
 				ctx = context.WithValue(ctx, CtxSchoolID, claims.SchoolID)
 			}
@@ -62,7 +85,8 @@ func Auth(cfg *config.Config) func(http.Handler) http.Handler {
 }
 
 // RequireRole returns middleware that allows only the given roles.
-// This is the core of the RBAC system (cahier des charges §2).
+// Legacy RBAC — kept for backward compatibility. New code should use
+// RequireModule(moduleKey, mode) for dynamic permissions.
 func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(roles))
 	for _, r := range roles {
@@ -77,6 +101,33 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 			}
 			if !allowed[role] {
 				JSONError(w, "accès refusé : permissions insuffisantes", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(r.Context()))
+		})
+	}
+}
+
+// RequireModule returns middleware that checks the dynamic permission matrix
+// (Architecture D). mode is "read" or "write".
+//
+//	RequireModule(models.ModuleSessions, "write")
+//
+// checks that the user's role has CanWrite=true on the "sessions" module in
+// the role_modules table (with in-memory cache, TTL 5min).
+//
+// Irreducible permissions (admin on settings/permissions/audit/users-admin/
+// users-inspectors) are always granted, regardless of DB state.
+func RequireModule(module, mode string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, ok := r.Context().Value(CtxRole).(string)
+			if !ok || role == "" {
+				JSONError(w, "rôle non authentifié", http.StatusUnauthorized)
+				return
+			}
+			if !rbac.CheckPermission(role, module, mode) {
+				JSONError(w, "accès refusé : permission "+mode+" sur "+module+" requise", http.StatusForbidden)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(r.Context()))
