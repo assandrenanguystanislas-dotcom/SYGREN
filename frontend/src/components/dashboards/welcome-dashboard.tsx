@@ -69,7 +69,7 @@ export function WelcomeDashboard({ onNavigate }: { onNavigate: (view: string) =>
   });
   const { data: teachersData } = useQuery({
     queryKey: ["teachers"],
-    queryFn: teachersApi.list,
+    queryFn: () => teachersApi.list(),
     enabled: !!user && (user.role === "admin" || user.role === "director"),
   });
 

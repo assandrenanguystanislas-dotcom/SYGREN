@@ -416,10 +416,22 @@ export const studentsApi = {
 // === Enseignants ===
 
 export const teachersApi = {
-  list: () =>
-    apiFetch<{ teachers: TeacherWithDetails[]; count: number }>(
-      "/api/teachers",
-    ),
+  /**
+   * Liste les enseignants.
+   *
+   * @param params.includeDirectors  si true, inclut aussi les directeurs
+   *   d'école dans la réponse (un directeur peut tenir une classe comme
+   *   enseignant — cahier des charges §3 Module 1). Le frontend utilise
+   *   ce flag dans classes-view.tsx pour alimenter le dropdown d'affec-
+   *   tation. Sans ce flag, la réponse ne contient que les users avec
+   *   role=teacher (utilisé par teachers-view.tsx).
+   */
+  list: (params?: { includeDirectors?: boolean }) => {
+    const qs = params?.includeDirectors ? "?include_directors=true" : "";
+    return apiFetch<{ teachers: TeacherWithDetails[]; count: number }>(
+      `/api/teachers${qs}`,
+    );
+  },
   create: (data: {
     full_name: string;
     phone?: string;

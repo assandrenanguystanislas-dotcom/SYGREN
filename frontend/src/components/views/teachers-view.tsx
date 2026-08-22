@@ -68,7 +68,7 @@ export function TeachersView() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["teachers"],
-    queryFn: teachersApi.list,
+    queryFn: () => teachersApi.list(),
   });
   const { data: schoolsData } = useQuery({
     queryKey: ["schools"],

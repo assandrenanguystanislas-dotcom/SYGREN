@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"gorm.io/gorm"
+
 	"sygren-api/database"
 	"sygren-api/middleware"
 	"sygren-api/models"
 	"sygren-api/utils"
-
-	"github.com/go-chi/chi/v5"
 )
 
 // === Teachers — Gestion des enseignants (comptes utilisateurs + affectation) ===
@@ -26,9 +27,33 @@ type TeacherWithDetails struct {
 }
 
 // ListTeachers returns teachers (role=teacher) filtered by scope.
+//
+// Query params :
+//
+//	include_directors=true  → inclut aussi les directeurs d'école dans la
+//	réponse (un directeur peut tenir une classe comme enseignant, cahier
+//	des charges §3 Module 1 — règle "director can hold a class").
+//	Le frontend utilise ce flag pour alimenter le dropdown d'affectation
+//	de classe (classes-view.tsx). Sans ce flag, la réponse ne contient que
+//	les enseignants (utilisateurs avec role=teacher) — utilisé par la vue
+//	"Utilisateurs → Enseignants".
+//
+// Le champ `class_name` est peuplé pour tous les users retournés (y compris
+// directeurs si include_directors=true). C'est utile pour :
+//   - savoir si un directeur donné tient déjà une classe (exclusion du
+//     dropdown disponible),
+//   - afficher le nom de l'enseignant affecté à une classe (lookup par ID).
 func ListTeachers(w http.ResponseWriter, r *http.Request) {
 	role := ctxRole(r)
-	query := database.DB.Model(&models.User{}).Where("role = ?", models.RoleTeacher)
+	includeDirectors := r.URL.Query().Get("include_directors") == "true"
+
+	var query *gorm.DB
+	if includeDirectors {
+		query = database.DB.Model(&models.User{}).
+			Where("role IN ?", []string{models.RoleTeacher, models.RoleDirector})
+	} else {
+		query = database.DB.Model(&models.User{}).Where("role = ?", models.RoleTeacher)
+	}
 
 	switch role {
 	case "director":

@@ -66,8 +66,8 @@ export function ClassesView() {
     enabled: canEdit,
   });
   const { data: teachersData } = useQuery({
-    queryKey: ["teachers"],
-    queryFn: teachersApi.list,
+    queryKey: ["teachers", "include-directors"],
+    queryFn: () => teachersApi.list({ includeDirectors: true }),
     enabled: canEdit,
   });
 
@@ -320,8 +320,22 @@ export function ClassesView() {
                   <SelectItem value="none">— Aucun —</SelectItem>
                   {availableTeachers.map((t: TeacherWithDetails) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.full_name}
-                      {t.email ? ` (${t.email})` : ""}
+                      <span className="flex items-center gap-1.5">
+                        <span>{t.full_name}</span>
+                        {t.role === "director" && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] py-0 px-1.5 h-4 font-medium border-amber-300 text-amber-700 bg-amber-50"
+                          >
+                            Directeur
+                          </Badge>
+                        )}
+                        {t.email && (
+                          <span className="text-[11px] text-muted-foreground">
+                            ({t.email})
+                          </span>
+                        )}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>

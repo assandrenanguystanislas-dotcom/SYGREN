@@ -576,7 +576,7 @@ function SchoolClassesPanel({
   // Récupère la liste des enseignants pour l'affectation (limité au scope du directeur)
   const { data: teachersData } = useQuery({
     queryKey: ["teachers"],
-    queryFn: teachersApi.list,
+    queryFn: () => teachersApi.list(),
     enabled: canEdit,
   });
 
