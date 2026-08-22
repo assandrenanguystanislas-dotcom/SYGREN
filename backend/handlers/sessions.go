@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"sygren-api/database"
@@ -824,50 +823,36 @@ func DeleteSession(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// === Annulation & Archivage (statuts terminaux) ===
+// === Suppression de session (hard delete) ===
 //
-// Ces deux opérations sont SOFT : elles ne suppriment pas la session, elles
-// la font passer dans un état terminal (cancelled / archived). La session
-// reste visible pour l'audit pédagogique et (pour archived) continue de
-// nourrir le bilan annuel élève + la comparaison inter-annuelle.
-//
-// Rationale : le "manque d'espace" n'est pas un vrai problème (Postgres gère
-// des dizaines de Mo/an sans peine). Le vrai besoin — une UI propre — se règle
-// par filtrage (ListSessions masque cancelled/archived par défaut) + archivage,
-// sans destruction de données. Voir discussion approche A + exemptions.
-
-// CancelSessionRequest — payload pour annuler une session
-type CancelSessionRequest struct {
-	Reason       string `json:"reason"`        // obligatoire (motif d'annulation)
-	DeleteGrades bool   `json:"delete_grades"` // si true, supprime les notes saisies
-}
-
-// CancelSession annule une session programmée.
-// PUT /api/sessions/{id}/cancel
-// RBAC : admin + director (son école).
+// L'annulation d'une session supprime DÉFINITIVEMENT la session + ses notes +
+// exemptions + moyennes précalculées (student_session_results). La session
+// n'est plus visible et ne surcharge plus le système. Le soft-cancel
+// précédent gardait les sessions en base (même masquées de l'UI) — l'utilisateur
+// a demandé le hard delete pour éviter la surcharge inutile.
 //
 // Règles :
-//   - Autorisé depuis "draft" librement (pas de note saisie possible en draft).
-//   - Autorisé depuis "open" :
-//   - si 0 note saisie → annulation directe
-//   - si notes présentes → requiert delete_grades=true (sinon 409 Conflict
-//     avec le nombre de notes concernées). Les notes sont alors supprimées.
-//   - Refusé depuis "closed" / "validated" : ces sessions ont déjà été saisies
-//     et doivent être archivées (pas annulées). Renvoie 409 Conflict avec
-//     un message explicatif.
-//   - Refusé depuis "cancelled" / "archived" (déjà terminal) → 409 Conflict.
+//   - Autorisé depuis "draft" et "open" (session non terminée).
+//   - Refusé depuis "closed"/"validated" (utiliser l'archivage — les notes
+//     validées doivent être conservées pour le bilan annuel).
+//   - Refusé depuis "archived" (déjà terminal, notes conservées).
+
+// CancelSessionRequest — payload pour supprimer une session (hard delete)
+type CancelSessionRequest struct {
+	Reason       string `json:"reason"`        // optionnel (non stocké — session supprimée)
+	DeleteGrades bool   `json:"delete_grades"` // ignoré (toujours supprimé en hard delete)
+}
+
+// CancelSession supprime DÉFINITIVEMENT une session (hard delete).
+// PUT /api/sessions/{id}/cancel
+// RBAC : admin + director (son école).
 func CancelSession(w http.ResponseWriter, r *http.Request) {
-	defer InvalidateDashboardCache() // Fix C: écriture session → invalidate cache dashboard
+	defer InvalidateDashboardCache()
 	id := chi.URLParam(r, "id")
+	// Le body est optionnel (reason n'est plus requis — la session est supprimée)
 	var req CancelSessionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
-		return
-	}
-	if strings.TrimSpace(req.Reason) == "" {
-		middleware.JSONError(w, "reason (motif d'annulation) est obligatoire", http.StatusBadRequest)
-		return
-	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	_ = req // reason + delete_grades ignorés (hard delete = tout supprimé)
 
 	var session models.EvaluationSession
 	if err := database.DB.First(&session, "id = ?", id).Error; err != nil {
@@ -875,12 +860,12 @@ func CancelSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// RBAC : director ne peut annuler que les sessions de son école
+	// RBAC : director ne peut supprimer que les sessions de son école
 	role := ctxRole(r)
 	if role == "director" {
 		schoolID := ctxSchoolID(r)
 		if schoolID == "" || session.SchoolID != schoolID {
-			middleware.JSONError(w, "accès refusé : vous ne pouvez annuler que les sessions de votre école", http.StatusForbidden)
+			middleware.JSONError(w, "accès refusé : vous ne pouvez supprimer que les sessions de votre école", http.StatusForbidden)
 			return
 		}
 	}
@@ -889,14 +874,14 @@ func CancelSession(w http.ResponseWriter, r *http.Request) {
 	switch session.Status {
 	case "closed", "validated":
 		middleware.JSONError(w,
-			"annulation impossible : session déjà "+session.Status+
+			"suppression impossible : session déjà "+session.Status+
 				" (utilisez l'archivage pour les sessions validées)", http.StatusConflict)
 		return
 	case "cancelled":
-		middleware.JSONError(w, "session déjà annulée", http.StatusConflict)
+		middleware.JSONError(w, "session déjà annulée (supprimée)", http.StatusConflict)
 		return
 	case "archived":
-		middleware.JSONError(w, "session déjà archivée — annulation impossible", http.StatusConflict)
+		middleware.JSONError(w, "session déjà archivée — suppression impossible (utilisez l'archivage)", http.StatusConflict)
 		return
 	case "draft", "open":
 		// OK — autorisé
@@ -905,42 +890,18 @@ func CancelSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Si la session est "open" et a des notes saisies, exiger delete_grades=true
-	if session.Status == "open" {
-		var gradeCount int64
-		database.DB.Model(&models.Grade{}).Where("session_id = ?", session.ID).Count(&gradeCount)
-		if gradeCount > 0 && !req.DeleteGrades {
-			middleware.JSONError(w,
-				fmt.Sprintf("%d note(s) déjà saisie(s) — confirmez avec delete_grades=true pour les supprimer "+
-					"(ou transformez la session en reportée via ExtendSession)", gradeCount),
-				http.StatusConflict)
-			return
-		}
-		if gradeCount > 0 && req.DeleteGrades {
-			// Supprimer les notes saisies (cascade soft)
-			if err := database.DB.Where("session_id = ?", session.ID).Delete(&models.Grade{}).Error; err != nil {
-				middleware.JSONError(w, "erreur suppression des notes: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			log.Printf("[CANCEL] Session %s : %d note(s) supprimée(s) lors de l'annulation", session.ID, gradeCount)
-		}
-	}
-
-	// Appliquer l'annulation
-	now := time.Now()
+	// HARD DELETE : supprime notes + exemptions + moyennes précalculées + session
 	userID := ctxUserID(r)
-	session.Status = "cancelled"
-	session.CancelReason = strings.TrimSpace(req.Reason)
-	session.CancelledBy = &userID
-	session.CancelledAt = &now
-	session.UpdatedAt = now
-	if err := database.DB.Save(&session).Error; err != nil {
-		middleware.JSONError(w, "erreur annulation session", http.StatusInternalServerError)
+	database.DB.Where("session_id = ?", id).Delete(&models.Grade{})
+	database.DB.Where("session_id = ?", id).Delete(&models.SessionExemption{})
+	database.DB.Where("session_id = ?", id).Delete(&models.StudentSessionResult{})
+	if err := database.DB.Delete(&models.EvaluationSession{}, "id = ?", id).Error; err != nil {
+		middleware.JSONError(w, "erreur suppression session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[CANCEL] Session %s annulée par %s (%s) — motif: %s",
-		session.ID, userID, role, session.CancelReason)
-	jsonResponse(w, http.StatusOK, session)
+	log.Printf("[CANCEL→DELETE] Session %s supprimée par %s (%s) — hard delete (notes+exemptions+moyennes supprimées)",
+		id, userID, role)
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // ArchiveSession archive une session validée (statut terminal lecture seule).

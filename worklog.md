@@ -2452,3 +2452,29 @@ Stage Summary :
 - Bug module Élèves corrigé : le filtre école (dropdown admin) filtre maintenant réellement la liste des élèves côté backend (query param school_id). Avant, l'admin voyait les élèves de TOUTES les écoles même après en avoir choisi une.
 - Même fix appliqué au grades-view (même bug).
 - welcome-dashboard inchangé (list() sans args = RBAC seul = correct pour un dashboard global).
+
+---
+Task ID: Session-Cancel-Becomes-HardDelete
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Une session annulée doit hard delete (supprimée de la DB) au lieu du soft-cancel (qui la garde visible + surcharge le système).
+
+Work Log:
+- Backend handlers/sessions.go CancelSession : remplacé le soft-cancel (status="cancelled" + reason + cancelled_by + cancelled_at + Save) par un HARD DELETE :
+  * Supprime grades + exemptions + student_session_results (Fix E table) + la session elle-même.
+  * Reason + delete_grades ignorés (tout est supprimé).
+  * Retourne {status: "deleted"} (pas la session, puisqu'elle n'existe plus).
+  * Préconditions inchangées : seulement depuis draft/open (closed/validated → archivage ; cancelled/archived → 409).
+  * Import "strings" retiré (plus utilisé — le nouveau handler ne fait plus de TrimSpace).
+  * Log [CANCEL→DELETE] pour audit.
+- Frontend sessions-view.tsx :
+  * Dialog d'annulation remplacé : "Annuler la session" → "Supprimer la session". Titre + warning "DÉFINITIVEMENT... Action irréversible". Bouton "Supprimer définitivement".
+  * Raison Textarea + checkbox delete_grades retirés (plus nécessaires — hard delete = tout supprimé).
+  * cancelMut toast : "Session annulée" → "Session supprimée" / "La session et ses notes ont été supprimées définitivement."
+  * onCancel : reason validation retirée (reason="" + deleteGrades=true envoyés au backend, qui les ignore).
+  * Bouton "Annuler la session" → "Supprimer la session".
+  * setStatusFilter("all") retiré du onSuccess (la session supprimée disparaît de toutes les vues — plus besoin de basculer).
+
+Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
+
+Push + vérification (backend + frontend → Render + Vercel) :
+- (à vérifier après push)

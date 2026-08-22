@@ -235,29 +235,21 @@ export function SessionsView() {
     },
   });
 
-  // === Annulation de session (soft cancel — raison obligatoire) ===
-  // Si la session "open" a des notes saisies, on envoie delete_grades=true
-  // (confirmé par l'utilisateur via checkbox dans le dialog).
+  // === Suppression de session (hard delete — la session + notes sont supprimées) ===
   const cancelMut = useMutation({
     mutationFn: ({ id, reason, deleteGrades }: { id: string; reason: string; deleteGrades: boolean }) =>
       sessionsApi.cancel(id, reason, deleteGrades),
     onSuccess: async (_, vars) => {
-      toast.success("Session annulée", {
-        description: vars.deleteGrades
-          ? "Les notes saisies ont été supprimées."
-          : "La session est passée en statut « Annulée ».",
+      toast.success("Session supprimée", {
+        description: "La session et ses notes ont été supprimées définitivement.",
       });
-      // Après annulation, la session disparaît de la vue "active" (filtre par
-      // défaut). On bascule sur "all" pour que l'utilisateur voit le résultat
-      // de son action et comprenne que la session existe toujours.
-      setStatusFilter((prev) => (prev === "active" ? "all" : prev));
       setCancelTarget(null);
       setCancelReason("");
       setCancelDeleteGrades(false);
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
     onError: (e) => {
-      toast.error("Annulation échouée", {
+      toast.error("Suppression échouée", {
         description: e instanceof Error ? e.message : "Erreur inconnue",
       });
     },
@@ -323,18 +315,11 @@ export function SessionsView() {
 
   async function onCancel() {
     if (!cancelTarget) return;
-    const reason = cancelReason.trim();
-    if (!reason) {
-      toast.error("Motif obligatoire", {
-        description: "Veuillez indiquer la raison de l'annulation.",
-      });
-      return;
-    }
     try {
       await cancelMut.mutateAsync({
         id: cancelTarget.id,
-        reason,
-        deleteGrades: cancelDeleteGrades,
+        reason: "",
+        deleteGrades: true,
       });
     } catch {
       /* toastée */
@@ -639,7 +624,7 @@ export function SessionsView() {
                       disabled={cancelMut.isPending}
                     >
                       <Ban className="w-3.5 h-3.5 mr-1.5" />
-                      Annuler la session
+                      Supprimer la session
                     </Button>
                   )}
 
@@ -1057,10 +1042,9 @@ export function SessionsView() {
         />
       )}
 
-      {/* === Dialog d'annulation (raison obligatoire + option delete_grades) ===
-          Soft cancel : la session passe en statut « Annulée ». Elle n'est pas
-          supprimée (conservée pour l'audit). Les notes saisies (si open) sont
-          supprimées après confirmation explicite de l'utilisateur. */}
+      {/* === Dialog de suppression (hard delete) ===
+          La session + ses notes + exemptions + moyennes sont supprimées
+          DÉFINITIVEMENT de la base. Action irréversible. */}
       {cancelTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card className="w-full max-w-md">
@@ -1070,7 +1054,7 @@ export function SessionsView() {
                   <Ban className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-base">Annuler la session</h3>
+                  <h3 className="font-semibold text-base">Supprimer la session</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {cancelTarget.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{cancelTarget.eval_number}
                     {" — "}
@@ -1082,63 +1066,19 @@ export function SessionsView() {
               <div className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-[11px] text-rose-700 flex items-start gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>
-                  La session sera marquée « Annulée ». Elle ne sera plus active
-                  mais restera visible dans l'historique (vue « Tout ») pour audit.
-                  {cancelTarget.status === "open" && cancelTarget.graded_count > 0 && (
-                    <>
-                      {" "}
-                      <strong>{cancelTarget.graded_count} note(s)</strong> ont déjà été saisies —
-                      cochez l'option ci-dessous pour les supprimer définitivement.
-                    </>
+                  Cette action supprimera <strong>DÉFINITIVEMENT</strong> la session
+                  {cancelTarget.graded_count > 0 && (
+                    <> et ses <strong>{cancelTarget.graded_count} note(s)</strong></>
                   )}
+                  {" "}de la base de données. <strong>Action irréversible.</strong>
                 </span>
               </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="cancel-reason">
-                  Motif de l&apos;annulation <span className="text-destructive">*</span>
-                </Label>
-                <Textarea
-                  id="cancel-reason"
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Ex : Examen reporté (jour férié), erreur de planification, force majeure…"
-                  rows={3}
-                  required
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Le motif est obligatoire et sera conservé pour l&apos;audit pédagogique.
-                </p>
-              </div>
-
-              {cancelTarget.status === "open" && cancelTarget.graded_count > 0 && (
-                <label className="flex items-start gap-2 cursor-pointer rounded-md border border-rose-200 bg-rose-50/50 p-2.5">
-                  <Checkbox
-                    checked={cancelDeleteGrades}
-                    onCheckedChange={(v) => setCancelDeleteGrades(v === true)}
-                    className="mt-0.5"
-                  />
-                  <div className="text-xs">
-                    <p className="font-medium text-rose-800">
-                      Supprimer les {cancelTarget.graded_count} note(s) saisie(s)
-                    </p>
-                    <p className="text-rose-600/80 mt-0.5">
-                      Recommandé — les notes n&apos;ont plus de sens si l&apos;évaluation
-                      n&apos;a pas lieu. Action irréversible.
-                    </p>
-                  </div>
-                </label>
-              )}
 
               <div className="flex justify-end gap-2 pt-1">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setCancelTarget(null);
-                    setCancelReason("");
-                    setCancelDeleteGrades(false);
-                  }}
+                  onClick={() => setCancelTarget(null)}
                   disabled={cancelMut.isPending}
                 >
                   Retour
@@ -1147,14 +1087,14 @@ export function SessionsView() {
                   type="button"
                   variant="destructive"
                   onClick={onCancel}
-                  disabled={cancelMut.isPending || !cancelReason.trim()}
+                  disabled={cancelMut.isPending}
                 >
                   {cancelMut.isPending ? (
                     <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
                   ) : (
                     <Ban className="w-4 h-4 mr-1.5" />
                   )}
-                  Annuler la session
+                  Supprimer définitivement
                 </Button>
               </div>
             </CardContent>
