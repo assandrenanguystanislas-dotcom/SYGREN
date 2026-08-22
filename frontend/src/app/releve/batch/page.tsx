@@ -102,6 +102,9 @@ export default function ReleveBatchPage() {
         setClasses(list);
         setSelected(new Set(list.map((c) => c.id))); // toutes cochées par défaut
         setLoading(false);
+        // Titre onglet indicatif (le batch ne s'imprime pas lui-même, mais le
+        // titre aide à identifier l'onglet quand plusieurs sont ouverts).
+        document.title = `Relevés PDF — ${list.length} classe(s)`;
       })
       .catch((e: Error) => {
         setError(e.message);
