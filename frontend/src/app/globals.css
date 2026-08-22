@@ -270,26 +270,29 @@
 }
 
 /* === Bulletins A5 paysage — Print CSS (A4 landscape, 2 bulletins/page) ===
- * Chaque .page-bulletins est une page A4 paysage (297×210mm) contenant
- * 2 bulletins A5 côte à côte, séparés par une ligne pointillée.
- * La page nommée « bulletins » force A4 paysage, marges 0 (le composant
- * gère son propre padding intérieur).
- * Le #bulletins-doc est rendu visible par défaut en impression (comme
- * #releve-doc et #synthese-doc) ; la visibilité est isolée par la page
- * nommée + les règles @page bulletins qui ne s'appliquent qu'aux éléments
- * .page-bulletins.
+ * Chaque .page-a4-landscape est une page A4 paysage (297×210mm) contenant
+ * 2 bulletins A5 (143.5mm chacun) côte à côte, séparés par un trait
+ * pointillé central de 10mm pour la découpe.
+ * La page nommée « bulletins » force A4 paysage, marges 0.
+ * Dimensions physiques strictes pour éviter tout décalage d'impression.
  */
 @media print {
   @page bulletins {
     size: A4 landscape;
     margin: 0;
   }
-  .page-bulletins {
+  .page-a4-landscape {
     page: bulletins;
+    width: 297mm !important;
+    height: 210mm !important;
+    max-height: 210mm !important;
+    padding: 5mm !important;
+    box-sizing: border-box !important;
     page-break-after: always;
     break-after: page;
+    overflow: hidden !important;
   }
-  .page-bulletins:last-child {
+  .page-a4-landscape:last-child {
     page-break-after: auto;
     break-after: auto;
   }
