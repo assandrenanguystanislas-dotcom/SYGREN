@@ -2547,3 +2547,16 @@ Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
 
 Push + vérification (backend + frontend → Render + Vercel) :
 - (à vérifier après push)
+
+Vérification E2E (après déploiement 102a9de8) :
+- Render live + Vercel READY (backend + frontend).
+- /api/settings avec admin → HTTP 200 ✓ (admin a toujours accès).
+- /api/health OK.
+- Router : settings route RequireRole(RoleAdmin) sans RoleInspector → inspector = 403 sur settings ✓ (par code, non testé en live car pas de compte inspector).
+
+Stage Summary :
+- Inspecteur → Admin IEP : mêmes droits que super admin SAUF paramètres généraux (/api/settings).
+- 13 RequireRole calls modifiés (RoleInspector ajouté), 1 exclusion (settings).
+- 8 case "inspector" retirés des handlers → scope global (comme admin).
+- Dashboard : inspector obtient getAdminDashboard (vue globale).
+- Frontend : label "Admin IEP", NAV_ITEMS ouverts (sauf settings), welcome stats + quick actions = admin.
