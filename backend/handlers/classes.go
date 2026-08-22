@@ -97,19 +97,51 @@ func ListClasses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// === Fix A suite : batch des school + teacher lookups (était 1 query/classe = N+1) ===
+	// Collecte des IDs uniques (schools + teachers non-nil).
+	schoolIDSet := make(map[string]bool)
+	teacherIDSet := make(map[string]bool)
+	for _, c := range classes {
+		schoolIDSet[c.SchoolID] = true
+		if c.TeacherID != nil {
+			teacherIDSet[*c.TeacherID] = true
+		}
+	}
+	// 1 query pour toutes les écoles
+	schoolMap := make(map[string]string, len(schoolIDSet))
+	if len(schoolIDSet) > 0 {
+		ids := make([]string, 0, len(schoolIDSet))
+		for id := range schoolIDSet {
+			ids = append(ids, id)
+		}
+		var schools []models.School
+		database.DB.Where("id IN ?", ids).Find(&schools)
+		for _, s := range schools {
+			schoolMap[s.ID] = s.Name
+		}
+	}
+	// 1 query pour tous les enseignants
+	teacherMap := make(map[string]string, len(teacherIDSet))
+	if len(teacherIDSet) > 0 {
+		ids := make([]string, 0, len(teacherIDSet))
+		for id := range teacherIDSet {
+			ids = append(ids, id)
+		}
+		var teachers []models.User
+		database.DB.Where("id IN ?", ids).Find(&teachers)
+		for _, t := range teachers {
+			teacherMap[t.ID] = t.FullName
+		}
+	}
+
 	for _, c := range classes {
 		var d ClassWithDetails
 		d.Class = c
-		// Nom de l'école
-		var school models.School
-		if err := database.DB.First(&school, "id = ?", c.SchoolID).Error; err == nil {
-			d.SchoolName = school.Name
-		}
-		// Nom de l'enseignant
+		// Nom de l'école (depuis schoolMap — pas de requête par classe)
+		d.SchoolName = schoolMap[c.SchoolID]
+		// Nom de l'enseignant (depuis teacherMap)
 		if c.TeacherID != nil {
-			var teacher models.User
-			if err := database.DB.First(&teacher, "id = ?", *c.TeacherID).Error; err == nil {
-				n := teacher.FullName
+			if n, ok := teacherMap[*c.TeacherID]; ok {
 				d.TeacherName = &n
 			}
 		}
