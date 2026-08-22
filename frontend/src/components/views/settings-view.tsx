@@ -7,11 +7,11 @@ import {
   Loader2,
   Save,
   RotateCcw,
+  RefreshCw,
   Award,
   Sliders,
   Database,
   Info,
-  Check,
   AlertCircle,
   ShieldCheck,
   KeyRound,
@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import { settingsApi, healthApi, authApi } from "@/lib/api";
 import type { Setting } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -112,6 +113,28 @@ function hashToTab(hash: string): SettingsTab | null {
   if (hash === "reset-requests") return "reset-requests";
   if (hash === "settings" || hash === "") return "general";
   return null;
+}
+
+/**
+ * Formatage du timestamp de dernière vérification en texte relatif :
+ * 0-2s      → "à l'instant"
+ * 2-60s     → "il y a Xs"
+ * 1-60min   → "il y a Xmin"
+ * >1h       → "il y a Xh"
+ *
+ * Utilisé par la Card "Statut du système" pour montrer quand le backend
+ * a été vérifié pour la dernière fois (sans polluer l'UI avec une heure
+ * absolue peu lisible).
+ */
+function formatLastCheck(timestampMs: number): string {
+  if (!timestampMs) return "à l'instant";
+  const diffSec = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  if (diffSec < 2) return "à l'instant";
+  if (diffSec < 60) return `il y a ${diffSec}s`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `il y a ${diffMin}min`;
+  const diffH = Math.floor(diffMin / 60);
+  return `il y a ${diffH}h`;
 }
 
 export function SettingsView({
@@ -295,7 +318,14 @@ function GeneralSettingsTab() {
     queryFn: settingsApi.list,
   });
 
-  const { data: health } = useQuery({
+  const {
+    data: health,
+    refetch: refetchHealth,
+    isFetching: isHealthFetching,
+    isError: isHealthError,
+    error: healthError,
+    dataUpdatedAt: healthUpdatedAt,
+  } = useQuery({
     queryKey: ["health"],
     queryFn: healthApi.check,
     refetchInterval: 30000,
@@ -344,13 +374,19 @@ function GeneralSettingsTab() {
   return (
     <div className="space-y-4">
       {/* === Card 1 : Statut du système ===
-          Toujours rendu (la query health est indépendante de la query
-          settings — on peut voir la santé du backend même pendant le
-          chargement initial des paramètres). */}
+          Affiche l'état du backend SYGREN (en ligne / hors ligne / vérification).
+          Une seule ligne riche : statut + service + version + dernière vérif.
+          Bouton "Vérifier" pour re-check manuel.
+          Pas de compteur de paramètres (redondant avec les Cards ci-dessous). */}
       <Card
         role="region"
         aria-label="Statut du système"
-        className="border-border/60 transition-colors hover:border-emerald-200"
+        className={cn(
+          "border-border/60 transition-colors",
+          isHealthError
+            ? "border-destructive/40 bg-destructive/5"
+            : "hover:border-emerald-200",
+        )}
       >
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -360,48 +396,65 @@ function GeneralSettingsTab() {
             Statut du système
           </CardTitle>
           <CardDescription className="text-xs">
-            Santé du backend et nombre de paramètres actifs.
+            Santé du backend SYGREN — vérification automatique toutes les 30s.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="flex items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-muted/30">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                <Check className="w-3.5 h-3.5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Backend Go</p>
-                <p className="font-medium text-sm truncate">
-                  {health
-                    ? `${health.service} v${health.version}`
-                    : "Vérification…"}
-                </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              {/* Indicateur d'état (pastille colorée) */}
+              {isHealthError ? (
+                <span className="flex h-3 w-3 rounded-full bg-destructive ring-2 ring-destructive/20 shrink-0" />
+              ) : !health ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />
+              ) : (
+                <span className="flex h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20 shrink-0 animate-pulse" />
+              )}
+              <div className="min-w-0 flex-1">
+                {isHealthError ? (
+                  <>
+                    <p className="font-medium text-sm text-destructive">
+                      Backend hors ligne
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {healthError instanceof Error
+                        ? healthError.message
+                        : "Connexion impossible — vérifiez le réseau ou le backend Render"}
+                    </p>
+                  </>
+                ) : !health ? (
+                  <p className="font-medium text-sm text-muted-foreground">
+                    Vérification en cours…
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-medium text-sm">
+                      Backend en ligne{" "}
+                      <span className="text-muted-foreground font-normal">
+                        · {health.service} v{health.version}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Vérifié {formatLastCheck(healthUpdatedAt)}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-muted/30">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Database className="w-3.5 h-3.5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Statut API</p>
-                <p className="font-medium text-sm capitalize">
-                  {health?.status ?? "—"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-muted/30">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                <Sliders className="w-3.5 h-3.5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">
-                  Paramètres actifs
-                </p>
-                <p className="font-medium text-sm">
-                  {data?.count ?? (isLoading ? "…" : 0)} configurés
-                </p>
-              </div>
-            </div>
+            {/* Bouton Refresh — re-check manuel */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetchHealth()}
+              disabled={isHealthFetching}
+              className="shrink-0 h-8"
+              aria-label="Revérifier la santé du backend"
+            >
+              <RefreshCw
+                className={cn("w-3.5 h-3.5", isHealthFetching && "animate-spin")}
+              />
+              <span className="hidden sm:inline ml-1.5">Vérifier</span>
+            </Button>
           </div>
         </CardContent>
       </Card>
