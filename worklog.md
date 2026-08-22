@@ -2013,3 +2013,40 @@ Stage Summary:
 - Déploiements finaux : Vercel ✅ READY (2cbf8547), Render ✅ live (2cbf8547, trigger manuel car auto-deploy webhook a manqué).
 - Pattern récurrent constaté : le webhook GitHub→Render rate ~1 push sur 2. À surveiller — si persistant, vérifier le webhook dans le dashboard Render (Settings → Webhook). Vercel, lui, auto-déploie à chaque push sans fail.
 - Artifacts : screenshot-results-buttons.png (gitignored via /screenshot-*.png).
+
+---
+Task ID: Monorepo-Conditional-Deploy-Understanding
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Correction de ma mauvaise interprétation des "Render auto-deploy manqués" + configuration Vercel pour aligner le comportement (skip si frontend/ non modifié).
+
+Work Log:
+- Correction utilisateur : "il s'agit d'un monorepo avec deux dossiers Backend et Frontend. Si pas de modification backend alors pas de déploiement, c'est pareil pour le frontend."
+- Ma conclusion précédente "webhook GitHub→Render flaky (manque ~1 push sur 2)" ÉTAIT FAUSSE. Les "Render auto-deploy manqués" que j'avais signalés (59587d7 frontend-only, 2cbf854 frontend-only) n'étaient PAS des manques — Render a CORRECTEMENT ignoré ces pushes car rootDir=backend et backend/ n'avait pas changé. Mes triggers Render manuels pour ces 2 commits étaient donc INUTILES (rebuild du même Go pour rien).
+
+Audit comportement réel des 2 plateformes :
+- Render (rootDir=backend) : déploie SEULEMENT si backend/ change. ✓ Conforme à l'intent. Comportement observé sur l'historique : 59587d7 (frontend)→non déployé, 2cbf854 (frontend)→non déployé, bad97de5 (backend)→déployé, 6891587 (backend)→déployé. Tous corrects.
+- Vercel (rootDirectory=frontend MAIS gitIgnoredBuildStep=null) : déployait sur CHAQUE push, y compris les commits backend-only (bad97de5, c902646c, 6891587 tous → READY). ❌ NON conforme à l'intent (gaspillait des builds Vercel sur les commits backend-only).
+
+Fix Vercel (alignement sur le comportement Render) :
+- Vercel API : GET /v9/projects/{id} → clé réelle = `commandForIgnoringBuildStep` (PAS `gitIgnoredBuildStep` qui est un alias read-only). 1er essai PATCH avec `gitIgnoredBuildStep` → HTTP 400 "should NOT have additional property".
+- PATCH /v9/projects/prj_51kMcmyW9PFzFt4sk0Jn7BYkvk4O avec `{"commandForIgnoringBuildStep": "git diff --quiet HEAD~1 HEAD -- frontend/"}` → HTTP 200 ✓.
+- Logique : `git diff --quiet HEAD~1 HEAD -- frontend/` retourne 0 (exit, Vercel skipp) si frontend/ n'a pas changé, non-zero (Vercel build) si frontend/ a changé.
+- Comportement attendu : commit backend-only → Vercel skipp ; commit frontend → Vercel build ; commit worklog-only → Vercel skipp.
+
+Mise à jour du helper local-deploy.sh (gitignored, pas de commit) :
+- Détection CONDITIONNELLE : `git diff --name-only HEAD~1 HEAD` → grep '^backend/' (BACKEND_DEPLOY) et '^frontend/' (FRONTEND_DEPLOY).
+- Étape 1 (build Go) : seulement si backend/ modifié.
+- Étape 2 (lint frontend) : seulement si frontend/ modifié.
+- Étape 5 (poll Render) : seulement si BACKEND_DEPLOY=1.
+- Étape 6 (poll Vercel) : seulement si FRONTEND_DEPLOY=1. Aussi corrigé le bug endpoint Vercel /v13 (invalide) → /v6 (correct).
+- Étape 7 (check Neon) : seulement si backend/ modifié (pas de migration DB sinon).
+- Affichage final : "Backend (Render) : ✅ live / — skip" et "Frontend (Vercel) : ✅ READY / — skip" selon ce qui a déployé.
+
+Test de validation : commit worklog-only (ce commit) → ni backend/ ni frontend/ modifié → Vercel ET Render doivent tous les deux SKIPP. C'est le test parfait pour valider la nouvelle config Vercel.
+- (résultat du test : à vérifier après push)
+
+Stage Summary:
+- Mauvaise interprétation corrigée : Render ne "manque" pas les pushes, il les ignore correctement quand backend/ ne change pas (rootDir=backend).
+- Vercel configuré pour le même comportement : commandForIgnoringBuildStep="git diff --quiet HEAD~1 HEAD -- frontend/" → skip si frontend/ non modifié.
+- Helper local-deploy.sh rendu conditionnel : ne poll QUE la plateforme dont le dossier a changé (plus de faux timeout sur l'autre).
+- Conséquence pour les futurs pushes : un commit frontend-only → Vercel déploie + Render skip (pas de rebuild Go inutile). Un commit backend-only → Render déploie + Vercel skip (pas de rebuild Next.js inutile). Gain de temps + économie de build minutes.
