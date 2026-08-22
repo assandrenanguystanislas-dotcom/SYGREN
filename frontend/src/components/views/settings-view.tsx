@@ -15,35 +15,51 @@ import {
   AlertCircle,
   ShieldCheck,
   KeyRound,
+  Ruler,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { settingsApi, healthApi } from "@/lib/api";
+import { settingsApi, healthApi, authApi } from "@/lib/api";
 import type { Setting } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { GradeScalesPanel } from "./grade-scales-view";
 import { PermissionsView } from "./permissions-view";
 import { ResetRequestsView } from "./reset-requests-view";
 
 // Labels lisibles pour les catégories
-const CATEGORY_LABELS: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
+const CATEGORY_LABELS: Record<
+  string,
+  { label: string; icon: React.ReactNode; description: string }
+> = {
   mention: {
-    label: "Seuils de mentions",
+    label: "Mentions & seuils",
     icon: <Award className="w-4 h-4" />,
-    description: "Définit les seuils (≥) pour chaque niveau de mention. Utilisés dans le calcul des moyennes et classements.",
+    description:
+      "Définit les seuils (≥) pour chaque niveau de mention. Utilisés dans le calcul des moyennes et classements.",
   },
   system: {
-    label: "Configuration système",
+    label: "Système",
     icon: <Sliders className="w-4 h-4" />,
-    description: "Paramètres globaux du système (année scolaire, seuils de réussite/distinction).",
+    description:
+      "Année scolaire, seuil de réussite et seuil de distinction.",
   },
   coefficient: {
     label: "Coefficients",
     icon: <Database className="w-4 h-4" />,
-    description: "Coefficient par défaut appliqué aux nouvelles matières (modifiable individuellement par matière).",
+    description:
+      "Coefficient par défaut appliqué aux nouvelles matières (modifiable individuellement par matière).",
   },
 };
 
@@ -61,16 +77,27 @@ const DEFAULT_VALUES: Record<string, string> = {
   "coefficient.default": "1",
 };
 
-export type SettingsTab = "general" | "permissions" | "reset-requests";
+export type SettingsTab =
+  | "general"
+  | "baremes"
+  | "permissions"
+  | "reset-requests";
 
 /**
  * Mappe l'onglet actif vers le hash URL (pour bookmarks + back/forward).
  * - "general"        → "#settings"
+ * - "baremes"        → "#baremes"
  * - "permissions"    → "#permissions"
  * - "reset-requests" → "#reset-requests"
  */
 function tabToHash(tab: SettingsTab): string {
-  if (tab === "permissions" || tab === "reset-requests") return `#${tab}`;
+  if (
+    tab === "baremes" ||
+    tab === "permissions" ||
+    tab === "reset-requests"
+  ) {
+    return `#${tab}`;
+  }
   return "#settings";
 }
 
@@ -80,14 +107,30 @@ function tabToHash(tab: SettingsTab): string {
  * garde la mainmise sur le routing top-level).
  */
 function hashToTab(hash: string): SettingsTab | null {
+  if (hash === "baremes") return "baremes";
   if (hash === "permissions") return "permissions";
   if (hash === "reset-requests") return "reset-requests";
   if (hash === "settings" || hash === "") return "general";
   return null;
 }
 
-export function SettingsView({ initialTab = "general" }: { initialTab?: SettingsTab }) {
+export function SettingsView({
+  initialTab = "general",
+}: {
+  initialTab?: SettingsTab;
+}) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
+
+  // Query dédiée : compte des demandes de réinitialisation en attente.
+  // Utilisée pour afficher un badge count sur l'onglet "Réinitialisations".
+  // TanStack déduplique cette query avec celle embarquée par ResetRequestsView
+  // quand l'onglet est actif (même queryKey ["reset-requests", "pending"]).
+  const { data: pendingData } = useQuery({
+    queryKey: ["reset-requests", "pending"],
+    queryFn: () => authApi.listResetRequests("pending"),
+    refetchInterval: 30000,
+  });
+  const pendingCount = pendingData?.count ?? 0;
 
   // Skip-first-mount : ne pas écraser le hash au tout premier render
   // (il vient d'être défini par page.tsx ou par l'URL entrante).
@@ -128,16 +171,20 @@ export function SettingsView({ initialTab = "general" }: { initialTab?: Settings
 
   return (
     <div className="space-y-6">
-      {/* En-tête de page */}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <SettingsIcon className="w-6 h-6 text-primary" />
-          Paramètres
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Configuration globale de SYGREN — système, permissions et réinitialisations
-          de mot de passe.
-        </p>
+      {/* En-tête de page — icône shadowée + titre + description.
+          Reprend le pattern de login-view.tsx / FullScreenLoader :
+          inline-flex rounded-2xl bg-primary + shadow-lg shadow-primary/30. */}
+      <div className="flex items-start gap-3.5">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30 shrink-0">
+          <SettingsIcon className="w-6 h-6" />
+        </div>
+        <div className="space-y-1 pt-1 min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Paramètres</h1>
+          <p className="text-sm text-muted-foreground">
+            Configuration globale de SYGREN — système, barèmes, permissions et
+            réinitialisations.
+          </p>
+        </div>
       </div>
 
       <Tabs
@@ -145,38 +192,84 @@ export function SettingsView({ initialTab = "general" }: { initialTab?: Settings
         onValueChange={(v) => setTab(v as SettingsTab)}
         className="space-y-4"
       >
+        {/* TabsList responsive : flex-wrap pour passer à la ligne sur petits
+            écrans (4 onglets + icônes = ~520px en mode texte). */}
         <TabsList
           aria-label="Sections des paramètres"
           className="flex h-auto flex-wrap w-full sm:w-fit"
         >
-          <TabsTrigger value="general" aria-label="Paramètres généraux (système, mentions, coefficients)">
+          <TabsTrigger
+            value="general"
+            aria-label="Paramètres généraux (système, mentions, coefficients)"
+          >
             <SettingsIcon className="w-4 h-4" />
             Général
           </TabsTrigger>
-          <TabsTrigger value="permissions" aria-label="Matrice de permissions RBAC (rôles × modules)">
+          <TabsTrigger
+            value="baremes"
+            aria-label="Barèmes de notation par niveau (CP, CE, CM, exception Dictée)"
+          >
+            <Ruler className="w-4 h-4" />
+            Barèmes
+          </TabsTrigger>
+          <TabsTrigger
+            value="permissions"
+            aria-label="Matrice de permissions RBAC (rôles × modules)"
+          >
             <ShieldCheck className="w-4 h-4" />
             Permissions
           </TabsTrigger>
-          <TabsTrigger value="reset-requests" aria-label="Demandes de réinitialisation de mot de passe">
+          <TabsTrigger
+            value="reset-requests"
+            aria-label="Demandes de réinitialisation de mot de passe"
+          >
             <KeyRound className="w-4 h-4" />
             Réinitialisations
+            {pendingCount > 0 && (
+              <Badge
+                variant="secondary"
+                className="ml-1 h-5 px-1.5 text-[10px] tabular-nums font-semibold"
+              >
+                {pendingCount}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
-        {/* Onglet Général : la liste des settings groupés par catégorie +
-            le badge de santé du backend (statut système + warning impact). */}
-        <TabsContent value="general">
+        {/* Onglet Général : Statut système + Cards par catégorie
+            (Mentions & seuils / Système / Coefficients). */}
+        <TabsContent
+          value="general"
+          className="animate-in fade-in-50 duration-150"
+        >
           <GeneralSettingsTab />
+        </TabsContent>
+
+        {/* Onglet Barèmes : GradeScalesPanel (CRUD barèmes CP/CE/CM +
+            exception Dictée /20). Panneau déjà autonome (loading + erreur
+            + header inline). */}
+        <TabsContent
+          value="baremes"
+          className="animate-in fade-in-50 duration-150"
+        >
+          <GradeScalesPanel />
         </TabsContent>
 
         {/* Onglet Permissions : embarque PermissionsView en mode embedded
             (le H1 + intro sont masqués — l'onglet fournit déjà ce contexte). */}
-        <TabsContent value="permissions">
+        <TabsContent
+          value="permissions"
+          className="animate-in fade-in-50 duration-150"
+        >
           <PermissionsView embedded />
         </TabsContent>
 
-        {/* Onglet Réinitialisations : embarque ResetRequestsView en mode embedded. */}
-        <TabsContent value="reset-requests">
+        {/* Onglet Réinitialisations : embarque ResetRequestsView en mode
+            embedded. */}
+        <TabsContent
+          value="reset-requests"
+          className="animate-in fade-in-50 duration-150"
+        >
           <ResetRequestsView embedded />
         </TabsContent>
       </Tabs>
@@ -185,8 +278,12 @@ export function SettingsView({ initialTab = "general" }: { initialTab?: Settings
 }
 
 /**
- * Onglet "Général" — contenu de l'ancienne SettingsView (statut système,
- * avertissement impact calculs, paramètres par catégorie, barèmes).
+ * Onglet "Général" — Statut système (toujours rendu, indépendant du
+ * chargement des settings) + Cards par catégorie avec header (icône +
+ * titre + description + badge count) + skeleton pendant le chargement.
+ *
+ * Avertissement "Impact sur les calculs" : affiché en bas de la Card
+ * "Mentions & seuils" seulement (contextuel — spécifique aux seuils).
  */
 function GeneralSettingsTab() {
   const queryClient = useQueryClient();
@@ -241,197 +338,269 @@ function GeneralSettingsTab() {
     await updateMut.mutateAsync({ key, value: defaultValue });
   };
 
-  if (isLoading) return <LoadingState />;
-
-  if (error)
-    return (
-      <Card className="border-destructive/40">
-        <CardContent className="py-10 text-center">
-          <p className="text-sm text-destructive font-medium">
-            Impossible de charger les paramètres
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {(error as Error).message}
-          </p>
-        </CardContent>
-      </Card>
-    );
-
   const settings = data?.settings ?? {};
   const categories = Object.keys(settings).sort();
 
   return (
     <div className="space-y-4">
-      {/* Statut système (badge de santé du backend) */}
-      <Card className="border-border/60">
+      {/* === Card 1 : Statut du système ===
+          Toujours rendu (la query health est indépendante de la query
+          settings — on peut voir la santé du backend même pendant le
+          chargement initial des paramètres). */}
+      <Card
+        role="region"
+        aria-label="Statut du système"
+        className="border-border/60 transition-colors hover:border-emerald-200"
+      >
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Info className="w-4 h-4 text-primary" />
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Info className="w-4 h-4" />
+            </span>
             Statut du système
           </CardTitle>
+          <CardDescription className="text-xs">
+            Santé du backend et nombre de paramètres actifs.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="flex items-center gap-2.5 rounded-lg border p-3">
-              <Check className="w-4 h-4 text-emerald-600" />
-              <div>
+            <div className="flex items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-muted/30">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <Check className="w-3.5 h-3.5" />
+              </span>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Backend Go</p>
-                <p className="font-medium text-sm">
-                  {health ? `${health.service} v${health.version}` : "Vérification…"}
+                <p className="font-medium text-sm truncate">
+                  {health
+                    ? `${health.service} v${health.version}`
+                    : "Vérification…"}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2.5 rounded-lg border p-3">
-              <Database className="w-4 h-4 text-primary" />
-              <div>
+            <div className="flex items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-muted/30">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Database className="w-3.5 h-3.5" />
+              </span>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Statut API</p>
                 <p className="font-medium text-sm capitalize">
                   {health?.status ?? "—"}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2.5 rounded-lg border p-3">
-              <Sliders className="w-4 h-4 text-amber-600" />
-              <div>
-                <p className="text-xs text-muted-foreground">Paramètres actifs</p>
-                <p className="font-medium text-sm">{data?.count ?? 0} configurés</p>
+            <div className="flex items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-muted/30">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <Sliders className="w-3.5 h-3.5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">
+                  Paramètres actifs
+                </p>
+                <p className="font-medium text-sm">
+                  {data?.count ?? (isLoading ? "…" : 0)} configurés
+                </p>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Avertissement */}
-      <Card className="border-amber-200 bg-amber-50">
-        <CardContent className="py-3 flex items-start gap-2.5">
-          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-amber-800">
-            <p className="font-medium">Impact sur les calculs</p>
-            <p className="text-xs mt-0.5">
-              La modification des seuils de mentions affecte immédiatement les
-              résultats de classement, les bulletins PDF et les statistiques du
-              tableau de bord. Les changements sont rétroactifs.
+      {/* === Cards 2-4 : Paramètres par catégorie === */}
+      {isLoading ? (
+        <SettingsSkeleton />
+      ) : error ? (
+        <Card className="border-destructive/40">
+          <CardContent className="py-10 text-center flex flex-col items-center gap-2">
+            <AlertCircle className="w-6 h-6 text-destructive" />
+            <p className="text-sm text-destructive font-medium">
+              Impossible de charger les paramètres
             </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Paramètres par catégorie */}
-      {categories.map((cat) => {
-        const catConfig = CATEGORY_LABELS[cat] ?? {
-          label: cat,
-          icon: <SettingsIcon className="w-4 h-4" />,
-          description: "",
-        };
-        const items = settings[cat] ?? [];
-        return (
-          <Card key={cat} className="border-border/60">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <span className="text-primary">{catConfig.icon}</span>
-                {catConfig.label}
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">{catConfig.description}</p>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {items.map((s) => (
-                <div
-                  key={s.key}
-                  className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{s.label}</p>
-                    <p className="text-[11px] text-muted-foreground font-mono truncate">
-                      {s.key}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {editingKey === s.key ? (
-                      <>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          max="20"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="w-24 h-9 text-center font-mono"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSave(s.key);
-                            if (e.key === "Escape") setEditingKey(null);
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => handleSave(s.key)}
-                          disabled={updateMut.isPending}
-                          className="h-9"
-                        >
-                          {updateMut.isPending ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Save className="w-3.5 h-3.5" />
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditingKey(null)}
-                          className="h-9"
-                        >
-                          Annuler
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-mono font-bold text-base text-primary min-w-[3rem] text-right">
-                          {s.value}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEdit(s)}
-                          className="h-9"
-                        >
-                          <SettingsIcon className="w-3.5 h-3.5 mr-1" />
-                          Modifier
-                        </Button>
-                        {DEFAULT_VALUES[s.key] && s.value !== DEFAULT_VALUES[s.key] && (
+            <p className="text-xs text-muted-foreground">
+              {(error as Error).message}
+            </p>
+          </CardContent>
+        </Card>
+      ) : categories.length === 0 ? (
+        <Card className="border-border/60">
+          <CardContent className="py-12 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Search className="w-6 h-6 opacity-50" />
+            <p className="text-sm font-medium">Aucun paramètre configuré</p>
+            <p className="text-xs text-center max-w-sm">
+              Les paramètres par défaut seront créés automatiquement à la
+              première utilisation du système.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        categories.map((cat, idx) => {
+          const catConfig = CATEGORY_LABELS[cat] ?? {
+            label: cat,
+            icon: <SettingsIcon className="w-4 h-4" />,
+            description: "",
+          };
+          const items = settings[cat] ?? [];
+          return (
+            <Card
+              key={cat}
+              role="region"
+              aria-label={`Catégorie ${catConfig.label}`}
+              className="border-border/60 transition-colors hover:border-emerald-200 animate-in fade-in-50 duration-150"
+              style={{ animationDelay: `${idx * 60}ms` }}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      {catConfig.icon}
+                    </span>
+                    {catConfig.label}
+                  </CardTitle>
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] tabular-nums font-medium"
+                  >
+                    {items.length} paramètre{items.length > 1 ? "s" : ""}
+                  </Badge>
+                </div>
+                {catConfig.description && (
+                  <p className="text-xs text-muted-foreground">
+                    {catConfig.description}
+                  </p>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {items.map((s) => (
+                  <div
+                    key={s.key}
+                    className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{s.label}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono truncate">
+                        {s.key}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {editingKey === s.key ? (
+                        <>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="20"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="w-24 h-9 text-center font-mono"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSave(s.key);
+                              if (e.key === "Escape") setEditingKey(null);
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleSave(s.key)}
+                            disabled={updateMut.isPending}
+                            className="h-9"
+                          >
+                            {updateMut.isPending ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Save className="w-3.5 h-3.5" />
+                            )}
+                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleReset(s.key)}
-                            disabled={updateMut.isPending}
+                            onClick={() => setEditingKey(null)}
                             className="h-9"
-                            title="Réinitialiser à la valeur par défaut"
                           >
-                            <RotateCcw className="w-3.5 h-3.5" />
+                            Annuler
                           </Button>
-                        )}
-                      </>
-                    )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-mono font-bold text-base text-primary min-w-[3rem] text-right">
+                            {s.value}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(s)}
+                            className="h-9"
+                          >
+                            <SettingsIcon className="w-3.5 h-3.5 mr-1" />
+                            Modifier
+                          </Button>
+                          {DEFAULT_VALUES[s.key] &&
+                            s.value !== DEFAULT_VALUES[s.key] && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleReset(s.key)}
+                                disabled={updateMut.isPending}
+                                className="h-9"
+                                title="Réinitialiser à la valeur par défaut"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        );
-      })}
+                ))}
 
-      {/* Section Barèmes de notation (admin uniquement, cahier des charges §3 Module 2) */}
-      <GradeScalesPanel />
+                {/* Alerte impact calculs — affichée uniquement pour la
+                    catégorie "mention" (contextuel : les seuils impactent
+                    rétroactivement les calculs). */}
+                {cat === "mention" && (
+                  <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-800">
+                      <p className="font-medium">Impact sur les calculs</p>
+                      <p className="mt-0.5">
+                        La modification des seuils de mentions affecte
+                        immédiatement les résultats de classement, les bulletins
+                        PDF et les statistiques du tableau de bord. Les
+                        changements sont rétroactifs.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
     </div>
   );
 }
 
-function LoadingState() {
+/**
+ * Skeleton : structure attendue pendant le chargement initial des
+ * paramètres. On imite la forme d'une Card de catégorie (header + 2 rows)
+ * pour minimiser la dissonance visuelle au moment du mount.
+ */
+function SettingsSkeleton() {
   return (
-    <Card>
-      <CardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        <p className="text-sm">Chargement des paramètres…</p>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {[1, 2, 3].map((i) => (
+        <Card key={i} className="border-border/60" aria-hidden="true">
+          <CardHeader className="pb-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-7 w-40" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+            <Skeleton className="h-3 w-72" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }

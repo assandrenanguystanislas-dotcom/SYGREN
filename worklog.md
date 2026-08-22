@@ -2690,3 +2690,54 @@ Stage Summary:
   4. frontend/src/components/dashboard-shell.tsx (NAV_ITEMS : 2 items retirés, settings moduleKeys étendu)
   5. frontend/src/app/page.tsx (helper resolveView + settingsTab + SettingsView initialTab)
 - Aucun commit/push effectué (laissé à l'utilisateur pour validation).
+
+---
+Task ID: Architecture-D-Phase4-Settings-Baremes-Onglet
+Agent: frontend-styling-expert
+Task: Extraction Barèmes de notation en 4e onglet + refonte globale page Paramètres
+
+Work Log:
+- Lecture des fichiers existants : worklog.md (200 dernières lignes), settings-view.tsx (Phase 3 — 3 onglets), grade-scales-view.tsx (GradeScalesPanel déjà isolé et exporté nommé), app/page.tsx (resolveView + settingsTab Phase 3), dashboard-shell.tsx (NAV_ITEMS inchangé — settings a moduleKeys ["settings", "permissions", "reset-requests"], on n'ajoute PAS "baremes" car les barèmes sont internes à Paramètres), reset-requests-view.tsx (prop embedded + structure de la query ["reset-requests", filter]), audit-view.tsx (pattern empty state — icône Search + "Aucun événement..."), skeleton.tsx (composant Skeleton existe, prêt à l'emploi), badge.tsx, card.tsx (CardDescription est exporté), tabs.tsx, globals.css (primary = orange oklch(0.646 0.222 41.116), sidebar/success = vert institution — on conserve la palette existante, pas d'indigo/bleu comme primaire).
+- settings-view.tsx — refonte complète :
+  * Ajout du 4e onglet "Barèmes" (entre Général et Permissions) avec icône Ruler (lucide-react). GradeScalesPanel est déplacé du GeneralSettingsTab vers un TabsContent dédié "baremes".
+  * Type `SettingsTab` étendu : "general" | "baremes" | "permissions" | "reset-requests". tabToHash/hashToTab mis à jour pour gérer "baremes" → "#baremes".
+  * Header de page amélioré : pattern login-view/FullScreenLoader repris (inline-flex w-12 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30) au lieu d'un simple H1+icône inline. Description mise à jour : "Configuration globale de SYGREN — système, barèmes, permissions et réinitialisations.".
+  * Restructuration du GeneralSettingsTab en Cards séparées par catégorie : Card 1 "Statut du système" (badge santé backend 3-col grid — toujours rendue, query health indépendante), Cards 2-4 par catégorie (mention / system / coefficient). Chaque Card de catégorie a un header enrichi : icône dans bg-primary/10 rounded-md + titre + description + badge count "X paramètre(s)" aligné à droite.
+  * Skeleton de chargement : remplace l'ancienne LoadingState (Loader2 + texte) par un SettingsSkeleton qui imite la structure attendue (3 Cards avec header + 2 rows chacun). Moins dissonant visuellement.
+  * Empty state : si `categories.length === 0` (paramètres vides), affiche une Card avec icône Search + "Aucun paramètre configuré" + message d'aide — pattern repris d'audit-view.tsx.
+  * Error state : si la query settings échoue, Card destructive avec AlertCircle + message d'erreur.
+  * Avertissement "Impact sur les calculs" déplacé : au lieu d'être une Card standalone entre Statut et catégories, il est maintenant affiché en bas de la Card "Mentions & seuils" uniquement (contextuel — spécifique aux seuils de mentions).
+  * Animations subtiles : chaque TabsContent a `animate-in fade-in-50 duration-150` (tw-animate-css déjà importé dans globals.css). Les Cards de catégorie ont aussi `animate-in fade-in-50 duration-150` avec un stagger via `animationDelay: ${idx * 60}ms`.
+  * Hover Cards : `transition-colors hover:border-emerald-200` sur les Cards (subtil, vert institution).
+  * Hover rows : `hover:bg-muted/30 transition-colors` sur les items de paramètre.
+  * Icônes dans boxes 3-col de Statut système : remplacées par des "chips" circulaires (bg-emerald-100 / bg-primary/10 / bg-amber-100) avec icône à l'intérieur — plus visuel que les icônes nues.
+  * Badge count sur l'onglet "Réinitialisations" : useQuery dédiée `["reset-requests", "pending"]` dans SettingsView (refetchInterval 30s) → badge `<Badge variant="secondary">` avec le count si > 0. TanStack déduplique cette query avec celle de ResetRequestsView quand l'onglet est actif (même queryKey). Le badge est `tabular-nums` + `text-[10px]` pour rester discret.
+  * Accessibilité : `aria-label` descriptif sur chaque TabsTrigger (incluant le détail : "Barèmes de notation par niveau (CP, CE, CM, exception Dictée)"). `role="region"` + `aria-label` sur les Cards Statut système et catégorie.
+  * Imports : ajout de `Ruler` (lucide-react), `Badge` (ui/badge), `Skeleton` (ui/skeleton), `Search` (empty state), `authApi` (api.ts pour le pending count), `CardDescription` (card.tsx). Suppression de la fonction LoadingState (remplacée par SettingsSkeleton).
+- app/page.tsx — ajout de #baremes au routing :
+  * resolveView : ajout de "baremes" → "settings" (au même titre que "permissions" et "reset-requests"). Mise à jour du commentaire JSDoc (Phase3 → Phase4).
+  * settingsTab : ajout du case `hash === "baremes"` → return "baremes" avant le fallback "general". Mise à jour du commentaire.
+  * Commentaires dans 3 endroits (lazy init useState, useEffect popstate, rendu SettingsView) mis à jour de "Phase3" à "Phase4" pour refléter l'extension.
+- Aucune modification de : backend Go, dashboard-shell.tsx (NAV_ITEMS déjà correct), permissions-view.tsx (embedded inchangé), reset-requests-view.tsx (embedded inchangé), grade-scales-view.tsx (GradeScalesPanel déjà autonome), types.ts, api.ts, auth-store.ts.
+- Vérifications finales (exécutées dans /home/z/sygren/frontend/) :
+  * `bun run lint` → EXIT 0 (aucune sortie, aucune erreur, aucun warning).
+  * `bun x tsc --noEmit` → EXIT 0 (aucune erreur de type).
+  * `bun run build` → EXIT 0 (Next.js 16.1.3 Turbopack — compiled successfully in 18.2s, 9 pages statiques générées).
+
+Stage Summary:
+- La page Paramètres passe de 3 à 4 onglets : Général / Barèmes / Permissions / Réinitialisations.
+- GradeScalesPanel (CP/10, CE/30, CM/50, Dictée /20) est désormais dans son propre onglet dédié "Barèmes" — l'onglet "Général" ne contient plus que Statut système + Mentions + Système + Coefficients.
+- Bookmarks : `#settings` (général), `#baremes`, `#permissions`, `#reset-requests` — tous fonctionnels via resolveView dans page.tsx (routing top-level) et tabToHash/hashToTab dans settings-view (sync onglet actif).
+- Back/forward navigateur : settings-view écoute popstate/hashchange, met à jour l'onglet actif si le hash correspond à un sous-onglet. Changements d'onglet utilisateur utilisent replaceState (pas pushState) pour ne pas polluer le back.
+- Refonte visuelle : Cards séparées par catégorie (au lieu d'une Card géante), skeletons structuraux pendant le chargement, badge count sur l'onglet Réinitialisations (query dédiée 30s, dédupliquée avec l'onglet actif), animations fade-in subtiles (stagger 60ms entre Cards), hover emerald-200 sur Cards, header de page avec icône shadowée (pattern login-view).
+- Empty state : si les paramètres sont vides, Card dédiée avec icône Search + message (pattern audit-view).
+- Avertissement "Impact sur les calculs" : déplacé en bas de la Card "Mentions & seuils" (contextuel — spécifique aux seuils de mentions, pas aux coefficients ni au système).
+- Accessibilité : aria-label descriptifs sur TabsTrigger + TabsList, role="region" + aria-label sur Cards Statut système et catégorie.
+- Responsive : TabsList avec flex flex-wrap (passe à la ligne sur petits écrans si 4 onglets + icônes ne tiennent pas), Cards s'empilent verticalement sur mobile par défaut Tailwind, grid sm:grid-cols-3 pour les boxes Statut système.
+- Queries/mutations TanStack : inchangées (settings, health, reset-requests pending count dédiée, PermissionsView et ResetRequestsView embarqués tels quels avec embedded=true).
+- Sticky footer : inchangé (dashboard-shell non touché).
+- Palette : primary orange (cahier des charges §5.1) + emerald pour sidebar/success/hover Cards + amber pour warning (Système cohérent, aucun indigo/bleu comme primaire).
+- Fichiers modifiés (2) :
+  1. frontend/src/components/views/settings-view.tsx (refonte complète : 4e onglet Barèmes + Cards séparées + skeletons + badge count + animations + header amélioré + empty/error states).
+  2. frontend/src/app/page.tsx (resolveView étendu avec "baremes" + settingsTab case "baremes" + commentaires Phase3 → Phase4).
+- Aucun commit/push effectué (laissé à l'utilisateur pour validation).
