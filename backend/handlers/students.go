@@ -298,6 +298,7 @@ func normalizeGenderBulk(s string) string {
 //   - admin    : schoolID = payload.SchoolID (requis).
 //   - autres   : 403.
 func BulkCreateStudents(w http.ResponseWriter, r *http.Request) {
+	defer InvalidateDashboardCache() // Fix C: import étudiants → invalidate cache dashboard
 	role := ctxRole(r)
 	var schoolID string
 	switch role {

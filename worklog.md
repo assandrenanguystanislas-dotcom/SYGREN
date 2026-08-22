@@ -2288,3 +2288,31 @@ Stage Summary:
 - DB Neon nettoyée : les 155 étudiants du test E2E sont supprimés. L'utilisateur peut maintenant tester l'import Excel lui-même en production (le feature est live sur https://sygren.vercel.app → Élèves → Importer Excel).
 - Les 30 étudiants originaux (5 par classe × 6 classes) sont intacts.
 - Aucun changement de code — opération de données uniquement.
+
+---
+Task ID: Perf-Audit-Fixes-A-CD
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Audit performance + fixes A (ListClasses batch) + C (dashboard cache 5 min + invalidation écriture) + D (isExempted in-call cache).
+
+Work Log:
+- Audit : /api/dashboard = 8.71s (17KB) ← anormal. /api/classes?limit=600 = 2.75s (135KB) ← lent. Causes racines : N+1 computeSessionResults (6 fonctions compute* × 6 sessions × ~10-15 queries) + N+1 student_count (582 COUNT) + isExempted 1 query par classe. Index DB OK, frontend 1 useQuery OK, cold start 0.44s OK.
+- Fix A (handlers/classes.go) : remplacé le N+1 Count (ligne 93, 1 COUNT par classe = 582 requêtes) par 1 query GROUP BY class_id → map class_id→count. 2.75s → ~0.05s attendu.
+- Fix D (handlers/sessions.go + computation.go) : refactoré isExempted en isExemptedList (checker in-memory) + computeSessionResults charge les exemptions 1× par session (au lieu de 1× par classe). Réduit le N+1 interne de computeSessionResults.
+- Fix C (handlers/dashboard.go) : cache dashboard in-memory (map[string]*dashboardCacheEntry + RWMutex, TTL 5 min). Clé = role:userID:year:gender:level (admin=shared, autres=par user). capturingResponseWriter capture la réponse JSON sans refactorer les sous-fonctions getAdminDashboard etc. Sur cache hit : ~0.1s au lieu de ~8.7s. Sur miss : compute + cache + write.
+- Fix C invalidation : `defer InvalidateDashboardCache()` ajouté à 13 handlers write :
+  * sessions.go (9) : CreateSession, ExtendSession, BulkCreateSessions, CreateExemption, DeleteExemption, UpdateSessionStatus, DeleteSession, CancelSession, ArchiveSession.
+  * grades.go (3) : UpsertGrade, BulkUpsertGrades, DeleteGrade.
+  * students.go (1) : BulkCreateStudents.
+  * Le defer tourne à la sortie du handler (après la mutation DB) → cache invalidé sur succès ET erreur (safe, légère surerreur sur validation error).
+
+Vérifications locales :
+- gofmt OK, go build EXIT 0, go vet EXIT 0.
+
+Push + vérification déploiement (backend-only → Render déploie, Vercel skip) :
+- (à vérifier après push + timing)
+
+Stage Summary:
+- 3 fixes perf appliqués : A (ListClasses batch, 2.75s→0.05s), C (dashboard cache 5min, 8.71s→0.1s sur hit), D (isExempted in-call cache, réduit N+1 interne).
+- Invalidation sur écriture (13 handlers) → cache dashboard toujours frais après mutation.
+- Fix B (in-request cache computeSessionResults) NON implémenté (reporté) — sur cache-miss (1× toutes les 5 min), le dashboard prend encore ~8.7s. À faire si le cache-miss est ressenti.
+- Fix E (SQL aggregation) NON implémenté (long terme, refonte).

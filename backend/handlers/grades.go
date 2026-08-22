@@ -36,9 +36,9 @@ import (
 // GradeWithDetails — note enrichie
 type GradeWithDetails struct {
 	models.Grade
-	StudentName     string `json:"student_name,omitempty"`
+	StudentName      string `json:"student_name,omitempty"`
 	StudentMatricule string `json:"student_matricule,omitempty"`
-	SubjectName     string `json:"subject_name,omitempty"`
+	SubjectName      string `json:"subject_name,omitempty"`
 }
 
 // ListGrades returns grades for a session, filtered by user scope.
@@ -141,6 +141,7 @@ type UpsertGradeRequest struct {
 // la classe de l'élève (cahier des charges §3 Module 2 : CP=/10, CE=/30,
 // CM=/50, Dictée /20).
 func UpsertGrade(w http.ResponseWriter, r *http.Request) {
+	defer InvalidateDashboardCache() // Fix C: saisie note → invalidate cache dashboard
 	var req UpsertGradeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
@@ -250,6 +251,7 @@ type BulkGradeRequest struct {
 // classe de chaque élève. Les élèves dont la classe est exemptée sont ignorés
 // (skipped_exempted).
 func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
+	defer InvalidateDashboardCache() // Fix C: saisie note → invalidate cache dashboard
 	var req BulkGradeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
@@ -385,18 +387,19 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"status":            "ok",
-		"session_id":        req.SessionID,
-		"total_received":    len(req.Grades),
-		"created":           saved,
-		"updated":           updated,
-		"skipped_exempted":  skippedExempted,
-		"skipped":           len(req.Grades) - saved - updated - skippedExempted,
+		"status":           "ok",
+		"session_id":       req.SessionID,
+		"total_received":   len(req.Grades),
+		"created":          saved,
+		"updated":          updated,
+		"skipped_exempted": skippedExempted,
+		"skipped":          len(req.Grades) - saved - updated - skippedExempted,
 	})
 }
 
 // DeleteGrade removes a single grade.
 func DeleteGrade(w http.ResponseWriter, r *http.Request) {
+	defer InvalidateDashboardCache() // Fix C: saisie note → invalidate cache dashboard
 	id := chi.URLParam(r, "id")
 	var grade models.Grade
 	if err := database.DB.First(&grade, "id = ?", id).Error; err != nil {
