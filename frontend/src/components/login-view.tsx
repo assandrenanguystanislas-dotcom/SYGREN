@@ -236,7 +236,7 @@ export function LoginView() {
                       <label className="text-xs font-medium mb-1.5 block">Votre fonction</label>
                       <div className="grid grid-cols-3 gap-2">
                         {([
-                          { v: "admin" as const, l: "Admin/IEP" },
+                          { v: "admin" as const, l: "Admin" },
                           { v: "director" as const, l: "Directeur" },
                           { v: "teacher" as const, l: "Enseignant" },
                         ]).map(({ v, l }) => (
