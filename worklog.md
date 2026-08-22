@@ -2335,3 +2335,23 @@ Reste à faire (optionnel) :
 
 Stage Summary :
 - 3 fixes perf appliqués + validés en prod. Le dashboard est rapidissime sur cache hit (0.25s). ListClasses 4× plus rapide. L'utilisateur ne devrait plus ressentir de lenteur sur le dashboard (sauf 1× / 5 min sur cache-miss, ou après une écriture).
+
+---
+Task ID: Perf-Fix-B-SessionResultsCache
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Fix B — in-request cache de computeSessionResults pour optimiser le cache-miss dashboard.
+
+Work Log:
+- Constat : cache-MISS dashboard ~9-12s car les 6 fonctions compute* (computeOverallPerformance, computeYearComparison, computeGlobalMentions, computeMonthlyTrend, computeSchoolsPerformance) appellent toutes aggregateSessionsPerformance/aggregateMentions/aggregateMonthlyTrend qui bouclent sur les sessions et rappellent computeSessionResults(s.ID) à chaque fois → N sessions × ~6 fonctions = ~30-36 appels à computeSessionResults (chacun ~10-15 queries).
+- Fix B implémenté (handlers/dashboard.go) :
+  * `dashboardSessionResultsCache map[string]*SessionResults` + `dashboardSessionCacheMu sync.Mutex` (global, vidée par GetDashboard à chaque cache-miss).
+  * `computeSessionResultsCached(sessionID)` : check cache → si hit return, sinon compute + populate. Thread-safe via mutex.
+  * Cache vidé au début du path cache-miss de GetDashboard (avant d'appeler getAdminDashboard etc.).
+  * Les 3 appels `computeSessionResults(s.ID)` dans les aggregates (aggregateMentions ligne 706, aggregateSessionsPerformance ligne 796, aggregateMonthlyTrend ligne 888) remplacés par `computeSessionResultsCached(s.ID)`.
+  * Sécurité : les aggregates font du READ-ONLY sur les SessionResults (r.Average, r.ClassLevel, r.HasAverage) → partage du pointeur cached est safe (pas de mutation).
+- Impact attendu : cache-MISS ~9-12s → ~1.5-2s (computeSessionResults appelé 1× par session au lieu de 6×, soit 6 appels au lieu de ~36 avec 6 sessions).
+
+Vérifications locales : gofmt OK, go build EXIT 0, go vet EXIT 0.
+
+Push + vérification (backend-only → Render déploie) :
+- (à mesurer après push)

@@ -177,6 +177,41 @@ func (c *capturingResponseWriter) WriteHeader(code int) {
 	c.status = code
 }
 
+// === Fix B : in-request cache de computeSessionResults ===
+// Les 6 fonctions compute* du dashboard appellent toutes aggregateSessionsPerformance
+// / aggregateMentions / aggregateMonthlyTrend, qui bouclent sur les sessions et
+// rappellent computeSessionResultsCached(s.ID) à chaque fois. Avec N sessions, c'est
+// N × (nombre de fonctions compute*) appels à computeSessionResults (chacun
+// faisant ~10-15 queries). Ce cache memoize computeSessionResults par session
+// AU SEIN d'une seule requête dashboard → N appels au lieu de N×6.
+// Vidé au début de chaque GetDashboard (cache-miss path).
+var (
+	dashboardSessionResultsCache = make(map[string]*SessionResults)
+	dashboardSessionCacheMu      sync.Mutex
+)
+
+// computeSessionResultsCached = computeSessionResults memoized par session.
+// À utiliser dans les aggregate* du dashboard (pas ailleurs — le cache est
+// global et vidé par GetDashboard à chaque cache-miss).
+func computeSessionResultsCached(sessionID string) (*SessionResults, error) {
+	dashboardSessionCacheMu.Lock()
+	if cached, ok := dashboardSessionResultsCache[sessionID]; ok && cached != nil {
+		dashboardSessionCacheMu.Unlock()
+		return cached, nil
+	}
+	dashboardSessionCacheMu.Unlock()
+
+	results, err := computeSessionResults(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	dashboardSessionCacheMu.Lock()
+	dashboardSessionResultsCache[sessionID] = results
+	dashboardSessionCacheMu.Unlock()
+	return results, nil
+}
+
 func GetDashboard(w http.ResponseWriter, r *http.Request) {
 	role := ctxRole(r)
 
@@ -210,6 +245,11 @@ func GetDashboard(w http.ResponseWriter, r *http.Request) {
 		Gender: gender,
 		Level:  level,
 	}
+
+	// Clear the in-request session results cache (Fix B) — fresh per request.
+	dashboardSessionCacheMu.Lock()
+	dashboardSessionResultsCache = make(map[string]*SessionResults)
+	dashboardSessionCacheMu.Unlock()
 
 	// Miss : calculer en capturant la réponse (sans écrire dans le vrai w)
 	crw := &capturingResponseWriter{}
@@ -663,7 +703,7 @@ func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf,
 		if f.Year > 0 && s.Year != f.Year {
 			continue
 		}
-		results, err := computeSessionResults(s.ID)
+		results, err := computeSessionResultsCached(s.ID)
 		if err != nil {
 			continue
 		}
@@ -753,7 +793,7 @@ func computeClassMentions(classID string) MentionDistribution {
 func aggregateMentions(sessions []models.EvaluationSession) MentionDistribution {
 	dist := make(map[string]int)
 	for _, s := range sessions {
-		results, err := computeSessionResults(s.ID)
+		results, err := computeSessionResultsCached(s.ID)
 		if err != nil {
 			continue
 		}
@@ -845,7 +885,7 @@ func aggregateMonthlyTrend(sessions []models.EvaluationSession) []MonthlyTrend {
 		// Compter les élèves concernés
 		studentCount := 0
 		for _, s := range sessions {
-			results, err := computeSessionResults(s.ID)
+			results, err := computeSessionResultsCached(s.ID)
 			if err == nil {
 				studentCount += results.Statistics.StudentCount
 			}
