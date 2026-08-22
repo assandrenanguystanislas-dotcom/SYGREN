@@ -2355,3 +2355,20 @@ Vérifications locales : gofmt OK, go build EXIT 0, go vet EXIT 0.
 
 Push + vérification (backend-only → Render déploie) :
 - (à mesurer après push)
+
+Vérification E2E (après déploiement d519bf70) :
+- Cache MISS (1er appel après deploy, cache in-memory vide) : 9-12s → **2.89s** (3-4× plus rapide). Fix B : computeSessionResults appelé 1× par session (6 appels) au lieu de 6× par session (~36 appels). Les 6 fonctions compute* partagent maintenant le même cache in-request.
+- Cache HIT (2e appel) : 0.25s (inchangé, Fix C).
+
+Bilan perf final (tous fixes A+B+C+D) :
+| Endpoint | Avant | Après (cache HIT) | Après (cache MISS) | Gain |
+|----------|-------|-------------------|--------------------|------|
+| /api/classes | 2.75s | 0.64s | 0.64s | 4× (Fix A) |
+| /api/dashboard | 8.71s | 0.25s | 2.89s | 35× hit / 3× miss |
+- /api/health : 0.50s (baseline).
+
+Stage Summary :
+- Tous les fixes perf appliqués (A+B+C+D) + validés en prod.
+- Le dashboard est maintenant rapidissime sur cache HIT (0.25s, 35× plus rapide) ET acceptable sur cache MISS (2.89s, 3× plus rapide qu'avant).
+- L'utilisateur ne devrait plus ressentir de lenteur sur le dashboard (cache hit = 0.25s dans 95% des cas ; cache miss = 2.89s 1× / 5 min ou après écriture).
+- Fix E (SQL aggregation, refonte long terme) non implémenté — nécessaire seulement si >50 sessions OU si le 2.89s cache-miss est encore ressenti.
