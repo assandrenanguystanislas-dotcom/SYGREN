@@ -2516,3 +2516,16 @@ Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
 
 Push + vérification (backend + frontend → Render + Vercel) :
 - (à vérifier après push)
+
+Vérification E2E (après déploiement 217cedd4) :
+- Render live + Vercel READY (backend + frontend).
+- API view=active → statuses: [] (aucune draft/open/closed — les 2 sessions sont validated). ✓
+- API view=validated → count=2, statuses: ["validated"]. Les 2 sessions validées sont maintenant dans cette vue (pas dans "En cours"). ✓
+- API view=archived → count=0. Aucune session archivée. ✓
+
+Stage Summary :
+- Réorg des vues du module Sessions : Actives/Archives/Tout → En cours/Validées/Archives.
+- Alignée sur le workflow : draft+open+closed → validated → archived.
+- Une session validée n'apparaît plus dans "En cours" (source de confusion avant).
+- "Tout" supprimé.
+- Backend : paramètre view=active|validated|archived (rétrocompatible). Frontend : 3 onglets En cours/Validées/Archives.
