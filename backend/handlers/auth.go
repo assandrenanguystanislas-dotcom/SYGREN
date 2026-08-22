@@ -36,15 +36,27 @@ func Login(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// Recherche par téléphone OU email
+		// === Recherche multi-méthode de l'utilisateur ===
+		// 1. Email OU téléphone (admin, inspector, director avec email, teacher)
 		var user models.User
 		result := database.DB.Where(
 			"phone = ? OR email = ?", req.Identifier, req.Identifier,
 		).First(&user)
 
+		// 2. Si pas trouvé, essayer le code école (login director par code établissement)
 		if result.Error != nil {
-			middleware.JSONError(w, "identifiants invalides", http.StatusUnauthorized)
-			return
+			var school models.School
+			if err := database.DB.Where("code = ?", req.Identifier).First(&school).Error; err != nil {
+				// Ni email, ni téléphone, ni code école → identifiants invalides
+				middleware.JSONError(w, "identifiants invalides", http.StatusUnauthorized)
+				return
+			}
+			// École trouvée → chercher le directeur de cette école
+			if err := database.DB.Where("school_id = ? AND role = ?", school.ID, models.RoleDirector).First(&user).Error; err != nil {
+				middleware.JSONError(w, "aucun directeur rattaché à cette école", http.StatusUnauthorized)
+				return
+			}
+			// Directeur trouvé → continuer le flow (password check ci-dessous)
 		}
 		if !user.Active {
 			middleware.JSONError(w, "compte désactivé", http.StatusForbidden)

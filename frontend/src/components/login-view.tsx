@@ -29,11 +29,7 @@ import {
 const loginSchema = z.object({
   identifier: z
     .string()
-    .min(1, "Identifiant requis")
-    .refine(
-      (v) => v.includes("@") || /^[+0-9\s-]{6,}$/.test(v),
-      "Saisissez un email ou un numéro de téléphone valide",
-    ),
+    .min(1, "Identifiant requis"),
   password: z.string().min(1, "Mot de passe requis"),
 });
 
@@ -105,7 +101,7 @@ export function LoginView() {
           <CardHeader className="space-y-1">
             <CardTitle className="text-xl">Connexion</CardTitle>
             <CardDescription>
-              Identifiez-vous avec votre email ou numéro de téléphone
+              Admin/IEP : email · Directeur : code école · Enseignant : téléphone
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -120,7 +116,7 @@ export function LoginView() {
                   name="identifier"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email ou téléphone</FormLabel>
+                      <FormLabel>Email, téléphone ou code école</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -128,7 +124,7 @@ export function LoginView() {
                             {...field}
                             type="text"
                             autoComplete="username"
-                            placeholder="exemple@sygren.ci"
+                            placeholder="email, téléphone ou code école (ex: EPPCP001)"
                             className="pl-9"
                             disabled={submitting}
                           />

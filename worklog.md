@@ -2560,3 +2560,22 @@ Stage Summary :
 - 8 case "inspector" retirés des handlers → scope global (comme admin).
 - Dashboard : inspector obtient getAdminDashboard (vue globale).
 - Frontend : label "Admin IEP", NAV_ITEMS ouverts (sauf settings), welcome stats + quick actions = admin.
+
+---
+Task ID: Login-SchoolCode-Director
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Login director par code établissement (en plus de email/téléphone existants).
+
+Work Log:
+- Backend handlers/auth.go Login : ajout recherche multi-méthode :
+  1. Email OU téléphone (WHERE phone = ? OR email = ?) — backward-compatible.
+  2. Si pas trouvé → code école : WHERE schools.code = ? → WHERE users.school_id = ? AND role = director.
+  3. Si école trouvée mais pas de director → "aucun directeur rattaché à cette école".
+  4. Si rien trouvé → "identifiants invalides".
+- Frontend login-view.tsx :
+  * Zod schema : assoupli (supprimé le refine email/téléphone → accepte tout non-vide, le backend valide).
+  * Label : "Email ou téléphone" → "Email, téléphone ou code école".
+  * Placeholder : "exemple@sygren.ci" → "email, téléphone ou code école (ex: EPPCP001)".
+  * Help text : "Identifiez-vous avec votre email ou numéro de téléphone" → "Admin/IEP : email · Directeur : code école · Enseignant : téléphone".
+
+Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
