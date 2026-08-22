@@ -2126,3 +2126,37 @@ Stage Summary final :
 - Crise évitée : le filtre commandForIgnoringBuildStep cassait les déploiements frontend (document.title non déployé). Désactivation → restauration. La feature est enfin en prod.
 - Vercel filter commandForIgnoringBuildStep = null (désactivé). Vercel déploie sur chaque push (wasteful mais safe). TODO secondaire : re-debugguer avec le bon cwd (frontend/) et `-- .` au lieu de `-- frontend/`, tester rigoureusement, réactiver seulement quand confiant.
 - Lesson : pour un filtre de déploiement, tester le "skip" (worklog-only) ne suffit pas — il faut AUSSI tester le "build" (frontend-only) pour s'assurer qu'il ne skipp pas abusivement.
+
+---
+Task ID: Synthese-UX-Simplify-Batch
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Simplifier UX Synthèse — remplacer les 2 boutons (CP1-CM1 + CM2) par 1 bouton "Synthèses PDF" → page batch (Option B, cohérent avec le Relevé).
+
+Work Log:
+- Analyse : les 2 boutons Synthèse ouvrent 2 documents SÉMANTIQUES distincts (principal CP1-CM1 + CM2 fin de cycle). 4 options proposées (statu quo, batch, all-in-one, dropdown). Option B retenue (batch, cohérent avec le Relevé).
+- Frontend src/app/synthese/batch/page.tsx (nouveau, ~350 lignes) :
+  * Liste FIXE de 2 documents (pas d'endpoint backend — contrairement au batch Relevé qui liste les classes via /api/reports/releve-classes) : [{id: "primary", label: "Synthèse CP1-CM1", desc: "Document principal (CP1 au CM1)"}, {id: "cm2", label: "Synthèse CM2", desc: "Fin de cycle primaire (CM2 seul)"}].
+  * Checkboxes (les 2 cochées par défaut) + bouton "Imprimer les Synthèses sélectionnées (N)".
+  * Impression séquentielle via iframes cachés : pour chaque doc, crée un iframe pointant vers /synthese?session_id=X&level_group={id}&t=TOKEN, attend #synthese-doc présent (waitForSyntheseReady, 45s timeout — la synthèse est plus lourde : paysage A4, 6 niveaux), lance print(), attend onafterprint, passe au suivant.
+  * Viewport iframe paysage (1123x794px) car la synthèse est A4 paysage (vs Relevé portrait 794x1123).
+  * Barre de progression (current/total + status), lien "Aperçu" par document (ouvre /synthese dans un nouvel onglet).
+  * document.title = "Synthèses PDF — 2 document(s)" pour l'onglet.
+  * Refactor anti-lint : getParams() lu à la demande (pas de state sessionId/token) → évite react-hooks/set-state-in-effect (même pattern que le batch Relevé).
+- Frontend src/components/views/results-view.tsx :
+  * Remplacé les 2 boutons "Synthèse CP1-CM1" + "Synthèse CM2" (32 lignes) par 1 bouton "Synthèses PDF" qui ouvre /synthese/batch?session_id=X&t=TOKEN.
+  * Visible dès qu'une session est sélectionnée (pas de niveau à choisir d'abord).
+- Layout /synthese/layout.tsx : déjà présent (Suspense wrapper) — hérité par la sous-route batch, aucun changement.
+- 0 changement backend (les documents sont fixes, pas d'endpoint à créer).
+
+Vérifications locales :
+- ESLint (batch/page.tsx + results-view.tsx) → 0 erreur, 0 warning (après refactor anti-lint).
+- tsc --noEmit → EXIT 0.
+
+Push + vérification déploiement (frontend-only → Vercel déploie, Render skip) :
+- (à vérifier après push)
+
+Stage Summary:
+- UX Synthèse simplifiée : 1 bouton "Synthèses PDF" au lieu de 2.
+- L'utilisateur clique → page batch liste les 2 documents (CP1-CM1 + CM2) → sélectionne (1 ou 2) → Imprimer → le navigateur ouvre successivement les dialogs d'impression.
+- Cohérent avec l'UX Relevé (1 bouton → batch → sélection → print séquentiel).
+- Permet d'imprimer les 2 documents d'un coup OU individuellement (sélection d'1 seul).

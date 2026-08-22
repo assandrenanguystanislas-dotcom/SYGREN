@@ -196,28 +196,12 @@ export function ResultsView() {
                       const raw = localStorage.getItem("sygren-auth");
                       if (raw) token = JSON.parse(raw)?.state?.token ?? "";
                     } catch {}
-                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}&level_group=primary&t=${encodeURIComponent(token)}`;
+                    const url = `${window.location.origin}/synthese/batch?session_id=${autoSessionId}&t=${encodeURIComponent(token)}`;
                     window.open(url, "_blank");
                   }}
                 >
                   <FileText className="w-4 h-4 mr-1.5" />
-                  Synthèse CP1-CM1
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    let token = "";
-                    try {
-                      const raw = localStorage.getItem("sygren-auth");
-                      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
-                    } catch {}
-                    const url = `${window.location.origin}/synthese?session_id=${autoSessionId}&level_group=cm2&t=${encodeURIComponent(token)}`;
-                    window.open(url, "_blank");
-                  }}
-                >
-                  <FileText className="w-4 h-4 mr-1.5" />
-                  Synthèse CM2
+                  Synthèses PDF
                 </Button>
                 {/* === Relevés PDF — Toutes les classes de la session ===
                     Ouvre /releve/batch?session_id=... dans un nouvel onglet.
