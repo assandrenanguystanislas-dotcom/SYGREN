@@ -70,7 +70,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "users",
     label: "Utilisateurs",
     icon: <UserCog className="w-4 h-4" />,
-    roles: ["admin", "director"],
+    roles: ["admin", "inspector", "director"],
   },
   {
     id: "subjects",

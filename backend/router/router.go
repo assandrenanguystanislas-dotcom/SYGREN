@@ -100,18 +100,18 @@ func New(cfg *config.Config) http.Handler {
 			r.Delete("/api/teachers/{id}", handlers.DeleteTeacher)
 		})
 
-		// Directeurs d'école — admin (CRUD), inspector (lecture des directeurs de son IEP)
+		// Directeurs d'école — super admin uniquement (CRUD)
 		r.Get("/api/directors", handlers.ListDirectors)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector))
+			r.Use(middleware.RequireRole(models.RoleAdmin))
 			r.Post("/api/directors", handlers.CreateDirector)
 			r.Put("/api/directors/{id}", handlers.UpdateDirector)
 			r.Delete("/api/directors/{id}", handlers.DeleteDirector)
 		})
 
-		// Inspecteurs IEP — admin uniquement (CRUD)
+		// Admins IEP (inspecteurs) — super admin uniquement (CRUD)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleInspector))
+			r.Use(middleware.RequireRole(models.RoleAdmin))
 			r.Get("/api/inspectors", handlers.ListInspectors)
 			r.Post("/api/inspectors", handlers.CreateInspector)
 			r.Put("/api/inspectors/{id}", handlers.UpdateInspector)

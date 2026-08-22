@@ -23,7 +23,7 @@ export function UsersView() {
   const user = useAuthStore((s) => s.user);
   const [tab, setTab] = useState("teachers");
 
-  const canSeeTeachers = user?.role === "admin" || user?.role === "director";
+  const canSeeTeachers = user?.role === "admin" || user?.role === "director" || user?.role === "inspector";
   const canSeeDirectors = user?.role === "admin";
   const canSeeInspectors = user?.role === "admin";
 
@@ -62,7 +62,7 @@ export function UsersView() {
         {canSeeInspectors && (
           <TabsTrigger value="inspectors">
             <ShieldCheck className="w-4 h-4 mr-1.5" />
-            Inspecteurs
+            Admin IEP
           </TabsTrigger>
         )}
       </TabsList>
