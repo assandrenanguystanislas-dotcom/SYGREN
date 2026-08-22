@@ -116,6 +116,22 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Vérifier que l'école a un directeur rattaché (cahier des charges).
+	// On ne peut pas créer un enseignant dans une école sans directeur.
+	if req.SchoolID != nil && *req.SchoolID != "" {
+		var directorCount int64
+		database.DB.Model(&models.User{}).
+			Where("school_id = ? AND role = ?", *req.SchoolID, models.RoleDirector).
+			Count(&directorCount)
+		if directorCount == 0 {
+			middleware.JSONError(w,
+				"impossible de créer un enseignant : cette école n'a pas de directeur rattaché. "+
+					"Veuillez d'abord créer le compte directeur de cette école.",
+				http.StatusConflict)
+			return
+		}
+	}
+
 	hashed, err := utils.HashPassword(req.Password)
 	if err != nil {
 		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
@@ -177,7 +193,18 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 		}
 		teacher.Password = hashed
 	}
-	if req.SchoolID != nil {
+	if req.SchoolID != nil && *req.SchoolID != "" {
+		// Vérifier que l'école a un directeur rattaché (cahier des charges).
+		var directorCount int64
+		database.DB.Model(&models.User{}).
+			Where("school_id = ? AND role = ?", *req.SchoolID, models.RoleDirector).
+			Count(&directorCount)
+		if directorCount == 0 {
+			middleware.JSONError(w,
+				"impossible d'affecter cet enseignant : cette école n'a pas de directeur rattaché.",
+				http.StatusConflict)
+			return
+		}
 		teacher.SchoolID = req.SchoolID
 	}
 	if req.Active != nil {
