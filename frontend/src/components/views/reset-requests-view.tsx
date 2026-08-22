@@ -18,6 +18,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +35,7 @@ const ROLE_LABELS: Record<string, string> = {
   teacher: "Enseignant",
 };
 
-export function ResetRequestsView() {
+export function ResetRequestsView({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"pending" | "all">("pending");
   const [resultDialog, setResultDialog] = useState<{
@@ -106,18 +107,26 @@ export function ResetRequestsView() {
     <div className="space-y-4">
       <Card className="border-border/60">
         <CardContent className="py-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <KeyRound className="w-4 h-4" />
+          <div
+            className={cn(
+              "flex items-center gap-3",
+              embedded ? "justify-end" : "justify-between",
+            )}
+          >
+            {/* Titre + count : masqués en mode embedded (l'onglet parent fournit le contexte) */}
+            {!embedded && (
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-base">Demandes de réinitialisation</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {requests.length} demande(s) {filter === "pending" ? "en attente" : "au total"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="font-semibold text-base">Demandes de réinitialisation</h2>
-                <p className="text-xs text-muted-foreground">
-                  {requests.length} demande(s) {filter === "pending" ? "en attente" : "au total"}
-                </p>
-              </div>
-            </div>
+            )}
             <Button
               variant="outline"
               size="sm"

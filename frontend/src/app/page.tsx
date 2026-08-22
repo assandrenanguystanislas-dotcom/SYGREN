@@ -21,13 +21,25 @@ import { SubjectsView } from "@/components/views/subjects-view";
 import { EvaluationsView } from "@/components/views/evaluations-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
-import { ResetRequestsView } from "@/components/views/reset-requests-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
-import { SettingsView } from "@/components/views/settings-view";
-import { PermissionsView } from "@/components/views/permissions-view";
+import { SettingsView, type SettingsTab } from "@/components/views/settings-view";
 import { AuditView } from "@/components/views/audit-view";
 import type { NavItem } from "@/components/dashboard-shell";
 import type { User } from "@/lib/types";
+
+/**
+ * Architecture D-Phase3 — Refonte Settings en onglets.
+ * « permissions » et « reset-requests » ne sont plus des entrées de nav
+ * top-level : ce sont désormais des sous-onglets de la page Paramètres.
+ * On les mappe vers « settings » pour le routing top-level (le navItem
+ * correspondant doit exister dans NAV_ITEMS pour passer le guard
+ * isViewAllowed). Le sous-onglet à ouvrir initialement est calculé plus
+ * bas à partir du hash URL originel.
+ */
+function resolveView(view: string): string {
+  if (view === "permissions" || view === "reset-requests") return "settings";
+  return view;
+}
 
 /**
  * Helper : détermine si une vue est autorisée pour le user.
@@ -71,11 +83,14 @@ function AppContent() {
   // Active view persistée dans l'URL hash (#students, #sessions, etc.) pour
   // survivre au refresh + intégrer le bouton back/forward du navigateur.
   // Lazy init : lit le hash au premier render (survit au refresh).
+  // Architecture D-Phase3 : on resolve « permissions » / « reset-requests »
+  // → « settings » (devenus des sous-onglets de la page Paramètres).
   const [activeView, setActiveView] = useState(() => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.slice(1); // enlève le '#'
-      const navItem = NAV_ITEMS.find((n) => n.id === hash);
-      if (navItem) return hash;
+      const resolved = resolveView(hash);
+      const navItem = NAV_ITEMS.find((n) => n.id === resolved);
+      if (navItem) return resolved;
     }
     return "dashboard";
   });
@@ -106,11 +121,15 @@ function AppContent() {
 
   // Écoute back/forward du navigateur (popstate + hashchange) → met à jour
   // activeView pour suivre la navigation du navigateur.
+  // Architecture D-Phase3 : on resolve les alias « permissions » et
+  // « reset-requests » vers « settings » (page.tsx ne gère plus que les vues
+  // top-level ; le sous-onglet est géré par SettingsView elle-même).
   useEffect(() => {
     const onNav = () => {
       const hash = window.location.hash.slice(1);
-      const navItem = NAV_ITEMS.find((n) => n.id === hash);
-      setActiveView(navItem ? hash : "dashboard");
+      const resolved = resolveView(hash);
+      const navItem = NAV_ITEMS.find((n) => n.id === resolved);
+      setActiveView(navItem ? resolved : "dashboard");
     };
     window.addEventListener("popstate", onNav);
     window.addEventListener("hashchange", onNav);
@@ -154,6 +173,19 @@ function AppContent() {
   // Vue par défaut si la vue active n'est pas autorisée pour ce rôle
   const view = allowed ? activeView : "dashboard";
 
+  // Architecture D-Phase3 : si on est sur la vue « settings », détermine
+  // quel sous-onglet ouvrir initialement à partir du hash URL originel
+  // (signet #permissions ou #reset-requests → ouvre directement l'onglet).
+  // Le hash est lu côté client uniquement ; SettingsView gère ensuite son
+  // propre état d'onglet (et son propre sync hash URL).
+  const settingsTab: SettingsTab = (() => {
+    if (typeof window === "undefined") return "general";
+    const hash = window.location.hash.slice(1);
+    if (hash === "permissions") return "permissions";
+    if (hash === "reset-requests") return "reset-requests";
+    return "general";
+  })();
+
   return (
     <DashboardShell activeView={view} onViewChange={setActiveView}>
       {view === "dashboard" &&
@@ -170,9 +202,10 @@ function AppContent() {
       {view === "evaluations" && <EvaluationsView />}
       {view === "results" && <ResultsView />}
       {view === "bulletins" && <BulletinsView />}
-      {view === "reset-requests" && <ResetRequestsView />}
-      {view === "settings" && <SettingsView />}
-      {view === "permissions" && <PermissionsView />}
+      {/* Architecture D-Phase3 — Refonte Settings : les anciennes vues
+          « permissions » et « reset-requests » deviennent des sous-onglets
+          de la page Paramètres (routing top-level résolu via resolveView). */}
+      {view === "settings" && <SettingsView initialTab={settingsTab} />}
       {view === "audit" && <AuditView />}
     </DashboardShell>
   );

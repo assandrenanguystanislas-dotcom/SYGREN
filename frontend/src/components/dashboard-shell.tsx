@@ -11,13 +11,11 @@ import {
   FileText,
   BarChart3,
   Settings,
-  KeyRound,
   LogOut,
   Menu,
   Trophy,
   ChevronRight,
   UserCog,
-  ShieldCheck,
   History,
 } from "lucide-react";
 
@@ -114,27 +112,18 @@ export const NAV_ITEMS: NavItem[] = [
     moduleKeys: ["report-cards"],
   },
   {
-    id: "reset-requests",
-    label: "Réinitialisations",
-    icon: <KeyRound className="w-4 h-4" />,
-    roles: ["admin"],
-    moduleKeys: ["reset-requests"],
-  },
-  {
     id: "settings",
     label: "Paramètres",
     icon: <Settings className="w-4 h-4" />,
     roles: ["admin"],
-    moduleKeys: ["settings"],
+    // Architecture D-Phase3 — Paramètres est désormais une page unique qui
+    // regroupe 3 sous-onglets (Général, Permissions, Réinitialisations).
+    // L'item est visible si l'user a accès à AU MOINS UN de ces modules.
+    // En pratique les 3 sont admin-only aujourd'hui, mais c'est plus correct
+    // pour l'avenir (ex: un rôle pourrait voir ResetRequests sans voir Settings).
+    moduleKeys: ["settings", "permissions", "reset-requests"],
   },
-  // === Architecture D — nouveaux modules admin ===
-  {
-    id: "permissions",
-    label: "Permissions",
-    icon: <ShieldCheck className="w-4 h-4" />,
-    roles: ["admin"],
-    moduleKeys: ["permissions"],
-  },
+  // === Architecture D — modules admin ===
   {
     id: "audit",
     label: "Journal d'audit",

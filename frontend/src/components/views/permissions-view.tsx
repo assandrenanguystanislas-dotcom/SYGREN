@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ShieldCheck, Lock, Info, Loader2, Save } from "lucide-react";
+import { ShieldCheck, Lock, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -12,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { permissionsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
-export function PermissionsView() {
+export function PermissionsView({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const refreshModules = useAuthStore((s) => s.refreshModules);
@@ -38,18 +37,21 @@ export function PermissionsView() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <ShieldCheck className="w-6 h-6 text-emerald-600" />
-          Permissions
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Modifiez dynamiquement la matrice rôle × module. Les changements sont actifs en
-          ~5 minutes (cache), tracés dans le journal d'audit, et la nav des utilisateurs
-          concernés se met à jour automatiquement.
-        </p>
-      </div>
+    <div className={embedded ? "space-y-4" : "space-y-6"}>
+      {/* En-tête + intro : masqués en mode embedded (l'onglet parent fournit le contexte) */}
+      {!embedded && (
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-emerald-600" />
+            Permissions
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Modifiez dynamiquement la matrice rôle × module. Les changements sont actifs en
+            ~5 minutes (cache), tracés dans le journal d'audit, et la nav des utilisateurs
+            concernés se met à jour automatiquement.
+          </p>
+        </div>
+      )}
 
       <Card className="border-amber-200 bg-amber-50/50">
         <CardContent className="pt-6 flex gap-3">

@@ -2640,3 +2640,53 @@ Stage Summary:
 - Audit trail complet (login, suspend, reactivate, permission.update)
 - Sécurité anti auto-blocage : permissions irreducible verrouillées (settings, permissions, audit, users-admin, users.inspectors pour admin)
 - Frontend Vercel en cours de déploiement automatique (vérification via dashboard Vercel)
+
+---
+Task ID: Architecture-D-Phase3-Settings-Refonte
+Agent: frontend-styling-expert
+Task: Refonte de la page Paramètres en onglets (Général + Permissions + Réinitialisations)
+
+Work Log:
+- Lecture des fichiers existants : worklog.md (100 dernières lignes), settings-view.tsx, permissions-view.tsx, reset-requests-view.tsx, dashboard-shell.tsx, app/page.tsx, eslint.config.mjs, tabs.tsx.
+- permissions-view.tsx : ajout de la prop `embedded?: boolean` (default false). Quand embedded=true : masque le bloc H1+intro (l'onglet parent fournit ce contexte) ; passe l'espacement vertical de space-y-6 à space-y-4 pour réduire le padding en haut. Toutes les queries/mutations/refreshModules sont conservées à l'identique. Nettoyage des imports inutilisés (useState, Save) au passage.
+- reset-requests-view.tsx : ajout de la prop `embedded?: boolean`. Quand embedded=true : masque le bloc icon+H2+count à l'intérieur de la Card (le bouton "Voir tout/Voir pending" reste, aligné à droite via `justify-end`). Ajout de l'import `cn` pour gérer le classNames conditionnel. Toutes les queries/approval/reject sont conservées à l'identique.
+- settings-view.tsx : refonte complète.
+  * Nouveau header de page (H1 "Paramètres" + description) en haut du composant, hors Tabs.
+  * Ajout d'un `Tabs` shadcn avec 3 `TabsTrigger` (Général/Permissions/Réinitialisations) + icônes Settings/ShieldCheck/KeyRound.
+  * `TabsList` en `flex h-auto flex-wrap w-full sm:w-fit` pour responsive mobile (les onglets passent à la ligne si l'écran est trop étroit).
+  * `TabsContent` pour chaque onglet. Général → composant interne `GeneralSettingsTab` qui contient l'ancienne logique SettingsView (useQuery settings, useQuery health, useMutation update, handlers edit/save/reset) + la Card "Statut du système" avec badge de santé backend + le warning "Impact sur les calculs" + les paramètres par catégorie + GradeScalesPanel. La première Card "Paramètres système" (H2+badge count) a été retirée pour éviter la duplication avec le header de page (la spec demandait explicitement de ne pas dupliquer le contexte fourni par l'onglet).
+  * Permissions → `<PermissionsView embedded />`. Réinitialisations → `<ResetRequestsView embedded />`.
+  * Ajout de la prop `initialTab?: "general" | "permissions" | "reset-requests"` (default "general") qui sélectionne l'onglet actif au premier render (useState lazy init).
+  * Ajout d'un `useEffect` qui synchronise l'URL hash quand l'onglet change : general→#settings, permissions→#permissions, reset-requests→#reset-requests. Utilise `window.history.replaceState` (pas pushState, pour ne pas polluer l'historique back). Skip-first-mount via `useRef(true)` pour ne pas écraser le hash au tout premier render (page.tsx ou l'URL entrante l'a déjà défini).
+  * Ajout d'un `popstate`/`hashchange` listener pour suivre le back/forward du navigateur (met à jour l'onglet actif si le hash correspond à un sous-onglet Settings).
+  * Export du type `SettingsTab` pour utilisation par app/page.tsx.
+  * Nettoyage des imports inutilisés au passage : useCrudMutation, SettingsByCategory (pré-existants), Badge (devenu inutile après retrait de la Card "Paramètres système").
+- dashboard-shell.tsx : retrait de 2 entrées NAV_ITEMS ("permissions" et "reset-requests") — ce ne sont plus des entrées de nav top-level. Mise à jour de l'item "settings" avec `moduleKeys: ["settings", "permissions", "reset-requests"]` (visible si l'user a accès à AU MOINS UN de ces modules — en pratique les 3 sont admin-only aujourd'hui, mais c'est plus correct pour l'avenir). Nettoyage des imports lucide-react (KeyRound, ShieldCheck n'étaient plus utilisés).
+- app/page.tsx :
+  * Ajout du helper `resolveView(view: string): string` qui mappe "permissions" et "reset-requests" → "settings" (les alias doivent toujours passer le guard `isViewAllowed` car le navItem est désormais "settings").
+  * Mise à jour de la lazy init `useState(() => ...)` pour appeler `resolveView(hash)` avant de chercher le navItem (signet #permissions ou #reset-requests sur un refresh → résout en "settings" → SettingsView se monte avec le bon sous-onglet).
+  * Mise à jour du listener popstate/hashchange pour appeler `resolveView(hash)` avant la recherche du navItem.
+  * Ajout de la variable `settingsTab: SettingsTab` calculée à chaque render à partir du hash URL originel (avant résolution) — utilisée uniquement quand `view === "settings"` pour passer `<SettingsView initialTab={settingsTab} />`. Lecture côté client uniquement (typeof window !== "undefined").
+  * Remplacement des 3 lignes de rendu (`view === "settings" && <SettingsView />`, `view === "permissions" && <PermissionsView />`, `view === "reset-requests" && <ResetRequestsView />`) par une seule ligne : `{view === "settings" && <SettingsView initialTab={settingsTab} />}`.
+  * Retrait de l'import `PermissionsView` et `ResetRequestsView` (devenus inutilisés — ils sont désormais importés par settings-view.tsx).
+- Vérifications finales :
+  * `bun run lint` → EXIT 0 (aucune erreur, aucun warning).
+  * `bun x tsc --noEmit` → EXIT 0 (aucune erreur de type).
+  * `bun run build` → EXIT 0 (build Next.js 16.1.3 Turbopack réussi, 9 pages statiques générées).
+
+Stage Summary:
+- La page Paramètres est désormais une page unique à onglets. Les modules "Permissions" et "Réinitialisations" ne sont plus des entrées de nav top-level — ils sont des sous-onglets de Paramètres.
+- Bookmarks : `#settings`, `#permissions`, `#reset-requests` continuent de fonctionner (via resolveView dans page.tsx pour le routing top-level, et via initialTab pour sélectionner le bon onglet au mount).
+- Back/forward navigateur : settings-view écoute popstate/hashchange et met à jour l'onglet actif si le hash correspond à un sous-onglet. Les changements d'onglet utilisateur utilisent replaceState (pas pushState) pour ne pas polluer l'historique back.
+- Comportement des queries/mutations TanStack : inchangé (PermissionsView et ResetRequestsView sont embarqués tels quels, juste avec embedded=true qui masque leur H1/intro).
+- Accessibilité : chaque TabsTrigger a un `aria-label` descriptif (l'icône seule pourrait prêter à confusion). Le TabsList a un `aria-label` global.
+- Responsive : TabsList avec `flex flex-wrap` pour passer à la ligne sur petits écrans.
+- Sticky footer : inchangé (dashboard-shell.tsx non touché côté layout — `min-h-screen flex flex-col` + `footer mt-auto` reste en place).
+- Aucune modification backend, types.ts, api.ts, ou auth-store.ts.
+- Fichiers modifiés (5) :
+  1. frontend/src/components/views/permissions-view.tsx (+ prop embedded, nettoyage imports)
+  2. frontend/src/components/views/reset-requests-view.tsx (+ prop embedded, import cn)
+  3. frontend/src/components/views/settings-view.tsx (refonte complète en Tabs)
+  4. frontend/src/components/dashboard-shell.tsx (NAV_ITEMS : 2 items retirés, settings moduleKeys étendu)
+  5. frontend/src/app/page.tsx (helper resolveView + settingsTab + SettingsView initialTab)
+- Aucun commit/push effectué (laissé à l'utilisateur pour validation).
