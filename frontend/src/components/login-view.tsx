@@ -40,6 +40,20 @@ type LoginValues = z.infer<typeof loginSchema>;
 export function LoginView() {
   const login = useAuthStore((s) => s.login);
   const [submitting, setSubmitting] = useState(false);
+  const [loginRole, setLoginRole] = useState<"admin" | "director" | "teacher">("director");
+
+  // Config adaptative selon le rôle sélectionné
+  const roleConfig = {
+    admin: { label: "Email", placeholder: "admin@sygren.ci" },
+    director: { label: "Code école", placeholder: "ex: EPPCP001" },
+    teacher: { label: "Téléphone", placeholder: "ex: 0700000000" },
+  }[loginRole];
+
+  const roles = [
+    { v: "admin" as const, l: "Admin" },
+    { v: "director" as const, l: "Directeur" },
+    { v: "teacher" as const, l: "Enseignant" },
+  ];
 
   // === Reset password modal ===
   const [resetOpen, setResetOpen] = useState(false);
@@ -125,6 +139,30 @@ export function LoginView() {
             <CardTitle className="text-xl">Connexion</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Sélecteur de fonction (pills animées) */}
+            <div className="relative flex p-1 bg-muted rounded-full mb-5">
+              {/* Fond coulissant animé */}
+              <div
+                className="absolute top-1 bottom-1 rounded-full bg-primary transition-all duration-300 ease-out"
+                style={{
+                  left: loginRole === "admin" ? "4px" : loginRole === "director" ? "calc(33.33% + 2px)" : "calc(66.66% + 0px)",
+                  right: loginRole === "admin" ? "calc(66.66% + 0px)" : loginRole === "director" ? "calc(33.33% + 2px)" : "4px",
+                }}
+              />
+              {roles.map(({ v, l }) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setLoginRole(v)}
+                  className={`relative z-10 flex-1 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 ${
+                    loginRole === v ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
@@ -136,7 +174,7 @@ export function LoginView() {
                   name="identifier"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email, téléphone ou code école</FormLabel>
+                      <FormLabel>{roleConfig.label}</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -144,7 +182,7 @@ export function LoginView() {
                             {...field}
                             type="text"
                             autoComplete="username"
-                            placeholder="email, téléphone ou code école (ex: EPPCP001)"
+                            placeholder={roleConfig.placeholder}
                             className="pl-9"
                             disabled={submitting}
                           />
