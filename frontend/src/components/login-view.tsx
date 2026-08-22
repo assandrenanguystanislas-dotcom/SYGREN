@@ -123,9 +123,6 @@ export function LoginView() {
         <Card className="shadow-xl border-border/60 glass">
           <CardHeader className="space-y-1">
             <CardTitle className="text-xl">Connexion</CardTitle>
-            <CardDescription>
-              Admin/IEP : email · Directeur : code école · Enseignant : téléphone
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
