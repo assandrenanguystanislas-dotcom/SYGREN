@@ -705,20 +705,18 @@ func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf,
 		return 0, 0
 	}
 	_, passThreshold, _ := GetSystemSettings()
-	// CP/CE scale=10 → threshold = passThreshold * 10/20 = passThreshold/2.
-	// CM scale=20 → threshold = passThreshold.
-	t10 := passThreshold * 10.0 / 20.0
-	t20 := passThreshold
+	// Normalise average sur /20 : avg * 20 / scale, puis compare au seuil /20.
+	// (évite le bug GORM qui passe les seuils en TEXT → "numeric >= text" error)
 	var result struct {
 		AvgPerf       *float64
 		TotalStudents int64
 		Passed        int64
 	}
 	query := `SELECT AVG(average) as avg_perf, COUNT(*) as total_students,
-		SUM(CASE WHEN average >= CASE WHEN average_scale = 10 THEN ? ELSE ? END THEN 1 ELSE 0 END) as passed
+		SUM(CASE WHEN (average * 20.0 / average_scale) >= ? THEN 1 ELSE 0 END) as passed
 		FROM student_session_results
 		WHERE session_id IN ? AND has_average = true`
-	args := []interface{}{t10, t20, sIDs}
+	args := []interface{}{passThreshold, sIDs}
 	if f.Level != "" {
 		query += " AND class_level = ?"
 		args = append(args, f.Level)
