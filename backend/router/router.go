@@ -75,6 +75,7 @@ func New(cfg *config.Config) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleDirector))
 			r.Post("/api/students", handlers.CreateStudent)
+			r.Post("/api/students/bulk", handlers.BulkCreateStudents)
 			r.Put("/api/students/{id}", handlers.UpdateStudent)
 			r.Delete("/api/students/{id}", handlers.DeleteStudent)
 		})

@@ -2182,3 +2182,51 @@ Stage Summary final :
 - Bug intermédiaire : 1er build Vercel (e7cd8b9) a échoué "window is not defined" (getParams appelé AVANT guard loading en render) → fix avec state loading + guard → build OK.
 - Lint cleanup : setState en microtask (Promise.resolve) pour éviter set-state-in-effect.
 - Déploiements finaux : Vercel ✅ READY (2bc264a), Render skip (frontend-only, backend non modifié — comportement conditionnel correct).
+
+---
+Task ID: Students-Excel-Import-Bulk
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Module élèves — import Excel bulk (Option C hybride : frontend SheetJS parse + preview, backend bulk-insert transaction).
+
+Work Log:
+- Analyse du fichier ELEVES (6).xls (45K, .xls BIFF) : 5 colonnes (matricule, nom, prenoms, sexe=MASCULIN/FEMININ, niveau=CP2), 155 élèves. Converti en CSV via libreoffice pour inspection.
+- 3 options comparées : A (backend parse Go Excel — rejeté, .xls mal supporté en Go), B (frontend parse + POST 1 par 1 — rejeté, pas de transaction), C (hybride frontend parse + preview + backend bulk transaction — RETENU).
+- Choix utilisateur : Option C, skip doublons, niveau=nom de classe (lookup), RBAC director (son école) + admin (school_id payload).
+
+Backend (handlers/students.go + router/router.go) :
+- Nouveau handler BulkCreateStudents (lignes ~250-453) :
+  * Request BulkImportRequest : {school_id (admin requis, director ignoré), students: [{matricule, first_name, last_name, gender, class_name}]}.
+  * RBAC : director → ctxSchoolID() (force son école) ; admin → payload.school_id ; autres → 403.
+  * Charge les classes actives de l'école en map UPPER(name)→class_id (lookup case-insensitive).
+  * Transaction GORM tx.Begin() → pour chaque élève : normalizeGenderBulk (MASCULIN→M, FEMININ→F), validate nom+prénoms, lookup class_name→class_id, check matricule (skip si déjà en base OU déjà vu dans le fichier — seenInFile map), insert en tx, tx.Commit().
+  * Réponse BulkImportResult : {created, skipped[]: [{row, matricule, reason}], failed[]: [{row, matricule, reason}], total}.
+  * Helpers : normalizeGenderBulk, ptrToStr, classListStr (pour message d'erreur listant les classes dispo).
+- Route POST /api/students/bulk ajoutée dans le groupe RequireRole(admin+director), juste après POST /api/students.
+- Build Go EXIT 0, go vet EXIT 0, gofmt OK.
+
+Frontend :
+- Dépendance : bun add xlsx (SheetJS 0.18.5, ~400KB, gère .xls + .xlsx client-side).
+- lib/api.ts : studentsApi.bulkCreate({school_id, students[]}) → POST /api/students/bulk, retourne {created, skipped, failed, total}.
+- Nouveau composant src/components/import-students-dialog.tsx (~310 lignes) :
+  * Dialog shadcn/ui avec input fichier (.xls/.xlsx/.csv).
+  * parseExcel() : XLSX.read(arrayBuffer) → sheet_to_json header:1 → normalizeHeader (lowercase, sans accents) → findCol (synonymes : matricule/nom/prenoms/prenom/sexe/sex/gender/niveau/classe/class) → valide colonnes obligatoires → parse rows → ParsedStudent{row, matricule, last_name, first_name, gender_raw, class_name, errors[]}.
+  * convertGender() : MASCULIN/M/MALE/G→M, FEMININ/F/FEMALE→F.
+  * Preview : résumé (N élèves, X valides, Y erreurs) + table 10 premières lignes (scrollable, lignes en erreur en rouge) + note "… et X autres".
+  * Bouton "Importer N élèves" → studentsApi.bulkCreate → résultat : 4 cards (créés/ignorés/échoués/total) + <details> pour skipped[] et failed[] (raison par ligne).
+  * onImported callback : refetch() la liste + queryClient.invalidateQueries(["classes"]) (effectifs mis à jour).
+- students-view.tsx : bouton "Importer Excel" (Upload icon) ajouté à côté de "Inscrire un élève", disabled si !schoolFilter (admin doit sélectionner une école d'abord). ImportStudentsDialog rendu après ConfirmDialog. useState importOpen + useQueryClient + refetch ajoutés.
+
+Vérifications locales :
+- ESLint (students-view + import-students-dialog + api.ts) → EXIT 0.
+- tsc --noEmit → EXIT 0 (après fix queryClient via useQueryClient).
+- next build → EXIT 0 (toutes routes pré-rendues, pas de window SSR error — le dialog est render-conditionnel, pas de getParams au top-level).
+
+Push + vérification déploiement (backend + frontend modifiés → Render ET Vercel déploient) :
+- (à vérifier après push)
+
+Stage Summary:
+- Feature import Excel bulk implémentée (Option C hybride).
+- Le directeur (ou admin avec école sélectionnée) clique "Importer Excel" → sélectionne .xls/.xlsx → preview avec validation → "Importer" → 155 élèves insérés en transaction, skip doublons, erreurs signalées par ligne.
+- Pas de dépendance Go Excel (SheetJS côté frontend parse, backend fait juste le bulk-insert + lookup).
+- RBAC respecté : director = son école (force ctxSchoolID), admin = school_id payload.
+- Cas edge gérés : matricule en double (skip), classe introuvable (failed), genre invalide (failed), nom/prénoms vides (failed), matricule vide (autorisé, NULL coexiste).

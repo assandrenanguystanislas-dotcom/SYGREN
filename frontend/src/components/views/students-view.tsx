@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Users,
   Plus,
@@ -12,6 +12,7 @@ import {
   Search,
   School as SchoolIcon,
   GraduationCap,
+  Upload,
 } from "lucide-react";
 
 import { studentsApi, classesApi, schoolsApi } from "@/lib/api";
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/table";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ImportStudentsDialog } from "@/components/import-students-dialog";
 
 interface FormData {
   class_id: string;
@@ -86,6 +88,7 @@ export function StudentsView() {
   const [deleteTarget, setDeleteTarget] = useState<StudentWithClass | null>(
     null,
   );
+  const [importOpen, setImportOpen] = useState(false);
 
   // === Écoles (admin seulement) ===
   const { data: schoolsData } = useQuery({
@@ -117,7 +120,7 @@ export function StudentsView() {
   // - teacher : élèves de sa classe (teacher_id = classes.teacher_id)
   // On passe classFilter au backend pour filtrer côté serveur (plus performant
   // que de filtrer côté client sur de grosses listes).
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["students", schoolFilter, classFilter],
     queryFn: () =>
       studentsApi.list(classFilter !== "all" ? classFilter : undefined),
@@ -125,6 +128,8 @@ export function StudentsView() {
     // élèves. Director et teacher ont toujours leur scope (RBAC backend).
     enabled: isTeacher || isDirector || (isAdmin && hasSchoolSelected),
   });
+
+  const queryClient = useQueryClient();
 
   const createMut = useCrudMutation(studentsApi.create, {
     invalidateKeys: [["students"], ["classes"], ["schools"]],
@@ -241,10 +246,23 @@ export function StudentsView() {
               </div>
             </div>
             {canEdit && (
-              <Button onClick={openCreate} size="sm" className="shadow-sm">
-                <Plus className="w-4 h-4 mr-1.5" />
-                Inscrire un élève
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={openCreate} size="sm" className="shadow-sm">
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Inscrire un élève
+                </Button>
+                <Button
+                  onClick={() => setImportOpen(true)}
+                  size="sm"
+                  variant="outline"
+                  disabled={!schoolFilter}
+                  className="shadow-sm"
+                  title={!schoolFilter ? "Sélectionnez d'abord une école" : "Importer un fichier Excel d'élèves"}
+                >
+                  <Upload className="w-4 h-4 mr-1.5" />
+                  Importer Excel
+                </Button>
+              </div>
             )}
           </div>
           {/* === Filtres en cascade (admin + director seulement) ===
@@ -598,6 +616,22 @@ export function StudentsView() {
         icon={Trash2}
         onConfirm={onDelete}
         loading={deleteMut.isPending}
+      />
+
+      {/* === Import Excel d'élèves (bulk) ===
+          Le directeur (ou admin avec école sélectionnée) importe un .xls/.xlsx
+          (matricule, nom, prenoms, sexe, niveau) → SheetJS parse → preview →
+          POST /api/students/bulk → skip doublons, lookup niveau→class_id. */}
+      <ImportStudentsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schoolId={schoolFilter}
+        onImported={() => {
+          // Rafraîchir la liste des élèves + classes (effectifs mis à jour).
+          refetch();
+          // Invalider aussi les queries classes (student_count change).
+          queryClient.invalidateQueries({ queryKey: ["classes"] });
+        }}
       />
     </div>
   );
