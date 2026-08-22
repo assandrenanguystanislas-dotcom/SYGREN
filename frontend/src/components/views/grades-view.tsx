@@ -168,7 +168,10 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
   //   par les classes de l'école active
   const { data: studentsData } = useQuery({
     queryKey: ["students", "grades-view", classFilter, activeSchoolId],
-    queryFn: () => studentsApi.list(classFilter !== "all" ? classFilter : undefined),
+    queryFn: () => studentsApi.list({
+      classId: classFilter !== "all" ? classFilter : undefined,
+      schoolId: activeSchoolId,
+    }),
     enabled: !!selectedSessionId,
   });
 

@@ -123,7 +123,10 @@ export function StudentsView() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["students", schoolFilter, classFilter],
     queryFn: () =>
-      studentsApi.list(classFilter !== "all" ? classFilter : undefined),
+      studentsApi.list({
+        classId: classFilter !== "all" ? classFilter : undefined,
+        schoolId: schoolFilter || undefined,
+      }),
     // Cascade stricte : admin doit avoir choisi une école pour charger les
     // élèves. Director et teacher ont toujours leur scope (RBAC backend).
     enabled: isTeacher || isDirector || (isAdmin && hasSchoolSelected),

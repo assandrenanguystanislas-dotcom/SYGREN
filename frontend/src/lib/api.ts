@@ -287,10 +287,15 @@ export const classesApi = {
 // === Élèves ===
 
 export const studentsApi = {
-  list: (classId?: string) =>
-    apiFetch<{ students: StudentWithClass[]; count: number }>(
-      classId ? `/api/students?class_id=${classId}` : "/api/students",
-    ),
+  list: (params?: { classId?: string; schoolId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.classId) qs.set("class_id", params.classId);
+    if (params?.schoolId) qs.set("school_id", params.schoolId);
+    const q = qs.toString();
+    return apiFetch<{ students: StudentWithClass[]; count: number }>(
+      q ? `/api/students?${q}` : "/api/students",
+    );
+  },
   create: (data: {
     class_id: string;
     first_name: string;

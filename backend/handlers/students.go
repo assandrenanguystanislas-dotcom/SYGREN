@@ -63,6 +63,13 @@ func ListStudents(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("students.class_id = ?", classFilter)
 	}
 
+	// Filtre optionnel par school_id (admin sélectionne une école spécifique
+	// dans le dropdown — sans ce filtre, l'admin verrait les élèves de TOUTES
+	// les écoles, même après avoir choisi une école).
+	if schoolID := r.URL.Query().Get("school_id"); schoolID != "" {
+		query = query.Where("classes.school_id = ?", schoolID)
+	}
+
 	var students []models.Student
 	if err := query.Order("last_name ASC, first_name ASC").Find(&students).Error; err != nil {
 		middleware.JSONError(w, "erreur récupération élèves", http.StatusInternalServerError)

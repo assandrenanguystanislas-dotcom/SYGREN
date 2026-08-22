@@ -2423,3 +2423,21 @@ Stage Summary :
 - Cache-hit : 0.23s (38× plus rapide que l'original).
 - Bug intermédiaire (GORM Raw type TEXT) trouvé en test + corrigé (normalisation /20).
 - Risque géré : backfill au démarrage (goroutine) + recompute synchrone sur grade writes + invalidation cache (Fix C defer) → données toujours fraîches.
+
+---
+Task ID: Fix-Students-SchoolFilter-NotApplied
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Bug module Élèves — le filtre école n'filtre pas réellement les élèves (admin voit tous les élèves même après avoir choisi une école).
+
+Work Log:
+- Bug : studentsApi.list(classId?) ne passait PAS schoolId → le schoolFilter (dropdown admin) n'était jamais envoyé au backend. Le backend ListStudents n'avait pas de case "admin" dans le switch RBAC → admin voyait TOUS les élèves de TOUTES les écoles. Le queryKey React Query incluait schoolFilter (donc refetch au changement) mais le queryFn ne le passait pas → mêmes données renvoyées.
+- Fix backend (handlers/students.go ListStudents) : ajout filtre `school_id` query param après le switch RBAC : `if schoolID := r.URL.Query().Get("school_id"); schoolID != "" { query = query.Where("classes.school_id = ?", schoolID) }`. Applique pour tous les rôles (admin + inspector + director + teacher — redondant pour director qui est déjà filtré par ctxSchoolID, mais inoffensif).
+- Fix frontend api.ts : studentsApi.list signature changée de `(classId?: string)` à `(params?: { classId?: string; schoolId?: string })` avec URLSearchParams pour construire la query string (class_id + school_id).
+- Fix frontend students-view.tsx : queryFn passe maintenant `{ classId, schoolId: schoolFilter }` au lieu de juste classId.
+- Fix frontend grades-view.tsx : queryFn passe `{ classId, schoolId: activeSchoolId }` (même bug — le grades view avait le même problème).
+- welcome-dashboard.tsx : studentsApi.list() (no args) reste compatible (params=undefined → RBAC seul, pas de school_id → tous les élèves pour admin = correct pour un dashboard d'accueil).
+
+Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
+
+Push + vérification (backend + frontend → Render + Vercel déploient) :
+- (à vérifier après push)
