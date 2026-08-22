@@ -51,7 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "iep",
     label: "Inspections (IEP)",
     icon: <BarChart3 className="w-4 h-4" />,
-    roles: ["admin"],
+    roles: ["admin", "inspector"],
   },
   {
     id: "schools",
@@ -63,13 +63,13 @@ export const NAV_ITEMS: NavItem[] = [
     id: "students",
     label: "Élèves",
     icon: <Users className="w-4 h-4" />,
-    roles: ["admin", "director", "teacher"],
+    roles: ["admin", "inspector", "director", "teacher"],
   },
   {
     id: "users",
     label: "Utilisateurs",
     icon: <UserCog className="w-4 h-4" />,
-    roles: ["admin", "director"],
+    roles: ["admin", "inspector", "director"],
   },
   {
     id: "subjects",

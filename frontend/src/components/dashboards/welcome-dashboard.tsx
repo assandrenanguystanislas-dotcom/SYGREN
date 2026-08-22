@@ -215,6 +215,7 @@ interface StatsData {
 function buildStats(role: Role, d: StatsData): StatCard[] {
   switch (role) {
     case "admin":
+    case "inspector":
       return [
         { label: "Inspections (IEP)", value: String(d.iepCount), hint: "circonscriptions", icon: <BarChart3 className="w-5 h-5" />, tone: "orange" },
         { label: "Écoles enregistrées", value: String(d.schoolCount), hint: "toutes IEP confondues", icon: <School className="w-5 h-5" />, tone: "green" },
@@ -260,9 +261,9 @@ const QUICK_ACTIONS: Record<
     { label: "Gérer les enseignants", hint: "Comptes", view: "teachers", icon: <Users className="w-4 h-4" /> },
   ],
   inspector: [
-    { label: "Vue analytique", hint: "Multi-écoles", view: "dashboard", icon: <TrendingUp className="w-4 h-4" /> },
-    { label: "Écoles supervisées", hint: "Circonscription", view: "schools", icon: <School className="w-4 h-4" /> },
-    { label: "Bulletins", hint: "Impression par lot", view: "bulletins", icon: <FileText className="w-4 h-4" /> },
+    { label: "Gérer les IEP", hint: "Circonscriptions scolaires", view: "iep", icon: <BarChart3 className="w-4 h-4" /> },
+    { label: "Gérer les écoles", hint: "Établissements", view: "schools", icon: <School className="w-4 h-4" /> },
+    { label: "Inscrire un élève", hint: "Matricule auto", view: "students", icon: <Users className="w-4 h-4" /> },
   ],
   teacher: [
     { label: "Saisir les notes", hint: "Grille mensuelle", view: "grades", icon: <ClipboardList className="w-4 h-4" /> },

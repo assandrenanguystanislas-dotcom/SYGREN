@@ -6,14 +6,14 @@ export type Role = "teacher" | "director" | "inspector" | "admin";
 export const ROLE_LABELS: Record<Role, string> = {
   teacher: "Instituteur",
   director: "Directeur d'École",
-  inspector: "Inspecteur (IEP)",
+  inspector: "Admin IEP",
   admin: "Super-Administrateur",
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   teacher: "Saisie des notes mensuelles de votre classe",
   director: "Gestion de l'établissement et validation des bulletins",
-  inspector: "Supervision analytique multi-écoles (circonscription)",
+  inspector: "Administration multi-écoles (sauf paramètres généraux)",
   admin: "Administration globale du système SYGREN",
 };
 

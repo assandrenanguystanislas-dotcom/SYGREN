@@ -31,14 +31,6 @@ func ListTeachers(w http.ResponseWriter, r *http.Request) {
 	query := database.DB.Model(&models.User{}).Where("role = ?", models.RoleTeacher)
 
 	switch role {
-	case "inspector":
-		iepID := ctxIEPID(r)
-		if iepID == "" {
-			jsonResponse(w, http.StatusOK, map[string]interface{}{"teachers": []interface{}{}, "count": 0})
-			return
-		}
-		query = query.Joins("JOIN schools ON schools.id = users.school_id").
-			Where("schools.iep_id = ?", iepID)
 	case "director":
 		schoolID := ctxSchoolID(r)
 		if schoolID == "" {

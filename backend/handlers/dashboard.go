@@ -254,10 +254,8 @@ func GetDashboard(w http.ResponseWriter, r *http.Request) {
 	// Miss : calculer en capturant la réponse (sans écrire dans le vrai w)
 	crw := &capturingResponseWriter{}
 	switch role {
-	case "admin":
+	case "admin", "inspector":
 		getAdminDashboard(crw, r)
-	case "inspector":
-		getInspectorDashboard(crw, r)
 	case "director":
 		getDirectorDashboard(crw, r)
 	case "teacher":
@@ -713,9 +711,9 @@ func aggregateSessionsPerformance(sessions []models.EvaluationSession) (avgPerf,
 		Passed        int64
 	}
 	query := `SELECT AVG(average) as avg_perf, COUNT(*) as total_students,
-		SUM(CASE WHEN (average * 20.0 / average_scale) >= ? THEN 1 ELSE 0 END) as passed
-		FROM student_session_results
-		WHERE session_id IN ? AND has_average = true`
+                SUM(CASE WHEN (average * 20.0 / average_scale) >= ? THEN 1 ELSE 0 END) as passed
+                FROM student_session_results
+                WHERE session_id IN ? AND has_average = true`
 	args := []interface{}{passThreshold, sIDs}
 	if f.Level != "" {
 		query += " AND class_level = ?"
@@ -752,17 +750,17 @@ func aggregateMentions(sessions []models.EvaluationSession) MentionDistribution 
 	}
 	tresBien, bien, assezBien, passable, faible, insuffisant := GetMentionThresholds()
 	query := `SELECT mention, COUNT(*) as cnt FROM (
-		SELECT CASE
-			WHEN average * 20.0 / average_scale >= ? THEN 'Très Bien'
-			WHEN average * 20.0 / average_scale >= ? THEN 'Bien'
-			WHEN average * 20.0 / average_scale >= ? THEN 'Assez Bien'
-			WHEN average * 20.0 / average_scale >= ? THEN 'Passable'
-			WHEN average * 20.0 / average_scale >= ? THEN 'Faible'
-			WHEN average * 20.0 / average_scale >= ? THEN 'Insuffisant'
-			ELSE 'Très Insuffisant'
-		END AS mention
-		FROM student_session_results
-		WHERE session_id IN ? AND has_average = true`
+                SELECT CASE
+                        WHEN average * 20.0 / average_scale >= ? THEN 'Très Bien'
+                        WHEN average * 20.0 / average_scale >= ? THEN 'Bien'
+                        WHEN average * 20.0 / average_scale >= ? THEN 'Assez Bien'
+                        WHEN average * 20.0 / average_scale >= ? THEN 'Passable'
+                        WHEN average * 20.0 / average_scale >= ? THEN 'Faible'
+                        WHEN average * 20.0 / average_scale >= ? THEN 'Insuffisant'
+                        ELSE 'Très Insuffisant'
+                END AS mention
+                FROM student_session_results
+                WHERE session_id IN ? AND has_average = true`
 	args := []interface{}{tresBien, bien, assezBien, passable, faible, insuffisant, sIDs}
 	if f.Level != "" {
 		query += " AND class_level = ?"
@@ -815,10 +813,10 @@ func aggregateMonthlyTrend(sessions []models.EvaluationSession) []MonthlyTrend {
 		StudentCount int64
 	}
 	query := `SELECT es.month, es.year, AVG(r.average) as avg_perf,
-		COUNT(DISTINCT r.student_id) as student_count
-		FROM student_session_results r
-		JOIN evaluation_sessions es ON es.id = r.session_id
-		WHERE r.session_id IN ? AND r.has_average = true`
+                COUNT(DISTINCT r.student_id) as student_count
+                FROM student_session_results r
+                JOIN evaluation_sessions es ON es.id = r.session_id
+                WHERE r.session_id IN ? AND r.has_average = true`
 	args := []interface{}{sIDs}
 	if f.Level != "" {
 		query += " AND r.class_level = ?"

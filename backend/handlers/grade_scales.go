@@ -168,13 +168,14 @@ func DeleteGradeScale(w http.ResponseWriter, r *http.Request) {
 // === Helper : getMaxScore ===
 // getMaxScore retourne le barème max pour un niveau + matière donné.
 // Logique de lookup :
-//   1. Chercher (level, subjectID) exact → si trouvé, retourner MaxScore
-//   2. Sinon chercher (level, NULL) → défaut du niveau
-//   3. Sinon → 20 (sécurité)
+//  1. Chercher (level, subjectID) exact → si trouvé, retourner MaxScore
+//  2. Sinon chercher (level, NULL) → défaut du niveau
+//  3. Sinon → 20 (sécurité)
 //
 // Ex : getMaxScore("CE", "dictée-id") → 20 (exception)
-//      getMaxScore("CE", "math-id")   → 30 (défaut CE)
-//      getMaxScore("CP", "math-id")   → 10 (défaut CP)
+//
+//	getMaxScore("CE", "math-id")   → 30 (défaut CE)
+//	getMaxScore("CP", "math-id")   → 10 (défaut CP)
 func getMaxScore(level, subjectID string) int {
 	// 1. Exception spécifique (level + subject_id)
 	if subjectID != "" {

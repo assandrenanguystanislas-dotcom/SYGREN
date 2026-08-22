@@ -45,14 +45,6 @@ func ListClasses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch role {
-	case "inspector":
-		iepID := ctxIEPID(r)
-		if iepID == "" {
-			jsonResponse(w, http.StatusOK, map[string]interface{}{"classes": []interface{}{}, "count": 0})
-			return
-		}
-		query = query.Joins("JOIN schools ON schools.id = classes.school_id").
-			Where("schools.iep_id = ?", iepID)
 	case "director":
 		schoolID := ctxSchoolID(r)
 		if schoolID == "" {

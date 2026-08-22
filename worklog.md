@@ -2529,3 +2529,21 @@ Stage Summary :
 - Une session validée n'apparaît plus dans "En cours" (source de confusion avant).
 - "Tout" supprimé.
 - Backend : paramètre view=active|validated|archived (rétrocompatible). Frontend : 3 onglets En cours/Validées/Archives.
+
+---
+Task ID: RBAC-Inspector-Becomes-AdminIEP
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Remplacer Inspecteur par Admin IEP = mêmes droits que super admin SAUF paramètres généraux.
+
+Work Log:
+- Backend router.go : ajout RoleInspector à 13 RequireRole calls (toutes celles qui ont RoleAdmin) SAUF settings (ligne 220, reste RequireRole(RoleAdmin) uniquement).
+- Backend handlers : retiré tous les case "inspector" des switch RBAC dans 8 handlers (classes, students, schools, teachers, directors, sessions, grades, computation) → inspector tombe sur le comportement admin = scope global (voit tout, plus de filtre IEP).
+- Backend dashboard.go : merged case "admin", "inspector" dans GetDashboard → inspector obtient getAdminDashboard (vue globale, comme admin).
+- Frontend types.ts : ROLE_LABELS["inspector"] = "Admin IEP" (était "Inspecteur (IEP)"). ROLE_DESCRIPTIONS["inspector"] = "Administration multi-écoles (sauf paramètres généraux)".
+- Frontend dashboard-shell.tsx NAV_ITEMS : ajout "inspector" à iep, students, users (ceux qui avaient admin sans inspector). Settings reste ["admin"] (exclusion).
+- Frontend welcome-dashboard.tsx : inspector stats = admin stats (IEP, écoles, élèves, enseignants). inspector quick actions = admin (IEP, écoles, étudiants). Plus de "Vue analytique / Écoles supervisées" (ancien comportement inspector lecture-seule).
+
+Vérifications : go build EXIT 0, go vet EXIT 0, ESLint EXIT 0, tsc EXIT 0.
+
+Push + vérification (backend + frontend → Render + Vercel) :
+- (à vérifier après push)

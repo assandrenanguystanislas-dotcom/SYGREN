@@ -70,13 +70,6 @@ func ListSessions(w http.ResponseWriter, r *http.Request) {
 		Joins("JOIN schools ON schools.id = evaluation_sessions.school_id")
 
 	switch role {
-	case "inspector":
-		iepID := ctxIEPID(r)
-		if iepID == "" {
-			jsonResponse(w, http.StatusOK, map[string]interface{}{"sessions": []interface{}{}, "count": 0})
-			return
-		}
-		query = query.Where("schools.iep_id = ?", iepID)
 	case "director":
 		schoolID := ctxSchoolID(r)
 		if schoolID == "" {
