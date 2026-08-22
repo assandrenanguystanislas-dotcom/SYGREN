@@ -2230,3 +2230,42 @@ Stage Summary:
 - Pas de dépendance Go Excel (SheetJS côté frontend parse, backend fait juste le bulk-insert + lookup).
 - RBAC respecté : director = son école (force ctxSchoolID), admin = school_id payload.
 - Cas edge gérés : matricule en double (skip), classe introuvable (failed), genre invalide (failed), nom/prénoms vides (failed), matricule vide (autorisé, NULL coexiste).
+
+---
+Task ID: Students-Excel-Import-Verification
+Agent: Main (Z.ai Code — mode tuteur)
+Task: Vérification E2E live de l'import Excel bulk + fix crash frontend.
+
+Work Log:
+- Push 4a6e8ec9 (feature) : backend handler + route + frontend dialog + bouton. Build OK, Vercel READY + Render live.
+- Test backend API (3 scénarios) :
+  * Create 2 étudiants (TESTIMP001/002, niveau=CP2) → created=2, skipped=0, failed=0 ✓.
+  * Re-import (même payload) → created=0, skipped=2 ("matricule déjà en base") ✓.
+  * Classe inexistante (niveau=XYZ) → created=0, failed=1 ("classe XYZ introuvable... classes dispo: CP1, CP2, CE1, CE2, CM1, CM2") ✓.
+- Test UI (Agent Browser) avec le vrai fichier ELEVES (6).xls (155 élèves, 5 niveaux : CE1=50, CM1=41, CE2=36, CP2=24, CP1=4) :
+  * Upload → SheetJS parse → preview "155 élèves, 155 valides" ✓.
+  * Clic "Importer 155 élèves" → backend crée 155 (transaction commit OK), distribution correcte par niveau (CP1+4, CP2+24, CE1+50, CE2+36, CM1+41, CM2+0) ✓.
+  * MAIS frontend a CRASHÉ ("Application error: a client-side exception") APRÈS l'import réussi.
+
+Bug critique identifié + corrigé (commit 9a16e10) :
+- Cause : Go sérialise un slice nil en JSON 'null' (pas '[]'). Le backend initialisait Skipped/Failed à leur zéro-value (nil) → réponse JSON `{created:155, skipped:null, failed:null, total:155}`.
+- Frontend faisait `result.skipped.length` → "Cannot read properties of null (reading 'length')" → React error boundary → crash.
+- Fix double :
+  * Backend : `Skipped: []BulkImportDetail{}, Failed: []BulkImportDetail{}` (slice vide) → JSON renvoie `[]`.
+  * Frontend : optional chaining `result.skipped?.length ?? 0` (défensif).
+- Vérif API après fix : `{created:1, skipped:[], failed:[], total:1}` ✓ (plus null).
+- Vérif UI après fix : upload CSV 1 étudiant (TESTUI005) → clic "Importer 1 élèves" → résultat "1 créés, 0 ignorés, 0 échoués" en 2s, crash=false, 0 erreur console ✓.
+
+Cleanup :
+- 8 étudiants TEST supprimés (TESTIMP001/002, TESTUI001-006) via DELETE /api/students/{id}.
+- Compte final EPP COTIERE PALMERAIE : 185 élèves (155 importés + 30 originaux), distribution par niveau correcte (CE1:55, CE2:41, CM1:46, CP1:9, CP2:29, CM2:5).
+
+Stage Summary final :
+- Feature import Excel bulk VALIDÉE E2E sur le live :
+  * Backend : transaction GORM, skip doublons, lookup niveau→class_id (case-insensitive), RBAC director+admin.
+  * Frontend : SheetJS parse .xls+.xlsx, preview avec validation, import → résultat créé/skipped/failed/total.
+- Le directeur (ou admin avec école sélectionnée) clique "Importer Excel" → sélectionne .xls/.xlsx → preview (155 élèves) → Importer → 155 insérés en transaction, skip doublons, erreurs signalées par ligne.
+- Bug crash frontend (null.length) trouvé en test + corrigé (backend init slice vide + frontend optional chaining).
+- Lesson : Go nil slice → JSON null (pas []). Toujours init les slices de réponse à [] pour que le frontend .length ne crash pas. Le tsc ne catch pas ça (null est assignable au type array|undefined selon la sérialisation).
+- Déploiements finaux : Vercel ✅ READY (9a16e10), Render ✅ live (9a16e10).
+- DB Neon : 155 étudiants réels importés pour EPP COTIERE PALMERAIE (données du fichier ELEVES (6).xls de l'utilisateur).
