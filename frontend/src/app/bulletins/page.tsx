@@ -116,25 +116,57 @@ function fmtNum(v: number): string {
 // (report_cards.go) : mêmes seuils (/20), mêmes textes. La moyenne est
 // normalisée sur /20 avant comparaison (le backend PDF avait le même bug
 // — corrigé au même moment — : seuils /20 vs moyenne /10 pour CP/CE).
-function appreciationFor(avg: number, scale: number, hasAvg: boolean): string {
+//
+// Retourne aussi le statut « négatif » : true si moyenne < seuil passant
+// (10/20 normalisés) ou aucune note → le texte s'affiche en ROUGE sur le
+// bulletin ; sinon noir (appréciation positive).
+function appreciationFor(
+  avg: number,
+  scale: number,
+  hasAvg: boolean,
+): { text: string; negative: boolean } {
   if (!hasAvg) {
-    return "Aucune note n'a été saisie pour cette session. Veuillez contacter l'administration.";
+    return {
+      text: "Aucune note n'a été saisie pour cette session. Veuillez contacter l'administration.",
+      negative: true, // anomalie — attire l'œil en rouge
+    };
   }
   // Normalisation /20 (CP/CE : average × 2 ; CM : inchangée).
   const avg20 = scale > 0 ? (avg * 20) / scale : avg;
   if (avg20 >= 16)
-    return "Excellents résultats. Félicitations pour ce travail remarquable et la régularité dans l'effort. Continuez ainsi !";
+    return {
+      text: "Excellents résultats. Félicitations pour ce travail remarquable et la régularité dans l'effort. Continuez ainsi !",
+      negative: false,
+    };
   if (avg20 >= 14)
-    return "Très bons résultats d'ensemble. Continuez dans cette voie, l'année se présente sous les meilleurs auspices.";
+    return {
+      text: "Très bons résultats d'ensemble. Continuez dans cette voie, l'année se présente sous les meilleurs auspices.",
+      negative: false,
+    };
   if (avg20 >= 12)
-    return "Bons résultats d'ensemble. Des efforts soutenus permettront de viser l'excellence. Encouragements.";
+    return {
+      text: "Bons résultats d'ensemble. Des efforts soutenus permettront de viser l'excellence. Encouragements.",
+      negative: false,
+    };
   if (avg20 >= 10)
-    return "Résultats satisfaisants. L'élève peut mieux faire avec davantage de rigueur et de régularité dans le travail.";
+    return {
+      text: "Résultats satisfaisants. L'élève peut mieux faire avec davantage de rigueur et de régularité dans le travail.",
+      negative: false,
+    };
   if (avg20 >= 8)
-    return "Résultats fragiles. Un soutien et un encadrement renforcés sont nécessaires pour progresser.";
+    return {
+      text: "Résultats fragiles. Un soutien et un encadrement renforcés sont nécessaires pour progresser.",
+      negative: true,
+    };
   if (avg20 >= 5)
-    return "Résultats insuffisants. Des difficultés importantes nécessitent un accompagnement personnalisé.";
-  return "Résultats très insuffisants. Une remédiation urgente est conseillée. Rencontre avec les parents recommandée.";
+    return {
+      text: "Résultats insuffisants. Des difficultés importantes nécessitent un accompagnement personnalisé.",
+      negative: true,
+    };
+  return {
+    text: "Résultats très insuffisants. Une remédiation urgente est conseillée. Rencontre avec les parents recommandée.",
+    negative: true,
+  };
 }
 
 // Construit un BulletinEleve à partir d'un élève du backend.
@@ -200,11 +232,18 @@ function buildBulletinEleve(
     maitreName: maitreName || undefined,
     // Appréciation générale automatique — mêmes seuils et textes que le
     // backend PDF (getGeneralAppreciation), moyenne normalisée /20.
-    appreciation: appreciationFor(
-      student.average,
-      student.average_scale,
-      student.has_average,
-    ),
+    // negative : < 10/20 ou aucune note → texte ROUGE sur le bulletin.
+    ...(() => {
+      const appr = appreciationFor(
+        student.average,
+        student.average_scale,
+        student.has_average,
+      );
+      return {
+        appreciation: appr.text,
+        appreciationNegative: appr.negative,
+      };
+    })(),
   };
 }
 

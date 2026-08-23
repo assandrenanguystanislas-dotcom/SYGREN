@@ -82,14 +82,19 @@ export interface BulletinEleve {
    *  « Appréciation et Visa du Maître ». */
   maitreName?: string;
   /** Appréciation générale automatique (mêmes textes que le backend PDF
-   *  — getGeneralAppreciation). Affichée dans la zone « Appréciation et
-   *  Visa du Maître ». Vide → zone laissée au visa manuel. */
+   *  — getGeneralAppreciation). Affichée en gras italique dans la zone
+   *  « Appréciation et Visa du Maître ». Vide → zone laissée au visa. */
   appreciation?: string;
+  /** true → appréciation NÉGATIVE (moyenne < 10/20 normalisés ou aucune
+   *  note) : texte ROUGE. false/absent → positive : texte NOIR. */
+  appreciationNegative?: boolean;
 }
 
 // Bordures bleues du modèle officiel.
 const BORDER = "rgb(40,100,200)";
 const LABEL = "rgb(20,50,140)";
+// Rouge d'alerte pour les appréciations négatives (impression nette).
+const NEGATIVE = "rgb(200,20,20)";
 
 export default function BulletinsA5Landscape({
   eleves,
@@ -262,13 +267,13 @@ export default function BulletinsA5Landscape({
                           style={{ borderColor: BORDER }}
                         >
 
-                          {/* Exploitation de texte — nom bleu gras centré, note noire grasse centrée */}
+                          {/* Exploitation de texte — nom bleu gras aligné à gauche, note noire grasse centrée */}
                           <div
                             className="grid grid-cols-8 border-b py-0.5"
                             style={{ borderColor: BORDER }}
                           >
                             <span
-                              className="col-span-6 font-bold text-center"
+                              className="col-span-6 font-bold text-left pl-2"
                               style={{ color: LABEL }}
                             >
                               Exploitation de Texte
@@ -308,19 +313,19 @@ export default function BulletinsA5Landscape({
                                 </div>
                                 <div className="flex-1">
                                   <div
-                                    className="border-b py-0.5 text-center font-bold text-[9px]"
+                                    className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
                                     style={{ color: LABEL }}
                                   >
                                     Hist – Géo.
                                   </div>
                                   <div
-                                    className="border-b py-0.5 text-center font-bold text-[9px]"
+                                    className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
                                     style={{ color: LABEL }}
                                   >
                                     EDHC
                                   </div>
                                   <div
-                                    className="py-0.5 text-center font-bold text-[9px]"
+                                    className="py-0.5 text-left pl-1 font-bold text-[9px]"
                                     style={{ color: LABEL }}
                                   >
                                     Sciences
@@ -342,7 +347,7 @@ export default function BulletinsA5Landscape({
                               style={{ borderColor: BORDER }}
                             >
                               <span
-                                className="col-span-6 font-bold text-center"
+                                className="col-span-6 font-bold text-left pl-2"
                                 style={{ color: LABEL }}
                               >
                                 Éveil au Milieu
@@ -356,7 +361,7 @@ export default function BulletinsA5Landscape({
                             </div>
                           )}
 
-                          {/* Autres matières — noms bleu gras centrés, notes noires grasses centrées */}
+                          {/* Autres matières — noms bleu gras alignés à gauche, notes noires grasses centrées */}
                           {[
                             { name: "Mathématiques", key: "maths" },
                             { name: "Dictée", key: "dictee" },
@@ -376,7 +381,7 @@ export default function BulletinsA5Landscape({
                               style={{ borderColor: BORDER }}
                             >
                               <span
-                                className="col-span-6 font-bold text-center"
+                                className="col-span-6 font-bold text-left pl-2"
                                 style={{ color: LABEL }}
                               >
                                 {m.name}
@@ -393,11 +398,11 @@ export default function BulletinsA5Landscape({
 
                         {/* Colonne Visas & Totaux (4/12) */}
                         <div className="col-span-4 flex flex-col justify-between text-center">
-                          {/* Espace signature du Directeur — nom imprimé en bas
-                              de la zone (dynamique, depuis releve-data). */}
+                          {/* Espace signature du Directeur — nom imprimé
+                              CENTRÉ en bas de la zone (dynamique). */}
                           <div className="h-16 flex flex-col justify-end pb-1 px-1">
                             {iepInfo?.director_name && (
-                              <p className="text-[9px] font-semibold leading-tight">
+                              <p className="text-center text-[9px] font-semibold leading-tight">
                                 {iepInfo.director_name}
                               </p>
                             )}
@@ -461,9 +466,18 @@ export default function BulletinsA5Landscape({
                           Appréciation et Visa du Maître
                         </p>
                         {/* Appréciation générale automatique (calculée comme
-                            le backend PDF). */}
+                            le backend PDF) — GRAS ITALIQUE lisible, couleur
+                            dynamique : NOIR si positive (≥ 10/20 normalisés),
+                            ROUGE si négative (< 10/20 ou aucune note). */}
                         {eleve.appreciation && (
-                          <p className="italic text-[9px] leading-snug mt-0.5 px-1.5">
+                          <p
+                            className="font-bold italic text-[10px] leading-snug mt-0.5 px-1.5"
+                            style={{
+                              color: eleve.appreciationNegative
+                                ? NEGATIVE
+                                : "black",
+                            }}
+                          >
                             {eleve.appreciation}
                           </p>
                         )}
