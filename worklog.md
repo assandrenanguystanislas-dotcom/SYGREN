@@ -2848,3 +2848,26 @@ Stage Summary:
 - Échelle de référence : moyenne normalisée /20 avant tout comparaison de seuils — règle désormais appliquée partout (mentions getMention convertissait déjà, générale et matières corrigées ici)
 - Les seuils/textes d'appréciation existent en 2 endroits (backend getGeneralAppreciation + frontend appreciationFor) : si les textes évoluent, penser à synchroniser les deux
 - 3 commits : b04a568 (feat frontend), 8d9e083 (fix générale PDF), a2eb2ab (fix matières + couleur PDF)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Refonte-Visuelle
+Agent: Main (tuteur)
+Task: Refonte visuelle bulletins A5 — alignement droit, matières bleu gras centrées, notes noires grasses centrées, cellule note fusionnée Éveil au Milieu CP, noms Directeur/Maître dynamiques
+
+Work Log:
+- Backend (commit e6ac88a) : champ teacher_name ajouté à ReleveData (releve-data) — résolu depuis Class.TeacherID → User.FullName (le titulaire peut être un directeur tenant la classe, d'où la résolution par ID sans filtre de rôle). Symétrique de director_name.
+- Frontend (commit b1cfbbd) :
+  * Bloc Matricule/Effectif/Année scolaire calé à l'extrême droite (text-right)
+  * Tous les noms de disciplines en BLEU GRAS CENTRÉ (font-bold + rgb(20,50,140) + text-center), y compris les 3 sous-lignes CP (Hist-Géo/EDHC/Sciences)
+  * Toutes les notes en NOIR GRAS CENTRÉ (font-bold text-black text-center)
+  * Bloc Éveil au Milieu CP restructuré : libellés (6/8 : Éveil au Milieu + accolade + 3 sous-lignes) + UNE cellule note unique fusionnée (col-span-2) centrée verticalement affichant la note globale eveilMilieu — même logique une-note-globale que CE/CM. Les notes détaillées histGeo/edhcMilieu/sciences ne sont plus affichées (slots conservés dans l'interface pour rétrocompat)
+  * Zone Visa du Directeur : nom du directeur imprimé en bas de l'espace signature (IEPInfo.director_name)
+  * Zone Appréciation et Visa du Maître : nom du maître titulaire imprimé en bas (BulletinEleve.maitreName), zone élargie min-h-[48px]
+  * Plomberie : IEPInfo.director_name, BulletinEleve.maitreName, teacher_name dans le type api.ts
+- Vérifié : gofmt/go build OK, tsc --noEmit EXIT 0, eslint EXIT 0
+- Vérifié production (Vercel READY + Render live sur b1cfbbd) : API releve-data renvoie teacher_name ('M. Mamadou Traoré' CP1 / 'Mme Affoué N'Guessan' CM1) + director_name ('M. Koffi Konan Directeur'). OCR bulletins : les 6 demandes validées sur CP1 (alignement droit ✓, bleu gras centré ✓, noir gras centré ✓, accolade + 3 sous-lignes + cellule unique ✓, nom directeur ✓, appréciation + nom maître ✓) et CM1 (ligne unique note 34.5 ✓, maître correct par classe ✓). PDF 18 pages 28 417 caractères, tous éléments présents.
+
+Stage Summary:
+- Bulletins A5 conformes au modèle officiel demandé : styles centrés bleu/noir, cellule note fusionnée CP, signatures nominatives dynamiques
+- teacher_name disponible dans releve-data pour tout document futur nécessitant le maître de classe
+- Correction syntaxe pendant le dev : commentaire JSX collé à une parenthèse (TS1109) détecté par tsc avant push
