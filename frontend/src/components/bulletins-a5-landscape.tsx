@@ -14,12 +14,19 @@ import React from "react";
 //
 // Couleurs du modèle officiel :
 //   - Bordures du tableau : bleu rgb(40,100,200)
-//   - Intitulés / libellés : bleu foncé rgb(20,50,140)
-//   - Notes et valeurs : noir
+//   - Intitulés / libellés / noms de disciplines : bleu foncé gras
+//     rgb(20,50,140), centrés dans leur cellule
+//   - Notes : noir gras, centrées dans leur cellule
 //
-// Rendu conditionnel « Éveil au Milieu » :
-//   - CP   : détail 3 sous-matières (Hist-Géo / EDHC / Sciences) + accolade
+// Rendu « Éveil au Milieu » :
+//   - CP   : label + accolade + 3 sous-lignes (Hist-Géo / EDHC / Sciences)
+//            et UNE cellule note unique fusionnée (col-span-2, centrée
+//            verticalement) — note globale, même logique que CE/CM
 //   - CE/CM : ligne unique avec la note globale
+//
+// Zones de signature : le nom du Directeur de l'école est imprimé dans la
+// zone « Visa du Directeur », le nom du maître de classe (titulaire) dans
+// la zone « Appréciation et Visa du Maître » — tous deux dynamiques.
 //
 // Barème de la moyenne : dynamique par élève (average_scale du backend —
 // CP/CE → /10, CM → /20, cahier des charges §3 Module 2). Fallback : déduit
@@ -33,6 +40,8 @@ export interface IEPInfo {
   inspector_email: string;
   inspector_phone: string;
   school_name: string;
+  /** Directeur de l'école — imprimé dans la zone « Visa du Directeur ». */
+  director_name?: string;
 }
 
 export interface BulletinEleve {
@@ -69,6 +78,9 @@ export interface BulletinEleve {
   total?: number | string;
   moyenne?: number | string;
   rangNum?: number | string; // Ex: 1 ou "1er"
+  /** Maître de la classe (titulaire) — imprimé dans la zone
+   *  « Appréciation et Visa du Maître ». */
+  maitreName?: string;
   /** Appréciation générale automatique (mêmes textes que le backend PDF
    *  — getGeneralAppreciation). Affichée dans la zone « Appréciation et
    *  Visa du Maître ». Vide → zone laissée au visa manuel. */
@@ -188,7 +200,7 @@ export default function BulletinsA5Landscape({
                             Sexe : <span className="font-normal">{eleve.sexe}</span>
                           </p>
                         </div>
-                        <div>
+                        <div className="text-right">
                           <p>
                             Matricule :{" "}
                             <span className="font-normal">{eleve.matricule}</span>
@@ -250,19 +262,19 @@ export default function BulletinsA5Landscape({
                           style={{ borderColor: BORDER }}
                         >
 
-                          {/* Exploitation de texte */}
+                          {/* Exploitation de texte — nom bleu gras centré, note noire grasse centrée */}
                           <div
                             className="grid grid-cols-8 border-b py-0.5"
                             style={{ borderColor: BORDER }}
                           >
                             <span
-                              className="col-span-6 font-bold pl-2"
+                              className="col-span-6 font-bold text-center"
                               style={{ color: LABEL }}
                             >
                               Exploitation de Texte
                             </span>
                             <span
-                              className="col-span-2 border-l text-center"
+                              className="col-span-2 border-l font-bold text-black text-center"
                               style={{ borderColor: BORDER }}
                             >
                               {eleve.notes.explText ?? ""}
@@ -271,82 +283,72 @@ export default function BulletinsA5Landscape({
 
                           {/* Éveil au milieu : dynamique selon la classe */}
                           {isCP ? (
-                            /* Cas CP : détail avec accolade */
+                            /* Cas CP : label + accolade + 3 sous-lignes,
+                             * et UNE cellule note unique fusionnée sur la
+                             * colonne NOTES (col-span-2), centrée
+                             * verticalement — une seule note globale,
+                             * même logique que le bulletin CE/CM. */
                             <div
                               className="grid grid-cols-8 border-b"
                               style={{ borderColor: BORDER }}
                             >
-                              <div
-                                className="col-span-2 pl-1 flex items-center font-bold leading-tight text-[10px]"
-                                style={{ color: LABEL }}
-                              >
-                                Éveil<br />au<br />Milieu
+                              {/* Partie libellés (6/8) : Éveil au Milieu + { + sous-lignes */}
+                              <div className="col-span-6 flex">
+                                <div
+                                  className="w-[30%] flex items-center justify-center font-bold leading-tight text-[10px] text-center"
+                                  style={{ color: LABEL }}
+                                >
+                                  Éveil<br />au<br />Milieu
+                                </div>
+                                <div
+                                  className="w-[10%] flex items-center justify-center text-lg"
+                                  style={{ color: BORDER }}
+                                >
+                                  &#123;
+                                </div>
+                                <div className="flex-1">
+                                  <div
+                                    className="border-b py-0.5 text-center font-bold text-[9px]"
+                                    style={{ color: LABEL }}
+                                  >
+                                    Hist – Géo.
+                                  </div>
+                                  <div
+                                    className="border-b py-0.5 text-center font-bold text-[9px]"
+                                    style={{ color: LABEL }}
+                                  >
+                                    EDHC
+                                  </div>
+                                  <div
+                                    className="py-0.5 text-center font-bold text-[9px]"
+                                    style={{ color: LABEL }}
+                                  >
+                                    Sciences
+                                  </div>
+                                </div>
                               </div>
+                              {/* Cellule note unique fusionnée (2/8) — note globale */}
                               <div
-                                className="col-span-1 flex items-center justify-center text-lg"
-                                style={{ color: BORDER }}
-                              >
-                                &#123;
-                              </div>
-                              <div
-                                className="col-span-5 border-l"
+                                className="col-span-2 border-l flex items-center justify-center font-bold text-black text-center"
                                 style={{ borderColor: BORDER }}
                               >
-                                <div
-                                  className="grid grid-cols-5 border-b py-0.5"
-                                  style={{ borderColor: BORDER }}
-                                >
-                                  <span className="col-span-3 font-semibold text-[9px] pl-1">
-                                    Hist – Géo.
-                                  </span>
-                                  <span
-                                    className="col-span-2 border-l text-center"
-                                    style={{ borderColor: BORDER }}
-                                  >
-                                    {eleve.notes.histGeo ?? ""}
-                                  </span>
-                                </div>
-                                <div
-                                  className="grid grid-cols-5 border-b py-0.5"
-                                  style={{ borderColor: BORDER }}
-                                >
-                                  <span className="col-span-3 font-semibold text-[9px] pl-1">
-                                    EDHC
-                                  </span>
-                                  <span
-                                    className="col-span-2 border-l text-center"
-                                    style={{ borderColor: BORDER }}
-                                  >
-                                    {eleve.notes.edhcMilieu ?? ""}
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-5 py-0.5">
-                                  <span className="col-span-3 font-semibold text-[9px] pl-1">
-                                    Sciences
-                                  </span>
-                                  <span
-                                    className="col-span-2 border-l text-center"
-                                    style={{ borderColor: BORDER }}
-                                  >
-                                    {eleve.notes.sciences ?? ""}
-                                  </span>
-                                </div>
+                                {eleve.notes.eveilMilieu ?? ""}
                               </div>
                             </div>
                           ) : (
-                            /* Cas CE / CM : note unique globale */
+                            /* Cas CE / CM : ligne unique avec la note globale */
                             <div
                               className="grid grid-cols-8 border-b py-0.5"
                               style={{ borderColor: BORDER }}
                             >
                               <span
-                                className="col-span-6 font-bold pl-2"
+                                className="col-span-6 font-bold text-center"
                                 style={{ color: LABEL }}
                               >
                                 Éveil au Milieu
                               </span>
                               <span
-                                className="col-span-2 border-l text-center"
+                                className="col-span-2 border-l font-bold text-black text-center"
                                 style={{ borderColor: BORDER }}
                               >
                                 {eleve.notes.eveilMilieu ?? ""}
@@ -354,9 +356,9 @@ export default function BulletinsA5Landscape({
                             </div>
                           )}
 
-                          {/* Autres matières */}
+                          {/* Autres matières — noms bleu gras centrés, notes noires grasses centrées */}
                           {[
-                            { name: "Mathématiques", key: "maths", bold: true },
+                            { name: "Mathématiques", key: "maths" },
                             { name: "Dictée", key: "dictee" },
                             { name: "EPS", key: "eps" },
                             { name: "Copie", key: "copie" },
@@ -374,13 +376,13 @@ export default function BulletinsA5Landscape({
                               style={{ borderColor: BORDER }}
                             >
                               <span
-                                className={`col-span-6 pl-2 ${m.bold ? "font-bold" : "font-medium"}`}
-                                style={m.bold ? { color: LABEL } : undefined}
+                                className="col-span-6 font-bold text-center"
+                                style={{ color: LABEL }}
                               >
                                 {m.name}
                               </span>
                               <span
-                                className="col-span-2 border-l text-center"
+                                className="col-span-2 border-l font-bold text-black text-center"
                                 style={{ borderColor: BORDER }}
                               >
                                 {eleve.notes[m.key as keyof typeof eleve.notes] ?? ""}
@@ -391,7 +393,15 @@ export default function BulletinsA5Landscape({
 
                         {/* Colonne Visas & Totaux (4/12) */}
                         <div className="col-span-4 flex flex-col justify-between text-center">
-                          <div className="h-16"></div>
+                          {/* Espace signature du Directeur — nom imprimé en bas
+                              de la zone (dynamique, depuis releve-data). */}
+                          <div className="h-16 flex flex-col justify-end pb-1 px-1">
+                            {iepInfo?.director_name && (
+                              <p className="text-[9px] font-semibold leading-tight">
+                                {iepInfo.director_name}
+                              </p>
+                            )}
+                          </div>
                           <div
                             className="border-t-2 pt-1"
                             style={{ borderColor: BORDER }}
@@ -441,7 +451,7 @@ export default function BulletinsA5Landscape({
 
                       {/* Appréciation / Visa du maître */}
                       <div
-                        className="border-t-2 p-1 text-center flex-grow flex flex-col"
+                        className="border-t-2 p-1 text-center flex-grow flex flex-col min-h-[48px]"
                         style={{ borderColor: BORDER }}
                       >
                         <p
@@ -451,10 +461,17 @@ export default function BulletinsA5Landscape({
                           Appréciation et Visa du Maître
                         </p>
                         {/* Appréciation générale automatique (calculée comme
-                            le backend PDF). Laisse l'espace restant au visa. */}
+                            le backend PDF). */}
                         {eleve.appreciation && (
                           <p className="italic text-[9px] leading-snug mt-0.5 px-1.5">
                             {eleve.appreciation}
+                          </p>
+                        )}
+                        {/* Nom du maître de classe (titulaire) imprimé en bas
+                            de la zone — dynamique, depuis releve-data. */}
+                        {eleve.maitreName && (
+                          <p className="mt-auto text-[9px] font-semibold leading-tight pb-0.5 px-1.5">
+                            {eleve.maitreName}
                           </p>
                         )}
                       </div>

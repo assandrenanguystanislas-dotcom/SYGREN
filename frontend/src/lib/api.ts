@@ -920,6 +920,7 @@ export const reportsApi = {
       class_name: string;
       class_level: string; // "CP" | "CE" | "CM"
       director_name: string;
+      teacher_name: string; // maître titulaire de la classe (signature bulletin)
       eval_label: string;
       eval_number: number;
       eval_type: string; // "composition" | "exam_blanc"

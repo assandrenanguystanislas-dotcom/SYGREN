@@ -149,6 +149,7 @@ function buildBulletinEleve(
   mois: string,
   anneeScolaire: string,
   rankLookup: Map<string, number>,
+  maitre: string,
 ): BulletinEleve {
   // Le backend renvoie last_name + first_name séparément. On les
   // concatène dans l'ordre "Nom Prénoms" (format officiel CI).
@@ -175,6 +176,10 @@ function buildBulletinEleve(
   const rank =
     matKey && matKey !== "N/A" ? (rankLookup.get(matKey) ?? 0) : 0;
 
+  // Maître de la classe (titulaire) — transmis par releve-data
+  // (teacher_name, résolu depuis Class.TeacherID côté backend).
+  const maitreName = maitre || "";
+
   return {
     id: student.matricule || student.num,
     nomPrenoms,
@@ -192,6 +197,7 @@ function buildBulletinEleve(
     total: anyGrade ? `${fmtNum(student.total)}/${fmtNum(totalSur)}` : undefined,
     moyenne: student.has_average ? fmtNum(student.average) : undefined,
     rangNum: rank > 0 ? rank : undefined,
+    maitreName: maitreName || undefined,
     // Appréciation générale automatique — mêmes seuils et textes que le
     // backend PDF (getGeneralAppreciation), moyenne normalisée /20.
     appreciation: appreciationFor(
@@ -351,6 +357,7 @@ export default function BulletinsPage() {
           inspector_email: first.inspector_email,
           inspector_phone: first.inspector_phone,
           school_name: first.school_name,
+          director_name: first.director_name,
         };
         setIepInfo(iep);
 
@@ -386,6 +393,7 @@ export default function BulletinsPage() {
                 mois,
                 anneeScolaire,
                 rankLookup,
+                data.teacher_name,
               ),
             );
           }
