@@ -205,19 +205,18 @@ export default function BulletinsA5Landscape({
                             Sexe : <span className="font-normal">{eleve.sexe}</span>
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p>
-                            Matricule :{" "}
-                            <span className="font-normal">{eleve.matricule}</span>
-                          </p>
-                          <p>
-                            Effectif :{" "}
-                            <span className="font-normal">{eleve.effectif}</span>
-                          </p>
-                          <p>
-                            Année scolaire :{" "}
-                            <span className="font-normal">{eleve.anneeScolaire}</span>
-                          </p>
+                        {/* Bloc droit calé à l'extrême droite, libellés
+                            empilés sur la MÊME VERTICALE (grille 2 colonnes
+                            auto : libellés alignés entre eux, valeurs
+                            alignées entre elles — « Effectif » exactement
+                            sous « Matricule », conformément au modèle). */}
+                        <div className="ml-auto w-fit grid grid-cols-[auto_auto] gap-x-1.5 text-left">
+                          <span>Matricule :</span>
+                          <span className="font-normal">{eleve.matricule}</span>
+                          <span>Effectif :</span>
+                          <span className="font-normal">{eleve.effectif}</span>
+                          <span>Année scolaire :</span>
+                          <span className="font-normal">{eleve.anneeScolaire}</span>
                         </div>
                       </div>
                     </div>
@@ -397,10 +396,14 @@ export default function BulletinsA5Landscape({
                         </div>
 
                         {/* Colonne Visas & Totaux (4/12) */}
-                        <div className="col-span-4 flex flex-col justify-between text-center">
-                          {/* Espace signature du Directeur — nom imprimé
-                              CENTRÉ en bas de la zone (dynamique). */}
-                          <div className="h-16 flex flex-col justify-end pb-1 px-1">
+                        <div className="col-span-4 flex flex-col text-center">
+                          {/* Grande zone de signature du Directeur : occupe
+                              tout l'espace libre jusqu'au bloc « Visa des
+                              Parents ». Le nom est imprimé TOUT EN BAS
+                              (juste au-dessus de la ligne séparatrice) —
+                              tout l'espace au-dessus reste disponible pour
+                              signer, conforme au modèle officiel. */}
+                          <div className="flex-1 flex flex-col justify-end pb-1 px-1 min-h-[40px]">
                             {iepInfo?.director_name && (
                               <p className="text-center text-[9px] font-semibold leading-tight">
                                 {iepInfo.director_name}
@@ -417,16 +420,17 @@ export default function BulletinsA5Landscape({
                             <div className="h-12"></div>
                           </div>
 
-                          {/* Totaux & Rang */}
+                          {/* Totaux & Rang — libellés et valeurs en GRAS
+                              bien lisible (11px). */}
                           <div
-                            className="border-t-2 pt-1 space-y-2 text-[10px] pb-2"
+                            className="border-t-2 pt-1 space-y-1.5 text-[11px] pb-2"
                             style={{ borderColor: BORDER }}
                           >
                             <div>
                               <p className="font-bold" style={{ color: LABEL }}>
                                 TOTAL :
                               </p>
-                              <p className="font-semibold text-gray-800">
+                              <p className="font-bold text-black">
                                 {eleve.total ?? "............/.........."}
                               </p>
                             </div>
@@ -434,7 +438,7 @@ export default function BulletinsA5Landscape({
                               <p className="font-bold" style={{ color: LABEL }}>
                                 Moyenne :
                               </p>
-                              <p className="font-semibold text-gray-800">
+                              <p className="font-bold text-black">
                                 {eleve.moyenne
                                   ? `${eleve.moyenne} ${baremeMoyenne}`
                                   : `............ ${baremeMoyenne}`}
@@ -444,7 +448,7 @@ export default function BulletinsA5Landscape({
                               <p className="font-bold" style={{ color: LABEL }}>
                                 Rang :
                               </p>
-                              <p className="font-semibold text-gray-800">
+                              <p className="font-bold text-black">
                                 {eleve.rangNum
                                   ? `${eleve.rangNum}${eleve.rangNum === 1 || eleve.rangNum === "1" ? "er" : "ème"} / ${eleve.effectif}`
                                   : "........ / ......"}
