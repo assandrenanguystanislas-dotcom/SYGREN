@@ -9,10 +9,12 @@ import React from "react";
 // + armoiries locales /ci-coat-of-arms.png (fiable à l'impression, sans
 // dépendance réseau vers Wikimedia).
 //
-// Chaque page A4 paysage fait 292×205mm (5mm de sécurité par rapport aux
-// 297×210mm physiques — règle d'or : toujours STRICTEMENT inférieur à la
-// page physique, sinon les bords sont coupés à l'impression). Elle
-// contient 2 bulletins A5 côte à côte,
+// Chaque page fait EXACTEMENT le format A4 paysage (297×210mm) avec
+// @page margin 0. À l'impression, choisir dans le dialogue l'échelle
+// « Ajuster / Agrandir pour remplir la zone imprimable » : le navigateur
+// met à l'échelle la page A4 complète pour remplir la zone imprimable de
+// l'imprimante (marges physiques gérées par le dialogue, pas par le CSS).
+// Chaque page contient 2 bulletins A5 côte à côte,
 // séparés par une ligne pointillée (zone de découpe/perforation).
 //
 // Couleurs du modèle officiel :
@@ -126,7 +128,7 @@ export default function BulletinsA5Landscape({
         return (
           <div
             key={pageIdx}
-            className={`page-bulletins w-[292mm] h-[205mm] bg-white mx-auto mb-6 p-4 print:p-0 print:m-0 flex flex-row border border-gray-300 print:border-none overflow-hidden ${!isLastPage ? "break-after-page" : ""}`}
+            className={`page-bulletins w-[297mm] h-[210mm] bg-white mx-auto mb-6 p-4 print:p-2 print:m-0 flex flex-row border border-gray-300 print:border-none overflow-hidden ${!isLastPage ? "break-after-page" : ""}`}
             style={{ pageBreakAfter: isLastPage ? "auto" : "always" }}
           >
             {pair.map((eleve, idx) => {
