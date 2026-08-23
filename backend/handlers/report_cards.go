@@ -432,7 +432,15 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
 	pdf.SetFont("Helvetica", "B", 10)
 	pdf.CellFormat(0, 6, tr("Appréciation générale:"), "", 1, "L", false, 0, "")
 	pdf.SetFont("Helvetica", "", 10)
-	appreciation := getGeneralAppreciation(result.Average, result.HasAverage)
+	// Les seuils de getGeneralAppreciation sont exprimés sur /20 alors
+	// que result.Average est sur l'échelle du niveau (CP/CE → /10).
+	// Normaliser avant comparaison, sinon un élève CP avec 8.5/10
+	// (= 17/20, excellent) recevait « Résultats fragiles ».
+	avg20 := result.Average
+	if result.AverageScale > 0 {
+		avg20 = result.Average * 20.0 / float64(result.AverageScale)
+	}
+	appreciation := getGeneralAppreciation(avg20, result.HasAverage)
 	pdf.MultiCell(180, 5, tr(appreciation), "", "J", false)
 
 	pdf.Ln(8)
