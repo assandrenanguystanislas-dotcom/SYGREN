@@ -3006,3 +3006,19 @@ Work Log:
 Stage Summary:
 - Signatures symétriques (96px chacune) + libellés harmonisés — commit a3b6f28
 - Frontend uniquement — backend et Render inchangés (live b1cfbbd)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Stats-Evolution
+Agent: Main (tuteur)
+Task: Bloc statistiques — MOY. CLASSE / PLUS FORTE / PLUS FAIBLE + ÉVOLUTION ▲▼ vs session précédente (idée utilisateur validée en revue d'expert)
+
+Work Log:
+- Revue d'expert préalable : recommandation trio stats classe + évolution avec garde-fous (Composition N°1 → ligne absente, absents → masqué, même école/type/année scolaire uniquement, stats de la CLASSE pas de l'école)
+- page.tsx : computeClassStats() (moy/max/min par classe depuis le releve-data déjà chargé — zéro requête) + fetchPreviousAverages() (sessions.list → session antérieure la plus proche même école + eval_type + année scolaire, annulées exclues → computation → matricule → {average, scale}). Delta normalisé /20 puis re-exprimé sur l'échelle du niveau courant (robuste aux échelles différentes).
+- Composant : BulletinEleve.stats + evolution ; bloc compact sous RANG (border-t-2, 9px, justify-between, libellés bleus gras / valeurs noires gras, MAJUSCULES alignées sur TOTAL/MOYENNE/RANG). ÉVOLUTION : ▲ +x.xx vert rgb(0,120,50) / ▼ -x.xx rouge rgb(200,20,20) / = 0 noir, séparé par un filet interne.
+- Vérifié production (Vercel READY a7ae2e3) — RECROUMENT API EXACT : Diabaté CP1 Novembre 8.56/10 → Décembre 9.01/10 = ▲ +0.46 ✓ (affiché identique) ; stats classe CP1 Décembre 7.11/9.01/5.19 ✓ (min = Traoré 5.19 confirmé API) ; Bamba ▲ +0.13 ✓ ; session Novembre (Composition N°1) : stats présentes, ligne ÉVOLUTION absente (dégradation gracieuse validée par DOM) ; OCR visuel : bloc propre, vert confirmé, aucun chevauchement.
+
+Stage Summary:
+- Bloc statistiques LIVE — commit a7ae2e3 : 3 lignes stats classe + évolution fléchée bicolore
+- Coût : 2 requêtes max supplémentaires (sessions.list + computation session précédente), non bloquantes
+- previousAvg disponible dans BulletinEleve.evolution si besoin d'affichage futur (« était 8.56 »)
