@@ -2992,3 +2992,17 @@ Work Log:
 Stage Summary:
 - Signatures fonctionnelles pour usage administratif réel — commit d94dfde
 - Frontend uniquement — backend et Render inchangés (live b1cfbbd)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Signatures-Egales
+Agent: Main (tuteur)
+Task: Zones Directeur/Parents à dimension identique (96px) + libellés MOYENNE/RANG en majuscules
+
+Work Log:
+- Visa du Directeur : 72px → 96px (≈ 25mm) ; Visa des Parents : min-84px+flex → 96px fixe — MÊME DIMENSION que le Directeur (demande utilisateur)
+- Libellés « Moyenne : » → « MOYENNE : » et « Rang : » → « RANG : » (alignés sur « TOTAL : »)
+- Vérifié production (Vercel READY a3b6f28) : OCR — les 2 zones visuellement identiques ~2,5cm généreuses, aucun chevauchement ; extraction DOM : TOTAL/MOYENNE/RANG tous en majuscules
+
+Stage Summary:
+- Signatures symétriques (96px chacune) + libellés harmonisés — commit a3b6f28
+- Frontend uniquement — backend et Render inchangés (live b1cfbbd)
