@@ -2871,3 +2871,21 @@ Stage Summary:
 - Bulletins A5 conformes au modèle officiel demandé : styles centrés bleu/noir, cellule note fusionnée CP, signatures nominatives dynamiques
 - teacher_name disponible dans releve-data pour tout document futur nécessitant le maître de classe
 - Correction syntaxe pendant le dev : commentaire JSX collé à une parenthèse (TS1109) détecté par tsc avant push
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Styles-Appreciation
+Agent: Main (tuteur)
+Task: Styles finaux bulletins A5 — appréciations gras italique bicolores (noir/rouge dynamique), disciplines alignées à gauche, directeur centré
+
+Work Log:
+- Appréciations : font-bold italic text-[10px] (9→10px pour la lisibilité) + couleur dynamique via BulletinEleve.appreciationNegative : NOIR si positive (≥ 10/20 normalisés : satisfaisant/bons/très bons/excellents), ROUGE rgb(200,20,20) si négative (< 10/20 : fragiles/insuffisants/très insuffisants) ou aucune note (anomalie). appreciationFor() retourne désormais {text, negative}.
+- Disciplines : retour à l'alignement À GAUCHE (font-bold text-left pl-2 + rgb(20,50,140)) après l'essai centré — inclut les 3 sous-lignes CP (pl-1). Notes inchangées : noir gras centrées.
+- Directeur : text-center explicite, en bas de la zone de signature (justify-end).
+- Logique des seuils validée par test unitaire bun (frontière exacte 10/20 : 4.9/10 → rouge fragile, 5.19/10 → noir satisfaisant, aucune note → rouge).
+- Aucun cas négatif dans les données réelles (session test : toutes moyennes ≥ 10.19/20) — le rouge s'activera automatiquement pour les élèves faibles.
+- Vérifié production (Vercel READY 31018ab) : OCR bulletin Diabaté (gras italique noir ✓, disciplines à gauche ✓, directeur centré ✓, notes centrées noir gras ✓, maître en bas ✓) + bulletin Bamba (7.57/10 = 15.14/20 → « Très bons résultats » gras italique noir ✓). PDF 18 pages : gras italique noir lisible, aucun chevauchement.
+
+Stage Summary:
+- 3 demandes livrées et vérifiées visuellement en production + PDF
+- Règle couleur : seuil passant 10/20 normalisés (cohérent avec getMention et getGeneralAppreciation du backend)
+- Frontend uniquement (commit 31018ab) — backend non modifié, Render inchangé (live b1cfbbd)
