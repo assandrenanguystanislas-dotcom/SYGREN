@@ -23,11 +23,9 @@ import React from "react";
 //     rgb(20,50,140), centrés dans leur cellule
 //   - Notes : noir gras, centrées dans leur cellule
 //
-// Rendu « Éveil au Milieu » :
-//   - CP   : label + accolade + 3 sous-lignes (Hist-Géo / EDHC / Sciences)
-//            et UNE cellule note unique fusionnée (col-span-2, centrée
-//            verticalement) — note globale, même logique que CE/CM
-//   - CE/CM : ligne unique avec la note globale
+// Rendu « Éveil au Milieu » — même style pour TOUS les niveaux (CP, CE,
+// CM) : label + accolade + 3 sous-lignes (Hist-Géo / EDHC / Sciences)
+// et UNE cellule note unique fusionnée (note globale).
 //
 // Zones de signature : le nom du Directeur de l'école est imprimé dans la
 // zone « Visa du Directeur », le nom du maître de classe (titulaire) dans
@@ -64,10 +62,10 @@ export interface BulletinEleve {
   averageScale?: number;
   notes: {
     explText?: number | string;
-    eveilMilieu?: number | string; // Note unique pour CE et CM
-    histGeo?: number | string;     // Détail CP
-    edhcMilieu?: number | string;  // Détail CP
-    sciences?: number | string;    // Détail CP
+    eveilMilieu?: number | string; // Note globale unique — tous niveaux (CP, CE, CM)
+    histGeo?: number | string;     // Composante CP (si matière séparée en DB)
+    edhcMilieu?: number | string;  // Composante CP (si matière séparée en DB)
+    sciences?: number | string;    // Composante CP (si matière séparée en DB)
     maths?: number | string;
     dictee?: number | string;
     eps?: number | string;
@@ -78,7 +76,6 @@ export interface BulletinEleve {
     edhc?: number | string;
     lecture?: number | string;
     poesieChant?: number | string;
-    edhcBase?: number | string;
   };
   total?: number | string;
   moyenne?: number | string;
@@ -133,7 +130,6 @@ export default function BulletinsA5Landscape({
           >
             {pair.map((eleve, idx) => {
               const classUpper = eleve.classe.toUpperCase();
-              const isCP = classUpper.startsWith("CP");
               // Barème de la moyenne : priorité à la donnée backend
               // (average_scale : 10 pour CP/CE, 20 pour CM — cahier des
               // charges §3). Fallback : déduit du préfixe de la classe.
@@ -290,80 +286,59 @@ export default function BulletinsA5Landscape({
                             </span>
                           </div>
 
-                          {/* Éveil au milieu : dynamique selon la classe */}
-                          {isCP ? (
-                            /* Cas CP : label + accolade + 3 sous-lignes,
+                          {/* Éveil au Milieu — MÊME STYLE pour tous les
+                             * niveaux (CP, CE et CM) : label + accolade +
+                             * 3 sous-lignes (Hist-Géo / EDHC / Sciences)
                              * et UNE cellule note unique fusionnée sur la
                              * colonne NOTES (col-span-2), centrée
-                             * verticalement — une seule note globale,
-                             * même logique que le bulletin CE/CM. */
-                            <div
-                              className="grid grid-cols-8 border-b"
-                              style={{ borderColor: BORDER }}
-                            >
-                              {/* Partie libellés (6/8) : Éveil au Milieu + { + sous-lignes */}
-                              <div className="col-span-6 flex">
-                                <div
-                                  className="w-[30%] flex items-center justify-center font-bold leading-tight text-[10px] text-center"
-                                  style={{ color: LABEL }}
-                                >
-                                  Éveil<br />au<br />Milieu
-                                </div>
-                                <div
-                                  className="w-[10%] flex items-center justify-center text-lg"
-                                  style={{ color: BORDER }}
-                                >
-                                  &#123;
-                                </div>
-                                <div className="flex-1">
-                                  <div
-                                    className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
-                                    style={{ color: LABEL }}
-                                  >
-                                    Hist – Géo.
-                                  </div>
-                                  <div
-                                    className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
-                                    style={{ color: LABEL }}
-                                  >
-                                    EDHC
-                                  </div>
-                                  <div
-                                    className="py-0.5 text-left pl-1 font-bold text-[9px]"
-                                    style={{ color: LABEL }}
-                                  >
-                                    Sciences
-                                  </div>
-                                </div>
-                              </div>
-                              {/* Cellule note unique fusionnée (2/8) — note globale */}
+                             * verticalement — une seule note globale. */}
+                          <div
+                            className="grid grid-cols-8 border-b"
+                            style={{ borderColor: BORDER }}
+                          >
+                            {/* Partie libellés (6/8) : Éveil au Milieu + { + sous-lignes */}
+                            <div className="col-span-6 flex">
                               <div
-                                className="col-span-2 border-l flex items-center justify-center font-bold text-black text-center"
-                                style={{ borderColor: BORDER }}
-                              >
-                                {eleve.notes.eveilMilieu ?? ""}
-                              </div>
-                            </div>
-                          ) : (
-                            /* Cas CE / CM : ligne unique avec la note globale */
-                            <div
-                              className="grid grid-cols-8 border-b py-0.5"
-                              style={{ borderColor: BORDER }}
-                            >
-                              <span
-                                className="col-span-6 font-bold text-left pl-2"
+                                className="w-[30%] flex items-center justify-center font-bold leading-tight text-[10px] text-center"
                                 style={{ color: LABEL }}
                               >
-                                Éveil au Milieu
-                              </span>
-                              <span
-                                className="col-span-2 border-l font-bold text-black text-center"
-                                style={{ borderColor: BORDER }}
+                                Éveil<br />au<br />Milieu
+                              </div>
+                              <div
+                                className="w-[10%] flex items-center justify-center text-lg"
+                                style={{ color: BORDER }}
                               >
-                                {eleve.notes.eveilMilieu ?? ""}
-                              </span>
+                                &#123;
+                              </div>
+                              <div className="flex-1">
+                                <div
+                                  className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
+                                  style={{ color: LABEL }}
+                                >
+                                  Hist – Géo.
+                                </div>
+                                <div
+                                  className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
+                                  style={{ color: LABEL }}
+                                >
+                                  EDHC
+                                </div>
+                                <div
+                                  className="py-0.5 text-left pl-1 font-bold text-[9px]"
+                                  style={{ color: LABEL }}
+                                >
+                                  Sciences
+                                </div>
+                              </div>
                             </div>
-                          )}
+                            {/* Cellule note unique fusionnée (2/8) — note globale */}
+                            <div
+                              className="col-span-2 border-l flex items-center justify-center font-bold text-black text-center"
+                              style={{ borderColor: BORDER }}
+                            >
+                              {eleve.notes.eveilMilieu ?? ""}
+                            </div>
+                          </div>
 
                           {/* Autres matières — noms bleu gras alignés à gauche, notes noires grasses centrées */}
                           {[
@@ -377,7 +352,6 @@ export default function BulletinsA5Landscape({
                             { name: "EDHC", key: "edhc" },
                             { name: "Lecture", key: "lecture" },
                             { name: "Poésie/ Chant", key: "poesieChant" },
-                            { name: "E.D.H.C", key: "edhcBase" },
                           ].map((m, i) => (
                             <div
                               key={i}
@@ -402,31 +376,27 @@ export default function BulletinsA5Landscape({
 
                         {/* Colonne Visas & Totaux (4/12) */}
                         <div className="col-span-4 flex flex-col text-center">
-                          {/* Grande zone de signature du Directeur : occupe
-                              tout l'espace libre jusqu'au bloc « Visa des
-                              Parents ». Le nom est imprimé TOUT EN BAS
-                              (juste au-dessus de la ligne séparatrice) —
-                              tout l'espace au-dessus reste disponible pour
-                              signer, conforme au modèle officiel. */}
-                          <div className="flex-1 flex flex-col justify-end pb-1 px-1 min-h-[40px]">
+                          {/* Signature du Directeur — zone COMPACTE (40px) :
+                              nom imprimé en bas, juste la place d'une
+                              signature courte. */}
+                          <div className="h-10 flex flex-col justify-end pb-1 px-1">
                             {iepInfo?.director_name && (
                               <p className="text-center text-[9px] font-semibold leading-tight">
                                 {iepInfo.director_name}
                               </p>
                             )}
                           </div>
+                          {/* Visa des Parents — zone GÉNÉREUSE : absorbe tout
+                              l'espace libre de la colonne (flex-1, minimum
+                              44px), totaux épinglés en bas. */}
                           <div
-                            className="border-t-2 pt-1"
+                            className="border-t-2 pt-1 flex flex-col"
                             style={{ borderColor: BORDER }}
                           >
                             <p className="font-bold text-[10px]" style={{ color: LABEL }}>
                               Visa des Parents
                             </p>
-                            {/* Zone compacte : 48px → 28px — l'espace
-                                reste suffisant pour une signature courte
-                                (le visa parent est plus petit que celui
-                                du directeur). */}
-                            <div className="h-7"></div>
+                            <div className="flex-1 min-h-[44px]"></div>
                           </div>
 
                           {/* Totaux & Rang — libellés et valeurs en GRAS

@@ -99,7 +99,8 @@ function mapSubjectName(name: string): BulletinNoteKey | null {
   if (n.includes("lect")) return "lecture";
   if (n.includes("edhc")) {
     if (n.includes("milieu")) return "edhcMilieu";
-    if (n.includes("base")) return "edhcBase";
+    // « EDHC base » (si présent en DB) fusionne avec la ligne EDHC —
+    // le doublon « E.D.H.C » a été supprimé du bulletin.
     return "edhc";
   }
   return null; // sujet non mappé — slot reste vide
