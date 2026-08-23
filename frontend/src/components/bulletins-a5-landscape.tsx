@@ -69,6 +69,10 @@ export interface BulletinEleve {
   total?: number | string;
   moyenne?: number | string;
   rangNum?: number | string; // Ex: 1 ou "1er"
+  /** Appréciation générale automatique (mêmes textes que le backend PDF
+   *  — getGeneralAppreciation). Affichée dans la zone « Appréciation et
+   *  Visa du Maître ». Vide → zone laissée au visa manuel. */
+  appreciation?: string;
 }
 
 // Bordures bleues du modèle officiel.
@@ -437,7 +441,7 @@ export default function BulletinsA5Landscape({
 
                       {/* Appréciation / Visa du maître */}
                       <div
-                        className="border-t-2 p-1 text-center min-h-[40px]"
+                        className="border-t-2 p-1 text-center flex-grow flex flex-col"
                         style={{ borderColor: BORDER }}
                       >
                         <p
@@ -446,6 +450,13 @@ export default function BulletinsA5Landscape({
                         >
                           Appréciation et Visa du Maître
                         </p>
+                        {/* Appréciation générale automatique (calculée comme
+                            le backend PDF). Laisse l'espace restant au visa. */}
+                        {eleve.appreciation && (
+                          <p className="italic text-[9px] leading-snug mt-0.5 px-1.5">
+                            {eleve.appreciation}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -110,6 +110,33 @@ function fmtNum(v: number): string {
   return String(Math.round(v * 100) / 100);
 }
 
+// === Appréciation générale automatique ===
+//
+// Réplique EXACTEMENT getGeneralAppreciation du backend
+// (report_cards.go) : mêmes seuils (/20), mêmes textes. La moyenne est
+// normalisée sur /20 avant comparaison (le backend PDF avait le même bug
+// — corrigé au même moment — : seuils /20 vs moyenne /10 pour CP/CE).
+function appreciationFor(avg: number, scale: number, hasAvg: boolean): string {
+  if (!hasAvg) {
+    return "Aucune note n'a été saisie pour cette session. Veuillez contacter l'administration.";
+  }
+  // Normalisation /20 (CP/CE : average × 2 ; CM : inchangée).
+  const avg20 = scale > 0 ? (avg * 20) / scale : avg;
+  if (avg20 >= 16)
+    return "Excellents résultats. Félicitations pour ce travail remarquable et la régularité dans l'effort. Continuez ainsi !";
+  if (avg20 >= 14)
+    return "Très bons résultats d'ensemble. Continuez dans cette voie, l'année se présente sous les meilleurs auspices.";
+  if (avg20 >= 12)
+    return "Bons résultats d'ensemble. Des efforts soutenus permettront de viser l'excellence. Encouragements.";
+  if (avg20 >= 10)
+    return "Résultats satisfaisants. L'élève peut mieux faire avec davantage de rigueur et de régularité dans le travail.";
+  if (avg20 >= 8)
+    return "Résultats fragiles. Un soutien et un encadrement renforcés sont nécessaires pour progresser.";
+  if (avg20 >= 5)
+    return "Résultats insuffisants. Des difficultés importantes nécessitent un accompagnement personnalisé.";
+  return "Résultats très insuffisants. Une remédiation urgente est conseillée. Rencontre avec les parents recommandée.";
+}
+
 // Construit un BulletinEleve à partir d'un élève du backend.
 // rankLookup : matricule normalisé → rang (1-based, au sein de la classe)
 // issu de l'API computation (gestion des ex-aequo côté backend).
@@ -165,6 +192,13 @@ function buildBulletinEleve(
     total: anyGrade ? `${fmtNum(student.total)}/${fmtNum(totalSur)}` : undefined,
     moyenne: student.has_average ? fmtNum(student.average) : undefined,
     rangNum: rank > 0 ? rank : undefined,
+    // Appréciation générale automatique — mêmes seuils et textes que le
+    // backend PDF (getGeneralAppreciation), moyenne normalisée /20.
+    appreciation: appreciationFor(
+      student.average,
+      student.average_scale,
+      student.has_average,
+    ),
   };
 }
 
