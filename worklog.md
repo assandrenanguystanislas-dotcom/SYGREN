@@ -2829,3 +2829,22 @@ Stage Summary:
 - 2 approches coexistent : génération PDF fpdf (archivage backend, inchangée) + impression A5 navigateur (nouveau modèle officiel, sans stockage)
 - Points d'attention pour évolutions futures : le @page landscape est injecté par la page (cascade), la contre-règle visibility est OBLIGATOIRE (body * caché par la section Synthèse), le mapping matières est dans mapSubjectName (page.tsx)
 - Aucune modification backend, RBAC inchangé, pas de migration DB (données Neon synchronisées automatiquement — lecture seule)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Appreciation
+Agent: Main (tuteur)
+Task: Appréciation générale automatique dans la zone « Appréciation et Visa du Maître » des bulletins A5 + correction de 2 bugs backend PDF (normalisation /20)
+
+Work Log:
+- Ajout de l'appréciation générale automatique aux bulletins A5 (frontend) : helper appreciationFor() dans page.tsx répliquant EXACTEMENT getGeneralAppreciation du backend (mêmes seuils /20 : 16/14/12/10/8/5, mêmes 7 textes). Calculée depuis releve-data (average + average_scale + has_average par élève — sans dépendance à l'API computation ni au matricule). Champ BulletinEleve.appreciation rendu en italique 9px sous le titre souligné ; zone passée en flex-grow (grande cellule basse conforme au modèle officiel), espace restant pour le visa manuel. Dégradation gracieuse : sans données, la zone reste titre + espace visa (commit b04a568).
+- BUG BACKEND #1 découvert puis corrigé (commit 8d9e083) : getGeneralAppreciation comparait result.Average (échelle niveau : CP/CE /10) à des seuils /20 → appréciation systématiquement trop sévère pour CP/CE (ex: 8.5/10 = 17/20 recevait « Résultats fragiles »). Fix : avg20 = average × 20 / average_scale.
+- BUG BACKEND #2 découvert via le PDF régénéré puis corrigé (commit a2eb2ab) : même famille — sg.NormalizedValue (échelle niveau, PAS /20 malgré la docstring) utilisé pour (a) la couleur vert/rouge (seuil >= 10) et (b) getSubjectAppreciationNormalized (seuils /20). Un CP avec 9.9/10 affichait « Passable » et en rouge. Fix : normalized20 = NormalizedValue × 20 / AverageScale dans la boucle matières ; docstring trompeuse corrigée.
+- Incident de process : 1er commit du fix #1 a réindenté tout report_cards.go (tabs → espaces, 944 lignes). Reset + réapplication via script python avec tabs littéraux → diff propre +9/-1. Leçon : vérifier git diff --stat avant commit sur les fichiers Go (tabs).
+- Vérifications : gofmt conforme (report_cards.go absent de gofmt -l), go vet OK, go build OK, tsc --noEmit EXIT 0, eslint EXIT 0.
+- Vérification production E2E : Vercel READY + Render live sur a2eb2ab. OCR bulletins A5 : CP1 9.01/10 (= 18.02/20) → « Excellents résultats. Félicitations… » ✓ ; CE1 5.82/10 (= 11.64/20) → « Résultats satisfaisants… » ✓ ; espace visa préservé ; tableau intact. PDF backend régénéré pour le même élève : toutes les matières 8+/10 passent de « Passable » à « Excellent », couleur cohérente, générale « Excellents résultats » en accord avec la mention « Très Bien ».
+
+Stage Summary:
+- Appréciation générale automatique LIVE sur les bulletins A5 (zone « Appréciation et Visa du Maître ») et corrigée dans les bulletins PDF fpdf
+- Échelle de référence : moyenne normalisée /20 avant tout comparaison de seuils — règle désormais appliquée partout (mentions getMention convertissait déjà, générale et matières corrigées ici)
+- Les seuils/textes d'appréciation existent en 2 endroits (backend getGeneralAppreciation + frontend appreciationFor) : si les textes évoluent, penser à synchroniser les deux
+- 3 commits : b04a568 (feat frontend), 8d9e083 (fix générale PDF), a2eb2ab (fix matières + couleur PDF)
