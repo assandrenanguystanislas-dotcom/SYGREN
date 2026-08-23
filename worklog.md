@@ -2906,3 +2906,21 @@ Stage Summary:
 - Zone signature directeur fonctionnelle (nom en bas, espace au-dessus) — commit 53e99f3
 - Grille auto/auto pour le bloc droit : pattern réutilisable pour tout libellé/valeur à aligner en colonne
 - Frontend uniquement — backend et Render inchangés (live b1cfbbd)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Fix-Print-Visa-Parents
+Agent: Main (tuteur)
+Task: Zone Visa des Parents compacte + coupure de la ligne basse à l'impression A4
+
+Work Log:
+- Diagnostic : la page CSS faisait h-[210mm] = hauteur EXACTE d'une page A4 paysage ; combiné à print:p-2 (8px) et au layout flex, le cadre bleu dépassait de ~2mm en bas → bordure « Appréciation et Visa du Maître » et nom du maître coupés au bord physique.
+- Mesure PDF avant correction : contenu à ~100 % de la hauteur de page (marge basse ≈ 0).
+- Fix 1 : h-[210mm] → h-[205mm] (marge de sécurité 5mm = 2,5mm haut/bas) + print:p-2 → print:p-0 (padding écran p-4 conservé pour l'aperçu).
+- Fix 2 : zone « Visa des Parents » h-12 (48px) → h-7 (28px) — signature parentale courte, 20px récupérés pour le tableau et la zone Directeur (flex-1).
+- Mesure PDF après correction : contenu à 92,2 % de la hauteur → marge basse de SÉCURITÉ 16,3mm en A4 paysage. La ligne du bas ne peut plus être coupée.
+- Vérifié production (Vercel READY 289fec4) : OCR bulletin Diabaté — zone Visa des Parents compacte ✓, ligne basse complète avec espace blanc sous le cadre ✓, zone directeur signable ✓, aucune collision avec les bords ✓. PDF 18 pages OK.
+
+Stage Summary:
+- Règle d'or établie pour toutes les pages d'impression : hauteur CSS STRICTEMENT INFÉRIEURE à la hauteur physique de la page (205mm pour A4 paysage 210mm) — jamais l'égalité
+- Zone visa parents compacte (28px) vs zone directeur grande (flex-1, signature officielle plus importante)
+- Frontend uniquement (commit 289fec4) — backend et Render inchangés (live b1cfbbd)
