@@ -2802,3 +2802,30 @@ Stage Summary:
   * Si l'IEP de l'école n'est pas Dabou-1, l'entête s'adapte automatiquement mais l'email par défaut (iep1dabou@gmail.com) est conservé si l'API ne renvoie pas inspector_email. Vérifier que le backend renvoie bien ces champs pour les autres IEP.
   * Le Rang n'est pas calculé par le backend releve-data (qui renvoie juste student.observation = "A"/"R"). Le slot rang reste vide — l'enseignant le remplit manuellement après impression. Si on veut le rang auto, il faudrait étendre le backend pour l'inclure dans releve-data (mais la spec disait NE PAS modifier le backend Go).
   * La page /bulletins réécrit localStorage["sygren-auth"] en préservant les champs existants (user, modules) si l'entrée existe déjà. Si l'onglet principal est ouvert simultanément et que l'utilisateur rafraîchit, le store se réhydrate depuis la version modifiée (avec le token URL qui est identique à celui déjà en place — donc pas de déconnexion effective). Effet de bord mineur : si l'utilisateur a un token différent en URL (ex: token admin passé en URL par un director), le store de l'onglet principal verra ce nouveau token après refresh et pourrait changer de comportement (mais en pratique le bouton "Imprimer" passe toujours le token courant — pas de changement effectif).
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-A5
+Agent: Main (tuteur)
+Task: Module Bulletins A5 paysage v2 — modèle officiel CI avec entête institutionnel dynamique (remplacement du module réverté 1bc8975)
+
+Work Log:
+- Analysé les références utilisateur : P1.png (bulletin CE1 rempli) et MOIS DE.pdf (modèle vierge A4 paysage 842x595) via VLM
+- Intégré le code utilisateur fourni avec 4 corrections majeures :
+  1. Barème moyenne : average_scale par élève du backend (CP/CE = /10, CM = /20, cahier des charges §3) au lieu de isCP ? '/10' : '/20' (bug : CE affiché /20)
+  2. Mapping 'Etude du Milieu' (nom réel en DB) → slot eveilMilieu — absent du mapping initial, la note CE/CM n'aurait jamais été affichée
+  3. Logo local /ci-coat-of-arms.png au lieu de l'URL Wikimedia (fiabilité impression, pas de dépendance réseau)
+  4. Entête institutionnel DYNAMIQUE (iep_name, iep_region, iep_bp, inspector_phone, inspector_email du backend) au lieu du texte codé en dur Dabou — multi-IEP, cohérent avec releve/synthese
+- Vérifié les données réelles en base Neon : 12 matières (Etude du Milieu, EDHC, Expression Ecrites...), usage par niveau (CP note EDHC séparé, CE/CM notent Etude du Milieu), 2 sessions avec notes (EPP COTIERE PALMERAIE nov/déc 2026)
+- Créé frontend/src/components/bulletins-a5-landscape.tsx : 2 bulletins A5/page A4 paysage 297x210mm, couleurs officielles rgb(40,100,200)/rgb(20,50,140), 13 matières ordre exact, Éveil au Milieu conditionnel (CP = accolade 3 sous-matières / CE-CM = ligne unique), chunking par classe (jamais 2 classes sur une même page — découpe/distribution)
+- Créé frontend/src/app/bulletins/page.tsx : fetch parallèle releve-classes + releve-data par classe + computation/session (rangs réels par classe avec ex-aequo, rapprochement par matricule normalisé), TOTAL points/points possibles, PrintStyle injecté (@page A4 landscape margin 0 — gagne la cascade sur le @page portrait du module /releve, s'applique uniquement à ce document)
+- Modifié api.ts (listReleveClasses), bulletins-view.tsx (bouton 'Imprimer les bulletins (A5)' — pattern results-view, token localStorage), globals.css (règles print .page-bulletins)
+- BUG PRINT DÉCOUVERT ET CORRIGÉ EN PROD : la section print Synthèse cache tout (body * { visibility: hidden }) → PDF 18 pages blanches. Correctif : visibility: visible sur #bulletins-doc + descendants (commit 1bd16cf)
+- Vérifications locales : tsc --noEmit EXIT 0, eslint EXIT 0 (0 erreur 0 warning)
+- Vérifications production (agent-browser sur sygren.vercel.app) : login admin → module Bulletins → école EPP COTIERE PALMERAIE → session Décembre 2026 (Validée) → bouton présent → nouvel onglet /bulletins → titre 'Bulletins A5 — EPP COTIERE PALMERAIE — COMPOSITION N°2 — Décembre 2026' → OCR des bulletins CP1/CE1/CM1 validé (entête Dabou dynamique, moyennes 9.01/10 CP, 5.82/10 CE, 11.6/20 CM, rangs 1er/4ème/5ème sur 5, TOTAL 81.1/90) → PDF 18 pages paysage avec 24 013 caractères de contenu → rendu visuel validé (bordures bleues, armoiries, séparateur pointillé)
+- Déploiements : Vercel READY 0f6a801 → 1bd16cf, Render live (backend inchangé, reste 5e16da83)
+
+Stage Summary:
+- Module Bulletins A5 opérationnel en production : https://sygren.vercel.app/#bulletins → sélection école + session → 'Imprimer les bulletins (A5)'
+- 2 approches coexistent : génération PDF fpdf (archivage backend, inchangée) + impression A5 navigateur (nouveau modèle officiel, sans stockage)
+- Points d'attention pour évolutions futures : le @page landscape est injecté par la page (cascade), la contre-règle visibility est OBLIGATOIRE (body * caché par la section Synthèse), le mapping matières est dans mapSubjectName (page.tsx)
+- Aucune modification backend, RBAC inchangé, pas de migration DB (données Neon synchronisées automatiquement — lecture seule)
