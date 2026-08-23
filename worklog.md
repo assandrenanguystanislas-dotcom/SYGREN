@@ -2960,3 +2960,19 @@ Stage Summary:
 - Commit d6550b5 : les bulletins sont de nouveau au format A4 exact — l'ajustement aux marges physiques de l'imprimante se fait par l'échelle du dialogue d'impression (choix utilisateur)
 - Si des coupures réapparaissent à l'impression : vérifier que l'échelle du dialogue n'est pas « 100 %/Taille réelle » mais bien « Ajuster/Remplir la zone imprimable »
 - Le worklog historique (eafc050/0d2adf5) est conservé — l'historique des tentatives mm reste documenté
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Unification-Eveil-Milieu
+Agent: Main (tuteur)
+Task: Éveil au Milieu unifié tous niveaux + suppression doublon E.D.H.C + rééquilibrage signatures
+
+Work Log:
+- Unification : le rendu conditionnel CP vs CE/CM est supprimé — TOUS les niveaux affichent le bloc « Éveil au Milieu » avec accolade + 3 sous-lignes (Hist-Géo / EDHC / Sciences) + cellule note unique fusionnée (note globale eveilMilieu). Code simplifié (variable isCP retirée).
+- Doublon « E.D.H.C » (ligne finale, clé edhcBase) supprimé de la liste des matières + champ edhcBase retiré de l'interface. Mapping mapSubjectName : « EDHC base » fusionne désormais vers edhc (aucun sujet de ce nom en DB — vérifié). La ligne « EDHC » restante entre Dessin et Lecture est la vraie matière DB (CP : 20 notes réelles).
+- Signatures rééquilibrées : Directeur flex-1 (trop large) → h-10 compact fixe ; Parents h-7 (trop restreint) → flex-1 min-h-[44px] qui absorbe tout l'espace libre, totaux épinglés en bas de colonne.
+- Vérifié production (Vercel READY 2c4d4aa) : OCR CM1 + CP1 — bloc Éveil au Milieu identique (accolade + 3 sous-lignes + note unique, 34.5 pour le CM1) ; extraction texte PDF : séquence matières propre, 'E.D.H.C' absent du texte, EDHC = 1 sous-ligne accolade + 1 ligne matière légitime ; Directeur compact / Parents généreuse sur les 2 bulletins.
+
+Stage Summary:
+- Bulletins homogènes entre niveaux (même structure Éveil au Milieu partout) — commit 2c4d4aa
+- Note CP : la cellule fusionnée Éveil au Milieu est vide pour CP (pas de matière « Etude du Milieu » en DB pour CP — les composantes EDHC/Hist-Géo/Sciences n'existent pas non plus comme matières séparées) ; la ligne EDHC du CP porte la vraie note DB
+- Répartition signatures : Directeur 40px compact, Parents flex-1 généreuse
