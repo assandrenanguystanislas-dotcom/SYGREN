@@ -2924,3 +2924,21 @@ Stage Summary:
 - Règle d'or établie pour toutes les pages d'impression : hauteur CSS STRICTEMENT INFÉRIEURE à la hauteur physique de la page (205mm pour A4 paysage 210mm) — jamais l'égalité
 - Zone visa parents compacte (28px) vs zone directeur grande (flex-1, signature officielle plus importante)
 - Frontend uniquement (commit 289fec4) — backend et Render inchangés (live b1cfbbd)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Fix-Print-Bord-Droit
+Agent: Main (tuteur)
+Task: Coupure de l'entête et du bord droit à l'impression A4 — même bug sur l'axe horizontal
+
+Work Log:
+- Retour utilisateur : après le fix vertical (210→205mm), l'entête et le côté droit se coupaient à l'impression
+- Cause racine : w-[297mm] = largeur EXACTE d'une page A4 paysage → 0mm de marge horizontale (bug symétrique du précédent, détecté un axe après l'autre)
+- Correctif : w-[297mm] → w-[292mm] (marge de sécurité 5mm = 2,5mm gauche/droite). Page finale : 292×205mm pour une feuille physique 297×210mm.
+- Règle d'or documentée dans l'en-tête du composant : dimensions CSS d'impression STRICTEMENT inférieures aux dimensions physiques, JAMAIS l'égalité — sur les DEUX axes simultanément.
+- Mesures PDF (projection A4 réelle) : marges gauche 3,0mm / haut 10,2mm / droite 8,2mm / bas 16,3mm — les 4 bords sécurisés.
+- Vérifié production (Vercel READY 9502218) : OCR page PDF complète — entête complet des 2 bulletins (Ministère + armoiries + République), espace blanc à droite du 2e bulletin, bas complets avec noms des maîtres, AUCUN élément coupé ni collé aux bords.
+
+Stage Summary:
+- Impression A4 paysage pleinement fonctionnelle : les 4 bords sécurisés (commit 9502218)
+- Leçon définitive : corriger TOUJOURS les 2 axes en même temps quand une page d'impression aux dimensions exactes est détectée — ici le vertical a été corrigé d'abord, révélant le horizontal
+- Frontend uniquement — backend et Render inchangés (live b1cfbbd)
