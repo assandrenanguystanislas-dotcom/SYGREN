@@ -13,7 +13,6 @@ import {
   Calendar,
   Trophy,
   AlertCircle,
-  Printer,
   School as SchoolIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -259,32 +258,6 @@ export function BulletinsView() {
                     <Files className="w-4 h-4 mr-1.5" />
                   )}
                   Générer tous les bulletins
-                </Button>
-                {/* === Imprimer les bulletins A5 paysage (2 par page A4) ===
-                    Ouvre /bulletins?session_id=...&t=token dans un nouvel onglet.
-                    La page fetch les releve-data de toutes les classes de la
-                    session, mappe les notes SYGREN → slots bulletin CI, et
-                    imprime via window.print(). Pas de génération PDF côté
-                    backend : c'est le navigateur qui produit le PDF (dialog
-                    Imprimer > Enregistrer au format PDF).
-                    Pattern repris de results-view.tsx (boutons Relevés PDF /
-                    Synthèses PDF) — token lu directement depuis localStorage
-                    pour éviter la dépendance à l'hydratation du store. */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    let token = "";
-                    try {
-                      const raw = localStorage.getItem("sygren-auth");
-                      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
-                    } catch {}
-                    const url = `${window.location.origin}/bulletins?session_id=${selectedSession.id}&t=${encodeURIComponent(token)}`;
-                    window.open(url, "_blank");
-                  }}
-                >
-                  <Printer className="w-4 h-4 mr-1.5" />
-                  Imprimer les bulletins (A5)
                 </Button>
               </div>
             )}
