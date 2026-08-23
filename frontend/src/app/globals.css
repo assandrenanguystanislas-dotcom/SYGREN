@@ -290,8 +290,13 @@
     page-break-after: auto;
     break-after: auto;
   }
+  /* NB : la section print « Synthèse » plus haut dans ce fichier cache
+     tout (body * { visibility: hidden }) et ne rend visibles que
+     #synthese-doc et #releve-doc. Sans cette contre-règle, le document
+     bulletins s'imprimerait blanc (layout présent mais contenu invisible). */
   #bulletins-doc,
   #bulletins-doc * {
+    visibility: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
