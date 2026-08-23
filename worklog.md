@@ -2976,3 +2976,19 @@ Stage Summary:
 - Bulletins homogènes entre niveaux (même structure Éveil au Milieu partout) — commit 2c4d4aa
 - Note CP : la cellule fusionnée Éveil au Milieu est vide pour CP (pas de matière « Etude du Milieu » en DB pour CP — les composantes EDHC/Hist-Géo/Sciences n'existent pas non plus comme matières séparées) ; la ligne EDHC du CP porte la vraie note DB
 - Répartition signatures : Directeur 40px compact, Parents flex-1 généreuse
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Signatures-Spacieuses
+Agent: Main (tuteur)
+Task: Zones Visa Directeur et Visa Parents agrandies — espace réel pour signer
+
+Work Log:
+- Retour utilisateur : après le rééquilibrage (2c4d4aa), les deux zones étaient trop restreintes (Directeur 40px, Parents min 44px)
+- Directeur : h-10 → h-[72px] (≈ 19mm), nom toujours imprimé en bas
+- Parents : min-h-[44px] → min-h-[84px] (≈ 22mm) + flex-1 (absorbe l'espace libre restant de la colonne)
+- La colonne droite peut désormais devenir le facteur de hauteur du tableau (si > colonne matières) — le bulletin s'adapte sans déborder
+- Vérifié production (Vercel READY d94dfde) : OCR — zone directeur ~3-4cm confortable, parents ~2-3cm spacieuse, totaux complets et lisibles, aucun débordement
+
+Stage Summary:
+- Signatures fonctionnelles pour usage administratif réel — commit d94dfde
+- Frontend uniquement — backend et Render inchangés (live b1cfbbd)
