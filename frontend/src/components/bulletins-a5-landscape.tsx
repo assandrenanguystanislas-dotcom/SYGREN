@@ -80,6 +80,20 @@ export interface BulletinEleve {
   total?: number | string;
   moyenne?: number | string;
   rangNum?: number | string; // Ex: 1 ou "1er"
+  /** Statistiques de LA classe de l'élève — affichées sous le RANG. */
+  stats?: {
+    moyenneClasse: number;
+    plusForte: number;
+    plusFaible: number;
+  };
+  /** Évolution vs session précédente (même école/type/année scolaire).
+   *  delta > 0 → ▲ vert ; < 0 → ▼ rouge ; exprimé sur l'échelle du
+   *  niveau courant. undefined → ligne masquée (Composition N°1,
+   *  élève absent à la session précédente…). */
+  evolution?: {
+    delta: number;
+    previousAvg: number;
+  };
   /** Maître de la classe (titulaire) — imprimé dans la zone
    *  « Appréciation et Visa du Maître ». */
   maitreName?: string;
@@ -97,6 +111,13 @@ const BORDER = "rgb(40,100,200)";
 const LABEL = "rgb(20,50,140)";
 // Rouge d'alerte pour les appréciations négatives (impression nette).
 const NEGATIVE = "rgb(200,20,20)";
+// Vert progression (harmonisé avec le vert notes du PDF backend).
+const POSITIVE = "rgb(0,120,50)";
+
+// Formatage compact (8.5 → "8.5", 9.0123 → "9.01").
+function fmt(v: number): string {
+  return String(Math.round(v * 100) / 100);
+}
 
 export default function BulletinsA5Landscape({
   eleves,
@@ -437,6 +458,75 @@ export default function BulletinsA5Landscape({
                               </p>
                             </div>
                           </div>
+
+                          {/* Statistiques de classe & évolution — bloc
+                              compact sous les totaux (label : valeur). */}
+                          {(eleve.stats || eleve.evolution) && (
+                            <div
+                              className="border-t-2 pt-1 pb-1 space-y-0.5 text-[9px]"
+                              style={{ borderColor: BORDER }}
+                            >
+                              {eleve.stats && (
+                                <>
+                                  <div className="flex justify-between px-1.5">
+                                    <span className="font-bold" style={{ color: LABEL }}>
+                                      MOY. CLASSE :
+                                    </span>
+                                    <span className="font-bold text-black">
+                                      {fmt(eleve.stats.moyenneClasse)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between px-1.5">
+                                    <span className="font-bold" style={{ color: LABEL }}>
+                                      PLUS FORTE :
+                                    </span>
+                                    <span className="font-bold text-black">
+                                      {fmt(eleve.stats.plusForte)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between px-1.5">
+                                    <span className="font-bold" style={{ color: LABEL }}>
+                                      PLUS FAIBLE :
+                                    </span>
+                                    <span className="font-bold text-black">
+                                      {fmt(eleve.stats.plusFaible)}
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                              {eleve.evolution && (
+                                <div
+                                  className={`flex justify-between px-1.5 ${
+                                    eleve.stats ? "border-t pt-0.5" : ""
+                                  }`}
+                                  style={
+                                    eleve.stats ? { borderColor: BORDER } : undefined
+                                  }
+                                >
+                                  <span className="font-bold" style={{ color: LABEL }}>
+                                    ÉVOLUTION :
+                                  </span>
+                                  <span
+                                    className="font-bold"
+                                    style={{
+                                      color:
+                                        eleve.evolution.delta > 0
+                                          ? POSITIVE
+                                          : eleve.evolution.delta < 0
+                                            ? NEGATIVE
+                                            : "black",
+                                    }}
+                                  >
+                                    {eleve.evolution.delta > 0
+                                      ? `▲ +${fmt(eleve.evolution.delta)}`
+                                      : eleve.evolution.delta < 0
+                                        ? `▼ ${fmt(eleve.evolution.delta)}`
+                                        : "= 0"}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 

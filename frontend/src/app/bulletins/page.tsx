@@ -33,7 +33,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Printer, X, AlertCircle, RefreshCw } from "lucide-react";
 
-import { reportsApi, computationApi } from "@/lib/api";
+import { reportsApi, computationApi, sessionsApi } from "@/lib/api";
 import { monthLabel } from "@/lib/session-utils";
 import BulletinsA5Landscape, {
   type BulletinEleve,
@@ -170,6 +170,76 @@ function appreciationFor(
   };
 }
 
+// === Statistiques de classe (moyenne / plus forte / plus faible) ===
+// Calculées côté navigateur depuis les élèves du releve-data de CHAQUE
+// classe (mêmes données que le bulletin — zéro requête supplémentaire).
+interface ClassStat {
+  avg: number;
+  max: number;
+  min: number;
+}
+
+function computeClassStats(students: ReleveData["students"]): ClassStat | null {
+  const withAvg = students.filter((s) => s.has_average);
+  if (withAvg.length === 0) return null;
+  let sum = 0;
+  let max = withAvg[0].average;
+  let min = withAvg[0].average;
+  for (const s of withAvg) {
+    sum += s.average;
+    if (s.average > max) max = s.average;
+    if (s.average < min) min = s.average;
+  }
+  return { avg: sum / withAvg.length, max, min };
+}
+
+// === Évolution vs session précédente ===
+// Retourne matricule → { average, average_scale } de la session
+// ANTÉRIEURE LA PLUS PROCHE, même école, même type d'évaluation et même
+// année scolaire (ex : Composition N°2 Décembre → Composition N°1 Novembre).
+// Map vide si aucune session précédente (Composition N°1, échec API…).
+async function fetchPreviousAverages(
+  sessionId: string,
+): Promise<Map<string, { average: number; scale: number }>> {
+  const empty = new Map<string, { average: number; scale: number }>();
+  try {
+    const list = await sessionsApi.list();
+    const all = list.sessions ?? [];
+    const cur = all.find((s) => s.id === sessionId);
+    if (!cur) return empty;
+    // Année scolaire : sept-déc → year/year+1 ; jan-juil → year-1/year.
+    const schoolYearOf = (m: number, y: number) => (m >= 9 ? y : y - 1);
+    const candidates = all.filter(
+      (s) =>
+        s.school_id === cur.school_id &&
+        s.eval_type === cur.eval_type &&
+        s.eval_number < cur.eval_number &&
+        schoolYearOf(s.month, s.year) === schoolYearOf(cur.month, cur.year) &&
+        s.status !== "cancelled",
+    );
+    if (candidates.length === 0) return empty;
+    // La plus proche : plus grand eval_number inférieur au courant.
+    candidates.sort((a, b) => b.eval_number - a.eval_number);
+    const prev = candidates[0];
+    const prevResults = await computationApi.getSessionResults(prev.id);
+    const m = new Map<string, { average: number; scale: number }>();
+    for (const r of prevResults.results ?? []) {
+      if (!r.has_average) continue;
+      const key = (r.matricule || "").trim().toUpperCase();
+      if (key && key !== "N/A") {
+        m.set(key, {
+          average: r.average,
+          scale: r.average_scale ?? 20,
+        });
+      }
+    }
+    return m;
+  } catch (e) {
+    console.warn("Évolution indisponible (session précédente) :", e);
+    return empty;
+  }
+}
+
 // Construit un BulletinEleve à partir d'un élève du backend.
 // rankLookup : matricule normalisé → rang (1-based, au sein de la classe)
 // issu de l'API computation (gestion des ex-aequo côté backend).
@@ -183,6 +253,8 @@ function buildBulletinEleve(
   anneeScolaire: string,
   rankLookup: Map<string, number>,
   maitre: string,
+  classStat: ClassStat | null,
+  prevLookup: Map<string, { average: number; scale: number }>,
 ): BulletinEleve {
   // Le backend renvoie last_name + first_name séparément. On les
   // concatène dans l'ordre "Nom Prénoms" (format officiel CI).
@@ -231,6 +303,33 @@ function buildBulletinEleve(
     moyenne: student.has_average ? fmtNum(student.average) : undefined,
     rangNum: rank > 0 ? rank : undefined,
     maitreName: maitreName || undefined,
+    // Statistiques de LA classe de l'élève (moyenne / plus forte / plus
+    // faible) — calculées depuis les mêmes données que le bulletin.
+    stats: classStat
+      ? {
+          moyenneClasse: classStat.avg,
+          plusForte: classStat.max,
+          plusFaible: classStat.min,
+        }
+      : undefined,
+    // Évolution vs session précédente (même école/type/année scolaire).
+    // Delta normalisé /20 puis exprimé sur l'échelle du niveau courant.
+    ...(() => {
+      const matKey = (student.matricule || "").trim().toUpperCase();
+      const prev =
+        matKey && matKey !== "N/A" ? prevLookup.get(matKey) : undefined;
+      if (!prev || !student.has_average) return { evolution: undefined };
+      const curScale = student.average_scale || 20;
+      const cur20 = (student.average * 20) / curScale;
+      const prev20 = (prev.average * 20) / prev.scale;
+      const delta = ((cur20 - prev20) * curScale) / 20;
+      return {
+        evolution: {
+          delta,
+          previousAvg: prev.average,
+        },
+      };
+    })(),
     // Appréciation générale automatique — mêmes seuils et textes que le
     // backend PDF (getGeneralAppreciation), moyenne normalisée /20.
     // negative : < 10/20 ou aucune note → texte ROUGE sur le bulletin.
@@ -337,6 +436,9 @@ export default function BulletinsPage() {
         return null;
       });
 
+    // Évolution vs session précédente — non bloquant (Map vide si absent).
+    const prevPromise = fetchPreviousAverages(sessionId);
+
     reportsApi
       .listReleveClasses(sessionId)
       .then(async (cls) => {
@@ -420,8 +522,10 @@ export default function BulletinsPage() {
         const mois = `${monthLabel(first.month)} ${first.year}`;
 
         // Construire les BulletinEleve pour toutes les classes.
+        const prevLookup = await prevPromise;
         const allEleves: BulletinEleve[] = [];
         for (const { classInfo, data } of valid) {
+          const classStat = computeClassStats(data.students);
           for (const s of data.students) {
             allEleves.push(
               buildBulletinEleve(
@@ -434,6 +538,8 @@ export default function BulletinsPage() {
                 anneeScolaire,
                 rankLookup,
                 data.teacher_name,
+                classStat,
+                prevLookup,
               ),
             );
           }
