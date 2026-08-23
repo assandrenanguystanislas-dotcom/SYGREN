@@ -376,10 +376,10 @@ export default function BulletinsA5Landscape({
 
                         {/* Colonne Visas & Totaux (4/12) */}
                         <div className="col-span-4 flex flex-col text-center">
-                          {/* Signature du Directeur — zone COMPACTE (40px) :
-                              nom imprimé en bas, juste la place d'une
-                              signature courte. */}
-                          <div className="h-10 flex flex-col justify-end pb-1 px-1">
+                          {/* Signature du Directeur — zone SPACIEUSE (72px
+                              ≈ 19mm) : nom imprimé en bas, belle place
+                              pour signer au-dessus. */}
+                          <div className="h-[72px] flex flex-col justify-end pb-1 px-1">
                             {iepInfo?.director_name && (
                               <p className="text-center text-[9px] font-semibold leading-tight">
                                 {iepInfo.director_name}
@@ -396,7 +396,9 @@ export default function BulletinsA5Landscape({
                             <p className="font-bold text-[10px]" style={{ color: LABEL }}>
                               Visa des Parents
                             </p>
-                            <div className="flex-1 min-h-[44px]"></div>
+                            {/* Zone SPACIEUSE (min 84px ≈ 22mm) + absorbe
+                                l'espace libre restant de la colonne. */}
+                            <div className="flex-1 min-h-[84px]"></div>
                           </div>
 
                           {/* Totaux & Rang — libellés et valeurs en GRAS
