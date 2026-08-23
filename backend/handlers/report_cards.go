@@ -363,6 +363,12 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
 	pdf.SetFont("Helvetica", "", 10)
 	pdf.SetTextColor(0, 0, 0)
 	for _, sg := range result.SubjectGrades {
+		// Normaliser sur /20 (NormalizedValue est sur l'échelle du niveau :
+		// CP/CE → /10, CM → /20) pour la couleur et l'appréciation par matière.
+		normalized20 := sg.NormalizedValue
+		if result.AverageScale > 0 {
+			normalized20 = sg.NormalizedValue * 20.0 / float64(result.AverageScale)
+		}
 		// Couleur alternée
 		pdf.SetFillColor(250, 250, 248)
 		pdf.CellFormat(75, 6.5, tr(sg.SubjectName), "1", 0, "L", false, 0, "")
@@ -374,7 +380,7 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
 			// Couleur de la note selon valeur normalisée sur /20
 			if sg.IsDraft {
 				pdf.SetTextColor(180, 120, 0) // orange pour brouillon
-			} else if sg.NormalizedValue >= 10 {
+			} else if normalized20 >= 10 {
 				pdf.SetTextColor(0, 120, 50) // vert
 			} else {
 				pdf.SetTextColor(180, 40, 20) // rouge
@@ -386,7 +392,7 @@ func generateBulletinPDF(result *StudentResult, session *SessionResults, student
 			pdf.CellFormat(35, 6.5, "-", "1", 0, "C", false, 0, "")
 			pdf.SetTextColor(0, 0, 0)
 		}
-		pdf.CellFormat(50, 6.5, tr(getSubjectAppreciationNormalized(sg.NormalizedValue, sg.HasGrade)), "1", 1, "L", false, 0, "")
+		pdf.CellFormat(50, 6.5, tr(getSubjectAppreciationNormalized(normalized20, sg.HasGrade)), "1", 1, "L", false, 0, "")
 	}
 
 	pdf.Ln(4)
@@ -500,9 +506,10 @@ func getSubjectAppreciation(grade float64, hasGrade bool) string {
 	return getSubjectAppreciationNormalized(grade, hasGrade)
 }
 
-// getSubjectAppreciationNormalized returns the appreciation based on the
-// normalized value (on /20). Works for all levels since normalized_value is
-// always on /20 regardless of the raw barème.
+// getSubjectAppreciationNormalized returns the appreciation based on a
+// value normalized on /20. NB: sg.NormalizedValue is on the LEVEL scale
+// (CP/CE → /10, CM → /20), NOT /20 — the caller MUST convert
+// (value × 20 / average_scale) before calling this function.
 func getSubjectAppreciationNormalized(normalized float64, hasGrade bool) string {
 	if !hasGrade {
 		return "Non évalué"
