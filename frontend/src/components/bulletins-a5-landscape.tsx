@@ -123,7 +123,7 @@ export default function BulletinsA5Landscape({
         return (
           <div
             key={pageIdx}
-            className={`page-bulletins w-[297mm] h-[210mm] bg-white mx-auto mb-6 p-4 print:p-2 print:m-0 flex flex-row border border-gray-300 print:border-none overflow-hidden ${!isLastPage ? "break-after-page" : ""}`}
+            className={`page-bulletins w-[297mm] h-[205mm] bg-white mx-auto mb-6 p-4 print:p-0 print:m-0 flex flex-row border border-gray-300 print:border-none overflow-hidden ${!isLastPage ? "break-after-page" : ""}`}
             style={{ pageBreakAfter: isLastPage ? "auto" : "always" }}
           >
             {pair.map((eleve, idx) => {
@@ -417,7 +417,11 @@ export default function BulletinsA5Landscape({
                             <p className="font-bold text-[10px]" style={{ color: LABEL }}>
                               Visa des Parents
                             </p>
-                            <div className="h-12"></div>
+                            {/* Zone compacte : 48px → 28px — l'espace
+                                reste suffisant pour une signature courte
+                                (le visa parent est plus petit que celui
+                                du directeur). */}
+                            <div className="h-7"></div>
                           </div>
 
                           {/* Totaux & Rang — libellés et valeurs en GRAS
