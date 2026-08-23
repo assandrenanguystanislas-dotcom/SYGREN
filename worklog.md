@@ -2889,3 +2889,20 @@ Stage Summary:
 - 3 demandes livrées et vérifiées visuellement en production + PDF
 - Règle couleur : seuil passant 10/20 normalisés (cohérent avec getMention et getGeneralAppreciation du backend)
 - Frontend uniquement (commit 31018ab) — backend non modifié, Render inchangé (live b1cfbbd)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Fix-Signature-Alignements
+Agent: Main (tuteur)
+Task: Corrections depuis capture utilisateur — directeur en bas de zone signable, totaux gras, libellés droits sur la même verticale
+
+Work Log:
+- Diagnostic via VLM sur la capture utilisateur (Touré CP2) + comparaison au modèle P1.png (disposition confirmée : Élève↔Matricule / Classe↔Effectif / Sexe↔Année, libellés droits empilés)
+- Fix 1 (directeur impossible à signer) : le bloc h-16 fixe plaçait le nom à ~64px du haut, au MILIEU de la grande zone. Correctif : flex-1 (zone s'étend de l'en-tête au bloc Visa des Parents) + justify-end → nom collé juste au-dessus de la ligne séparatrice, ~60-70 % de la hauteur libre pour la signature. Colonne passe de justify-between à flux simple.
+- Fix 2 (totaux peu lisibles) : valeurs font-semibold text-gray-800 → font-bold text-black, taille 10px → 11px, space-y-2 → space-y-1.5. Libellés déjà font-bold (maintenus).
+- Fix 3 (libellés droits décalés) : text-right alignait les FINS de lignes → débuts de libellés à des positions X différentes. Correctif : grille interne grid-cols-[auto_auto] gap-x-1.5 + ml-auto w-fit text-left → libellés TOUS sur la même verticale, valeurs alignées entre elles, bloc calé à droite (répond à « Effectif exactement sur la même verticale que Matricule », 1re demande du projet).
+- Vérifié production (Vercel READY 53e99f3) : OCR bulletin Diabaté (3/3 corrections validées : directeur en bas avec grand espace ✓, totaux gras lisibles 81.1/90 + 9.01/10 + 1er/5 ✓, libellés empilés même verticale ✓) + bulletin Touré CP2 nom long (bloc droit propre, pas de chevauchement ✓) + PDF 18 pages (4/4 OUI sur les deux bulletins de la page 1).
+
+Stage Summary:
+- Zone signature directeur fonctionnelle (nom en bas, espace au-dessus) — commit 53e99f3
+- Grille auto/auto pour le bloc droit : pattern réutilisable pour tout libellé/valeur à aligner en colonne
+- Frontend uniquement — backend et Render inchangés (live b1cfbbd)
