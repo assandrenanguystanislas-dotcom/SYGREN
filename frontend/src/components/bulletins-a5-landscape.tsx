@@ -376,10 +376,11 @@ export default function BulletinsA5Landscape({
 
                         {/* Colonne Visas & Totaux (4/12) */}
                         <div className="col-span-4 flex flex-col text-center">
-                          {/* Signature du Directeur — zone SPACIEUSE (72px
-                              ≈ 19mm) : nom imprimé en bas, belle place
-                              pour signer au-dessus. */}
-                          <div className="h-[72px] flex flex-col justify-end pb-1 px-1">
+                          {/* Signature du Directeur — zone SPACIEUSE
+                              (96px ≈ 25mm) : nom imprimé en bas, belle
+                              place pour signer au-dessus. MÊME DIMENSION
+                              que la zone « Visa des Parents ». */}
+                          <div className="h-[96px] flex flex-col justify-end pb-1 px-1">
                             {iepInfo?.director_name && (
                               <p className="text-center text-[9px] font-semibold leading-tight">
                                 {iepInfo.director_name}
@@ -396,9 +397,9 @@ export default function BulletinsA5Landscape({
                             <p className="font-bold text-[10px]" style={{ color: LABEL }}>
                               Visa des Parents
                             </p>
-                            {/* Zone SPACIEUSE (min 84px ≈ 22mm) + absorbe
-                                l'espace libre restant de la colonne. */}
-                            <div className="flex-1 min-h-[84px]"></div>
+                            {/* Zone SPACIEUSE — MÊME DIMENSION que la
+                                zone Directeur (96px ≈ 25mm). */}
+                            <div className="h-[96px]"></div>
                           </div>
 
                           {/* Totaux & Rang — libellés et valeurs en GRAS
@@ -417,7 +418,7 @@ export default function BulletinsA5Landscape({
                             </div>
                             <div>
                               <p className="font-bold" style={{ color: LABEL }}>
-                                Moyenne :
+                                MOYENNE :
                               </p>
                               <p className="font-bold text-black">
                                 {eleve.moyenne
@@ -427,7 +428,7 @@ export default function BulletinsA5Landscape({
                             </div>
                             <div>
                               <p className="font-bold" style={{ color: LABEL }}>
-                                Rang :
+                                RANG :
                               </p>
                               <p className="font-bold text-black">
                                 {eleve.rangNum
