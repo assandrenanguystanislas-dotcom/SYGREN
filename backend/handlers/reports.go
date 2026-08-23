@@ -94,6 +94,8 @@ type ReleveData struct {
 	ClassLevel string `json:"class_level"` // "CP" | "CE" | "CM"
 	// Directeur de l'école (signatures)
 	DirectorName string `json:"director_name"`
+	// Maître de la classe (titulaire — signature du bulletin)
+	TeacherName string `json:"teacher_name"`
 	// Évaluation (session)
 	EvalLabel  string `json:"eval_label"` // "Composition" ou "Examen Blanc"
 	EvalNumber int    `json:"eval_number"`
@@ -333,6 +335,17 @@ func GetReleveData(w http.ResponseWriter, r *http.Request) {
 		directorName = director.FullName
 	}
 
+	// 10b. Récupérer le nom du maître de la classe (Class.TeacherID → User).
+	// Un directeur peut tenir une classe (RBAC) — le titulaire est
+	// simplement l'utilisateur affecté à la classe, quel que soit son rôle.
+	teacherName := ""
+	if class.TeacherID != nil && *class.TeacherID != "" {
+		var teacher models.User
+		if err := database.DB.First(&teacher, "id = ?", *class.TeacherID).Error; err == nil {
+			teacherName = teacher.FullName
+		}
+	}
+
 	// 11. Date formatée (jj/mm/aaaa) — utilise la date du jour côté serveur
 	// pour le document final. Le frontend peut la surcharger si besoin.
 	now := time.Now()
@@ -355,6 +368,7 @@ func GetReleveData(w http.ResponseWriter, r *http.Request) {
 		ClassName:      class.Name,
 		ClassLevel:     class.Level,
 		DirectorName:   directorName,
+		TeacherName:    teacherName,
 		EvalLabel:      evalLabel,
 		EvalNumber:     session.EvalNumber,
 		EvalType:       session.EvalType,
