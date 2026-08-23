@@ -836,6 +836,22 @@ export const dashboardApi = {
 
 export const reportsApi = {
   /**
+   * Liste les classes associées à une session (pour itérer et générer
+   * un relevé/bulletin par classe). Endpoint utilisé par /releve/batch
+   * et /bulletins.
+   */
+  listReleveClasses: (sessionId: string) =>
+    apiFetch<{
+      classes: Array<{
+        id: string;
+        name: string;
+        level: string;
+        student_count: number;
+      }>;
+      count: number;
+    }>(`/api/reports/releve-classes?session_id=${sessionId}`),
+
+  /**
    * Récupère les données JSON pour le document de synthèse.
    *
    * @param sessionId ID de la session (rétrocompat : on retrouve l'école + eval)
