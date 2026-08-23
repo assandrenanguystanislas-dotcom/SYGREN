@@ -2942,3 +2942,21 @@ Stage Summary:
 - Impression A4 paysage pleinement fonctionnelle : les 4 bords sécurisés (commit 9502218)
 - Leçon définitive : corriger TOUJOURS les 2 axes en même temps quand une page d'impression aux dimensions exactes est détectée — ici le vertical a été corrigé d'abord, révélant le horizontal
 - Frontend uniquement — backend et Render inchangés (live b1cfbbd)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Revert-Echelle-Impression
+Agent: Main (tuteur)
+Task: Annulation des réductions de dimensions (commits 289fec4/9502218, worklogs eafc050/0d2adf5) — retour au format A4 exact + impression par échelle « remplir la zone imprimable »
+
+Work Log:
+- Choix utilisateur : abandon de l'approche « dimensions CSS réduites » au profit de l'échelle du dialogue d'impression
+- Revert : w-[292mm] → w-[297mm], h-[205mm] → h-[210mm], print:p-0 → print:p-2 — la page CSS fait EXACTEMENT le format A4 paysage (état d'origine), @page margin 0
+- Convention d'impression documentée dans l'en-tête du composant : sélectionner « Ajuster / Agrandir pour remplir la zone imprimable » dans le dialogue — le navigateur met à l'échelle la page A4 complète pour remplir la zone imprimable ; les marges physiques sont gérées par le dialogue, pas par le CSS
+- Conservé : zone Visa des Parents compacte h-7 (demande utilisateur antérieure, indépendante de l'échelle)
+- Incident environnement : le sandbox a été réinitialisé en cours de session (workspace/ effacé, Go et agent-browser toujours présents) — re-clone du dépôt, identité Git reconfigurée, aucune perte (tout était poussé)
+- Vérifié : tsc/eslint EXIT 0 ; production Vercel READY d6550b5 : page OK, entête complet, visa parents compact, directeur en bas, aucun problème à l'écran
+
+Stage Summary:
+- Commit d6550b5 : les bulletins sont de nouveau au format A4 exact — l'ajustement aux marges physiques de l'imprimante se fait par l'échelle du dialogue d'impression (choix utilisateur)
+- Si des coupures réapparaissent à l'impression : vérifier que l'échelle du dialogue n'est pas « 100 %/Taille réelle » mais bien « Ajuster/Remplir la zone imprimable »
+- Le worklog historique (eafc050/0d2adf5) est conservé — l'historique des tentatives mm reste documenté
