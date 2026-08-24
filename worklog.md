@@ -3062,3 +3062,18 @@ Work Log:
 
 Stage Summary:
 - Casse homogène sur l'ensemble du bulletin — commit 2388bc9
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Titres-Encadres-Grille
+Agent: Main (tuteur)
+Task: Titres encadrés + zone statistique sans vide blanc + matières resserrées
+
+Work Log:
+- Titres VISA DES PARENTS / RÉSULTATS / STATISTIQUES encadrés (border complète bleue, centrée, mx-1 — même lisibilité cellulaire que VISA DU DIRECTEUR dans l'en-tête). Soulignement retiré au profit de l'encadré.
+- Zone STATISTIQUES : cellule flex-1 qui absorbe l'espace restant de la colonne droite (avant : la colonne matières dictait la hauteur → grand vide blanc sous la dernière ligne de stats) + lignes réparties justify-evenly.
+- Grille tableau 6/2/4 → 5/2/5 : MATIÈRES -17 % de largeur, NOTES inchangée, colonne visas/totaux élargie. Sous-grilles internes alignées en grid-cols-7 (5 matière + 2 note), plus aucune grille 8 résiduelle.
+- Vérifié production (Vercel READY b5169f4) : OCR — encadrés 4 côtés confirmés sur les 3 titres, stats réparties jusqu'en bas sans vide, matières plus étroites avec noms toujours sur une ligne, aucun chevauchement.
+
+Stage Summary:
+- Colonne droite : 4 cellules titrées encadrées harmonieuses ; colonne matières resserrée — commit b5169f4
+- flex-1 + justify-evenly : pattern anti-vide pour toute cellule terminale d'une colonne d'impression
