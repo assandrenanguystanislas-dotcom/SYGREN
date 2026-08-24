@@ -464,32 +464,20 @@ export function ResultsView() {
             </CardContent>
           </Card>
 
-          {/* Détail des matières pour l'élève expandé */}
-          {expandedStudent && (
-            <div className="space-y-4">
-              <StudentDetailCard
-                result={results.results.find(
-                  (r) => r.student_id === expandedStudent,
-                )}
-                averageScale={
-                  results.results.find((r) => r.student_id === expandedStudent)?.average_scale
-                  ?? results.average_scale
-                }
+          {/* Bilan annuel de l'élève expandé — le détail des notes par
+              matière est accessible via l'icône œil (Dialog) qui offre
+              plus d'informations (stats, évolution, lacunes). */}
+          {expandedStudent && (() => {
+            const r = results.results.find((r) => r.student_id === expandedStudent);
+            return r ? (
+              <StudentAnnualCard
+                studentId={r.student_id}
+                studentName={`${r.last_name} ${r.first_name}`}
+                classLevel={r.class_level}
+                averageScale={r.average_scale ?? results.average_scale}
               />
-              {/* Bilan annuel de l'élève */}
-              {(() => {
-                const r = results.results.find((r) => r.student_id === expandedStudent);
-                return r ? (
-                  <StudentAnnualCard
-                    studentId={r.student_id}
-                    studentName={`${r.last_name} ${r.first_name}`}
-                    classLevel={r.class_level}
-                    averageScale={r.average_scale ?? results.average_scale}
-                  />
-                ) : null;
-              })()}
-            </div>
-          )}
+            ) : null;
+          })()}
         </>
       )}
 
@@ -607,67 +595,6 @@ function StudentRow({
         </TableCell>
       </TableRow>
     </>
-  );
-}
-
-// === Carte de détail des matières d'un élève ===
-function StudentDetailCard({
-  result,
-  averageScale = 20,
-}: {
-  result?: StudentResult;
-  averageScale?: number;
-}) {
-  if (!result) return null;
-  return (
-    <Card className="border-border/60 animate-in-up">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">
-          Détail des notes — {result.last_name} {result.first_name}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {result.subject_grades.map((sg) => (
-            <div
-              key={sg.subject_id}
-              className={cn(
-                "flex items-center justify-between rounded-lg border p-2.5",
-                sg.has_grade
-                  ? sg.is_draft
-                    ? "bg-amber-50/50 border-amber-200"
-                    : "bg-card border-border"
-                  : "bg-muted/30 border-dashed",
-              )}
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{sg.subject_name}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  coef. {sg.coefficient}
-                  {sg.is_draft && " · brouillon"}
-                </p>
-              </div>
-              <div className="text-right">
-                {sg.has_grade ? (
-                  <span
-                    className={cn(
-                      "font-bold text-sm",
-                      sg.normalized_value >= (averageScale / 2)
-                        ? "text-emerald-600"
-                        : "text-amber-600",
-                    )}
-                  >
-                    {sg.grade.toFixed(2)}/{sg.max_score}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground text-sm">—</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

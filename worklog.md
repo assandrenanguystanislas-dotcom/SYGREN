@@ -3223,3 +3223,20 @@ Stage Summary:
 - DRY : lib/evolution.ts partagé entre bulletins A5 et dialog Résultats — formule d'évolution identique garantie.
 - Leçon clé : le type doc `normalized_value // note normalisée sur /20` est trompeur — le backend normalise sur l'average_scale de l'élève. E2E sur un vrai élève CE1 (Diane) a révélé le bug que tsc/eslint ne pouvaient pas détecter. Règle : toujours E2E sur des données réelles avec échelle mixte (CP/CE /10 + CM /20) pour toute logique de seuillage.
 - Render : service LIVE (health 200, login 200) ; rebuild df9845d déclenché par efd9121 (cleanup fpdf) en cours — pas d'impact API (fpdf était orpheline depuis 958637e).
+
+---
+Task ID: Module-Resultats-Row-Expandable-Bilan-Annuel-Seul
+Agent: Main (tuteur)
+Task: Rangement du row expansible module Résultats — supprimer la carte « Détail des notes » (redondante avec le Dialog œil), ne garder que « Bilan annuel »
+
+Work Log:
+- Contexte : le Dialog œil (livré df9845d → 066d6df) affiche déjà les notes par matière normalisées /20 + stats + évolution vs session précédente + lacunes à combler. La carte inline « Détail des notes » (StudentDetailCard) dans le row expansible est devenue redondante — l'utilisateur demande sa suppression pour ne laisser que « Bilan annuel » (StudentAnnualCard).
+- Lecture results-view.tsx : structure du bloc expandé (lignes ~466-492) = wrapper div space-y-4 contenant StudentDetailCard + IIFE rendant StudentAnnualCard. Fonction StudentDetailCard définie lignes ~613-672 (autonome, plus aucun consommateur après suppression).
+- Edit 1 (JSX) : remplacé le bloc {expandedStudent && (<div className="space-y-4"><StudentDetailCard/>{IIFE StudentAnnualCard}</div>)} par une IIFE directe ne rendant que StudentAnnualCard. Commentaire mis à jour pour expliquer la décision (« le détail des notes par matière est accessible via l'icône œil (Dialog) qui offre plus d'informations (stats, évolution, lacunes) »). Wrapper div space-y-4 retiré (un seul enfant ne nécessite plus d'espacement vertical).
+- Edit 2 (dead code) : supprimé la fonction StudentDetailCard entière (60 lignes : signature, guard !result, Card+CardHeader+CardTitle+CardContent+grid subject_grades.map). Aucun autre consommateur.
+- Vérifié : tsc --noEmit EXIT 0, eslint results-view.tsx EXIT 0. Imports Card/CardHeader/CardTitle/CardContent toujours utilisés par StatisticsGrid/LoadingState/ErrorState — pas de nettoyage d'imports requis.
+- Côté backend : aucun changement (frontend-only). Render restera LIVE — service smart-skip les commits qui ne touchent pas backend/.
+- À venir : commit refactor → push main → poll Vercel READY → E2E via Agent Browser sur sygren.vercel.app (login admin → module Résultats → expand une ligne → vérifier qu'il ne reste QUE la carte « Bilan annuel », plus de « Détail des notes »).
+
+Stage Summary:
+- Row expansible allégé d'une carte redondante — l'œil (Dialog) devient le seul point d'accès au détail par matière ; le Bilan annuel reste pour la vue longitudinale multi-sessions. Code mort retiré (-60 lignes).
