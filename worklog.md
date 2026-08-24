@@ -3103,3 +3103,21 @@ Work Log:
 
 Stage Summary:
 - Lecture naturelle « ÉLÈVE EN PROGRESSION : ▲ +0.46 » — commit 00fdc38
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Suppression-PDF-Legacy
+Agent: Main (tuteur)
+Task: Suppression de l'ancien système de bulletins PDF (génération/régénération) — module 100 % impression A5
+
+Work Log:
+- bulletins-view.tsx refondu (-279 lignes) : retirés les boutons « Générer tous les bulletins » / « Générer » / « Régénérer » / téléchargement « PDF », les mutations generate/generate-batch, la requête report-cards, les colonnes Statut (Généré/Non généré) et Actions, la carte progression de génération et la légende
+- Remplacé par : carte « Préparation d'impression » (élèves PRÊTS = moyenne calculée / total + badge statut session + barre de progression), aperçu simplifié (Rang / Élève / Moyenne / Mention), titre « Bulletins » + description A5
+- api.ts : bloc reportCardsApi (list/generate/generateBatch/download, 41 lignes) supprimé + référence agrégée reportCards + import type ReportCardWithStudent — bulletins-view était l'unique consommateur. Type conservé dans types.ts (documentation API backend)
+- Incident dev : la 1re coupe python s'est arrêtée à un '};' interne (méthode download) → résidu orphelin détecté par tsc (TS1128), nettoyé jusqu'au marqueur Module 5. Leçon : découper sur marqueurs de commentaires, pas sur '};'
+- Backend /api/report-cards INTACT (aucun changement Go, aucun risque) — plus consommé par le frontend ; données historiques report_cards conservées en base
+- Vérifié production (Vercel READY 86d72db) : E2E complet — login → module Bulletins → ancien boutons ABSENTS du DOM (Générer tous/Régénérer/Non généré = false) → cascade école → session Décembre → bouton unique « Imprimer les bulletins (A5) » → nouvel onglet /bulletins → titre + BULLETIN DE NOTES + STATISTIQUES + ÉLÈVE EN PROGRESSION présents
+
+Stage Summary:
+- Un seul système de bulletins : l'A5 navigateur (modèle officiel finalisé) — commit 86d72db
+- La carte « prêts » donne le signal Go/No-Go avant impression (moyennes calculées)
+- Les endpoints report-cards backend pourront être retirés plus tard si confirmé inutiles (décision à prendre côté produit)
