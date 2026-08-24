@@ -3034,3 +3034,18 @@ Work Log:
 
 Stage Summary:
 - Lecture immédiate de la tendance par les parents sans interpréter la flèche — commit 798a598
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Cellules-Titrees
+Agent: Main (tuteur)
+Task: Colonne droite en cellules titrées — Visa des Parents, RÉSULTATS, STATISTIQUES
+
+Work Log:
+- Colonne droite restructurée en 4 cellules délimitées (filets bleus border-t-2, titres centrés bold 10px) : Directeur (96px + nom) / VISA DES PARENTS (titre + 96px, symétrique du Directeur) / RÉSULTATS (titre souligné + TOTAL-MOYENNE-RANG) / STATISTIQUES (titre souligné + stats + tendance)
+- TOTAL/MOYENNE/RANG passés du format 2 lignes empilées au format compact justify-between (libellé gauche / valeur droite) pour compenser la hauteur des 2 nouveaux titres sur le format A5
+- RÉSULTATS et STATISTIQUES soulignés (même marque visuelle que « Appréciation et Visa du Maître »)
+- Vérifié production (Vercel READY 34c4d03) : DOM — Visa des Parents ✓ RÉSULTATS ✓ STATISTIQUES ✓ TOTAL ✓ PROGRESSION ✓ ; OCR — cellules nettes séparées par traits bleus, direct → parents (titre centré + grand espace) → résultats (1 ligne par total) → statistiques, aucun chevauchement ni texte coupé
+
+Stage Summary:
+- Colonne droite lisible et hiérarchisée en 4 cellules titrées — commit 34c4d03
+- Format compact des totaux : pattern aligné sur le bloc statistiques
