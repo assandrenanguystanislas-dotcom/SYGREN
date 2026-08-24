@@ -1,36 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   FileText,
   Loader2,
-  Download,
-  FileCheck2,
-  FileX2,
-  RefreshCw,
-  Files,
+  Printer,
   Calendar,
   Trophy,
   AlertCircle,
-  Printer,
   School as SchoolIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 
-import {
-  sessionsApi,
-  computationApi,
-  reportCardsApi,
-  schoolsApi,
-} from "@/lib/api";
+import { sessionsApi, computationApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import {
   MENTION_COLOR_CLASSES,
   type SessionWithDetails,
-  type SessionResults,
-  type ReportCardWithStudent,
 } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +41,15 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+// === Module Bulletins — impression A5 (modèle officiel CI) ===
+//
+// Depuis la refonte du module, l'impression se fait exclusivement via le
+// bulletin A5 paysage (2 bulletins/page A4) rendu par le navigateur —
+// l'ancienne génération PDF fpdf (Générer / Régénérer / Générer tous,
+// archivage backend + téléchargement) a été retirée sur demande
+// utilisateur. Les endpoints backend /api/report-cards restent
+// disponibles mais ne sont plus utilisés par le frontend.
+
 interface MergedStudent {
   student_id: string;
   student_name: string;
@@ -65,20 +61,17 @@ interface MergedStudent {
   mention: string;
   mention_color: string;
   has_drafts: boolean;
-  report_card?: ReportCardWithStudent;
-  has_bulletin: boolean;
 }
 
 export function BulletinsView() {
   const user = useAuthStore((s) => s.user);
-  const canGenerate = user?.role === "admin" || user?.role === "director";
+  const canPrint = user?.role === "admin" || user?.role === "director";
   // Cascade stricte (même logique que students-view et results-view)
   // - admin/inspector : doivent choisir une école → puis une session
   // - director/teacher : école figée (RBAC backend) → choisissent une session
   const isAdmin = user?.role === "admin";
   const isInspector = user?.role === "inspector";
   const needsSchoolSelect = isAdmin || isInspector;
-  const queryClient = useQueryClient();
 
   // === Cascade : École → Session ===
   const [schoolFilter, setSchoolFilter] = useState<string>(
@@ -116,83 +109,11 @@ export function BulletinsView() {
     enabled: !!autoSessionId,
   });
 
-  const { data: reportCardsData } = useQuery({
-    queryKey: ["report-cards", autoSessionId],
-    queryFn: () => reportCardsApi.list(autoSessionId!),
-    enabled: !!autoSessionId,
-  });
-
   // États de la cascade stricte
   const waitingForSchool = needsSchoolSelect && !hasSchoolSelected;
   const waitingForSession = hasSchoolSelected && !autoSessionId;
 
-  // Mutation : générer un bulletin individuel
-  const generateMut = useMutation({
-    mutationFn: ({ sessionId, studentId }: { sessionId: string; studentId: string }) =>
-      reportCardsApi.generate(sessionId, studentId),
-    onSuccess: async (_, vars) => {
-      toast.success("Bulletin généré avec succès");
-      await queryClient.invalidateQueries({
-        queryKey: ["report-cards", vars.sessionId],
-      });
-    },
-    onError: (e) => {
-      toast.error("Échec de la génération", {
-        description: e instanceof Error ? e.message : "Erreur inconnue",
-      });
-    },
-  });
-
-  // Mutation : générer en lot
-  const generateBatchMut = useMutation({
-    mutationFn: (sessionId: string) => reportCardsApi.generateBatch(sessionId),
-    onSuccess: async (data, sessionId) => {
-      toast.success(
-        `${data.generated}/${data.total} bulletins générés`,
-        {
-          description:
-            data.failed > 0
-              ? `${data.failed} échec(s) — voir les détails`
-              : "Tous les bulletins ont été générés avec succès",
-        },
-      );
-      await queryClient.invalidateQueries({
-        queryKey: ["report-cards", sessionId],
-      });
-    },
-    onError: (e) => {
-      toast.error("Échec de la génération en lot", {
-        description: e instanceof Error ? e.message : "Erreur inconnue",
-      });
-    },
-  });
-
-  // Téléchargement PDF
-  async function handleDownload(rc: ReportCardWithStudent) {
-    try {
-      const blob = await reportCardsApi.download(rc.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `bulletin_${rc.student_matricule}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("Bulletin téléchargé");
-    } catch (e) {
-      toast.error("Échec du téléchargement", {
-        description: e instanceof Error ? e.message : "Erreur inconnue",
-      });
-    }
-  }
-
-  // Fusionner les données : étudiants (depuis computation) + bulletins (depuis report-cards)
-  const reportCardsMap = new Map<string, ReportCardWithStudent>();
-  for (const rc of reportCardsData?.report_cards ?? []) {
-    reportCardsMap.set(rc.student_id, rc);
-  }
-
+  // Aperçu des élèves avant impression (résultats de la session)
   const mergedStudents: MergedStudent[] = (resultsData?.results ?? []).map(
     (r) => ({
       student_id: r.student_id,
@@ -205,15 +126,13 @@ export function BulletinsView() {
       mention: r.mention,
       mention_color: r.mention_color,
       has_drafts: r.has_drafts,
-      report_card: reportCardsMap.get(r.student_id),
-      has_bulletin: reportCardsMap.has(r.student_id),
     }),
   );
 
-  const generatedCount = mergedStudents.filter((s) => s.has_bulletin).length;
+  const readyCount = mergedStudents.filter((s) => s.has_average).length;
   const totalCount = mergedStudents.length;
-  const completionPercent =
-    totalCount > 0 ? (generatedCount / totalCount) * 100 : 0;
+  const readyPercent =
+    totalCount > 0 ? (readyCount / totalCount) * 100 : 0;
 
   if (sessionsLoading && hasSchoolSelected) {
     return <LoadingState message="Chargement des sessions…" />;
@@ -236,57 +155,32 @@ export function BulletinsView() {
                 <FileText className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="font-semibold text-base">Bulletins PDF</h2>
+                <h2 className="font-semibold text-base">Bulletins</h2>
                 <p className="text-xs text-muted-foreground">
                   {waitingForSchool
                     ? "Sélectionnez une école pour commencer"
                     : waitingForSession
-                      ? "Sélectionnez une session pour générer les bulletins"
-                      : "Génération, stockage et impression des bulletins officiels"}
+                      ? "Sélectionnez une session pour imprimer les bulletins"
+                      : "Impression A5 — modèle officiel, 2 bulletins par page A4 paysage"}
                 </p>
               </div>
             </div>
-            {canGenerate && selectedSession && (
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => generateBatchMut.mutate(selectedSession.id)}
-                  disabled={generateBatchMut.isPending || resultsLoading}
-                  className="shadow-sm"
-                >
-                  {generateBatchMut.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                  ) : (
-                    <Files className="w-4 h-4 mr-1.5" />
-                  )}
-                  Générer tous les bulletins
-                </Button>
-                {/* === Imprimer les bulletins A5 paysage (2 par page A4) ===
-                    Ouvre /bulletins?session_id=...&t=token dans un nouvel onglet.
-                    La page fetch les releve-data de toutes les classes de la
-                    session (+ les rangs via computation), mappe les notes
-                    SYGREN → slots bulletin CI officiel, et imprime via
-                    window.print(). Pas de génération PDF côté backend : le
-                    navigateur produit le PDF (dialog Imprimer > Enregistrer
-                    au format PDF).
-                    Pattern repris de results-view.tsx — token lu directement
-                    depuis localStorage pour éviter la dépendance à
-                    l'hydratation du store. */}
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    let token = "";
-                    try {
-                      const raw = localStorage.getItem("sygren-auth");
-                      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
-                    } catch {}
-                    const url = `${window.location.origin}/bulletins?session_id=${selectedSession.id}&t=${encodeURIComponent(token)}`;
-                    window.open(url, "_blank");
-                  }}
-                >
-                  <Printer className="w-4 h-4 mr-1.5" />
-                  Imprimer les bulletins (A5)
-                </Button>
-              </div>
+            {canPrint && selectedSession && (
+              <Button
+                className="shadow-sm"
+                onClick={() => {
+                  let token = "";
+                  try {
+                    const raw = localStorage.getItem("sygren-auth");
+                    if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+                  } catch {}
+                  const url = `${window.location.origin}/bulletins?session_id=${selectedSession.id}&t=${encodeURIComponent(token)}`;
+                  window.open(url, "_blank");
+                }}
+              >
+                <Printer className="w-4 h-4 mr-1.5" />
+                Imprimer les bulletins (A5)
+              </Button>
             )}
           </div>
 
@@ -386,7 +280,7 @@ export function BulletinsView() {
           <CardContent className="py-12 text-center">
             <Calendar className="w-8 h-8 mx-auto mb-3 text-primary/50" />
             <p className="text-sm font-medium text-foreground">
-              Sélectionnez une session pour générer les bulletins
+              Sélectionnez une session pour imprimer les bulletins
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {sessions.length > 0
@@ -397,7 +291,7 @@ export function BulletinsView() {
         </Card>
       ) : null}
 
-      {/* Stats de génération */}
+      {/* Préparation d'impression */}
       {selectedSession && (
         <Card className="border-border/60">
           <CardContent className="py-4">
@@ -405,10 +299,10 @@ export function BulletinsView() {
               <div className="flex items-center gap-4">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-primary">
-                    {generatedCount}
+                    {readyCount}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    générés
+                    prêts (moyenne calculée)
                   </p>
                 </div>
                 <div className="text-center">
@@ -418,18 +312,23 @@ export function BulletinsView() {
                   <p className="text-[11px] text-muted-foreground">
                     élèves
                   </p>
-                  </div>
                 </div>
+                {sessionCfg && (
+                  <Badge variant="outline" className="text-xs">
+                    {sessionCfg.label}
+                  </Badge>
+                )}
+              </div>
               <div className="flex-1 min-w-[200px]">
                 <div className="flex items-center justify-between text-[11px] mb-1">
                   <span className="text-muted-foreground">
-                    Progression de la génération
+                    Préparation de l&apos;impression
                   </span>
                   <span className="font-medium">
-                    {completionPercent.toFixed(0)}%
+                    {readyPercent.toFixed(0)}%
                   </span>
                 </div>
-                <Progress value={completionPercent} className="h-2" />
+                <Progress value={readyPercent} className="h-2" />
               </div>
             </div>
           </CardContent>
@@ -442,14 +341,15 @@ export function BulletinsView() {
           <CardContent className="py-3 flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
             <p className="text-sm text-amber-800">
-              Certaines notes sont encore en brouillon. Les bulletins générés
-              seront provisoires. Validez la session pour des bulletins définitifs.
+              Certaines notes sont encore en brouillon. Les bulletins
+              imprimés seront provisoires. Validez la session pour des
+              bulletins définitifs.
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Tableau des bulletins (seulement si session sélectionnée — cascade) */}
+      {/* Aperçu des élèves (seulement si session sélectionnée — cascade) */}
       {selectedSession && (
         resultsLoading ? (
           <LoadingState message="Calcul des résultats…" />
@@ -470,8 +370,6 @@ export function BulletinsView() {
                     <TableHead>Élève</TableHead>
                     <TableHead className="text-center">Moyenne</TableHead>
                     <TableHead>Mention</TableHead>
-                    <TableHead className="text-center">Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -528,66 +426,6 @@ export function BulletinsView() {
                             {s.mention}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center">
-                          {s.has_bulletin ? (
-                            <Badge
-                              variant="outline"
-                              className="text-xs border-emerald-200 bg-emerald-50 text-emerald-700"
-                            >
-                              <FileCheck2 className="w-3 h-3 mr-1" />
-                              Généré
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-xs border-slate-200 bg-slate-50 text-slate-500"
-                            >
-                              <FileX2 className="w-3 h-3 mr-1" />
-                              Non généré
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {canGenerate && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 gap-1.5"
-                                disabled={generateMut.isPending}
-                                onClick={() =>
-                                  generateMut.mutate({
-                                    sessionId: selectedSession!.id,
-                                    studentId: s.student_id,
-                                  })
-                                }
-                              >
-                                {s.has_bulletin ? (
-                                  <>
-                                    <RefreshCw className="w-3.5 h-3.5" />
-                                    Régénérer
-                                  </>
-                                ) : (
-                                  <>
-                                    <FileText className="w-3.5 h-3.5" />
-                                    Générer
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            {s.has_bulletin && s.report_card && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 gap-1.5"
-                                onClick={() => handleDownload(s.report_card!)}
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                PDF
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -597,26 +435,6 @@ export function BulletinsView() {
           </CardContent>
         </Card>
       ))}
-
-      {/* Légende */}
-      <Card className="border-border/60 bg-muted/30">
-        <CardContent className="py-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
-            Bulletin généré et stocké
-          </span>
-          <span className="flex items-center gap-1.5">
-            <FileX2 className="w-3.5 h-3.5 text-slate-400" />
-            Bulletin non généré
-          </span>
-          {canGenerate && (
-            <span className="flex items-center gap-1.5">
-              <Files className="w-3.5 h-3.5 text-primary" />
-              Génération par lot disponible
-            </span>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

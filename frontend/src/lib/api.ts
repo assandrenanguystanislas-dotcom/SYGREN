@@ -38,7 +38,6 @@ import type {
   SessionResults,
   AnnualResult,
   ReportCard,
-  ReportCardWithStudent,
   DashboardData,
   Setting,
   SettingsByCategory,
@@ -776,48 +775,6 @@ export const computationApi = {
     ),
 };
 
-// === Module 4 — Bulletins PDF ===
-
-export const reportCardsApi = {
-  /** Liste les bulletins générés pour une session */
-  list: (sessionId: string) =>
-    apiFetch<{ report_cards: ReportCardWithStudent[]; count: number }>(
-      `/api/report-cards/session/${sessionId}`,
-    ),
-  /** Génère le bulletin d'un élève spécifique */
-  generate: (sessionId: string, studentId: string) =>
-    apiFetch<ReportCard>(
-      `/api/report-cards/generate/${sessionId}/${studentId}`,
-      { method: "POST" },
-    ),
-  /** Génère les bulletins de tous les élèves d'une session (par lot) */
-  generateBatch: (sessionId: string) =>
-    apiFetch<{
-      session_id: string;
-      total: number;
-      generated: number;
-      failed: number;
-    }>(`/api/report-cards/generate-batch/${sessionId}`, { method: "POST" }),
-  /** Télécharge le PDF d'un bulletin (retourne un Blob) */
-  download: async (reportCardId: string): Promise<Blob> => {
-    const token = getToken();
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(
-      withPort(`/api/report-cards/${reportCardId}/download`),
-      { headers },
-    );
-    if (!res.ok) {
-      const text = await res.text();
-      throw new ApiException(
-        text || `Erreur ${res.status}`,
-        res.status,
-      );
-    }
-    return res.blob();
-  },
-};
-
 // === Module 5 — Tableaux de bord analytiques ===
 
 export const dashboardApi = {
@@ -1059,7 +1016,6 @@ export const api = {
   sessions: sessionsApi,
   grades: gradesApi,
   computation: computationApi,
-  reportCards: reportCardsApi,
   dashboard: dashboardApi,
   settings: settingsApi,
   // Architecture D
