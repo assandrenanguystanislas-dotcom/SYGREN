@@ -3091,3 +3091,15 @@ Work Log:
 Stage Summary:
 - Uniformité parfaite des 5 titres du bulletin (même style cellule) — commit 8f4682e
 - Leçon : « comme X » = reproduire le style EXACT de X (cellule pleine largeur), pas une approximation (boîte encadrée)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Eleve-Progression
+Agent: Main (tuteur)
+Task: Libellés « ÉLÈVE EN PROGRESSION » / « ÉLÈVE EN RÉGRESSION » / « ÉLÈVE STABLE »
+
+Work Log:
+- Libellé de tendance reformulé en phrase complète : ÉLÈVE EN PROGRESSION (▲ vert) / ÉLÈVE EN RÉGRESSION (▼ rouge) / ÉLÈVE STABLE (= noir)
+- Vérifié production (Vercel READY 00fdc38) : DOM — 14 progressions + 11 régressions (les 25 lignes converties ; le check « anciens libellés » est un faux positif de sous-chaîne) ; OCR — libellé long tient sur UNE ligne avec la valeur, 4 lignes stats bien réparties, aucun chevauchement
+
+Stage Summary:
+- Lecture naturelle « ÉLÈVE EN PROGRESSION : ▲ +0.46 » — commit 00fdc38
