@@ -276,7 +276,7 @@ export default function BulletinsA5Landscape({
                         >
                           NOTES
                         </div>
-                        <div className="col-span-4 py-0.5">Visa du Directeur</div>
+                        <div className="col-span-4 py-0.5">VISA DU DIRECTEUR</div>
                       </div>
 
                       {/* Corps du tableau */}
@@ -418,7 +418,7 @@ export default function BulletinsA5Landscape({
                               className="font-bold text-[10px] py-0.5 text-center"
                               style={{ color: LABEL }}
                             >
-                              Visa des Parents
+                              VISA DES PARENTS
                             </p>
                             <div className="h-[96px]"></div>
                           </div>
@@ -561,7 +561,7 @@ export default function BulletinsA5Landscape({
                           className="font-bold underline text-[10px]"
                           style={{ color: LABEL }}
                         >
-                          Appréciation et Visa du Maître
+                          APPRÉCIATION ET VISA DU MAÎTRE
                         </p>
                         {/* Appréciation générale automatique (calculée comme
                             le backend PDF) — GRAS ITALIQUE lisible, couleur
