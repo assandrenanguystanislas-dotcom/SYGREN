@@ -259,13 +259,15 @@ export default function BulletinsA5Landscape({
                           "........................................................20......"}
                       </div>
 
-                      {/* En-tête tableau */}
+                      {/* En-tête tableau — matières resserrées : 5/12
+                          (au lieu de 6), NOTES 2/12 inchangée, colonne
+                          visas/totaux élargie 5/12. */}
                       <div
                         className="grid grid-cols-12 border-b-2 text-center font-bold text-[11px]"
                         style={{ borderColor: BORDER, color: LABEL }}
                       >
                         <div
-                          className="col-span-6 border-r-2 py-0.5 text-left pl-2"
+                          className="col-span-5 border-r-2 py-0.5 text-left pl-2"
                           style={{ borderColor: BORDER }}
                         >
                           MATIÈRES
@@ -276,25 +278,26 @@ export default function BulletinsA5Landscape({
                         >
                           NOTES
                         </div>
-                        <div className="col-span-4 py-0.5">VISA DU DIRECTEUR</div>
+                        <div className="col-span-5 py-0.5">VISA DU DIRECTEUR</div>
                       </div>
 
                       {/* Corps du tableau */}
                       <div className="grid grid-cols-12 flex-grow text-[10px]">
 
-                        {/* Colonnes Matières + Notes (8/12) */}
+                        {/* Colonnes Matières + Notes (7/12 — matières
+                            resserrées) */}
                         <div
-                          className="col-span-8 border-r-2 flex flex-col justify-between"
+                          className="col-span-7 border-r-2 flex flex-col justify-between"
                           style={{ borderColor: BORDER }}
                         >
 
                           {/* Exploitation de texte — nom bleu gras aligné à gauche, note noire grasse centrée */}
                           <div
-                            className="grid grid-cols-8 border-b py-0.5"
+                            className="grid grid-cols-7 border-b py-0.5"
                             style={{ borderColor: BORDER }}
                           >
                             <span
-                              className="col-span-6 font-bold text-left pl-2"
+                              className="col-span-5 font-bold text-left pl-2"
                               style={{ color: LABEL }}
                             >
                               Exploitation de Texte
@@ -314,11 +317,11 @@ export default function BulletinsA5Landscape({
                              * colonne NOTES (col-span-2), centrée
                              * verticalement — une seule note globale. */}
                           <div
-                            className="grid grid-cols-8 border-b"
+                            className="grid grid-cols-7 border-b"
                             style={{ borderColor: BORDER }}
                           >
-                            {/* Partie libellés (6/8) : Éveil au Milieu + { + sous-lignes */}
-                            <div className="col-span-6 flex">
+                            {/* Partie libellés (5/7) : Éveil au Milieu + { + sous-lignes */}
+                            <div className="col-span-5 flex">
                               <div
                                 className="w-[30%] flex items-center justify-center font-bold leading-tight text-[10px] text-center"
                                 style={{ color: LABEL }}
@@ -352,7 +355,7 @@ export default function BulletinsA5Landscape({
                                 </div>
                               </div>
                             </div>
-                            {/* Cellule note unique fusionnée (2/8) — note globale */}
+                            {/* Cellule note unique fusionnée (2/7) — note globale */}
                             <div
                               className="col-span-2 border-l flex items-center justify-center font-bold text-black text-center"
                               style={{ borderColor: BORDER }}
@@ -376,11 +379,11 @@ export default function BulletinsA5Landscape({
                           ].map((m, i) => (
                             <div
                               key={i}
-                              className="grid grid-cols-8 border-b last:border-b-0 py-0.5"
+                              className="grid grid-cols-7 border-b last:border-b-0 py-0.5"
                               style={{ borderColor: BORDER }}
                             >
                               <span
-                                className="col-span-6 font-bold text-left pl-2"
+                                className="col-span-5 font-bold text-left pl-2"
                                 style={{ color: LABEL }}
                               >
                                 {m.name}
@@ -395,8 +398,9 @@ export default function BulletinsA5Landscape({
                           ))}
                         </div>
 
-                        {/* Colonne Visas & Totaux (4/12) */}
-                        <div className="col-span-4 flex flex-col text-center">
+                        {/* Colonne Visas & Totaux (5/12 — élargie pour
+                            compenser les matières resserrées) */}
+                        <div className="col-span-5 flex flex-col text-center">
                           {/* Signature du Directeur — cellule sous l'en-tête
                               « Visa du Directeur » (96px ≈ 25mm) : nom
                               imprimé en bas, place pour signer au-dessus. */}
@@ -408,30 +412,30 @@ export default function BulletinsA5Landscape({
                             )}
                           </div>
 
-                          {/* Cellule VISA DES PARENTS — même structure que la
-                              cellule du Directeur : titre centré + 96px. */}
+                          {/* Cellule VISA DES PARENTS — titre ENCADRÉ
+                              (comme VISA DU DIRECTEUR) + 96px. */}
                           <div
-                            className="border-t-2"
+                            className="border-t-2 pt-1"
                             style={{ borderColor: BORDER }}
                           >
                             <p
-                              className="font-bold text-[10px] py-0.5 text-center"
-                              style={{ color: LABEL }}
+                              className="font-bold text-[10px] py-0.5 text-center border mx-1"
+                              style={{ color: LABEL, borderColor: BORDER }}
                             >
                               VISA DES PARENTS
                             </p>
                             <div className="h-[96px]"></div>
                           </div>
 
-                          {/* Cellule RÉSULTATS — titre + lignes compactes
-                              (libellé à gauche, valeur à droite). */}
+                          {/* Cellule RÉSULTATS — titre ENCADRÉ + lignes
+                              compactes (libellé à gauche, valeur à droite). */}
                           <div
-                            className="border-t-2 pt-0.5 pb-1"
+                            className="border-t-2 pt-1"
                             style={{ borderColor: BORDER }}
                           >
                             <p
-                              className="font-bold underline text-[10px] py-0.5 text-center"
-                              style={{ color: LABEL }}
+                              className="font-bold text-[10px] py-0.5 text-center border mx-1"
+                              style={{ color: LABEL, borderColor: BORDER }}
                             >
                               RÉSULTATS
                             </p>
@@ -467,20 +471,22 @@ export default function BulletinsA5Landscape({
                             </div>
                           </div>
 
-                          {/* Cellule STATISTIQUES — titre + stats de classe
-                              et tendance (PROGRESSION/RÉGRESSION). */}
+                          {/* Cellule STATISTIQUES — titre ENCADRÉ + stats.
+                              flex-1 + justify-evenly : la cellule absorbe
+                              l'espace restant de la colonne (plus de vide
+                              blanc sous les lignes) et répartit ses lignes. */}
                           {(eleve.stats || eleve.evolution) && (
                             <div
-                              className="border-t-2 pt-0.5 pb-1"
+                              className="border-t-2 pt-1 pb-1 flex-1 flex flex-col min-h-0"
                               style={{ borderColor: BORDER }}
                             >
                               <p
-                                className="font-bold underline text-[10px] py-0.5 text-center"
-                                style={{ color: LABEL }}
+                                className="font-bold text-[10px] py-0.5 text-center border mx-1"
+                                style={{ color: LABEL, borderColor: BORDER }}
                               >
                                 STATISTIQUES
                               </p>
-                              <div className="space-y-0.5 text-[9px]">
+                              <div className="flex-1 flex flex-col justify-evenly text-[9px]">
                               {eleve.stats && (
                                 <>
                                   <div className="flex justify-between px-1.5">
