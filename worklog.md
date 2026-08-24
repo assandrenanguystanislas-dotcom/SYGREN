@@ -3121,3 +3121,20 @@ Stage Summary:
 - Un seul système de bulletins : l'A5 navigateur (modèle officiel finalisé) — commit 86d72db
 - La carte « prêts » donne le signal Go/No-Go avant impression (moyennes calculées)
 - Les endpoints report-cards backend pourront être retirés plus tard si confirmé inutiles (décision à prendre côté produit)
+
+---
+Task ID: Architecture-D-Phase6-v2-Backend-ReportCards-Removal
+Agent: Main (tuteur)
+Task: Suppression backend des endpoints /api/report-cards (suite logique du passage 100 % A5)
+
+Work Log:
+- Routes retirées du router (4 routes + groupe RequireModule) avec commentaire explicatif ; backend/handlers/report_cards.go supprimé (-564 lignes avec router) : génération fpdf individuelle/lot, listing, download, upsertReportCardRecord, generateBulletinPDF, helpers d'appréciation propres
+- Découverte à la compilation : monthLabelFR était défini dans report_cards.go et utilisé par dashboard.go → déplacé dans helpers.go (avec commentaire d'historique). Les autres helpers (getSubjectAppreciation*) n'avaient pas d'autre consommateur Go (le frontend a sa propre copie appreciationFor)
+- Conservé volontairement : models.ReportCard + table report_cards (données historiques + rollback), ModuleReportCards dans rbac_defaults (inerte — plus aucune route ne le référence ; nettoyage optionnel), getSessionForUser/computeSessionResults (partagés)
+- Incident environnement : Go avait disparu (réinitialisation sandbox) → réinstallation Go 1.25.5 avec vérification SHA256 officielle
+- Vérifié : gofmt conforme, go vet OK, go build OK ; production Render live 958637e — /api/report-cards/* → 404 ✓, /api/health 200 ✓, releve-classes 200 ✓, computation 200 ✓, dashboard 200 ✓ (monthLabelFR sain) ; document A5 production complet (BULLETIN + ÉLÈVE EN PROGRESSION) ✓
+
+Stage Summary:
+- Backend allégé de 564 lignes de code PDF mort — un seul système de bulletins de bout en bout (frontend + backend) — commit 958637e
+- Table report_cards et modèle conservés : suppression DB possible plus tard si l'utilisateur confirme (décision produit, non destructive aujourd'hui)
+- Entrée RBAC « Bulletins PDF » devenue inerte : à nettoyer éventuellement avec la table
