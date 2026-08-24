@@ -397,10 +397,9 @@ export default function BulletinsA5Landscape({
 
                         {/* Colonne Visas & Totaux (4/12) */}
                         <div className="col-span-4 flex flex-col text-center">
-                          {/* Signature du Directeur — zone SPACIEUSE
-                              (96px ≈ 25mm) : nom imprimé en bas, belle
-                              place pour signer au-dessus. MÊME DIMENSION
-                              que la zone « Visa des Parents ». */}
+                          {/* Signature du Directeur — cellule sous l'en-tête
+                              « Visa du Directeur » (96px ≈ 25mm) : nom
+                              imprimé en bas, place pour signer au-dessus. */}
                           <div className="h-[96px] flex flex-col justify-end pb-1 px-1">
                             {iepInfo?.director_name && (
                               <p className="text-center text-[9px] font-semibold leading-tight">
@@ -408,64 +407,80 @@ export default function BulletinsA5Landscape({
                               </p>
                             )}
                           </div>
-                          {/* Visa des Parents — zone GÉNÉREUSE : absorbe tout
-                              l'espace libre de la colonne (flex-1, minimum
-                              44px), totaux épinglés en bas. */}
+
+                          {/* Cellule VISA DES PARENTS — même structure que la
+                              cellule du Directeur : titre centré + 96px. */}
                           <div
-                            className="border-t-2 pt-1 flex flex-col"
+                            className="border-t-2"
                             style={{ borderColor: BORDER }}
                           >
-                            <p className="font-bold text-[10px]" style={{ color: LABEL }}>
+                            <p
+                              className="font-bold text-[10px] py-0.5 text-center"
+                              style={{ color: LABEL }}
+                            >
                               Visa des Parents
                             </p>
-                            {/* Zone SPACIEUSE — MÊME DIMENSION que la
-                                zone Directeur (96px ≈ 25mm). */}
                             <div className="h-[96px]"></div>
                           </div>
 
-                          {/* Totaux & Rang — libellés et valeurs en GRAS
-                              bien lisible (11px). */}
+                          {/* Cellule RÉSULTATS — titre + lignes compactes
+                              (libellé à gauche, valeur à droite). */}
                           <div
-                            className="border-t-2 pt-1 space-y-1.5 text-[11px] pb-2"
+                            className="border-t-2 pt-0.5 pb-1"
                             style={{ borderColor: BORDER }}
                           >
-                            <div>
-                              <p className="font-bold" style={{ color: LABEL }}>
-                                TOTAL :
-                              </p>
-                              <p className="font-bold text-black">
-                                {eleve.total ?? "............/.........."}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="font-bold" style={{ color: LABEL }}>
-                                MOYENNE :
-                              </p>
-                              <p className="font-bold text-black">
-                                {eleve.moyenne
-                                  ? `${eleve.moyenne} ${baremeMoyenne}`
-                                  : `............ ${baremeMoyenne}`}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="font-bold" style={{ color: LABEL }}>
-                                RANG :
-                              </p>
-                              <p className="font-bold text-black">
-                                {eleve.rangNum
-                                  ? `${eleve.rangNum}${eleve.rangNum === 1 || eleve.rangNum === "1" ? "er" : "ème"} / ${eleve.effectif}`
-                                  : "........ / ......"}
-                              </p>
+                            <p
+                              className="font-bold underline text-[10px] py-0.5 text-center"
+                              style={{ color: LABEL }}
+                            >
+                              RÉSULTATS
+                            </p>
+                            <div className="space-y-1 text-[11px]">
+                              <div className="flex justify-between px-1.5">
+                                <span className="font-bold" style={{ color: LABEL }}>
+                                  TOTAL :
+                                </span>
+                                <span className="font-bold text-black">
+                                  {eleve.total ?? "......../........"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between px-1.5">
+                                <span className="font-bold" style={{ color: LABEL }}>
+                                  MOYENNE :
+                                </span>
+                                <span className="font-bold text-black">
+                                  {eleve.moyenne
+                                    ? `${eleve.moyenne} ${baremeMoyenne}`
+                                    : `........ ${baremeMoyenne}`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between px-1.5">
+                                <span className="font-bold" style={{ color: LABEL }}>
+                                  RANG :
+                                </span>
+                                <span className="font-bold text-black">
+                                  {eleve.rangNum
+                                    ? `${eleve.rangNum}${eleve.rangNum === 1 || eleve.rangNum === "1" ? "er" : "ème"} / ${eleve.effectif}`
+                                    : "....../....."}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Statistiques de classe & évolution — bloc
-                              compact sous les totaux (label : valeur). */}
+                          {/* Cellule STATISTIQUES — titre + stats de classe
+                              et tendance (PROGRESSION/RÉGRESSION). */}
                           {(eleve.stats || eleve.evolution) && (
                             <div
-                              className="border-t-2 pt-1 pb-1 space-y-0.5 text-[9px]"
+                              className="border-t-2 pt-0.5 pb-1"
                               style={{ borderColor: BORDER }}
                             >
+                              <p
+                                className="font-bold underline text-[10px] py-0.5 text-center"
+                                style={{ color: LABEL }}
+                              >
+                                STATISTIQUES
+                              </p>
+                              <div className="space-y-0.5 text-[9px]">
                               {eleve.stats && (
                                 <>
                                   <div className="flex justify-between px-1.5">
@@ -531,6 +546,7 @@ export default function BulletinsA5Landscape({
                                   </span>
                                 </div>
                               )}
+                              </div>
                             </div>
                           )}
                         </div>
