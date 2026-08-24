@@ -136,12 +136,41 @@ export function computeEvolution(
 
 // === computeLacunes ====================================================
 //
-// Lacunes à combler : matières notées (non brouillon) avec note normalisée
-// /20 strictement inférieure à 10. Le seuil 10/20 normalisé est fiable quel
-// que soit le barème de la matière (10, 20, 30, 50…) car le backend
-// normalise systématiquement en /20 via normalized_value.
-export function computeLacunes(subject_grades: StudentResult["subject_grades"]) {
+// Lacunes à combler : matières notées (non brouillon) avec note
+// normalisée strictement inférieure au SEUIL DE PASSAGE de l'élève.
+//
+// IMPORTANT — normalized_value est sur l'échelle de l'élève (average_scale),
+// PAS systématiquement /20. Le backend normalise ainsi :
+//   - CP/CE (average_scale=10) : normalized_value = grade * 10 / max_score
+//     → ex : 14.20/20 devient 7.10 (sur /10), 25.50/30 devient 8.50 (sur /10)
+//   - CM   (average_scale=20) : normalized_value = grade * 20 / max_score
+//     → ex : 14.20/20 reste 14.20 (sur /20), 25.50/30 devient 17.00 (sur /20)
+//
+// Le seuil de passage est donc averageScale/2 (5 pour CP/CE, 10 pour CM) —
+// pas un 10/20 fixe. Sans cette correction, tous les élèves CP/CE seraient
+// à tort flagués en lacune (leurs notes /10 sont toutes < 10).
+export function computeLacunes(
+  subject_grades: StudentResult["subject_grades"],
+  averageScale = 20,
+) {
+  const threshold = averageScale / 2; // 5 pour /10, 10 pour /20
   return subject_grades.filter(
-    (sg) => sg.has_grade && !sg.is_draft && sg.normalized_value < 10,
+    (sg) => sg.has_grade && !sg.is_draft && sg.normalized_value < threshold,
   );
+}
+
+// === normalizeTo20 =====================================================
+//
+// Convertit une normalized_value (sur l'échelle de l'élève) en valeur /20,
+// pour pouvoir appliquer des seuils d'appréciation FR/CI standardisés
+// (Excellent >= 16, Très Bien >= 14, Bien >= 12, Passable >= 10, Insuffisant).
+//
+// Sans cette conversion, les élèves CP/CE (échelle /10) verraient toutes
+// leurs matières affichées "Insuffisant" car leurs notes /10 sont < 10.
+export function normalizeTo20(
+  normalizedValue: number,
+  averageScale = 20,
+): number {
+  if (averageScale <= 0) return normalizedValue;
+  return (normalizedValue * 20) / averageScale;
 }

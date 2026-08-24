@@ -54,6 +54,7 @@ import {
   fetchPreviousAverages,
   computeEvolution,
   computeLacunes,
+  normalizeTo20,
   type EvolutionData,
 } from "@/lib/evolution";
 import {
@@ -62,16 +63,19 @@ import {
   type StudentResult,
 } from "@/lib/types";
 
-// === Appréciation par matière (seuils FR/CI standard sur /20 normalisé) ===
+// === Appréciation par matière (seuils FR/CI standard sur /20) ===
+// Reçoit une valeur DÉJÀ convertie en /20 via normalizeTo20() — sinon les
+// élèves CP/CE (échelle /10) verraient toutes leurs matières en "Insuffisant"
+// car leurs notes /10 sont toutes < 10.
 function subjectAppreciation(
-  normalized: number,
+  norm20: number,
   hasGrade: boolean,
 ): { text: string; tone: string } {
   if (!hasGrade) return { text: "Non évalué", tone: "text-muted-foreground" };
-  if (normalized >= 16) return { text: "Excellent", tone: "text-emerald-600" };
-  if (normalized >= 14) return { text: "Très Bien", tone: "text-emerald-600" };
-  if (normalized >= 12) return { text: "Bien", tone: "text-emerald-600" };
-  if (normalized >= 10) return { text: "Passable", tone: "text-amber-600" };
+  if (norm20 >= 16) return { text: "Excellent", tone: "text-emerald-600" };
+  if (norm20 >= 14) return { text: "Très Bien", tone: "text-emerald-600" };
+  if (norm20 >= 12) return { text: "Bien", tone: "text-emerald-600" };
+  if (norm20 >= 10) return { text: "Passable", tone: "text-amber-600" };
   return { text: "Insuffisant", tone: "text-rose-600" };
 }
 
@@ -201,7 +205,7 @@ export function StudentDetailDialog({
   const passThreshold = scale / 2; // 5 pour /10, 10 pour /20
   const mentionClass =
     MENTION_COLOR_CLASSES[student.mention_color] ?? "";
-  const lacunes = computeLacunes(student.subject_grades);
+  const lacunes = computeLacunes(student.subject_grades, scale);
   const hasLacunes = lacunes.length > 0;
 
   // Étiquette pour "previousSession" (peut être null si Map vide)
@@ -299,10 +303,10 @@ export function StudentDetailDialog({
                 </TableHeader>
                 <TableBody>
                   {student.subject_grades.map((sg) => {
-                    const appr = subjectAppreciation(
-                      sg.normalized_value,
-                      sg.has_grade,
-                    );
+                    // Conversion en /20 pour seuils d'appréciation + couleur
+                    // (normalized_value est sur l'échelle de l'élève, pas /20).
+                    const norm20 = normalizeTo20(sg.normalized_value, scale);
+                    const appr = subjectAppreciation(norm20, sg.has_grade);
                     return (
                       <TableRow key={sg.subject_id}>
                         <TableCell>
@@ -321,7 +325,7 @@ export function StudentDetailDialog({
                             <span
                               className={cn(
                                 "font-semibold",
-                                sg.normalized_value >= 10
+                                norm20 >= 10
                                   ? "text-emerald-600"
                                   : "text-rose-600",
                               )}
@@ -334,7 +338,7 @@ export function StudentDetailDialog({
                         </TableCell>
                         <TableCell className="text-center text-sm font-mono">
                           {sg.has_grade ? (
-                            sg.normalized_value.toFixed(2)
+                            norm20.toFixed(2)
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -371,7 +375,7 @@ export function StudentDetailDialog({
                 />
                 Lacunes à combler
                 <span className="text-xs text-muted-foreground font-normal">
-                  (matières &lt; 10/20 normalisé)
+                  (matières &lt; {scale / 2}/{scale})
                 </span>
               </h3>
               {hasLacunes ? (
@@ -396,7 +400,7 @@ export function StudentDetailDialog({
               ) : (
                 <p className="text-sm text-emerald-700 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  Aucune lacune — toutes les matières notées sont ≥ 10/20.
+                  Aucune lacune — toutes les matières notées sont ≥ {scale / 2}/{scale}.
                 </p>
               )}
             </CardContent>
