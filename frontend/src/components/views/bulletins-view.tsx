@@ -126,9 +126,13 @@ export function BulletinsView() {
   const waitingForSchool = needsSchoolSelect && !hasSchoolSelected;
   const waitingForSession = hasSchoolSelected && !autoSessionId;
 
-  // Aperçu des élèves avant impression (résultats de la session)
-  const mergedStudents: MergedStudent[] = (resultsData?.results ?? []).map(
-    (r) => ({
+  // Aperçu des élèves avant impression (résultats de la session).
+  // Le filtre Classe s'applique AUSSI à l'aperçu et à la carte « prêts » :
+  // « Toutes » = tous les élèves, sinon uniquement ceux de la classe
+  // choisie (chaque StudentResult porte son class_id).
+  const mergedStudents: MergedStudent[] = (resultsData?.results ?? [])
+    .filter((r) => classFilter === "all" || r.class_id === classFilter)
+    .map((r) => ({
       student_id: r.student_id,
       student_name: `${r.last_name} ${r.first_name}`,
       student_matricule: r.matricule,
@@ -139,8 +143,7 @@ export function BulletinsView() {
       mention: r.mention,
       mention_color: r.mention_color,
       has_drafts: r.has_drafts,
-    }),
-  );
+    }));
 
   const readyCount = mergedStudents.filter((s) => s.has_average).length;
   const totalCount = mergedStudents.length;
@@ -406,7 +409,11 @@ export function BulletinsView() {
         ) : mergedStudents.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="py-12 text-center">
-              <p className="text-sm">Aucun élève dans cette session.</p>
+              <p className="text-sm">
+                {classFilter !== "all"
+                  ? "Aucun élève dans cette classe pour cette session."
+                  : "Aucun élève dans cette session."}
+              </p>
             </CardContent>
           </Card>
         ) : (
