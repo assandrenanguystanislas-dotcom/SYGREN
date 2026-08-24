@@ -412,14 +412,15 @@ export default function BulletinsA5Landscape({
                             )}
                           </div>
 
-                          {/* Cellule VISA DES PARENTS — titre ENCADRÉ
-                              (comme VISA DU DIRECTEUR) + 96px. */}
+                          {/* Cellule VISA DES PARENTS — titre CELLULE pleine
+                              largeur (style VISA DU DIRECTEUR : centré +
+                              filet de séparation) + 96px. */}
                           <div
-                            className="border-t-2 pt-1"
+                            className="border-t-2"
                             style={{ borderColor: BORDER }}
                           >
                             <p
-                              className="font-bold text-[10px] py-0.5 text-center border mx-1"
+                              className="font-bold text-[10px] py-0.5 text-center border-b"
                               style={{ color: LABEL, borderColor: BORDER }}
                             >
                               VISA DES PARENTS
@@ -434,7 +435,7 @@ export default function BulletinsA5Landscape({
                             style={{ borderColor: BORDER }}
                           >
                             <p
-                              className="font-bold text-[10px] py-0.5 text-center border mx-1"
+                              className="font-bold text-[10px] py-0.5 text-center border-b"
                               style={{ color: LABEL, borderColor: BORDER }}
                             >
                               RÉSULTATS
@@ -481,7 +482,7 @@ export default function BulletinsA5Landscape({
                               style={{ borderColor: BORDER }}
                             >
                               <p
-                                className="font-bold text-[10px] py-0.5 text-center border mx-1"
+                                className="font-bold text-[10px] py-0.5 text-center border-b"
                                 style={{ color: LABEL, borderColor: BORDER }}
                               >
                                 STATISTIQUES
@@ -563,10 +564,10 @@ export default function BulletinsA5Landscape({
                         className="border-t-2 p-1 text-center flex-grow flex flex-col min-h-[48px]"
                         style={{ borderColor: BORDER }}
                       >
-                        {/* Titre ENCADRÉ comme les autres cellules
-                            (VISA DES PARENTS / RÉSULTATS / STATISTIQUES). */}
+                        {/* Titre CELLULE pleine largeur (style VISA DU
+                            DIRECTEUR : centré + filet de séparation). */}
                         <p
-                          className="font-bold text-[10px] py-0.5 text-center border mx-1 self-center px-4"
+                          className="font-bold text-[10px] py-0.5 text-center border-b mx-1.5"
                           style={{ color: LABEL, borderColor: BORDER }}
                         >
                           APPRÉCIATION ET VISA DU MAÎTRE
