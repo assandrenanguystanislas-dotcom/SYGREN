@@ -3022,3 +3022,15 @@ Stage Summary:
 - Bloc statistiques LIVE — commit a7ae2e3 : 3 lignes stats classe + évolution fléchée bicolore
 - Coût : 2 requêtes max supplémentaires (sessions.list + computation session précédente), non bloquantes
 - previousAvg disponible dans BulletinEleve.evolution si besoin d'affichage futur (« était 8.56 »)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Libelle-Progression-Regression
+Agent: Main (tuteur)
+Task: Libellé dynamique PROGRESSION / RÉGRESSION / STABLE (remplace ÉVOLUTION)
+
+Work Log:
+- La ligne de tendance porte son sens dans le libellé : delta > 0 → « PROGRESSION : ▲ +x.xx » (vert) ; delta < 0 → « RÉGRESSION : ▼ -x.xx » (rouge) ; delta = 0 → « STABLE : = 0 » (noir)
+- Vérifié production (Vercel READY 798a598) : document Décembre complet = 14 PROGRESSION + 11 RÉGRESSION (les deux branches dynamiques utilisées sur données réelles — ex : Traoré CP1 7.74 → 5.19 en régression), ÉVOLUTION absent du DOM
+
+Stage Summary:
+- Lecture immédiate de la tendance par les parents sans interpréter la flèche — commit 798a598
