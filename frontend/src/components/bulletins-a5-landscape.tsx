@@ -503,8 +503,14 @@ export default function BulletinsA5Landscape({
                                     eleve.stats ? { borderColor: BORDER } : undefined
                                   }
                                 >
+                                  {/* Libellé dynamique : PROGRESSION (▲ vert) /
+                                      RÉGRESSION (▼ rouge) / STABLE (= noir). */}
                                   <span className="font-bold" style={{ color: LABEL }}>
-                                    ÉVOLUTION :
+                                    {eleve.evolution.delta > 0
+                                      ? "PROGRESSION :"
+                                      : eleve.evolution.delta < 0
+                                        ? "RÉGRESSION :"
+                                        : "STABLE :"}
                                   </span>
                                   <span
                                     className="font-bold"
