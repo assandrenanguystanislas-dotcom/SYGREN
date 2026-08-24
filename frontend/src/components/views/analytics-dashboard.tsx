@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
@@ -19,6 +19,8 @@ import {
   BarChart3,
   Building2,
   Calendar,
+  ChevronDown,
+  ChevronUp,
   GraduationCap,
   Loader2,
   PieChart as PieChartIcon,
@@ -32,9 +34,16 @@ import {
   Clock,
 } from "lucide-react";
 
-import { dashboardApi } from "@/lib/api";
+import { dashboardApi, sessionsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import type { DashboardData, EntityPerformance, YearComparison } from "@/lib/types";
+import type {
+  DashboardData,
+  EntityPerformance,
+  SessionWithDetails,
+  YearComparison,
+} from "@/lib/types";
+import { EVAL_TYPE_LABELS } from "@/lib/types";
+import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -89,6 +98,10 @@ export function AnalyticsDashboard() {
   const [yearFilter, setYearFilter] = useState("2026");
   const [genderFilter, setGenderFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
+  // Ligne d'école expansée dans le tableau « Détail par école ». null = tout
+  // replié. Une seule ligne ouverte à la fois (pattern cohérent avec le
+  // module Résultats).
+  const [expandedSchoolId, setExpandedSchoolId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["dashboard", yearFilter, genderFilter, levelFilter],
@@ -99,6 +112,28 @@ export function AnalyticsDashboard() {
         level: levelFilter || undefined,
       }),
   });
+
+  // Sessions actives (draft/open/closed) pour le scope Écoles (admin/IEP).
+  // Une fois validée, la session disparaît de cette liste : la vue ne montre
+  // que le travail restant à faire, sans bruit des sessions finalisées.
+  const isSchoolScope = data?.scope === "global" || data?.scope === "iep";
+  const { data: activeSessionsData } = useQuery({
+    queryKey: ["active-sessions", yearFilter],
+    queryFn: () =>
+      sessionsApi.list({ view: "active", year: Number(yearFilter) }),
+    enabled: isSchoolScope,
+    staleTime: 60_000,
+  });
+
+  const activeSessionsBySchool = useMemo(() => {
+    const map = new Map<string, SessionWithDetails[]>();
+    for (const s of activeSessionsData?.sessions ?? []) {
+      const arr = map.get(s.school_id) ?? [];
+      arr.push(s);
+      map.set(s.school_id, arr);
+    }
+    return map;
+  }, [activeSessionsData]);
 
   if (isLoading) return <LoadingState />;
   if (error)
@@ -120,6 +155,15 @@ export function AnalyticsDashboard() {
   const entityLabel =
     data.scope === "global" || data.scope === "iep" ? "Écoles" : "Classes";
   const entities = data.schools ?? data.classes ?? [];
+
+  // Scope Écoles (admin/IEP) : ne garder que les écoles ayant au moins une
+  // session en cours (draft/open/closed). Les écoles dont toutes les
+  // sessions sont validées, annulées ou archivées sont retirées de la liste
+  // pour simplifier la vue (focus sur le travail restant).
+  const visibleEntities =
+    entityLabel === "Écoles"
+      ? entities.filter((e) => activeSessionsBySchool.has(e.id))
+      : entities;
 
   return (
     <div className="space-y-4">
@@ -333,13 +377,43 @@ export function AnalyticsDashboard() {
         </Card>
       )}
 
-      {/* Détail par entité (tableau récapitulatif) */}
-      {entities.length > 0 && (
+      {/* Détail par entité (tableau récapitulatif) — scope Écoles (admin/IEP) :
+          seules les écoles avec une session en cours (draft/open/closed) sont
+          listées. Les sessions validées sont retirées pour simplifier la vue :
+          focus sur le travail restant. Lignes expansibles pour voir le détail
+          de chaque session active de l'école. */}
+      {entityLabel === "Écoles" && visibleEntities.length === 0 && (
+        <Card className="border-border/60">
+          <CardContent className="py-8 text-center">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
+            <p className="text-sm font-medium">Toutes les sessions sont validées</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Aucune école n'a de session en cours (Brouillon, Saisie ouverte
+              ou Saisie fermée) pour {yearFilter}.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {visibleEntities.length > 0 && (
         <Card className="border-border/60 overflow-hidden">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-primary" />
               Détail par {entityLabel.toLowerCase().slice(0, -1)}
+              {entityLabel === "Écoles" && (
+                <Badge variant="outline" className="ml-1 text-[10px] font-normal">
+                  sessions en cours
+                </Badge>
+              )}
             </CardTitle>
+            {entityLabel === "Écoles" && (
+              <p className="text-xs text-muted-foreground">
+                Écoles avec au moins une session active (Brouillon / Saisie
+                ouverte / Saisie fermée). Les sessions validées sont
+                automatiquement retirées de cette vue.
+              </p>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto scroll-sygren">
@@ -349,9 +423,11 @@ export function AnalyticsDashboard() {
                     <th className="text-left p-3 font-medium text-muted-foreground">
                       Nom
                     </th>
-                    <th className="text-center p-3 font-medium text-muted-foreground">
-                      Classes
-                    </th>
+                    {data.scope !== "school" && (
+                      <th className="text-center p-3 font-medium text-muted-foreground">
+                        Classes
+                      </th>
+                    )}
                     <th className="text-center p-3 font-medium text-muted-foreground">
                       Élèves
                     </th>
@@ -364,52 +440,98 @@ export function AnalyticsDashboard() {
                     <th className="text-center p-3 font-medium text-muted-foreground">
                       Performance
                     </th>
+                    {entityLabel === "Écoles" && (
+                      <th className="w-[40px] p-3" aria-label="Détail session" />
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {entities.map((e) => (
-                    <tr
-                      key={e.id}
-                      className="border-b last:border-b-0 hover:bg-muted/30"
-                    >
-                      <td className="p-3 font-medium">{e.name}</td>
-                      {data.scope !== "school" && (
-                        <td className="text-center p-3 text-muted-foreground">
-                          {e.class_count ?? "—"}
-                        </td>
-                      )}
-                      <td className="text-center p-3">{e.student_count}</td>
-                      <td className="text-center p-3">{e.session_count}</td>
-                      <td className="text-center p-3">
-                        <span
+                  {visibleEntities.map((e) => {
+                    const sessions = activeSessionsBySchool.get(e.id) ?? [];
+                    const expanded = expandedSchoolId === e.id;
+                    const isExpandable =
+                      entityLabel === "Écoles" && sessions.length > 0;
+                    // colSpan de la ligne expansée : dépend de la présence ou
+                    // non de la colonne Classes (cachée en scope school) et de
+                    // la colonne chevron (présente uniquement en scope Écoles).
+                    const colCount =
+                      entityLabel === "Écoles"
+                        ? 7 // Nom + Classes + Élèves + Sessions + Complétion + Performance + Chevron
+                        : data.scope === "school"
+                          ? 5
+                          : 6;
+                    return (
+                      <Fragment key={e.id}>
+                        <tr
                           className={cn(
-                            "inline-block px-2 py-0.5 rounded text-xs font-medium",
-                            e.completion_rate >= 75
-                              ? "bg-emerald-100 text-emerald-700"
-                              : e.completion_rate >= 50
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-slate-100 text-slate-600",
+                            "border-b last:border-b-0 hover:bg-muted/30 transition-colors",
+                            expanded && "bg-muted/30",
+                            isExpandable && "cursor-pointer",
                           )}
+                          onClick={
+                            isExpandable
+                              ? () =>
+                                  setExpandedSchoolId(expanded ? null : e.id)
+                              : undefined
+                          }
                         >
-                          {e.completion_rate.toFixed(0)}%
-                        </span>
-                      </td>
-                      <td className="text-center p-3">
-                        <span
-                          className={cn(
-                            "font-bold",
-                            e.avg_performance >= 10
-                              ? "text-emerald-600"
-                              : "text-amber-600",
+                          <td className="p-3 font-medium">{e.name}</td>
+                          {data.scope !== "school" && (
+                            <td className="text-center p-3 text-muted-foreground">
+                              {e.class_count ?? "—"}
+                            </td>
                           )}
-                        >
-                          {e.avg_performance > 0
-                            ? e.avg_performance.toFixed(2)
-                            : "—"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                          <td className="text-center p-3">{e.student_count}</td>
+                          <td className="text-center p-3">{e.session_count}</td>
+                          <td className="text-center p-3">
+                            <span
+                              className={cn(
+                                "inline-block px-2 py-0.5 rounded text-xs font-medium",
+                                e.completion_rate >= 75
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : e.completion_rate >= 50
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-slate-100 text-slate-600",
+                              )}
+                            >
+                              {e.completion_rate.toFixed(0)}%
+                            </span>
+                          </td>
+                          <td className="text-center p-3">
+                            <span
+                              className={cn(
+                                "font-bold",
+                                e.avg_performance >= 10
+                                  ? "text-emerald-600"
+                                  : "text-amber-600",
+                              )}
+                            >
+                              {e.avg_performance > 0
+                                ? e.avg_performance.toFixed(2)
+                                : "—"}
+                            </span>
+                          </td>
+                          {entityLabel === "Écoles" && (
+                            <td className="p-3 text-center">
+                              {isExpandable &&
+                                (expanded ? (
+                                  <ChevronUp className="inline-block w-4 h-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="inline-block w-4 h-4 text-muted-foreground" />
+                                ))}
+                            </td>
+                          )}
+                        </tr>
+                        {expanded && sessions.length > 0 && (
+                          <tr className="bg-muted/20 border-b last:border-b-0">
+                            <td colSpan={colCount} className="p-3">
+                              <SchoolActiveSessions sessions={sessions} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -678,6 +800,94 @@ function EntitiesChart({ entities }: { entities: EntityPerformance[] }) {
         />
       </BarChart>
     </ChartContainer>
+  );
+}
+
+// === Détail des sessions actives d'une école (row expansible du « Détail par école ») ===
+//
+// Rendu sous la ligne d'école expansée. Affiche une mini-carte par session
+// active (draft/open/closed) : mois/année, type d'éval, statut, complétion,
+// brouillons, exemptions, date de clôture.
+function SchoolActiveSessions({
+  sessions,
+}: {
+  sessions: SessionWithDetails[];
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+        {sessions.length} session{sessions.length > 1 ? "s" : ""} en cours
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {sessions.map((s) => {
+          const statusCfg =
+            SESSION_STATUS_CONFIG[s.status] ?? SESSION_STATUS_CONFIG.draft;
+          const evalLabel = `${EVAL_TYPE_LABELS[s.eval_type]} N°${s.eval_number}`;
+          const expected = s.student_count * s.subject_count;
+          return (
+            <div
+              key={s.id}
+              className="rounded-lg border border-border/60 bg-card p-3 text-xs"
+            >
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="font-medium text-sm flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                  {monthLabel(s.month)} {s.year}
+                </span>
+                <span
+                  className={cn(
+                    "inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border",
+                    statusCfg.color,
+                  )}
+                >
+                  {statusCfg.label}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mb-2">{evalLabel}</p>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Complétion</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      s.completion_rate >= 75
+                        ? "text-emerald-600"
+                        : s.completion_rate >= 50
+                          ? "text-amber-600"
+                          : "text-slate-600",
+                    )}
+                  >
+                    {s.completion_rate.toFixed(0)}% ({s.graded_count}/{expected})
+                  </span>
+                </div>
+                {s.draft_count > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Dont brouillons</span>
+                    <span className="text-amber-600">{s.draft_count}</span>
+                  </div>
+                )}
+                {s.exemption_count > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Exemptions</span>
+                    <span className="text-muted-foreground">
+                      {s.exemption_count}
+                    </span>
+                  </div>
+                )}
+                {s.close_at && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Clôture</span>
+                    <span className="text-muted-foreground">
+                      {new Date(s.close_at).toLocaleDateString("fr-FR")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

@@ -3240,3 +3240,24 @@ Work Log:
 
 Stage Summary:
 - Row expansible allégé d'une carte redondante — l'œil (Dialog) devient le seul point d'accès au détail par matière ; le Bilan annuel reste pour la vue longitudinale multi-sessions. Code mort retiré (-60 lignes).
+
+---
+Task ID: Dashboard-Detail-Ecole-Row-Exansible-Sessions-En-Cours
+Agent: Main (tuteur)
+Task: Tableau de bord — carte « Détail par école » : row expansible + ne montrer que les écoles avec une session en cours (draft/open/closed) ; retrait auto dès validation pour simplifier la vue
+
+Work Log:
+- Discovery : lu analytics-dashboard.tsx (carte « Détail par entité » lignes 336-418, table raw <table> avec 6 colonnes, entityLabel = "Écoles" si scope global/iep, "Classes" sinon). Entité EntityPerformance (id/name/class_count/student_count/session_count/completion_rate/avg_performance). Aucune notion de session « en cours » dans ce card — agrégat annuel par école.
+- Côté backend : sessionsApi.list({ view: "active" }) retourne les sessions status IN (draft, open, closed) — voir backend/handlers/sessions.go lignes 107-115. La view=validated (validated only) et view=archived (archived only) existent aussi. Le scope RBAC filtre automatiquement par rôle (admin voit tout, IEP voit sa circonscription).
+- Décision design : 2 améliorations combinées en 1 seule carte (au lieu d'en créer une nouvelle) — (1) filtrer visibleEntities sur les écoles ayant une session active (Map schoolId → SessionWithDetails[]), (2) ajouter une 7e colonne chevron et une 2e <tr> par ligne expansée qui rend SchoolActiveSessions (mini-cartes par session : mois/année + type éval + statut + complétion + brouillons + exemptions + clôture).
+- Edit imports : Fragment/useMemo ajoutés (React) ; ChevronDown/ChevronUp (lucide) ; sessionsApi (api) ; SessionWithDetails + EVAL_TYPE_LABELS (types) ; monthLabel + SESSION_STATUS_CONFIG (session-utils). CheckCircle2/Clock/Calendar déjà importés — réutilisés pour l'empty state et les mini-cartes.
+- Edit composant : état expandedSchoolId (une ligne ouverte à la fois, pattern cohérent avec module Résultats). useQuery secondaire queryKey ["active-sessions", yearFilter], enabled=isSchoolScope (admin/IEP only — director/teacher sont en scope school/class et ne voient pas la carte « Détail par école » mais « Détail par classe »). useMemo dictionnaire schoolId→sessions[]. visibleEntities = entityLabel==="Écoles" ? filter : entities (pas de filtre en scope Classes — comportement inchangé pour director/teacher).
+- Edit table : <tr> cliquable (cursor-pointer + onClick toggle) ; colonne chevron w-[40px] en scope Écoles ; 2e <tr> colSpan=7 rend SchoolActiveSessions quand expanded && sessions.length > 0. Titre carte enrichi : BarChart3 + « Détail par école » + Badge « sessions en cours » + sous-titre explicatif « Les sessions validées sont automatiquement retirées de cette vue ».
+- Empty state : nouveau Card quand entityLabel==="Écoles" && visibleEntities.length===0 → CheckCircle2 vert + « Toutes les sessions sont validées » + message contextuel (année filtrée). Scope Classes : pas d'empty state dédié (comportement inchangé — si pas de classes, rien ne s'affiche).
+- Helper SchoolActiveSessions (avant LoadingState) : grid sm:2 lg:3 mini-cartes par session. Chaque carte = mois/année (Calendar) + Badge statut coloré (SESSION_STATUS_CONFIG) + « Composition N°X » (EVAL_TYPE_LABELS) + complétion % (colorée ≥75/≥50/<50) avec détail graded/expected + brouillons (si >0) + exemptions (si >0) + date clôture (si close_at).
+- Vérifié : tsc --noEmit EXIT 0, eslint analytics-dashboard.tsx EXIT 0. Pas de régression — le scope Classes (director/teacher) reste inchangé (pas de filtre, pas de chevron, pas d'expand — isExpandable=false car entityLabel!=="Écoles").
+- Frontend-only : Render smart-skip (pas de backend touché). À venir : commit feat → push main → poll Vercel READY → E2E via Agent Browser sur sygren.vercel.app (login admin → dashboard → vérifier que la carte « Détail par école » ne montre QUE les écoles avec session active → cliquer une ligne → vérifier mini-cartes session → valider qu'une école dont toutes les sessions sont validées n'apparaît plus).
+
+Stage Summary:
+- Tableau de bord focus action : la carte « Détail par école » ne montre plus que les écoles ayant encore du travail en cours (draft/open/closed). Une fois validée, la session sort du filtre → l'école disparaît de la vue si elle n'a plus aucune session active. Lignes expansibles pour voir le détail par session sans quitter le dashboard.
+- 0 backend touché : réutilise le filtre view=active déjà en place depuis Architecture-D-Phase6. Pattern DRY : monthLabel/SESSION_STATUS_CONFIG/EVAL_TYPE_LABELS déjà partagés avec sessions-view/results-view.
