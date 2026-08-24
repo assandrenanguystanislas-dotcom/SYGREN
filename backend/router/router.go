@@ -198,14 +198,11 @@ func New(cfg *config.Config) http.Handler {
 		r.Get("/api/computation/session/{id}", handlers.GetSessionResults)
 		r.Get("/api/computation/student/{id}/annual", handlers.GetStudentAnnualResults)
 
-		// === Module 4 — Bulletins PDF ===
-		r.Get("/api/report-cards/session/{sessionId}", handlers.ListReportCards)
-		r.Get("/api/report-cards/{id}/download", handlers.DownloadReportCard)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireModule(models.ModuleReportCards, "write"))
-			r.Post("/api/report-cards/generate/{sessionId}/{studentId}", handlers.GenerateReportCard)
-			r.Post("/api/report-cards/generate-batch/{sessionId}", handlers.GenerateBatchReportCards)
-		})
+		// === Module 4 — Bulletins ===
+		// Endpoints de génération PDF retirés (le module est passé 100 % sur
+		// l'impression A5 côté navigateur — /bulletins + releve-data/computation).
+		// L'entité models.ReportCard et la table report_cards sont conservées
+		// (données historiques + rollback possible).
 
 		// === Synthèse + Relevé (données JSON pour rendu HTML frontend) ===
 		// RBAC : scope vérifié dans le handler (admin = toutes, director = son école, etc.)

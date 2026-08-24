@@ -80,3 +80,18 @@ func matriculeOrNA(m *string) string {
 	}
 	return *m
 }
+
+// monthLabelFR retourne le nom français du mois (1-12) pour les
+// libellés de session/évaluation. Historiquement défini dans
+// report_cards.go (supprimé lors du passage 100 % impression A5) —
+// déplacé ici car dashboard.go l'utilise.
+func monthLabelFR(month int) string {
+	months := []string{
+		"Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+		"Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+	}
+	if month >= 1 && month <= 12 {
+		return months[month-1]
+	}
+	return "—"
+}
