@@ -3174,3 +3174,25 @@ Work Log:
 
 Stage Summary:
 - Cohérence totale de la cascade : le sélecteur Classe pilote aperçu + carte prêts + impression — commit 73ff413
+
+---
+Task ID: Session-Setup-Tuteur-Environnement
+Agent: Main (tuteur)
+Task: Ouverture de session tuteur — mise en place et vérification E2E de l'environnement (clone, Go, identité git, Neon, Render, Vercel)
+
+Work Log:
+- Clonage du dépôt SYGREN (https://github.com/assandrenanguystanislas-dotcom/SYGREN) dans /home/z/SYGREN — main à 4073859, propre, branche unique main, remote origin sans token (credential store restreint 600)
+- Identité git configurée par-repo (user.name=assandrenanguystanislas, user.email=assandrenanguystanislas@gmail.com) — n'altère pas le global du sandbox
+- Installation Go 1.25.0 (linux-amd64) dans /home/z/go-sdk (Go était absent — réinitialisation sandbox) — PATH persisté dans .bashrc/.profile
+- Compilation backend : `go mod tidy` OK, `go vet ./...` clean, `go build -o /tmp/sygren-api main.go` OK (binaire 24 Mo, ELF 64-bit) — confirme que toute modification backend compilera sur Render
+- Test connexion Neon en local : backend démarré avec DATABASE_URL=postgresql://neondb_owner@ep-still-haze-b272s0fu-pooler... — `[DB] Connecté à PostgreSQL (Neon)` + AutoMigrate 9 modèles en cours (connexions froides ~350ms/requête, attendu sur Neon)
+- API Render (GET /v1/services) : service `SYGREN` id=srv-da0t6lnlk1mc738nvvf0, url=https://sygren.onrender.com, runtime=go, plan=free, region=frankfurt, rootDir=backend, build=`go build -tags netgo -ldflags '-s -w' -o app`, start=`./app`, autoDeploy=yes on commit main, suspended=not_suspended
+- API Vercel (GET /v9/projects) : projet `sygren` id=prj_51kMcmyW9PFzFt4sk0Jn7BYkvk4O, rootDirectory=frontend, framework=nextjs, nodeVersion=24.x, NEXT_PUBLIC_API_URL=https://sygren.onrender.com (pointe bien vers Render), dernier déploiement dpl_3HxNeDAyWmhP8yzwSwSBZ2SHD1X9 READY/PROMOTED sur commit 4073859 (= HEAD du clone)
+- Production E2E vérifiée : GET https://sygren.onrender.com/api/health → 200 `{"service":"sygren-api","status":"ok","version":"0.1.0"}` (0.23s) ; POST /api/auth/login identifier=admin@sygren.ci password=admin123 → 200 + JWT + user admin (DB Neon lue, 1.0s) ; GET https://sygren.vercel.app/ → 200 (0.27s)
+- Login backend attend `identifier` (phone OR email) — LoginRequest {Identifier, Password} dans handlers/auth.go — pas `email` (corrigé dans les tests ultérieurs)
+- Sécurité : token GitHub dans credential store /home/z/.git-credentials (chmod 600), jamais écrit dans .git/config du repo ; secrets restent en variables d'env de session, non écrits dans le dépôt
+
+Stage Summary:
+- Environnement 100 % opérationnel : clone propre, Go 1.25 installé, backend compile, Neon/Render/Vercel tous live en prod — commit (à suivre)
+- Identité git par-repo conforme (assandrenanguystanislas / assandrenanguystanislas@gmail.com) ; autoDeploy Render + Vercel confirmés sur commit to main
+- Pattern de travail établi : (1) coder en local (2) `go vet` + `go build` + `tsc --noEmit` + `eslint` (3) commit worklog+code (4) push to main (5) poll Render + Vercel jusqu'à live/READY (6) vérif E2E prod
