@@ -293,7 +293,7 @@ export default function BulletinsA5Landscape({
 
                           {/* Exploitation de texte — nom bleu gras aligné à gauche, note noire grasse centrée */}
                           <div
-                            className="grid grid-cols-7 border-b py-0.5"
+                            className="grid grid-cols-7 border-b py-0.5 text-[11px]"
                             style={{ borderColor: BORDER }}
                           >
                             <span
@@ -336,19 +336,19 @@ export default function BulletinsA5Landscape({
                               </div>
                               <div className="flex-1">
                                 <div
-                                  className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
+                                  className="border-b py-0.5 text-left pl-1 font-bold text-[10px]"
                                   style={{ color: LABEL }}
                                 >
                                   Hist – Géo.
                                 </div>
                                 <div
-                                  className="border-b py-0.5 text-left pl-1 font-bold text-[9px]"
+                                  className="border-b py-0.5 text-left pl-1 font-bold text-[10px]"
                                   style={{ color: LABEL }}
                                 >
                                   EDHC
                                 </div>
                                 <div
-                                  className="py-0.5 text-left pl-1 font-bold text-[9px]"
+                                  className="py-0.5 text-left pl-1 font-bold text-[10px]"
                                   style={{ color: LABEL }}
                                 >
                                   Sciences
@@ -379,7 +379,7 @@ export default function BulletinsA5Landscape({
                           ].map((m, i) => (
                             <div
                               key={i}
-                              className="grid grid-cols-7 border-b last:border-b-0 py-0.5"
+                              className="grid grid-cols-7 border-b last:border-b-0 py-0.5 text-[11px]"
                               style={{ borderColor: BORDER }}
                             >
                               <span
@@ -563,9 +563,11 @@ export default function BulletinsA5Landscape({
                         className="border-t-2 p-1 text-center flex-grow flex flex-col min-h-[48px]"
                         style={{ borderColor: BORDER }}
                       >
+                        {/* Titre ENCADRÉ comme les autres cellules
+                            (VISA DES PARENTS / RÉSULTATS / STATISTIQUES). */}
                         <p
-                          className="font-bold underline text-[10px]"
-                          style={{ color: LABEL }}
+                          className="font-bold text-[10px] py-0.5 text-center border mx-1 self-center px-4"
+                          style={{ color: LABEL, borderColor: BORDER }}
                         >
                           APPRÉCIATION ET VISA DU MAÎTRE
                         </p>
