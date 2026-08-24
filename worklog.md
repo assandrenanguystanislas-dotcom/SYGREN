@@ -3049,3 +3049,16 @@ Work Log:
 Stage Summary:
 - Colonne droite lisible et hiérarchisée en 4 cellules titrées — commit 34c4d03
 - Format compact des totaux : pattern aligné sur le bloc statistiques
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Titres-Majuscules
+Agent: Main (tuteur)
+Task: Tous les titres de cellules en MAJUSCULES (harmonisation casse)
+
+Work Log:
+- 3 titres restés en casse mixte passés en majuscules : Visa du Directeur → VISA DU DIRECTEUR (en-tête colonne), Visa des Parents → VISA DES PARENTS, Appréciation et Visa du Maître → APPRÉCIATION ET VISA DU MAÎTRE
+- Les autres titres étaient déjà en majuscules (MOIS DE, MATIÈRES, NOTES, RÉSULTATS, STATISTIQUES, BULLETIN DE NOTES et tous les libellés de lignes)
+- Vérifié production (Vercel READY 2388bc9) : DOM — ancienne casse absente, les 5 titres VISA DU DIRECTEUR / VISA DES PARENTS / APPRÉCIATION ET VISA DU MAÎTRE / RÉSULTATS / STATISTIQUES présents
+
+Stage Summary:
+- Casse homogène sur l'ensemble du bulletin — commit 2388bc9
