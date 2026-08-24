@@ -804,6 +804,9 @@ export const reportsApi = {
         name: string;
         level: string;
         student_count: number;
+        /** true = la classe (ou son niveau) est exemptée de la session :
+         *  affichée grisée dans le sélecteur, exclue de l'impression. */
+        exempted: boolean;
       }>;
       count: number;
     }>(`/api/reports/releve-classes?session_id=${sessionId}`),

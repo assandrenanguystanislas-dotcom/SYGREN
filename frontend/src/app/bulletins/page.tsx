@@ -51,6 +51,7 @@ interface ClassInfo {
   name: string;
   level: string;
   student_count: number;
+  exempted?: boolean;
 }
 
 // === Mapping matières SYGREN → slots bulletin ===
@@ -378,6 +379,9 @@ export default function BulletinsPage() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
     const urlToken = params.get("t");
+    // class_id (optionnel) : restreint l'impression à UNE classe.
+    // Absent = toutes les classes (comportement historique).
+    const classIdParam = params.get("class_id");
 
     // Si pas de session_id → erreur immédiate.
     if (!sessionId) {
@@ -442,7 +446,13 @@ export default function BulletinsPage() {
     reportsApi
       .listReleveClasses(sessionId)
       .then(async (cls) => {
-        const classes: ClassInfo[] = cls.classes || [];
+        const classes: ClassInfo[] = (cls.classes || [])
+          // Exclusions : classes exemptées de la session (directement ou
+          // via leur niveau) — aucun bulletin à imprimer pour elles.
+          .filter((c) => !c.exempted)
+          // Impression ciblée : ne garder que la classe demandée si
+          // class_id est présent dans l'URL.
+          .filter((c) => !classIdParam || c.id === classIdParam);
         if (classes.length === 0) {
           setEleves([]);
           setMeta({ schoolName: "—", sessionLabel: "Session inconnue" });

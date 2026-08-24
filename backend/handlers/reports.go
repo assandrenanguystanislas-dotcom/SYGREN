@@ -423,13 +423,32 @@ func ListReleveClasses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Charger les exemptions de la session : par classe (ClassID) ou par
+	// NIVEAU entier (Level = "CP"|"CE"|"CM" — NULL ClassID). Une classe est
+	// exemptée si elle est ciblée directement OU si son niveau l'est.
+	var exemptions []models.SessionExemption
+	database.DB.Where("session_id = ?", session.ID).Find(&exemptions)
+	exemptedClassIDs := make(map[string]bool)
+	exemptedLevels := make(map[string]bool)
+	for _, e := range exemptions {
+		if e.ClassID != nil && *e.ClassID != "" {
+			exemptedClassIDs[*e.ClassID] = true
+		}
+		if e.Level != nil && *e.Level != "" {
+			exemptedLevels[*e.Level] = true
+		}
+	}
+
 	// Construire la réponse avec le compte d'élèves par classe (utile côté
 	// frontend pour afficher "5 élèves" et permettre de dé/sélectionner).
+	// exempted : la classe ne participe pas à la session — le frontend
+	// l'affiche grisée et l'exclut de l'impression des bulletins.
 	type ClassInfo struct {
 		ID           string `json:"id"`
 		Name         string `json:"name"`
 		Level        string `json:"level"`
 		StudentCount int64  `json:"student_count"`
+		Exempted     bool   `json:"exempted"`
 	}
 	result := make([]ClassInfo, 0, len(classes))
 	for _, c := range classes {
@@ -440,6 +459,7 @@ func ListReleveClasses(w http.ResponseWriter, r *http.Request) {
 			Name:         c.Name,
 			Level:        c.Level,
 			StudentCount: count,
+			Exempted:     exemptedClassIDs[c.ID] || exemptedLevels[c.Level],
 		})
 	}
 

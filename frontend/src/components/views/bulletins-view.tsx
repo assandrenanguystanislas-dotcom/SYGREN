@@ -9,10 +9,11 @@ import {
   Calendar,
   Trophy,
   AlertCircle,
+  Users,
   School as SchoolIcon,
 } from "lucide-react";
 
-import { sessionsApi, computationApi, schoolsApi } from "@/lib/api";
+import { sessionsApi, computationApi, schoolsApi, reportsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import {
@@ -78,6 +79,9 @@ export function BulletinsView() {
     needsSchoolSelect ? "" : (user?.school_id ?? ""),
   );
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
+  // Classe cible pour l'impression : "all" = TOUTES les classes (défaut,
+  // comportement historique), sinon l'ID d'une classe précise.
+  const [classFilter, setClassFilter] = useState<string>("all");
   const hasSchoolSelected = schoolFilter !== "" && schoolFilter !== "all";
 
   // Charger les écoles (admin/inspector seulement)
@@ -108,6 +112,15 @@ export function BulletinsView() {
     queryFn: () => computationApi.getSessionResults(autoSessionId!),
     enabled: !!autoSessionId,
   });
+
+  // Classes de la session (pour le sélecteur d'impression par classe +
+  // le statut exempté). "" = TOUTES.
+  const { data: releveClassesData } = useQuery({
+    queryKey: ["releve-classes", autoSessionId],
+    queryFn: () => reportsApi.listReleveClasses(autoSessionId!),
+    enabled: !!autoSessionId,
+  });
+  const releveClasses = releveClassesData?.classes ?? [];
 
   // États de la cascade stricte
   const waitingForSchool = needsSchoolSelect && !hasSchoolSelected;
@@ -174,12 +187,15 @@ export function BulletinsView() {
                     const raw = localStorage.getItem("sygren-auth");
                     if (raw) token = JSON.parse(raw)?.state?.token ?? "";
                   } catch {}
-                  const url = `${window.location.origin}/bulletins?session_id=${selectedSession.id}&t=${encodeURIComponent(token)}`;
+                  const classParam = classFilter !== "all" ? `&class_id=${classFilter}` : "";
+                  const url = `${window.location.origin}/bulletins?session_id=${selectedSession.id}${classParam}&t=${encodeURIComponent(token)}`;
                   window.open(url, "_blank");
                 }}
               >
                 <Printer className="w-4 h-4 mr-1.5" />
-                Imprimer les bulletins (A5)
+                {classFilter !== "all"
+                  ? `Imprimer — ${releveClasses.find((c) => c.id === classFilter)?.name ?? "classe"}`
+                  : "Imprimer les bulletins (A5)"}
               </Button>
             )}
           </div>
@@ -195,6 +211,7 @@ export function BulletinsView() {
                 <Select value={schoolFilter} onValueChange={(v) => {
                   setSchoolFilter(v);
                   setSelectedSessionId(undefined);
+                  setClassFilter("all");
                 }}>
                   <SelectTrigger className="w-full overflow-hidden">
                     <SelectValue placeholder="Choisir une école…" />
@@ -228,7 +245,10 @@ export function BulletinsView() {
               </label>
               <Select
                 value={autoSessionId ?? ""}
-                onValueChange={setSelectedSessionId}
+                onValueChange={(v) => {
+                  setSelectedSessionId(v);
+                  setClassFilter("all");
+                }}
                 disabled={!hasSchoolSelected || sessions.length === 0}
               >
                 <SelectTrigger className="w-full overflow-hidden">
@@ -257,6 +277,36 @@ export function BulletinsView() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Filtre Classe (impression ciblée) — apparaît une fois la
+                session choisie. "" = TOUTES les classes (défaut).
+                Les classes exemptées sont visibles mais non
+                sélectionnables (disabled + libellé). */}
+            {selectedSession && (
+              <div className="space-y-1.5 min-w-[200px] flex-1 max-w-[300px] min-w-0">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Users className="w-3 h-3" /> Classe
+                </label>
+                <Select value={classFilter} onValueChange={setClassFilter}>
+                  <SelectTrigger className="w-full overflow-hidden">
+                    <SelectValue placeholder="Toutes les classes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes les classes</SelectItem>
+                    {releveClasses.map((c) => (
+                      <SelectItem
+                        key={c.id}
+                        value={c.id}
+                        disabled={c.exempted}
+                      >
+                        {c.name} ({c.student_count} élève{c.student_count > 1 ? "s" : ""})
+                        {c.exempted ? " — Exemptée" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
