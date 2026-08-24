@@ -529,10 +529,10 @@ export default function BulletinsA5Landscape({
                                       RÉGRESSION (▼ rouge) / STABLE (= noir). */}
                                   <span className="font-bold" style={{ color: LABEL }}>
                                     {eleve.evolution.delta > 0
-                                      ? "PROGRESSION :"
+                                      ? "ÉLÈVE EN PROGRESSION :"
                                       : eleve.evolution.delta < 0
-                                        ? "RÉGRESSION :"
-                                        : "STABLE :"}
+                                        ? "ÉLÈVE EN RÉGRESSION :"
+                                        : "ÉLÈVE STABLE :"}
                                   </span>
                                   <span
                                     className="font-bold"
