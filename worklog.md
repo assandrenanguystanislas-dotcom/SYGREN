@@ -3077,3 +3077,17 @@ Work Log:
 Stage Summary:
 - Colonne droite : 4 cellules titrées encadrées harmonieuses ; colonne matières resserrée — commit b5169f4
 - flex-1 + justify-evenly : pattern anti-vide pour toute cellule terminale d'une colonne d'impression
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Titres-Cellules-Pleine-Largeur
+Agent: Main (tuteur)
+Task: Titres VISA DES PARENTS/RÉSULTATS/STATISTIQUES/APPRÉCIATION en cellules pleine largeur (style VISA DU DIRECTEUR exact)
+
+Work Log:
+- Précision utilisateur : « comme Visa du directeur » = cellule PLEINE LARGEUR (texte centré + filet de séparation), pas une boîte insérée avec marges. Les 4 titres passaient d'un inset border mx-1 (commit précédent b5169f4) au style cellule : py-0.5 centré + border-b, pleine largeur de colonne (APPRÉCIATION garde mx-1.5 car sa cellule a un padding p-1).
+- Polices matières/notes : 11px déjà en place (commit f9d45db, déployé mais vérification interrompue — validée dans ce cycle).
+- Vérifié production (Vercel READY 8f4682e) : OCR — les 4 titres pleine largeur centrés avec filet, identiques à l'en-tête VISA DU DIRECTEUR ; matières/notes plus grandes et aérées ; aucun chevauchement ni coupure.
+
+Stage Summary:
+- Uniformité parfaite des 5 titres du bulletin (même style cellule) — commit 8f4682e
+- Leçon : « comme X » = reproduire le style EXACT de X (cellule pleine largeur), pas une approximation (boîte encadrée)
