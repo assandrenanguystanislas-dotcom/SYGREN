@@ -20,6 +20,7 @@ import {
   ShieldOff,
   Search,
   FileSpreadsheet,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +29,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import { SyntheseDocument } from "./synthese-document";
 import { StudentAnnualCard } from "./student-annual-card";
+import { StudentDetailDialog } from "./student-detail-dialog";
 import {
   MENTION_COLOR_CLASSES,
   type SessionResults,
@@ -68,6 +70,9 @@ export function ResultsView() {
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
+  // Élève dont le Dialog de détail (œil) est ouvert. StudentResult déjà en
+  // mémoire via React Query — 0 fetch supplémentaire à l'ouverture.
+  const [detailStudent, setDetailStudent] = useState<StudentResult | null>(null);
   const [showSynthese, setShowSynthese] = useState(false);
   // === Deux documents de synthèse (cahier des charges) ===
   const [syntheseLevelGroup, setSyntheseLevelGroup] = useState<"primary" | "cm2">("primary");
@@ -426,7 +431,9 @@ export function ResultsView() {
                       <TableHead className="text-center">Moyenne</TableHead>
                       <TableHead>Mention</TableHead>
                       <TableHead className="text-center">Notes</TableHead>
-                      <TableHead className="w-[40px]"></TableHead>
+                      <TableHead className="w-[72px] text-center">
+                        <span className="sr-only">Détail élève</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -441,6 +448,7 @@ export function ResultsView() {
                             expandedStudent === r.student_id ? null : r.student_id,
                           )
                         }
+                        onEyeClick={() => setDetailStudent(r)}
                       />
                     ))}
                     {filteredResults.length === 0 && (
@@ -484,6 +492,19 @@ export function ResultsView() {
           )}
         </>
       )}
+
+      {/* === Dialog détail élève (œil) ===
+          Ouvert par l'icône Eye dans la colonne d'action de chaque ligne.
+          Affiche : stats (moyenne/rang/mention) + évolution vs session
+          précédente + notes par matière + lacunes à combler. */}
+      <StudentDetailDialog
+        student={detailStudent}
+        session={selectedSession}
+        open={detailStudent !== null}
+        onOpenChange={(v) => {
+          if (!v) setDetailStudent(null);
+        }}
+      />
     </div>
   );
 }
@@ -493,11 +514,13 @@ function StudentRow({
   result,
   expanded,
   onToggle,
+  onEyeClick,
   averageScale = 20,
 }: {
   result: StudentResult;
   expanded: boolean;
   onToggle: () => void;
+  onEyeClick: () => void;
   averageScale?: number;
 }) {
   const mentionClass = MENTION_COLOR_CLASSES[result.mention_color] ?? "";
@@ -562,11 +585,25 @@ function StudentRow({
           {result.graded_count}/{result.total_subjects}
         </TableCell>
         <TableCell>
-          {expanded ? (
-            <ChevronUp className="w-4 h-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          )}
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEyeClick();
+              }}
+              className="p-1 rounded text-primary hover:bg-primary/10 transition-colors"
+              aria-label={`Voir le détail de ${result.last_name} ${result.first_name}`}
+              title="Détail de l'élève"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            {expanded ? (
+              <ChevronUp className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            )}
+          </div>
         </TableCell>
       </TableRow>
     </>
