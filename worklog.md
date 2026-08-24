@@ -3138,3 +3138,25 @@ Stage Summary:
 - Backend allégé de 564 lignes de code PDF mort — un seul système de bulletins de bout en bout (frontend + backend) — commit 958637e
 - Table report_cards et modèle conservés : suppression DB possible plus tard si l'utilisateur confirme (décision produit, non destructive aujourd'hui)
 - Entrée RBAC « Bulletins PDF » devenue inerte : à nettoyer éventuellement avec la table
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Impression-Par-Classe
+Agent: Main (tuteur)
+Task: Impression par classe ou toute l'école (Option A — cascade étendue) + correctif exemptions backend
+
+Work Log:
+- Revue d'expert préalable : 3 options comparées (cascade étendue / modal / boutons par ligne) → Option A retenue avec l'utilisateur (zéro clic supplémentaire pour imprimer tout, cohérence avec le pattern cascade existant)
+- Backend reports.go : ListReleveClasses charge les SessionExemption de la session et marque chaque classe exempted = ciblée directement (ClassID) OU via son niveau (Level CP/CE/CM). Correctif du bug : avant, les classes exemptées apparaissaient dans l'impression « toutes » avec des bulletins vides.
+- Frontend bulletins-view.tsx : 3e sélecteur « Classe » (Toutes par défaut / classe précise), exemptées disabled + libellé « — Exemptée » (visibles mais non sélectionnables, choix utilisateur), reset en cascade (école/session → Toutes), bouton dynamique « Imprimer — CP1 », class_id injecté dans l'URL du /bulletins
+- Frontend /bulletins/page.tsx : filtre double — exemptées exclues + restriction à class_id si présent (absent = toutes, comportement historique)
+- Piège UI contourné : Radix Select ne rend pas le placeholder avec value="" → valeur sentinelle "all" pour « Toutes les classes »
+- Vérifié production (Render live + Vercel READY bf93a41) — données réelles idéales : CM2 exemptée sur la session test Décembre :
+  * API : exempted=False ×5, CM2 exempted=True ✓
+  * Toutes : classes présentes CP1/CP2/CE1/CE2/CM1, CM2 ABSENTE ✓
+  * class_id=CP1 : document CP1 uniquement ✓
+  * class_id=CM2 : « Aucun élève » (exemptée filtrée) ✓
+  * Sélecteur : CM2 visible disabled « — Exemptée » ✓ ; sélection CP1 → bouton « Imprimer — CP1 » → onglet /bulletins?class_id=CP1 → document CP1 seul ✓
+
+Stage Summary:
+- Impression 3 modes : toute l'école (défaut), une classe ciblée, exemptées exclues partout — commit bf93a41
+- exempted est un champ permanent de releve-classes : réutilisable par /releve/batch (même bug potentiel là-bas si non filtré)
