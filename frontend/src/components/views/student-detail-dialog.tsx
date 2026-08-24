@@ -380,22 +380,28 @@ export function StudentDetailDialog({
               </h3>
               {hasLacunes ? (
                 <ul className="space-y-1">
-                  {lacunes.map((sg) => (
-                    <li
-                      key={sg.subject_id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="font-medium">
-                        {sg.subject_name}
-                        <span className="text-muted-foreground font-normal ml-1">
-                          (coef. {sg.coefficient})
+                  {lacunes.map((sg) => {
+                    // Affiché en /20 normé (cohérent avec la colonne « /20 norm. »
+                    // de la table ci-dessus). normalized_value est sur l'échelle
+                    // de l'élève — on convertit via normalizeTo20.
+                    const lacune20 = normalizeTo20(sg.normalized_value, scale);
+                    return (
+                      <li
+                        key={sg.subject_id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="font-medium">
+                          {sg.subject_name}
+                          <span className="text-muted-foreground font-normal ml-1">
+                            (coef. {sg.coefficient})
+                          </span>
                         </span>
-                      </span>
-                      <span className="text-rose-600 font-mono font-semibold">
-                        {sg.normalized_value.toFixed(2)}/20
-                      </span>
-                    </li>
-                  ))}
+                        <span className="text-rose-600 font-mono font-semibold">
+                          {lacune20.toFixed(2)}/20
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="text-sm text-emerald-700 flex items-center gap-1.5">
