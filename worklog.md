@@ -3160,3 +3160,17 @@ Work Log:
 Stage Summary:
 - Impression 3 modes : toute l'école (défaut), une classe ciblée, exemptées exclues partout — commit bf93a41
 - exempted est un champ permanent de releve-classes : réutilisable par /releve/batch (même bug potentiel là-bas si non filtré)
+
+---
+Task ID: Architecture-D-Phase6-v2-Bulletins-Cascade-Apercu
+Agent: Main (tuteur)
+Task: Le filtre Classe s'applique aussi à l'aperçu et à la carte « prêts » (retour utilisateur)
+
+Work Log:
+- Diagnostic retour utilisateur : le sélecteur Classe ne filtrait que l'impression — le tableau d'aperçu et la carte de préparation affichaient tous les élèves
+- Fix : mergedStudents filtré par class_id (« Toutes » = toute l'école, sinon les élèves de la classe choisie) — chaque StudentResult porte sa classe (Approche A). La carte « prêts » (compteur + barre) suit automatiquement.
+- Message d'état vide distinct selon le filtre (« Aucun élève dans cette classe pour cette session »)
+- Vérifié production (Vercel READY 73ff413) : E2E — sans filtre 25 lignes / avec CE1 : 5 lignes d'aperçu, carte « 5 prêts », bouton « Imprimer — CE1 » ✓
+
+Stage Summary:
+- Cohérence totale de la cascade : le sélecteur Classe pilote aperçu + carte prêts + impression — commit 73ff413
