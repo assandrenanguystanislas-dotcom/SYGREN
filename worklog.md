@@ -3196,3 +3196,30 @@ Stage Summary:
 - Environnement 100 % opérationnel : clone propre, Go 1.25 installé, backend compile, Neon/Render/Vercel tous live en prod — commit (à suivre)
 - Identité git par-repo conforme (assandrenanguystanislas / assandrenanguystanislas@gmail.com) ; autoDeploy Render + Vercel confirmés sur commit to main
 - Pattern de travail établi : (1) coder en local (2) `go vet` + `go build` + `tsc --noEmit` + `eslint` (3) commit worklog+code (4) push to main (5) poll Render + Vercel jusqu'à live/READY (6) vérif E2E prod
+
+---
+Task ID: Module-Resultats-Oeil-Detail-Eleve
+Agent: Main (tuteur)
+Task: œil devant chaque élève du module Résultats → Dialog riche (notes par matière + stats + progression/régression + lacunes à combler)
+
+Work Log:
+- Discovery : lu results-view.tsx (table 6 colonnes, colonne action w-[40px] avec chevron d'expand + StudentDetailCard inline existant), types.ts (StudentResult, SubjectGrade avec normalized_value, EvaluationSession avec eval_type/eval_number/month/year), bulletins/page.tsx (fetchPreviousAverages ligne 202 + logique d'évolution inline IIFE lignes 318-333). Analysis user validée (données dispo, 0 fetch supplémentaire à l'ouverture).
+- Décision design : GARDER l'expand existant (coup d'œil inline) + AJOUTER l'œil à côté (Dialog riche avec progression + lacunes que l'expand n'a pas). Cellule 40px → 72px (œil + chevron). Eye avec stopPropagation pour ne pas toggle l'expand.
+- Refactor DRY : créé lib/evolution.ts avec fetchPreviousAverages (extrait de bulletins/page.tsx, retourne maintenant aussi previousSession pour le label du dialog) + computeEvolution (type structural — réutilisable par StudentResult ET ReleveData student) + computeLacunes + normalizeTo20.
+- bulletins/page.tsx refactor : import depuis lib/evolution (sessionsApi retiré — non utilisé), IIFE inline remplacée par computeEvolution (comportement inchangé : evolution.delta + previousAvg identiques), déstructure { averages: prevLookup }.
+- Créé student-detail-dialog.tsx : Dialog shadcn + EvolutionBanner (▲/▼/= « ÉLÈVE EN PROGRESSION/RÉGRESSION/STABLE » — mêmes libellés que le bulletin A5) + table matières (Matière/Note//20 norm./Appréciation) + section Lacunes. useQuery fetchPreviousAverages (lazy, cached 5min/sessionId).
+- results-view.tsx : import Eye + StudentDetailDialog, state detailStudent, Eye button dans cellule 40→72px, Dialog rendu en pied de ResultsView.
+- Commit efd9121 chore(backend) : go mod tidy a détecté go-pdf/fpdf orpheline depuis 958637e (suppression report-cards) → retirée proprement. Build vérifié sans fpdf.
+- Commit df9845d feat(results) : œil + Dialog + lib/evolution. tsc EXIT 0, eslint EXIT 0. Push → Vercel READY df9845d.
+- E2E via Agent Browser sur sygren.vercel.app : login admin → module Résultats → EPP COTIERE PALMERAIE → Composition N°2 Décembre 2026 → clic œil Diane (1er, 8.32/10, Très Bien). Dialog ouvert, TOUS les éléments présents (header/stats/évolution/table/lacunes). ÉLÈVE EN PROGRESSION +1.70 vs Novembre 6.63/10 ✅.
+- BUG CRITIQUE découvert en E2E : SubjectGrade.normalized_value est documenté « /20 » mais le backend normalise en réalité sur l'average_scale de l'élève (/10 CP/CE, /20 CM). Preuve : Dictée 14.20/20 → norm 7.10 (= 14.20×10/20, échelle CE1). Conséquence : Diane voyait ses 4 matières en « Insuffisant » et toutes flaguées lacune — car le code comparait 7.10 (sur /10) contre seuil 10/20 fixe.
+- Commit 146318e fix(results) : computeLacunes prend averageScale, seuil = averageScale/2 (5 CP/CE, 10 CM). normalizeTo20() convertit normalized_value vers /20. subjectAppreciation reçoit la valeur /20 convertie. Colonne « /20 norm. » affiche norm20 (Dictée 14.20 au lieu de 7.10). Libellé lacunes dynamique (matières < 5/10 pour CE1). tsc + eslint EXIT 0. Push → Vercel READY 146318e.
+- E2E re-vérif Diane (post-fix) : Dictée 14.20→Très Bien ✅, Etude 17.00→Excellent ✅, Exploitation 17.40→Excellent ✅, Math 18.00→Excellent ✅, « Aucune lacune — toutes les matières notées sont ≥ 5/10 » ✅.
+- E2E Fofana (4ème, 5.82/10, Passable) : ÉLÈVE EN RÉGRESSION -1.95 vs Novembre 7.78/10 ✅ (branche régression). Dictée 12.40→Bien, Etude 14.00→Très Bien, Exploitation 8.00→Insuffisant, Math 12.20→Bien ✅. Lacune détectée : Exploitation (4.00 < 5/10 = vraie lacune) ✅.
+- Mini-bug affichage lacune : affichait « 4.00/20 » (normalized_value sur /10 avec suffixe /20). Commit 066d6df fix : affiche lacune20 = normalizeTo20(4.00, 10) = 8.00/20, cohérent avec la colonne /20 norm. de la table. tsc + eslint EXIT 0. Push → Vercel READY 066d6df. Re-vérif E2E : « Exploitation de Texte (coef. 1) 8.00/20 » ✅.
+
+Stage Summary:
+- Feature livrée E2E vérifiée en prod sur les 2 branches (progression + aucune lacune / régression + lacune listée). 4 commits : efd9121 (chore backend fpdf) + df9845d (feat œil) + 146318e (fix seuils échelle élève) + 066d6df (fix affichage lacune /20).
+- DRY : lib/evolution.ts partagé entre bulletins A5 et dialog Résultats — formule d'évolution identique garantie.
+- Leçon clé : le type doc `normalized_value // note normalisée sur /20` est trompeur — le backend normalise sur l'average_scale de l'élève. E2E sur un vrai élève CE1 (Diane) a révélé le bug que tsc/eslint ne pouvaient pas détecter. Règle : toujours E2E sur des données réelles avec échelle mixte (CP/CE /10 + CM /20) pour toute logique de seuillage.
+- Render : service LIVE (health 200, login 200) ; rebuild df9845d déclenché par efd9121 (cleanup fpdf) en cours — pas d'impact API (fpdf était orpheline depuis 958637e).
