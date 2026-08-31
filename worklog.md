@@ -3372,3 +3372,18 @@ Stage Summary:
 - « Plan d'Action Pluriannuel de l'IEPP » livré de bout en bout dans le module Résultats (2e onglet) : saisie par élève des 3 matières désignées avec maîtrise en direct, agrégats du document officiel calculés serveur, reproduction imprimable A4 portrait avec remédiation saisissable et signatures
 - 9 fichiers : models.go (+3 modèles), handlers/pda.go (nouveau), router.go (+8 routes), types.ts, api.ts (+pdaApi), pda-view.tsx (nouveau), pda-document.tsx (nouveau), results-view.tsx (onglets), globals.css (print #pda-doc)
 - L'objectif utilisateur est couvert : le niveau d'étude de CHAQUE élève est visible par matière (badges Admis/Non admis) et agrégé exactement comme dans le document du ministère (Filles/Garçons distingués)
+
+---
+Task ID: Deploy-Verification-PDA-IEPP
+Agent: Main (tuteur)
+Task: Vérification des déploiements Render (LIVE) et Vercel (READY) du commit fe345d0 — sans tokens (révolqués)
+
+Work Log:
+- Contexte : tokens Render/Vercel/Neon de la session 1 indisponibles (sandbox reconstruit) → vérification par endpoints PUBLICS, preuves directes plutôt que statuts API
+- Render LIVE vérifié : /api/health → 200 ; /api/pda/exams → 401 (la route n'existait PAS avant ce deploy — 404 à 21:53, 401 à 21:55 = nouveau binaire live) ; POST sans token → 401 (RBAC RequireModule actif)
+- Vercel READY vérifié : page → 200 + le bundle /_next/static/chunks/c6647c164738662e.js contient « action IEPP » (libellé du nouvel onglet) — apparu entre 2 polls (deploy terminé)
+- Nettoyage : backend local arrêté, dev server my-project restauré sur le port 3000, DB de test = SQLite locale gitignorée (production Neon JAMAIS touchée par les tests — zéro donnée de test en prod)
+
+Stage Summary:
+- fe345d0 déployé et vérifié sur les DEUX pipelines : Render LIVE (health 200 + route PDA 401/RBAC) et Vercel READY (bundle contient l'onglet) — la fonctionnalité est disponible en production
+- La vérification fonctionnelle en prod (saisie réelle via navigateur) reste à faire par le user (identifiants prod non disponibles dans cette session) — le flux complet a été validé E2E en local (API + navigateur, y compris calculs des 3 tableaux du document)
