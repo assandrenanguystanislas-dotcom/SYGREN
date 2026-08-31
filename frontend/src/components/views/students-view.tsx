@@ -49,6 +49,7 @@ interface FormData {
   last_name: string;
   gender: "M" | "F";
   matricule: string; // fourni par le Ministère de l'Éducation (optionnel)
+  birth_year: string; // année de naissance seule, ex: "2006" — state string (input), parse à la soumission ; "" = non renseignée
 }
 
 const EMPTY: FormData = {
@@ -57,7 +58,11 @@ const EMPTY: FormData = {
   last_name: "",
   gender: "M",
   matricule: "",
+  birth_year: "",
 };
+
+// Payload API : birth_year est un number (0 = non renseignée / effacer).
+type StudentPayload = Omit<FormData, "birth_year"> & { birth_year: number };
 
 export function StudentsView() {
   const user = useAuthStore((s) => s.user);
@@ -140,7 +145,7 @@ export function StudentsView() {
     actionLabel: "Inscription",
   });
   const updateMut = useCrudMutation(
-    (id: string, data: FormData) => studentsApi.update(id, data),
+    (id: string, data: StudentPayload) => studentsApi.update(id, data),
     {
       invalidateKeys: [["students"]],
       successMessage: "Élève modifié avec succès",
@@ -165,21 +170,22 @@ export function StudentsView() {
       last_name: s.last_name,
       gender: s.gender as "M" | "F",
       matricule: s.matricule ?? "",
+      birth_year: s.birth_year != null ? String(s.birth_year) : "",
     });
     setEditing(s);
     setDialogOpen(true);
   }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // birth_year : "" (champ vide) → 0 → backend = NULL (non renseignée / effacée).
+    const birth_year = form.birth_year ? parseInt(form.birth_year, 10) : 0;
+    const payload: StudentPayload = { ...form, birth_year };
     try {
       if (editing) {
-        await updateMut.mutateAsync([editing.id, form]);
+        await updateMut.mutateAsync([editing.id, payload]);
       } else {
-        const result = await createMut.mutateAsync([form]);
-        // Afficher le matricule généré
-        if ("matricule" in result) {
-          // toast déjà affiché par le hook ; le matricule est visible dans la liste
-        }
+        await createMut.mutateAsync([payload]);
+        // toast déjà affiché par le hook ; le matricule est visible dans la liste
       }
       setDialogOpen(false);
     } catch {
@@ -428,6 +434,7 @@ export function StudentsView() {
                     <TableHead>Nom</TableHead>
                     <TableHead>Prénom</TableHead>
                     <TableHead>Sexe</TableHead>
+                    <TableHead>Naissance</TableHead>
                     <TableHead>Classe</TableHead>
                     <TableHead>École</TableHead>
                     {canEdit && <TableHead className="text-right">Actions</TableHead>}
@@ -460,6 +467,9 @@ export function StudentsView() {
                         >
                           {s.gender}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {s.birth_year ?? "—"}
                       </TableCell>
                       <TableCell>{s.class_name ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">
@@ -572,22 +582,43 @@ export function StudentsView() {
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="student-gender">Sexe</Label>
-              <Select
-                value={form.gender}
-                onValueChange={(v) =>
-                  setForm({ ...form, gender: v as "M" | "F" })
-                }
-              >
-                <SelectTrigger id="student-gender">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="M">Masculin</SelectItem>
-                  <SelectItem value="F">Féminin</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="student-gender">Sexe</Label>
+                <Select
+                  value={form.gender}
+                  onValueChange={(v) =>
+                    setForm({ ...form, gender: v as "M" | "F" })
+                  }
+                >
+                  <SelectTrigger id="student-gender">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="M">Masculin</SelectItem>
+                    <SelectItem value="F">Féminin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="student-birth-year">Année de naissance</Label>
+                <Input
+                  id="student-birth-year"
+                  value={form.birth_year}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      birth_year: e.target.value.replace(/[^0-9]/g, "").slice(0, 4),
+                    })
+                  }
+                  placeholder="Ex : 2006"
+                  inputMode="numeric"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Format court — uniquement l&apos;année. Optionnel.
+                </p>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button

@@ -120,12 +120,18 @@ func (c *Class) BeforeCreate(tx *gorm.DB) error {
 // (PostgreSQL autorise plusieurs NULL dans un unique index, donc plusieurs
 // élèves sans matricule peuvent coexister sans conflit.)
 type Student struct {
-	ID        string     `gorm:"primaryKey;type:text" json:"id"`
-	Matricule *string    `gorm:"uniqueIndex;type:text" json:"matricule,omitempty"`
-	ClassID   string     `gorm:"type:text;index" json:"class_id"`
-	FirstName string     `gorm:"type:text" json:"first_name"`
-	LastName  string     `gorm:"type:text" json:"last_name"`
-	Gender    string     `gorm:"type:text" json:"gender"` // M / F
+	ID        string  `gorm:"primaryKey;type:text" json:"id"`
+	Matricule *string `gorm:"uniqueIndex;type:text" json:"matricule,omitempty"`
+	ClassID   string  `gorm:"type:text;index" json:"class_id"`
+	FirstName string  `gorm:"type:text" json:"first_name"`
+	LastName  string  `gorm:"type:text" json:"last_name"`
+	Gender    string  `gorm:"type:text" json:"gender"` // M / F
+	// BirthYear — année de naissance seule (format court, ex: 2006).
+	// Nullable : NULL = non renseignée (les élèves existants ne sont pas
+	// impactés — AutoMigrate ajoute la colonne sans backfill). Le champ
+	// BirthDate (date complète ISO) est conservé pour compatibilité API
+	// mais n'est pas exposé dans l'UI (champ dormant depuis l'origine).
+	BirthYear *int       `gorm:"type:integer" json:"birth_year,omitempty"`
 	BirthDate *time.Time `json:"birth_date,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 }

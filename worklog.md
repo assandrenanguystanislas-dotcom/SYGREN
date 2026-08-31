@@ -3282,3 +3282,26 @@ Work Log:
 Stage Summary:
 - Environnement 100 % opérationnel : clone propre à 55098ab, Go 1.27.0 installé, backend compile (vet+build), Neon lisible/écrivable via AutoMigrate, Render LIVE, Vercel READY sur HEAD
 - Pipeline complet re-vérifié : local compile → prod déployée → données réelles accessibles. Prêt à reprendre le travail selon le pattern établi : (1) coder (2) go vet + go build + tsc + eslint (3) commit worklog+code (4) push main (5) poll Render/Vercel (6) E2E prod
+
+---
+Task ID: Module-Eleves-Champ-Annee-Naissance
+Agent: Main (tuteur)
+Task: Module Élèves — ajouter le champ année de naissance au format court (ex: 2006, uniquement l'année)
+
+Work Log:
+- Discovery : le modèle Student avait déjà BirthDate *time.Time (date ISO complète) MAIS aucune UI ne l'utilisait (champ dormant, API-capable seulement) — vérifié students-view/entity-dialog/import-dialog/bulletins (grep birth_date/naissance vide côté UI)
+- Décision design validée avec le pattern existant : NOUVEAU champ BirthYear *int nullable plutôt que détourner BirthDate — rétrocompatible (élèves existants = NULL → affiché « — »), BirthDate conservé pour compat API (commenté dormant)
+- Backend models.go : BirthYear *int `gorm:"type:integer" json:"birth_year,omitempty"` + commentaire d'historique — AutoMigrate ajoute la colonne sans backfill
+- Backend students.go : CreateStudentRequest.BirthYear *int + helper validateBirthYear (plage 1900..année courante, erreur 400 lisible) ; Create = absent/0 → NULL ; Update = nil → inchangé / 0 → effacer (NULL) / sinon valider+set (même sémantique pointeur que Matricule)
+- Frontend types.ts : Student.birth_year?: number | null (StudentWithClass hérite) ; api.ts : create (birth_year?: number) + update Partial (birth_year: number, 0 = effacer)
+- Frontend students-view.tsx : FormData.birth_year string (input) → StudentPayload type (Omit & {birth_year: number}) parse à la soumission ("" → 0) ; openEdit pré-remplit String(s.birth_year) ; formulaire = grid 2 col (Sexe | Année de naissance, input inputMode=numeric, sanitize [^0-9] max 4 chars, placeholder « Ex : 2006 », helper « Format court — uniquement l'année. Optionnel. ») ; table = colonne « Naissance » entre Sexe et Classe (tabular-nums, — si null) ; code mort retiré au passage (if "matricule" in result décoratif)
+- Outil d'édition convertit tabs→espaces sur TOUT le fichier Go édité → gofmt -w restaure (HEAD était tabs donc diff minimal) — leçon : TOUJOURS gofmt -w après édition d'un .go
+- Vérif : go vet CLEAN, go build OK, tsc --noEmit EXIT 0, eslint EXIT 0 (students-view/api/types)
+- E2E local vs Neon : boot backend local (AutoMigrate ajoute birth_year à Neon ~55s) → CREATE birth_year=2006 ✓ → PUT 2007 ✓ → PUT 0 = NULL ✓ → PUT 2006 ✓ → POST 1850 = 400 « année de naissance invalide : 1850 (attendu entre 1900 et 2026) » ✓ → LIST birth_year ✓ → DELETE élève test (DB propre) ✓
+- INCIDENT DIAGNOSTIC (leçon importante) : via l'endpoint POOLER Neon (PgBouncer), les PUT sur /api/students/{id} renvoyaient 404 « élève introuvable » après l'ajout de colonne — log GORM : `cached plan must not change result type (SQLSTATE 0A000)` sur SELECT * FROM students WHERE id — PERSISTE même après redémarrage du processus (PgBouncer recycle des prepared statements serveur nommés stmtcache_N préparés avant l'ALTER, donc avec l'ancien schéma) → basculé sur l'endpoint DIRECT Neon (sans -pooler) pour les tests locaux = OK immédiatement. Prod non impactée : chaque deploy Render = processus neuf + AutoMigrate au boot avant écoute HTTP, connexions fraîches sans plans périmés
+- Leçon E2E : GORM Delete/First sur id inexistant ne renvoie pas d'erreur distinguable côté handler (First si, mais Delete non) — toujours vérifier les codes HTTP bruts (curl -w) en debug, pas seulement le JSON
+
+Stage Summary:
+- Champ année de naissance livré de bout en bout (modèle + API + formulaire + table) — nullable, validé 1900..année courante, sémantique 0=effacer — 6 fichiers touchés (models.go, students.go, types.ts, api.ts, students-view.tsx, worklog)
+- Base Neon synchronisée (colonne birth_year ajoutée par AutoMigrate du boot local, re-confirmée au boot Render)
+- Infra leçon : PgBouncer Neon + pgx prepared statements = piège après ALTER TABLE en local → utiliser endpoint direct pour tester les migrations

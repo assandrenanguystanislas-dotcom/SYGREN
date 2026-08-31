@@ -364,6 +364,7 @@ export const studentsApi = {
     last_name: string;
     gender: "M" | "F";
     matricule?: string; // fourni par le Ministère de l'Éducation (optionnel)
+    birth_year?: number; // année de naissance seule, ex: 2006 — 0/absent = non renseignée
   }) =>
     apiFetch<Student>("/api/students", {
       method: "POST",
@@ -376,6 +377,7 @@ export const studentsApi = {
       first_name: string;
       last_name: string;
       gender: "M" | "F";
+      birth_year: number; // année seule — 0 = effacer (NULL)
       birth_date: string;
       matricule: string; // string vide = effacer le matricule
     }>,

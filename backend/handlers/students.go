@@ -98,7 +98,8 @@ type CreateStudentRequest struct {
 	FirstName string  `json:"first_name"`
 	LastName  string  `json:"last_name"`
 	Gender    string  `json:"gender"`               // M / F
-	BirthDate *string `json:"birth_date,omitempty"` // ISO 8601
+	BirthYear *int    `json:"birth_year,omitempty"` // année de naissance seule, ex: 2006 (optionnel)
+	BirthDate *string `json:"birth_date,omitempty"` // ISO 8601 (dormant — pas d'UI)
 }
 
 // normalizeMatricule retourne nil si la string est vide (→ NULL en base),
@@ -110,6 +111,17 @@ func normalizeMatricule(s string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+// validateBirthYear vérifie que l'année de naissance est plausible :
+// entre 1900 et l'année courante. Retourne une erreur lisible sinon
+// (le handler la renvoie telle quelle au frontend en 400).
+func validateBirthYear(y int) error {
+	current := time.Now().Year()
+	if y < 1900 || y > current {
+		return fmt.Errorf("année de naissance invalide : %d (attendu entre 1900 et %d)", y, current)
+	}
+	return nil
 }
 
 // CreateStudent creates a new student.
@@ -167,6 +179,17 @@ func CreateStudent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Année de naissance optionnelle (format court, ex: 2006).
+	// Absente ou 0 → NULL (non renseignée).
+	if req.BirthYear != nil && *req.BirthYear != 0 {
+		if err := validateBirthYear(*req.BirthYear); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		y := *req.BirthYear
+		student.BirthYear = &y
+	}
+
 	if err := database.DB.Create(&student).Error; err != nil {
 		middleware.JSONError(w, "erreur création élève: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -221,6 +244,21 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 			student.BirthDate = &t
 		}
 	}
+
+	// Année de naissance : nil = champ non envoyé (inchangé) ;
+	// 0 = effacer (NULL) ; sinon valider la plage et mettre à jour.
+	if req.BirthYear != nil {
+		if *req.BirthYear == 0 {
+			student.BirthYear = nil
+		} else if err := validateBirthYear(*req.BirthYear); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		} else {
+			y := *req.BirthYear
+			student.BirthYear = &y
+		}
+	}
+
 	if err := database.DB.Save(&student).Error; err != nil {
 		middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
 		return

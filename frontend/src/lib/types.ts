@@ -90,6 +90,7 @@ export interface Student {
   last_name: string;
   gender: "M" | "F" | string;
   birth_date?: string | null;
+  birth_year?: number | null; // année de naissance seule (ex: 2006) — null si non renseignée
   created_at: string;
 }
 
