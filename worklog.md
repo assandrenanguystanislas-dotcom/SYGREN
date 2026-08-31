@@ -3323,3 +3323,23 @@ Work Log:
 Stage Summary:
 - PUT /api/students/{id} réparé en prod : protocole simple pgx sur la connexion Neon pooler — la classe d'erreur 0A000 (« cached plan ») ne peut plus se produire, y compris aux prochains deploys avec migration de schéma
 - Leçon d'architecture : Neon pooler (PgBouncer transaction) + pgx CacheStatement = bombe à retardement au premier ALTER TABLE après un deploy → protocole simple dès qu'un pooler s'intercale entre l'app et la base
+
+---
+Task ID: E2E-Prod-Browser-Annee-Naissance
+Agent: Main (tuteur)
+Task: Vérification E2E navigateur en prod (Vercel + Render live) du champ année de naissance + nettoyage DB
+
+Work Log:
+- Deploy vérifié : Render LIVE f495f5c (fix protocole simple) + Vercel READY f495f5c ; /api/health 200
+- E2E API prod complet : login ✓ → CREATE birth_year=2006 ✓ → LIST birth_year ✓ → PUT 2006→2007 = HTTP 200 birth_year:2007 (avant fix : 404 0A000) ✓ → PUT 0 = NULL ✓ → DELETE (élèves de test retirés) ✓
+- Agent Browser E2E UI (sygren.vercel.app) : login admin → module Élèves → sélection école (Radix Select : clic option via eval JS — find text/typeahead non fiables sur les options Radix) → table : colonnes « Matricule | Nom | Prénom | Sexe | Naissance | Classe | École | Actions », élèves existants affichent « — » (NULL) ✓
+- Dialog Inscrire : champ « Année de naissance » présent entre Sexe et boutons ✓ → saisie 2006 + classe CM2 → toast « Élève inscrit avec succès » → ligne « N/A | Test-UI | Annee-Naissance | M | 2006 | CM2 | EPP COTIERE PALMERAIE » ✓
+- Dialog Modifier : pré-rempli « 2006 » ✓ → test sanitisation : « abc2027xyz99 » → input = « 2027 » (lettres retirées, max 4) ✓
+- Validation backend vérifiée EN VRAI via l'UI : PUT avec 2027 (année future) → 400 « année de naissance invalide » (network requests : PUT 400) — la plage 1900..année courante fonctionne ✓
+- Édition valide 2007 → toast succès + ligne mise à jour « 2007 » ✓
+- Suppression via trash + ConfirmDialog « Supprimer l'élève ? » → row absente ✓ + vérif API : 0 élève de test restant (DB propre) ✓ ; screenshot /tmp/sygren-eleves-final.png
+- Leçon UI-test : les refs Radix Select sont instables après re-render (clic sur ref périmé = clic sur le mauvais élément, dialog fermé sans sauvegarde) → pour les options/listes Radix, cliquer via eval JS sur [role=option] par texte, et piloter les inputs via le native setter + event input
+
+Stage Summary:
+- Feature « année de naissance » livrée et vérifiée E2E en prod sur TOUT le cycle (API + UI) : création, affichage « — » pour NULL, pré-remplissage, sanitisation, rejet année future (400), édition, suppression — DB de prod laissée propre
+- Au passage : bug de production préexistant découvert et corrigé (0A000 PgBouncer) — les PUT/First-by-id students cassés depuis le deploy 2560b2b sont réparés (f495f5c)
