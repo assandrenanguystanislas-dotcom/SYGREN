@@ -3261,3 +3261,24 @@ Work Log:
 Stage Summary:
 - Tableau de bord focus action : la carte « Détail par école » ne montre plus que les écoles ayant encore du travail en cours (draft/open/closed). Une fois validée, la session sort du filtre → l'école disparaît de la vue si elle n'a plus aucune session active. Lignes expansibles pour voir le détail par session sans quitter le dashboard.
 - 0 backend touché : réutilise le filtre view=active déjà en place depuis Architecture-D-Phase6. Pattern DRY : monthLabel/SESSION_STATUS_CONFIG/EVAL_TYPE_LABELS déjà partagés avec sessions-view/results-view.
+
+---
+Task ID: Session-Setup-Tuteur-Environnement-2026-08-31
+Agent: Main (tuteur)
+Task: Ouverture de session tuteur #2 — réinstallation de l'environnement (sandbox réinitialisé) et vérification complète de l'état de prod
+
+Work Log:
+- Clonage du dépôt SYGREN dans /home/z/SYGREN — main à 55098ab (250 commits), git status propre, branche unique main
+- Identité git par-repo configurée (user.name=assandrenanguystanislas, user.email=assandrenanguystanislas@gmail.com)
+- Sécurité : token GitHub retiré de l'URL du remote origin (https://github.com/... sans token) et stocké dans /home/z/.git-credentials (credential store, chmod 600) — jamais écrit dans .git/config ni dans le dépôt
+- Installation Go 1.27.0 (linux-amd64) dans /home/z/go-sdk — SHA256 vérifié contre go.dev/dl (675c26c4...) — PATH persisté dans .bashrc/.profile (sandbox avait été réinitialisé, Go absent)
+- Compilation backend : `go mod tidy` OK, `go vet ./...` CLEAN, `go build -o /tmp/sygren-api main.go` OK (binaire 24 Mo)
+- Test Neon en local : backend démarré (binaire compilé, DATABASE_URL Neon pooler + JWT_SECRET session + PORT 8090) — `[DB] Connecté à PostgreSQL (Neon)` + `[DB] Migrations terminées` (AutoMigrate ~55s, connexions froides ~350ms/requête attendues) — /api/health 200 + POST /api/auth/login admin@sygren.ci → 200 JWT + role admin (données réelles lues depuis Neon) — backend local ensuite arrêté proprement
+- API Render (GET /v1/services) : service SYGREN srv-da0t6lnlk1mc738nvvf0, not_suspended, autoDeploy=yes, url=https://sygren.onrender.com — dernier deploy status=live (message « feat(results): œil devant chaque élève » = df9845d, dernier commit backend-impactant ; les commits frontend-only suivants sont smart-skipés, comportement attendu)
+- API Vercel (GET /v6/deployments?target=production) : projet sygren prj_51kMcmyW9PFzFt4sk0Jn7BYkvk4O — dernier deploy commit 55098ab (= HEAD du clone) state READY ✓, précédents c08bf35/b6f4664 READY
+- Prod E2E : GET https://sygren.onrender.com/api/health → 200 `{"service":"sygren-api","status":"ok","version":"0.1.0"}` ; GET https://sygren.vercel.app/ → HTTP 200 (0.67s)
+- Leçon infra : `go run main.go` en arrière-plan via `&` simple est tué à la fin du shell → utiliser le binaire compilé avec nohup + sous-shell détaché pour les tests locaux
+
+Stage Summary:
+- Environnement 100 % opérationnel : clone propre à 55098ab, Go 1.27.0 installé, backend compile (vet+build), Neon lisible/écrivable via AutoMigrate, Render LIVE, Vercel READY sur HEAD
+- Pipeline complet re-vérifié : local compile → prod déployée → données réelles accessibles. Prêt à reprendre le travail selon le pattern établi : (1) coder (2) go vet + go build + tsc + eslint (3) commit worklog+code (4) push main (5) poll Render/Vercel (6) E2E prod
