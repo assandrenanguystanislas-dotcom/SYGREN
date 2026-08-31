@@ -31,8 +31,20 @@ func Init(cfg *config.Config) error {
 
 	if cfg.DatabaseURL != "" {
 		// Mode production : PostgreSQL (Neon.tech)
-		log.Println("[DB] Connexion à PostgreSQL (Neon)…")
-		db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+		//
+		// PreferSimpleProtocol (protocole simple pgx, sans prepared
+		// statements serveur) : l'endpoint POOLER de Neon est un
+		// PgBouncer en mode transaction. Avec le mode par défaut de
+		// pgx (CacheStatement), les statements nommés survivent côté
+		// pooler et, dès qu'AutoMigrate ajoute une colonne, chaque
+		// SELECT * re-préparé échoue avec « cached plan must not
+		// change result type » (SQLSTATE 0A000) → 404 en cascade sur
+		// tous les handlers First-by-id (ex: PUT /api/students/{id}).
+		// Le protocole simple est la parade documentée PgBouncer.
+		db, err = gorm.Open(postgres.New(postgres.Config{
+			DSN:                  cfg.DatabaseURL,
+			PreferSimpleProtocol: true,
+		}), &gorm.Config{
 			Logger: logger.Default.LogMode(gormLogLevel),
 		})
 		if err != nil {

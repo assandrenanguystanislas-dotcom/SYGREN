@@ -3305,3 +3305,21 @@ Stage Summary:
 - Champ année de naissance livré de bout en bout (modèle + API + formulaire + table) — nullable, validé 1900..année courante, sémantique 0=effacer — 6 fichiers touchés (models.go, students.go, types.ts, api.ts, students-view.tsx, worklog)
 - Base Neon synchronisée (colonne birth_year ajoutée par AutoMigrate du boot local, re-confirmée au boot Render)
 - Infra leçon : PgBouncer Neon + pgx prepared statements = piège après ALTER TABLE en local → utiliser endpoint direct pour tester les migrations
+
+---
+Task ID: Fix-Backend-PgBouncer-SimpleProtocol
+Agent: Main (tuteur)
+Task: Fix production — PUT /api/students/{id} en 404 après deploy (SQLSTATE 0A000) → protocole simple pgx
+
+Work Log:
+- Constat en E2E prod : CREATE ✓ / LIST ✓ / DELETE ✓ mais PUT 2006→2007 = 404 « élève introuvable » (identique au symptôme local via pooler) — retest 15 min plus tard : TOUJOURS 404 → la fenêtre ne se referme PAS seule
+- Cause racine confirmée : DATABASE_URL de Render = endpoint POOLER Neon (PgBouncer transaction-mode, vérifié via API Render env-vars) + driver pgx par défaut (CacheStatement) → les prepared statements serveur nommés (stmtcache_N) de l'ANCIEN process Render (live depuis le 24/08, préparés AVANT l'ALTER) survivent côté pooler sur les connexions serveur ; le nouveau process re-prépare les mêmes noms → PostgreSQL rejette avec « cached plan must not change result type » dès que le schéma de la table a changé (seule la table students est impactée ici — First-by-id students → 404 ; les autres tables inchangées fonctionnent)
+- Fix (database/database.go, branche PostgreSQL uniquement) : gorm.Open(postgres.New(postgres.Config{DSN, PreferSimpleProtocol: true})) — protocole simple = ZÉRO prepared statement serveur = immunité totale à la classe d'erreur 0A000, parade documentée PgBouncer transaction-mode ; branche SQLite inchangée ; gofmt -w après édition (outil convertit tabs→espaces)
+- Vérif : gofmt clean, go vet CLEAN, go build OK
+- E2E local sur l'endpoint POOLER (config exacte qui échouait, statements périmés toujours côté pooler) : boot ✓ → CREATE birth_year=2006 ✓ → PUT 2007 = HTTP 200 birth_year:2007 (avant fix : 404) ✓ → DELETE (DB propre) ✓
+- Impact perf : pas de prepared statements serveur = coût marginal (parse par requête) — négligeable pour ce volume (latence réseau Neon domine) ; bénéfice : plus aucun risque 0A000 aux futurs deploys ajoutant des colonnes
+- Sécurité : JWT_SECRET visible via l'API Render (token admin) — ne jamais l'écrire dans le repo/worklog
+
+Stage Summary:
+- PUT /api/students/{id} réparé en prod : protocole simple pgx sur la connexion Neon pooler — la classe d'erreur 0A000 (« cached plan ») ne peut plus se produire, y compris aux prochains deploys avec migration de schéma
+- Leçon d'architecture : Neon pooler (PgBouncer transaction) + pgx CacheStatement = bombe à retardement au premier ALTER TABLE après un deploy → protocole simple dès qu'un pooler s'intercale entre l'app et la base
