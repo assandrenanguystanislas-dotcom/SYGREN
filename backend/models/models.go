@@ -480,6 +480,83 @@ func (a *AuditLog) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// === PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM) ===
+// Reproduction du document officiel « SUIVI DU PLAN D'ACTION PLURIANNUEL
+// DE L'IEPP — RÉSULTAT DE L'EXAMEN BLANC N°X » (niveaux CE et CM).
+// Objectif : mesurer le niveau de maîtrise de CHAQUE élève dans les 3
+// matières désignées (Exploitation de texte, Mathématiques, Dictée) puis
+// produire automatiquement les tableaux agrégés du document :
+//   Tableau 1 : Présents / Admis / % Admis (Total | Filles | Garçons)
+//   Tableau 2 : maîtrise par matière (Présents, Admis, %, Non Admis, %)
+//   Tableau 3 : difficultés d'apprentissage + remédiation
+// Un élève est « Admis » dans une matière si Present=true ET
+// note >= barème_niveau × Threshold/100 (barème PDA : CE=/10, CM=/20).
+
+// PDAExam — un examen blanc du plan d'action (numéroté par école + année).
+type PDAExam struct {
+	ID        string     `gorm:"primaryKey;type:text" json:"id"`
+	SchoolID  string     `gorm:"type:text;index" json:"school_id"`
+	Number    int        `json:"number"`                                    // Examen Blanc N° 1, 2, 3…
+	Year      int        `gorm:"index" json:"year"`                         // année scolaire (ex: 2026)
+	ExamDate  *time.Time `gorm:"type:timestamp" json:"exam_date,omitempty"` // date de passage (optionnel)
+	Threshold int        `gorm:"default:50" json:"threshold"`               // seuil de maîtrise en % du barème (ex: 50)
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+func (p *PDAExam) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == "" {
+		p.ID = uuid.NewString()
+	}
+	return nil
+}
+
+// PDAResult — résultat individuel d'un élève à un examen blanc du plan.
+// Notes = pointeurs : nil = non saisie (affiché « — » et neutre dans les
+// agrégats : un élève présent sans note ne compte ni Admis ni Non Admis).
+type PDAResult struct {
+	ID               string    `gorm:"primaryKey;type:text" json:"id"`
+	ExamID           string    `gorm:"type:text;uniqueIndex:idx_pda_results_exam_student" json:"exam_id"`
+	StudentID        string    `gorm:"type:text;uniqueIndex:idx_pda_results_exam_student" json:"student_id"`
+	Present          bool      `gorm:"default:false" json:"present"`
+	NoteExploitation *float64  `gorm:"type:numeric" json:"note_exploitation,omitempty"`
+	NoteMath         *float64  `gorm:"type:numeric" json:"note_math,omitempty"`
+	NoteDictee       *float64  `gorm:"type:numeric" json:"note_dictee,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+func (p *PDAResult) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == "" {
+		p.ID = uuid.NewString()
+	}
+	return nil
+}
+
+// PDARemediation — compteurs de remédiation (lignes 2-3 du tableau 3 du
+// document : élèves ayant bénéficié des cours de mise à niveau + élèves
+// ayant bénéficié des mécanismes de remédiation). Ces effectifs ne sont
+// pas dérivables des notes : saisie manuelle par classe et par examen.
+type PDARemediation struct {
+	ID                 string    `gorm:"primaryKey;type:text" json:"id"`
+	ExamID             string    `gorm:"type:text;uniqueIndex:idx_pda_remediation_exam_class" json:"exam_id"`
+	ClassID            string    `gorm:"type:text;uniqueIndex:idx_pda_remediation_exam_class" json:"class_id"`
+	MiseANiveauTotal   int       `gorm:"default:0" json:"mise_a_niveau_total"`
+	MiseANiveauGarcons int       `gorm:"default:0" json:"mise_a_niveau_garcons"`
+	MiseANiveauFilles  int       `gorm:"default:0" json:"mise_a_niveau_filles"`
+	RemediationTotal   int       `gorm:"default:0" json:"remediation_total"`
+	RemediationGarcons int       `gorm:"default:0" json:"remediation_garcons"`
+	RemediationFilles  int       `gorm:"default:0" json:"remediation_filles"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+func (p *PDARemediation) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == "" {
+		p.ID = uuid.NewString()
+	}
+	return nil
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
 	return []interface{}{
@@ -490,5 +567,7 @@ func AllModels() []interface{} {
 		&PasswordResetRequest{},
 		// Architecture D — Dynamic RBAC + Audit
 		&Role{}, &RoleModule{}, &AuditLog{},
+		// PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM)
+		&PDAExam{}, &PDAResult{}, &PDARemediation{},
 	}
 }

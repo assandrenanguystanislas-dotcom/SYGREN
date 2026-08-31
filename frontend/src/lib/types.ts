@@ -621,3 +621,108 @@ export interface AuditLogsResponse {
 
 // User vu par l'admin (GET /api/users) — même structure que User, plus rien de sensible
 export type UserAdminRow = User;
+
+// === PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM) ===
+// Reproduction du document officiel « RÉSULTAT DE L'EXAMEN BLANC N°X ».
+// Barème : CE=/10, CM=/20 — Admis = présent ET note >= seuil (barème × seuil %).
+
+export interface PdaExam {
+  id: string;
+  school_id: string;
+  school_name?: string;
+  number: number;
+  year: number;
+  exam_date?: string | null;
+  threshold: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PdaClassInfo {
+  id: string;
+  name: string;
+  level: string;
+  max_score: number;
+  seuil: number;
+}
+
+// Ligne élève de la grille de saisie (GET .../results)
+export interface PdaStudentRow {
+  student_id: string;
+  matricule: string;
+  last_name: string;
+  first_name: string;
+  gender: string; // M / F
+  present: boolean;
+  note_exploitation?: number | null;
+  note_math?: number | null;
+  note_dictee?: number | null;
+  admis_exploitation: boolean;
+  admis_math: boolean;
+  admis_dictee: boolean;
+  admis_global: boolean;
+}
+
+export interface PdaResultsResponse {
+  exam: PdaExam;
+  class: PdaClassInfo;
+  students: PdaStudentRow[];
+  count: number;
+}
+
+// Effectifs Total | Filles | Garçons d'une ligne du document
+export interface PdaCountRow {
+  total: number;
+  filles: number;
+  garcons: number;
+}
+
+// Stats de maîtrise d'une matière (Tableau 2)
+export interface PdaSubjectStats {
+  presents: PdaCountRow;
+  admis: PdaCountRow;
+  non_admis: PdaCountRow;
+  pct_admis: number;
+  pct_non_admis: number;
+}
+
+// IEP pour l'en-tête officiel du document
+export interface PdaIepInfo {
+  id: string;
+  name: string;
+  region: string;
+  inspector_name: string;
+  inspector_email: string;
+  inspector_phone: string;
+  bp: string;
+}
+
+// Synthèse agrégée (GET .../summary) — les 3 tableaux du document
+export interface PdaSummary {
+  exam: PdaExam;
+  school: { id: string; name: string; code: string };
+  iep: PdaIepInfo | null;
+  class: PdaClassInfo;
+  table1: { presents: PdaCountRow; admis: PdaCountRow; pct_admis: number };
+  table2: {
+    exploitation: PdaSubjectStats;
+    math: PdaSubjectStats;
+    dictee: PdaSubjectStats;
+  };
+  table3: {
+    difficultes: PdaCountRow;
+    mise_a_niveau: PdaCountRow;
+    remediation: PdaCountRow;
+  };
+}
+
+// Compteurs de remédiation (lignes 2-3 du tableau 3 — saisie manuelle)
+export interface PdaRemediation {
+  class_id: string;
+  mise_a_niveau_total: number;
+  mise_a_niveau_garcons: number;
+  mise_a_niveau_filles: number;
+  remediation_total: number;
+  remediation_garcons: number;
+  remediation_filles: number;
+}

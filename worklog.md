@@ -3343,3 +3343,32 @@ Work Log:
 Stage Summary:
 - Feature « année de naissance » livrée et vérifiée E2E en prod sur TOUT le cycle (API + UI) : création, affichage « — » pour NULL, pré-remplissage, sanitisation, rejet année future (400), édition, suppression — DB de prod laissée propre
 - Au passage : bug de production préexistant découvert et corrigé (0A000 PgBouncer) — les PUT/First-by-id students cassés depuis le deploy 2560b2b sont réparés (f495f5c)
+
+---
+Task ID: Module-Resultats-PDA-IEPP
+Agent: Main (tuteur)
+Task: Module Résultats — implémenter le « PLAN D'ACTION PLURIANNUEL DE L'IEPP » (document officiel, niveaux CE/CM) : niveau de maîtrise de chaque élève dans les 3 matières désignées (Exploitation de texte, Mathématiques, Dictée)
+
+Work Log:
+- Analyse du document scanné (fiche « RÉSULTAT DE L'EXAMEN BLANC N°X ») : Tableau 1 Présents/Admis/%Admis × (Total|Filles|Garçons), Tableau 2 maîtrise par matière × (Total|Garçons|Filles) avec Non Admis + %, Tableau 3 difficultés + remédiation × (Total|Garçons|Filles), en-tête institutionnel + signatures
+- Design zéro-touch : 3 NOUVELLES tables (PDAExam par école numéroté N°X + année + seuil %, PDAResult unique exam+student avec Present + 3 notes pointeurs, PDARemediation 6 compteurs manuels par classe) — aucune modification des tables existantes
+- Sémantique maîtrise documentée : Admis matière = Present && note >= barème_niveau × seuil% (barème PDA : CE=/10, CM=/20 — échelle mixte du projet, défaut 50 %) ; Admis global = 3/3 matières ; En difficulté = présent non admis global ; note absente = neutre (ni Admis ni Non Admis, affiché « — »/« Incomplet »)
+- Backend handlers/pda.go (~720 l.) : ListPDAExams (scope director/teacher imposé, admin/inspector = tout ou school_id), CreatePDAExam (auto-number MAX+1 par école+année, unicité → 409, seuil 1..100, date optionnelle), DeletePDAExam (transaction cascade résultats+remédiation), GetPDAResults (roster + flags maîtrise calculés serveur), SavePDAResults (bulk upsert, validation élèves de la classe + notes 0..barème, null=effacer), Get/SavePDARemediation (upsert, compteurs 0..999), GetPDASummary (les 3 tableaux calculés SERVEUR = source unique de vérité + school+iep pour l'en-tête)
+- RBAC : réutilise ModuleGrades pour l'écriture (mêmes droits que la saisie de notes : teacher+director+admin+inspector) — AUCUN changement de matrice RBAC ; lecture authentifiée avec scope handler
+- Router : 8 routes /api/pda/* (4 GET authentifiés + 4 écritures RequireModule grades write)
+- Frontend types.ts/api.ts : PdaExam/PdaStudentRow/PdaSummary/PdaCountRow/PdaSubjectStats/PdaRemediation + pdaApi (8 méthodes)
+- results-view.tsx : refactor minimal en 2 onglets (Classement = existant intact renommé ResultsRankingView, nouveau « Plan d'action IEPP » = PdaView) — zéro touch à la logique de classement
+- pda-view.tsx : cascade stricte École→Examen→Classe (classes CE/CM filtrées, CP exclu), dialog création (numéro auto affiché, année, seuil %, date), grille de saisie (Présent checkbox → active les 3 inputs de note, badges maîtrise LIVE Admis/Non admis/—/Incomplet/Absent, note saisie ⇒ présent auto), Enregistrer bulk, suppression avec ConfirmDialog
+- pda-document.tsx : reproduction fidèle du document officiel (en-tête ministère/IEP depuis les données IEP de l'école, titre encadré, 3 tableaux, signatures) imprimable 100 % navigateur (isolement #pda-doc dans globals.css, même technique que synthèse/relevé) + lignes remédiation saisissables DANS le document
+- Pattern React 19 (leçon) : la règle eslint react-hooks/set-state-in-effect interdit les effets de synchro serveur→état → remplacés partout par dérivation (serverRows memo) + override (saisie locale remise à null au changement de cascade et après sauvegarde) + remount par key pour le dialog — zéro useEffect
+- BUG UI détecté au test navigateur et corrigé : l'état vide admin (pas d'école) court-circuitait le sélecteur d'école (early-return) → supprimé, la barre de cascade reste toujours visible
+- Responsive corrigé au test 390px : champs cascade w-full empilés sur mobile (sm:flex-1 sm:max-w en desktop)
+- Piège env sandbox : DATABASE_URL=file:...custom.db (template my-project) écrasait le mode SQLite → lancer le backend local avec env -u DATABASE_URL
+- E2E local complet (backend SQLite + curl) : création auto-number ✓, doublon explicite 409 ✓, seuil 150 → 400 ✓, saisie CE1 (5/6.5/4 → Admis/Admis/Non admis, global=Non admis) ✓, seuil CM=10 avec 12→admis 9.5→non admis ✓, résumé exact (presents 3/2/1, admis 1/0/1, pct 33.3, dictée admis G1 non-admis F1, difficultés 2/2F) ✓, remédiation PUT/GET ✓, upsert dictée 4→5 → global Admis sans doublon ✓, validations 400 (note>barème, classe CP, élève étranger, compteur 5000) ✓, DELETE cascade → 404 ✓
+- E2E navigateur (Agent Browser, frontend local + backend local) : login admin → Résultats → onglets visibles, Classement intact (états indépendants) → cascade école/examen/classe → création N°2 via dialog (auto-number) → saisie grille (badges live) → Enregistrer + toast → persistance API vérifiée → suppression N°2 (ConfirmDialog) → 404 API → sélection N°1 (données API affichées) → Document officiel (tableaux exacts, remédiation éditée 2→3 persistée, signatures) → mobile 390px (cascade empilée + table scrollable)
+- Environnement : tokens Render/Vercel/Neon de la session 1 ABSENTS (sandbox reconstruit, local-credentials.sh perdu, tokens à révoquer) → vérification deploy faite via endpoints publics après push
+
+Stage Summary:
+- « Plan d'Action Pluriannuel de l'IEPP » livré de bout en bout dans le module Résultats (2e onglet) : saisie par élève des 3 matières désignées avec maîtrise en direct, agrégats du document officiel calculés serveur, reproduction imprimable A4 portrait avec remédiation saisissable et signatures
+- 9 fichiers : models.go (+3 modèles), handlers/pda.go (nouveau), router.go (+8 routes), types.ts, api.ts (+pdaApi), pda-view.tsx (nouveau), pda-document.tsx (nouveau), results-view.tsx (onglets), globals.css (print #pda-doc)
+- L'objectif utilisateur est couvert : le niveau d'étude de CHAQUE élève est visible par matière (badges Admis/Non admis) et agrégé exactement comme dans le document du ministère (Filles/Garçons distingués)

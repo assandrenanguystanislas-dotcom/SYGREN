@@ -198,6 +198,23 @@ func New(cfg *config.Config) http.Handler {
 		r.Get("/api/computation/session/{id}", handlers.GetSessionResults)
 		r.Get("/api/computation/student/{id}/annual", handlers.GetStudentAnnualResults)
 
+		// === PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM) ===
+		// Reproduction du document officiel « RÉSULTAT DE L'EXAMEN BLANC N°X ».
+		// Lecture : tous les rôles authentifiés (scope par périmètre dans
+		// les handlers). Écriture : mêmes droits que la saisie des notes
+		// (ModuleGrades — teacher+director+admin+inspector).
+		r.Get("/api/pda/exams", handlers.ListPDAExams)
+		r.Get("/api/pda/exams/{id}/results", handlers.GetPDAResults)
+		r.Get("/api/pda/exams/{id}/remediation", handlers.GetPDARemediation)
+		r.Get("/api/pda/exams/{id}/summary", handlers.GetPDASummary)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleGrades, "write"))
+			r.Post("/api/pda/exams", handlers.CreatePDAExam)
+			r.Delete("/api/pda/exams/{id}", handlers.DeletePDAExam)
+			r.Post("/api/pda/exams/{id}/results", handlers.SavePDAResults)
+			r.Put("/api/pda/exams/{id}/remediation", handlers.SavePDARemediation)
+		})
+
 		// === Module 4 — Bulletins ===
 		// Endpoints de génération PDF retirés (le module est passé 100 % sur
 		// l'impression A5 côté navigateur — /bulletins + releve-data/computation).

@@ -55,8 +55,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PdaView } from "./pda-view";
 
-export function ResultsView() {
+function ResultsRankingView() {
   const user = useAuthStore((s) => s.user);
   // Rôles pour la cascade stricte (même logique que students-view)
   // - admin/inspector : doivent choisir une école → puis une session → résultats
@@ -702,5 +704,32 @@ function ErrorState({ message }: { message: string }) {
         <p className="text-xs text-muted-foreground mt-1">{message}</p>
       </CardContent>
     </Card>
+  );
+}
+
+// === Onglets du module Résultats ===
+// « Classement » : moyennes pondérées et rangs par session (existant).
+// « Plan d'action IEPP » : examens blancs CE/CM — suivi du document
+// officiel du ministère (niveau de maîtrise par élève et par matière).
+export function ResultsView() {
+  return (
+    <Tabs defaultValue="classement" className="space-y-4">
+      <TabsList className="flex-wrap h-auto">
+        <TabsTrigger value="classement" className="gap-1.5">
+          <Trophy className="w-3.5 h-3.5" />
+          Classement
+        </TabsTrigger>
+        <TabsTrigger value="pda" className="gap-1.5">
+          <FileText className="w-3.5 h-3.5" />
+          Plan d&apos;action IEPP
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="classement" className="space-y-4">
+        <ResultsRankingView />
+      </TabsContent>
+      <TabsContent value="pda" className="space-y-4">
+        <PdaView />
+      </TabsContent>
+    </Tabs>
   );
 }

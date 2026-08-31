@@ -308,3 +308,33 @@
 }
 
 
+
+/* === PDA IEPP — Print CSS (portrait A4) ===
+ * Reproduction de la fiche « SUIVI DU PLAN D'ACTION PLURIANNUEL DE L'IEPP —
+ * RÉSULTAT DE L'EXAMEN BLANC N°X ». Même technique d'isolement que la
+ * synthèse : tout est masqué à l'impression, seul #pda-doc est visible.
+ * Le @page par défaut (A4 portrait, marge 8mm — défini pour le relevé
+ * plus haut) s'applique : le document PDA est portrait. */
+@media print {
+  #pda-doc,
+  #pda-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #pda-doc {
+    background: white !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  /* Les compteurs de remédiation s'impriment comme du texte (sans bordure) */
+  #pda-doc input {
+    border: none !important;
+    background: white !important;
+  }
+}

@@ -48,6 +48,11 @@ import type {
   AuditLogsResponse,
   AuditLog,
   UserAdminRow,
+  // PDA IEPP — Plan d'Action Pluriannuel
+  PdaExam,
+  PdaResultsResponse,
+  PdaRemediation,
+  PdaSummary,
 } from "./types";
 
 // En production (Vercel), NEXT_PUBLIC_API_URL pointe vers le backend déployé.
@@ -1006,6 +1011,81 @@ export const usersAdminApi = {
     }),
 };
 
+// === PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM) ===
+
+export const pdaApi = {
+  /** Liste des examens blancs (scope serveur : director/teacher = leur école). */
+  listExams: (params?: { school_id?: string; year?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.school_id) q.set("school_id", params.school_id);
+    if (params?.year) q.set("year", String(params.year));
+    const qs = q.toString();
+    return apiFetch<{ exams: PdaExam[]; count: number }>(
+      `/api/pda/exams${qs ? "?" + qs : ""}`,
+    );
+  },
+
+  /** Crée un examen blanc (number absent → auto-incrémenté par école+année). */
+  createExam: (data: {
+    school_id: string;
+    number?: number;
+    year: number;
+    exam_date?: string;
+    threshold?: number;
+  }) =>
+    apiFetch<PdaExam>("/api/pda/exams", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /** Supprime un examen blanc (cascade résultats + remédiation). */
+  deleteExam: (id: string) =>
+    apiFetch<{ status: string }>(`/api/pda/exams/${id}`, { method: "DELETE" }),
+
+  /** Roster d'une classe + notes saisies + flags de maîtrise calculés. */
+  getResults: (examId: string, classId: string) =>
+    apiFetch<PdaResultsResponse>(
+      `/api/pda/exams/${examId}/results?class_id=${classId}`,
+    ),
+
+  /** Saisie en lot des résultats (note null = effacer). */
+  saveResults: (
+    examId: string,
+    data: {
+      class_id: string;
+      results: {
+        student_id: string;
+        present: boolean;
+        note_exploitation?: number | null;
+        note_math?: number | null;
+        note_dictee?: number | null;
+      }[];
+    },
+  ) =>
+    apiFetch<{ status: string; count: number }>(
+      `/api/pda/exams/${examId}/results`,
+      { method: "POST", body: JSON.stringify(data) },
+    ),
+
+  /** Compteurs de remédiation d'une classe (lignes 2-3 du tableau 3). */
+  getRemediation: (examId: string, classId: string) =>
+    apiFetch<PdaRemediation>(
+      `/api/pda/exams/${examId}/remediation?class_id=${classId}`,
+    ),
+
+  saveRemediation: (examId: string, data: PdaRemediation) =>
+    apiFetch<PdaRemediation>(`/api/pda/exams/${examId}/remediation`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  /** Synthèse agrégée (les 3 tableaux du document) — calculée côté serveur. */
+  getSummary: (examId: string, classId: string) =>
+    apiFetch<PdaSummary>(
+      `/api/pda/exams/${examId}/summary?class_id=${classId}`,
+    ),
+};
+
 // Barrel agrégé pour rétro-compat
 export const api = {
   auth: authApi,
@@ -1027,4 +1107,5 @@ export const api = {
   permissions: permissionsApi,
   audit: auditApi,
   usersAdmin: usersAdminApi,
+  pda: pdaApi,
 };
