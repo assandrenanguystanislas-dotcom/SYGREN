@@ -53,6 +53,8 @@ import type {
   PdaResultsResponse,
   PdaRemediation,
   PdaSummary,
+  PdaTimelineResponse,
+  PdaExamKind,
 } from "./types";
 
 // En production (Vercel), NEXT_PUBLIC_API_URL pointe vers le backend déployé.
@@ -1014,7 +1016,8 @@ export const usersAdminApi = {
 // === PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM) ===
 
 export const pdaApi = {
-  /** Liste des examens blancs (scope serveur : director/teacher = leur école). */
+  /** Liste des évaluations du plan — compositions + examens blancs
+   *  (scope serveur : director/teacher = leur école). */
   listExams: (params?: { school_id?: string; year?: number }) => {
     const q = new URLSearchParams();
     if (params?.school_id) q.set("school_id", params.school_id);
@@ -1025,9 +1028,18 @@ export const pdaApi = {
     );
   },
 
-  /** Crée un examen blanc (number absent → auto-incrémenté par école+année). */
+  /**
+   * Crée une évaluation du plan :
+   *  - examen blanc (kind="blanc", défaut) : number absent → auto-incrémenté
+   *    par école+année ;
+   *  - composition mensuelle (kind="composition") : session_id requis (session
+   *    eval_type=composition de l'école) — numéro + année imposés par la session,
+   *    notes dérivées du module Notes (lecture seule dans le PDA).
+   */
   createExam: (data: {
     school_id: string;
+    kind?: PdaExamKind;
+    session_id?: string;
     number?: number;
     year: number;
     exam_date?: string;
@@ -1083,6 +1095,13 @@ export const pdaApi = {
   getSummary: (examId: string, classId: string) =>
     apiFetch<PdaSummary>(
       `/api/pda/exams/${examId}/summary?class_id=${classId}`,
+    ),
+
+  /** Suivi pluriannuel : matrice élève × évaluations (compositions +
+   *  examens blancs) d'une classe CE/CM pour une année donnée. */
+  getTimeline: (classId: string, year: number) =>
+    apiFetch<PdaTimelineResponse>(
+      `/api/pda/timeline?class_id=${classId}&year=${year}`,
     ),
 };
 

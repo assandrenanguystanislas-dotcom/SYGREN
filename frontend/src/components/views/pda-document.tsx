@@ -2,7 +2,9 @@
 
 // === PDA IEPP — Document officiel imprimable ===
 // Reproduction fidèle de la fiche « SUIVI DU PLAN D'ACTION PLURIANNUEL DE
-// L'IEPP — RÉSULTAT DE L'EXAMEN BLANC N°X » (niveaux CE/CM).
+// L'IEPP » (niveaux CE/CM) pour chaque évaluation suivie : examen blanc
+// (saisie manuelle) ou composition mensuelle (notes dérivées du module
+// Notes).
 //   - Tableau 1 : Présents / Admis / % Admis (Total | Filles | Garçons)
 //   - Tableau 2 : maîtrise par matière (3 matières désignées)
 //   - Tableau 3 : difficultés (calculé) + remédiation (saisissable ici)
@@ -15,6 +17,7 @@ import { Loader2, Printer, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { pdaApi } from "@/lib/api";
+import { monthLabel } from "@/lib/session-utils";
 import type { PdaCountRow, PdaSummary } from "@/lib/types";
 
 const INK = "#1f2937"; // gris encre — cohérent avec les documents officiels
@@ -151,16 +154,33 @@ export function PdaDocument({
 
   const s: PdaSummary = data;
   const t2 = s.table2;
+  const isComposition = s.exam.kind === "composition";
   const examDate = s.exam.exam_date
     ? new Date(s.exam.exam_date).toLocaleDateString("fr-FR")
     : "";
+  // Libellés officiels selon le type d'évaluation suivie par le plan.
+  const evalTitle = isComposition
+    ? `RESULTAT DE LA COMPOSITION N° ${s.exam.number} — ${
+        s.exam.session_month && s.exam.session_month >= 1 && s.exam.session_month <= 12
+          ? `${monthLabel(s.exam.session_month).toUpperCase()} `
+          : ""
+      }${s.exam.year}`
+    : `RESULTAT DE L'EXAMEN BLANC N° ${s.exam.number} — ANNEE ${s.exam.year}`;
+  const evalColHeader = isComposition
+    ? `${s.exam.number}° COMPOSITION`
+    : `${s.exam.number}° EXAMEN BLANC`;
+  const toolbarTitle = isComposition
+    ? `Composition N°${s.exam.number}${
+        s.exam.session_month ? ` — ${monthLabel(s.exam.session_month)} ${s.exam.year}` : ""
+      }`
+    : `Examen Blanc N°${s.exam.number}`;
 
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
       {/* Barre d'outils (masquée à l'impression) */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden">
         <h3 className="font-semibold text-sm">
-          Plan d&apos;Action IEPP — Examen Blanc N°{s.exam.number} · {s.class.name}
+          Plan d&apos;Action IEPP — {toolbarTitle} · {s.class.name}
         </h3>
         <div className="flex items-center gap-2">
           {remDirty && (
@@ -240,11 +260,11 @@ export function PdaDocument({
             SUIVI DU PLAN D&apos;ACTION PLURIANNUEL DE L&apos;IEPP
           </div>
           <div style={{ fontSize: "12px", fontWeight: 800, textDecoration: "underline", marginTop: "6px" }}>
-            RESULTAT DE L&apos;EXAMEN BLANC N° {s.exam.number} — ANNEE {s.exam.year}
+            {evalTitle}
           </div>
         </div>
 
-        {/* --- École / Classe / Date --- */}
+        {/* --- École / Classe / Date / Seuils --- */}
         <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "8px", lineHeight: 1.6 }}>
           <span>ECOLE : {s.school.name}</span>
           <span style={{ marginLeft: "32px" }}>
@@ -252,7 +272,21 @@ export function PdaDocument({
             {examDate ? ` — PASSAGE : ${examDate}` : ""}
           </span>
           <span style={{ marginLeft: "32px", fontWeight: 400 }}>
-            Seuil de maîtrise : {s.class.seuil}/{s.class.max_score} ({s.exam.threshold} %)
+            {s.exam.kind === "composition" ? (
+              <>
+                Seuils de maîtrise ({s.exam.threshold} %) :{" "}
+                {s.subjects.map((sub, i) => (
+                  <span key={sub.key}>
+                    {i > 0 ? " · " : ""}
+                    {sub.label} {sub.seuil}/{sub.max_score || "—"}
+                  </span>
+                ))}
+              </>
+            ) : (
+              <>
+                Seuil de maîtrise : {s.class.seuil}/{s.class.max_score} ({s.exam.threshold} %)
+              </>
+            )}
           </span>
         </div>
 
@@ -262,7 +296,7 @@ export function PdaDocument({
             <tr>
               <th style={{ ...thStyle, border: "none", width: "26%" }} />
               <th style={{ ...thStyle, border: "none" }} colSpan={3}>
-                {s.exam.number}° EXAMEN BLANC
+                {evalColHeader}
               </th>
             </tr>
             <tr>

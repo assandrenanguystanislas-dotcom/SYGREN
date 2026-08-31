@@ -622,14 +622,26 @@ export interface AuditLogsResponse {
 // User vu par l'admin (GET /api/users) — même structure que User, plus rien de sensible
 export type UserAdminRow = User;
 
-// === PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM) ===
-// Reproduction du document officiel « RÉSULTAT DE L'EXAMEN BLANC N°X ».
-// Barème : CE=/10, CM=/20 — Admis = présent ET note >= seuil (barème × seuil %).
+// === PDA IEPP — Plan d'Action Pluriannuel (compositions + examens blancs) ===
+// Reproduction du document officiel « SUIVI DU PLAN D'ACTION PLURIANNUEL DE
+// L'IEPP ». Le plan suit les compositions mensuelles (notes dérivées du
+// module Notes) ET les examens blancs (saisie manuelle) pour les élèves de
+// CE et CM, dans les 3 matières désignées : Exploitation de texte,
+// Mathématiques, Dictée.
+// Maîtrise : Admis = présent ET note >= barème × seuil % — barème selon la
+// source : blanc = PDA fixe (CE=/10, CM=/20) ; composition = GradeScale réel.
+
+export type PdaExamKind = "blanc" | "composition";
 
 export interface PdaExam {
   id: string;
   school_id: string;
   school_name?: string;
+  kind: PdaExamKind;
+  session_id?: string | null;
+  // Enrichissement liste (compositions uniquement)
+  session_month?: number | null;
+  session_status?: string;
   number: number;
   year: number;
   exam_date?: string | null;
@@ -638,15 +650,31 @@ export interface PdaExam {
   updated_at: string;
 }
 
-export interface PdaClassInfo {
-  id: string;
-  name: string;
-  level: string;
+// État d'une matière désignée pour l'évaluation (barème + seuil absolus).
+// Pour une composition, max_score/seuil viennent du GradeScale réel du
+// niveau et de la matière ; matched=false = matière non notée dans les
+// compositions (aucune dérivation possible — avertissement affiché).
+export interface PdaSubjectInfo {
+  key: "exploitation" | "math" | "dictee";
+  label: string;
+  matched: boolean;
+  subject_id?: string;
+  subject_name?: string;
   max_score: number;
   seuil: number;
 }
 
-// Ligne élève de la grille de saisie (GET .../results)
+export interface PdaClassInfo {
+  id: string;
+  name: string;
+  level: string;
+  // Barème PDA uniforme (blancs uniquement — 0 pour une composition,
+  // les barèmes par matière étant dans subjects[]).
+  max_score: number;
+  seuil: number;
+}
+
+// Ligne élève de la grille (GET .../results)
 export interface PdaStudentRow {
   student_id: string;
   matricule: string;
@@ -665,6 +693,10 @@ export interface PdaStudentRow {
 
 export interface PdaResultsResponse {
   exam: PdaExam;
+  // true = composition mensuelle (notes dérivées du module Notes)
+  read_only: boolean;
+  // Barème + seuil par matière (ordre : exploitation, math, dictée)
+  subjects: PdaSubjectInfo[];
   class: PdaClassInfo;
   students: PdaStudentRow[];
   count: number;
@@ -700,6 +732,9 @@ export interface PdaIepInfo {
 // Synthèse agrégée (GET .../summary) — les 3 tableaux du document
 export interface PdaSummary {
   exam: PdaExam;
+  read_only: boolean;
+  // Barème + seuil par matière (ordre : exploitation, math, dictée)
+  subjects: PdaSubjectInfo[];
   school: { id: string; name: string; code: string };
   iep: PdaIepInfo | null;
   class: PdaClassInfo;
@@ -725,4 +760,61 @@ export interface PdaRemediation {
   remediation_total: number;
   remediation_garcons: number;
   remediation_filles: number;
+}
+
+// === Suivi pluriannuel (GET /api/pda/timeline) — matrice élève × évaluations ===
+// Toutes les évaluations du plan d'une année pour une classe CE/CM :
+// compositions mensuelles (dérivées) + examens blancs (saisie manuelle).
+
+export interface PdaTimelineEvaluation {
+  id: string;
+  kind: PdaExamKind;
+  label: string; // « Composition N°2 — Octobre 2026 » / « Examen blanc N°1 »
+  short_label: string; // « C2 » / « EB1 » (en-tête compact de la matrice)
+  number: number;
+  year: number;
+  month?: number | null;
+  threshold: number;
+  read_only: boolean;
+  subject_maxes: [number, number, number];
+  subject_seuils: [number, number, number];
+}
+
+export interface PdaTimelineCell {
+  present: boolean;
+  notes: [number | null, number | null, number | null];
+  admis: [boolean, boolean, boolean];
+  admis_global: boolean;
+}
+
+export interface PdaTimelineStudent {
+  student_id: string;
+  matricule: string;
+  last_name: string;
+  first_name: string;
+  gender: string; // M / F
+  cells: Record<string, PdaTimelineCell>;
+  presents: number;
+  admis_global_count: number;
+  pct_admis: number;
+}
+
+export interface PdaTimelineSubject {
+  key: "exploitation" | "math" | "dictee";
+  label: string;
+  matched: boolean;
+  subject_id?: string;
+  subject_name?: string;
+  max_composition: number; // barème compositions (0 = non notée)
+  max_blanc: number; // barème PDA des examens blancs
+}
+
+export interface PdaTimelineResponse {
+  class: { id: string; name: string; level: string };
+  year: number;
+  evaluations: PdaTimelineEvaluation[];
+  students: PdaTimelineStudent[];
+  subjects: PdaTimelineSubject[];
+  warnings: string[];
+  count: number;
 }

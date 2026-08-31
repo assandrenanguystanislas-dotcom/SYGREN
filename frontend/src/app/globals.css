@@ -338,3 +338,31 @@
     background: white !important;
   }
 }
+
+/* === PDA IEPP — Suivi pluriannuel : Print CSS (A4 paysage) ===
+ * Matrice élève × évaluations (compositions + examens blancs) : large →
+ * paysage, même technique d'isolement que les autres documents (page nommée
+ * pour ne pas affecter les impressions des autres vues). */
+@media print {
+  @page pda-timeline {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+  #pda-timeline,
+  #pda-timeline * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #pda-timeline {
+    background: white !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+}

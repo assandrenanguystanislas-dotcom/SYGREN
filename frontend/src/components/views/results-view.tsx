@@ -57,6 +57,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PdaView } from "./pda-view";
+import { PdaTimelineView } from "./pda-timeline-view";
 
 function ResultsRankingView() {
   const user = useAuthStore((s) => s.user);
@@ -709,8 +710,11 @@ function ErrorState({ message }: { message: string }) {
 
 // === Onglets du module Résultats ===
 // « Classement » : moyennes pondérées et rangs par session (existant).
-// « Plan d'action IEPP » : examens blancs CE/CM — suivi du document
-// officiel du ministère (niveau de maîtrise par élève et par matière).
+// « Plan d'action IEPP » : compositions mensuelles + examens blancs CE/CM —
+//   suivi du document officiel du ministère (niveau de maîtrise par élève
+//   et par matière ; compositions dérivées du module Notes).
+// « Suivi pluriannuel » : matrice élève × évaluations — niveau d'étude de
+//   chaque élève dans les 3 matières désignées, évaluation après évaluation.
 export function ResultsView() {
   return (
     <Tabs defaultValue="classement" className="space-y-4">
@@ -723,12 +727,19 @@ export function ResultsView() {
           <FileText className="w-3.5 h-3.5" />
           Plan d&apos;action IEPP
         </TabsTrigger>
+        <TabsTrigger value="timeline" className="gap-1.5">
+          <TrendingUp className="w-3.5 h-3.5" />
+          Suivi pluriannuel
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="classement" className="space-y-4">
         <ResultsRankingView />
       </TabsContent>
       <TabsContent value="pda" className="space-y-4">
         <PdaView />
+      </TabsContent>
+      <TabsContent value="timeline" className="space-y-4">
+        <PdaTimelineView />
       </TabsContent>
     </Tabs>
   );

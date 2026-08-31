@@ -480,9 +480,12 @@ func (a *AuditLog) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// === PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM) ===
+// === PDA IEPP — Plan d'Action Pluriannuel (compositions + examens blancs CE/CM) ===
 // Reproduction du document officiel « SUIVI DU PLAN D'ACTION PLURIANNUEL
-// DE L'IEPP — RÉSULTAT DE L'EXAMEN BLANC N°X » (niveaux CE et CM).
+// DE L'IEPP » (niveaux CE et CM) pour TOUTES les évaluations de l'année :
+//   - les COMPOSITIONS MENSUELLES (kind="composition") : notes dérivées du
+//     module Notes (EvaluationSession + Grade) — aucune double saisie ;
+//   - les EXAMENS BLANCS (kind="blanc") : saisie manuelle des 3 notes.
 // Objectif : mesurer le niveau de maîtrise de CHAQUE élève dans les 3
 // matières désignées (Exploitation de texte, Mathématiques, Dictée) puis
 // produire automatiquement les tableaux agrégés du document :
@@ -490,15 +493,33 @@ func (a *AuditLog) BeforeCreate(tx *gorm.DB) error {
 //   Tableau 2 : maîtrise par matière (Présents, Admis, %, Non Admis, %)
 //   Tableau 3 : difficultés d'apprentissage + remédiation
 // Un élève est « Admis » dans une matière si Present=true ET
-// note >= barème_niveau × Threshold/100 (barème PDA : CE=/10, CM=/20).
+// note >= barème × Threshold/100. Barème selon la source :
+//   - examen blanc  : barème PDA fixe (CE=/10, CM=/20) ;
+//   - composition   : barème réel de la matière pour le niveau (GradeScale,
+//     ex: CE=/30, CM=/50, Dictée /20) — les notes de composition sont
+//     enregistrées sur ce barème dans le module Notes.
 
-// PDAExam — un examen blanc du plan d'action (numéroté par école + année).
+// PDAExam — une évaluation suivie par le plan d'action (composition
+// mensuelle ou examen blanc), numérotée par école + année.
+const (
+	PDAKindBlanc       = "blanc"       // examen blanc — saisie manuelle des 3 notes
+	PDAKindComposition = "composition" // composition mensuelle — notes dérivées du module Notes
+)
+
 type PDAExam struct {
-	ID        string     `gorm:"primaryKey;type:text" json:"id"`
-	SchoolID  string     `gorm:"type:text;index" json:"school_id"`
-	Number    int        `json:"number"`                                    // Examen Blanc N° 1, 2, 3…
+	ID       string `gorm:"primaryKey;type:text" json:"id"`
+	SchoolID string `gorm:"type:text;index" json:"school_id"`
+	// Kind — type d'évaluation suivie :
+	//   - "blanc"       : examen blanc (saisie manuelle des 3 notes dans le PDA)
+	//   - "composition" : composition mensuelle (notes DÉRIVÉES du module Notes
+	//     via la session liée — grille PDA en lecture seule)
+	Kind string `gorm:"type:text;default:blanc;index" json:"kind"`
+	// SessionID — session de composition mensuelle (EvaluationSession) dont
+	// les notes alimentent le plan (kind="composition" uniquement).
+	SessionID *string    `gorm:"type:text;index" json:"session_id,omitempty"`
+	Number    int        `json:"number"`                                    // Composition/Examen Blanc N° 1, 2, 3…
 	Year      int        `gorm:"index" json:"year"`                         // année scolaire (ex: 2026)
-	ExamDate  *time.Time `gorm:"type:timestamp" json:"exam_date,omitempty"` // date de passage (optionnel)
+	ExamDate  *time.Time `gorm:"type:timestamp" json:"exam_date,omitempty"` // date de passage (optionnel, blancs)
 	Threshold int        `gorm:"default:50" json:"threshold"`               // seuil de maîtrise en % du barème (ex: 50)
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`

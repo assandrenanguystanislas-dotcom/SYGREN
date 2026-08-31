@@ -79,6 +79,15 @@ func Init(cfg *config.Config) error {
 
 	log.Println("[DB] Migrations terminées")
 
+	// Backfill PDA — la colonne kind a été introduite avec l'extension
+	// « compositions mensuelles » du plan d'action : les examens créés
+	// avant sont des examens blancs (saisie manuelle). Idempotent.
+	if err := db.Model(&models.PDAExam{}).
+		Where("kind = '' OR kind IS NULL").
+		Update("kind", "blanc").Error; err != nil {
+		log.Println("[DB] backfill pda_exams.kind warning:", err)
+	}
+
 	// Seed initial data (super-admin + matières par défaut)
 	if err := seedDefaults(db); err != nil {
 		log.Println("[DB] seed warning:", err)
