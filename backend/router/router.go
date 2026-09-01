@@ -9,6 +9,7 @@ import (
 	"sygren-api/handlers"
 	"sygren-api/middleware"
 	"sygren-api/models"
+	"sygren-api/storage"
 )
 
 // New builds the main HTTP router with all SYGREN routes.
@@ -44,6 +45,14 @@ func New(cfg *config.Config) http.Handler {
 
 	// Global middleware
 	r.Use(middleware.CORSMiddleware)
+
+	// Fichiers du stockage local (DEV UNIQUEMENT) — service public : même
+	// modèle d'accès « qui a l'URL lit le fichier » que les URLs présignées
+	// R2. Monté seulement si le stockage local est actif (storage.New est
+	// appelé AVANT router.New dans main.go).
+	if storage.Global != nil && storage.Global.Kind() == "local" {
+		r.Handle("/storage/*", http.StripPrefix("/storage/", http.FileServer(http.Dir(cfg.StoragePath))))
+	}
 
 	// Public routes
 	r.Get("/api/health", handlers.Health)
@@ -91,6 +100,10 @@ func New(cfg *config.Config) http.Handler {
 			r.Post("/api/schools", handlers.CreateSchool)
 			r.Put("/api/schools/{id}", handlers.UpdateSchool)
 			r.Delete("/api/schools/{id}", handlers.DeleteSchool)
+			// Logos d'écoles — stockage fichiers (R2 prod / FS dev) ; 503 si
+			// le stockage n'est pas configuré (voir handlers/schools.go)
+			r.Post("/api/schools/{id}/logo", handlers.UploadSchoolLogo)
+			r.Delete("/api/schools/{id}/logo", handlers.DeleteSchoolLogo)
 		})
 
 		// Classes — lecture ouverte, écriture admin + inspector + director

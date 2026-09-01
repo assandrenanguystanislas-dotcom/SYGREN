@@ -2,12 +2,15 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 
 	"sygren-api/database"
 	"sygren-api/middleware"
 	"sygren-api/models"
+	"sygren-api/storage"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -24,6 +27,9 @@ type SchoolWithStats struct {
 	IEPName      string `json:"iep_name,omitempty"`
 	ClassCount   int64  `json:"class_count"`
 	StudentCount int64  `json:"student_count"`
+	// LogoURL — URL de lecture présignée (R2) ou chemin public (dev),
+	// calculée par le handler à partir de LogoPath (jamais stockée en DB).
+	LogoURL string `json:"logo_url,omitempty"`
 }
 
 // ListSchools returns schools filtered by the user's scope.
@@ -119,15 +125,24 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Assemblage en mémoire — plus aucune requête dans cette boucle
+	// Assemblage en mémoire — plus aucune requête DB dans cette boucle
+	// (la présignature du logo est un calcul local HMAC, pas un appel réseau)
 	result := make([]SchoolWithStats, 0, len(schools))
 	for _, s := range schools {
-		result = append(result, SchoolWithStats{
+		stats := SchoolWithStats{
 			School:       s,
 			IEPName:      iepName[s.IEPID],
 			ClassCount:   classCounts[s.ID],
 			StudentCount: studentCounts[s.ID],
-		})
+		}
+		if s.LogoPath != nil && *s.LogoPath != "" && storage.Global != nil {
+			if u, err := storage.Global.PresignURL(r.Context(), *s.LogoPath); err == nil {
+				stats.LogoURL = u
+			} else {
+				log.Println("[schools] présignature logo:", err)
+			}
+		}
+		result = append(result, stats)
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
@@ -273,6 +288,132 @@ func DeleteSchool(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := database.DB.Delete(&models.School{}, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
+		return
+	}
+	// Nettoyage du logo dans le stockage (best effort — l'école est déjà supprimée)
+	if storage.Global != nil {
+		var school models.School
+		if err := database.DB.Unscoped().First(&school, "id = ?", id).Error; err == nil && school.LogoPath != nil && *school.LogoPath != "" {
+			if err := storage.Global.Delete(r.Context(), *school.LogoPath); err != nil {
+				log.Println("[schools] nettoyage logo école supprimée:", err)
+			}
+		}
+	}
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// === Logos d'écoles — stockage fichiers (R2 en prod, filesystem en dev) ===
+//
+// RBAC : même groupe que l'écriture écoles (RequireModule "schools" write) —
+// cohérent avec Create/Update/DeleteSchool (pas de re-check rôle ici).
+// Le logo est une image publique de l'établissement : la lecture passe par
+// une URL présignée R2 (signature dans l'URL) — même modèle d'accès que le
+// filesystem dev public /storage/*.
+
+const (
+	// MaxLogoBytes — limite stricte du corps de requête (2 MiB).
+	MaxLogoBytes = 2 << 20
+	// DefaultLogoKeyPrefix — préfixe des clés R2/local des logos.
+	// Clé finale : school-logos/<school_id>.<ext> (1 logo par école).
+)
+
+// Types d'images acceptés pour un logo (sniffé sur le CONTENU, jamais sur
+// l'extension du fichier envoyé — anti-renommage malveillant). SVG exclu :
+// exécutable dans le navigateur (vecteur XSS s'il est servi en direct).
+var allowedLogoTypes = map[string]string{
+	"image/png":  "png",
+	"image/jpeg": "jpg",
+	"image/webp": "webp",
+}
+
+// UploadSchoolLogo — POST /api/schools/{id}/logo (multipart, champ "logo").
+// Remplace l'ancien logo s'il existe (objet R2 différent supprimé).
+func UploadSchoolLogo(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var school models.School
+	if err := database.DB.First(&school, "id = ?", id).Error; err != nil {
+		middleware.JSONError(w, "école introuvable", http.StatusNotFound)
+		return
+	}
+	if storage.Global == nil {
+		middleware.JSONError(w, "stockage fichiers non configuré (R2 requis en production — variables R2_* absentes)", http.StatusServiceUnavailable)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, MaxLogoBytes)
+	if err := r.ParseMultipartForm(MaxLogoBytes); err != nil {
+		middleware.JSONError(w, "logo trop volumineux ou requête invalide (max 2 Mo)", http.StatusBadRequest)
+		return
+	}
+	file, _, err := r.FormFile("logo")
+	if err != nil {
+		middleware.JSONError(w, "champ fichier \"logo\" requis", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil || len(data) == 0 {
+		middleware.JSONError(w, "fichier vide ou illisible", http.StatusBadRequest)
+		return
+	}
+	contentType := http.DetectContentType(data)
+	ext, ok := allowedLogoTypes[contentType]
+	if !ok {
+		middleware.JSONError(w, "format non supporté (PNG, JPEG ou WebP attendu)", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	key := fmt.Sprintf("school-logos/%s.%s", school.ID, ext)
+	if err := storage.Global.Put(r.Context(), key, contentType, data); err != nil {
+		log.Println("[schools] upload logo:", err)
+		middleware.JSONError(w, "échec de l'enregistrement du logo", http.StatusInternalServerError)
+		return
+	}
+
+	// Remplacement : si l'ancien objet a une clé différente (extension
+	// différente), on le supprime pour éviter les orphelins.
+	if school.LogoPath != nil && *school.LogoPath != "" && *school.LogoPath != key {
+		if err := storage.Global.Delete(r.Context(), *school.LogoPath); err != nil {
+			log.Println("[schools] suppression ancien logo:", err)
+		}
+	}
+
+	if err := database.DB.Model(&models.School{}).Where("id = ?", school.ID).
+		Update("logo_path", key).Error; err != nil {
+		middleware.JSONError(w, "échec de la mise à jour de l'école", http.StatusInternalServerError)
+		return
+	}
+
+	logoURL, _ := storage.Global.PresignURL(r.Context(), key)
+	jsonResponse(w, http.StatusOK, map[string]interface{}{"logo_path": key, "logo_url": logoURL})
+}
+
+// DeleteSchoolLogo — DELETE /api/schools/{id}/logo.
+func DeleteSchoolLogo(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var school models.School
+	if err := database.DB.First(&school, "id = ?", id).Error; err != nil {
+		middleware.JSONError(w, "école introuvable", http.StatusNotFound)
+		return
+	}
+	if school.LogoPath == nil || *school.LogoPath == "" {
+		middleware.JSONError(w, "aucun logo à supprimer", http.StatusNotFound)
+		return
+	}
+	if storage.Global == nil {
+		middleware.JSONError(w, "stockage fichiers non configuré (R2 requis en production)", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := storage.Global.Delete(r.Context(), *school.LogoPath); err != nil {
+		log.Println("[schools] delete logo:", err)
+		middleware.JSONError(w, "échec de la suppression du logo", http.StatusInternalServerError)
+		return
+	}
+	if err := database.DB.Model(&models.School{}).Where("id = ?", school.ID).
+		Update("logo_path", nil).Error; err != nil {
+		middleware.JSONError(w, "échec de la mise à jour de l'école", http.StatusInternalServerError)
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})

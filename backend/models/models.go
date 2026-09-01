@@ -76,12 +76,16 @@ func (i *IEP) BeforeCreate(tx *gorm.DB) error {
 
 // === School ===
 type School struct {
-	ID        string    `gorm:"primaryKey;type:text" json:"id"`
-	IEPID     string    `gorm:"type:text;index" json:"iep_id"`
-	Code      string    `gorm:"uniqueIndex;type:text" json:"code"` // code unique identifiant l'école dans le système IEP
-	Name      string    `gorm:"type:text" json:"name"`
-	Address   string    `gorm:"type:text" json:"address"`
-	Status    string    `gorm:"type:text;default:public" json:"status"` // public | private | community
+	ID      string `gorm:"primaryKey;type:text" json:"id"`
+	IEPID   string `gorm:"type:text;index" json:"iep_id"`
+	Code    string `gorm:"uniqueIndex;type:text" json:"code"` // code unique identifiant l'école dans le système IEP
+	Name    string `gorm:"type:text" json:"name"`
+	Address string `gorm:"type:text" json:"address"`
+	Status  string `gorm:"type:text;default:public" json:"status"` // public | private | community
+	// LogoPath — clé de l'objet logo dans le stockage fichiers (R2 en prod,
+	// filesystem en dev). Nullable : NULL = aucun logo. L'URL de lecture
+	// (présignée) est calculée par les handlers, jamais stockée.
+	LogoPath  *string   `gorm:"type:text" json:"logo_path,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
