@@ -11,13 +11,19 @@ package handlers
 //   DE MAÎTRISE EN LECTURE (EXPLOITATION DE TEXTE), MATHÉMATIQUES » :
 //   une ligne par école, GROUPÉES PAR CENTRE D'EXAMEN, avec par discipline
 //   (Exploitation de texte, Mathématiques) :
-//     Total (inscrits) | Filles (inscrites) | Présents | % Admis |
+//     Total (inscrits) | Filles (inscrites) | Présents (admis) | % Admis |
 //     Admis (Filles) | % Admis (Filles)
-//   Convention de calcul (alignée sur GetPDASummary, corrective des
-//   formules Excel erronées du modèle papier — % divisés par les PRÉSENTS,
-//   jamais par les inscrits) :
-//     % Admis        = Admis / Présents
-//     % Admis Filles = Admises / Filles présentes
+//   Formules du MODÈLE REÇU (vérifiées sur sa ligne TOTAL : 1105/1238 =
+//   89,26 % ; 579/622 = 93,09 %) — la colonne « Présents (admis) » porte
+//   les ADMIS (élèves présents ayant atteint le seuil de maîtrise de la
+//   discipline), les non admis restent déductibles (présents évalués −
+//   admis, et alimentent les difficultés de la section B) :
+//     % Admis          = Admis / Inscrits
+//     % Admis (Filles) = Admises / Filles inscrites
+//   Périmètre : seules les écoles rattachées à un CENTRE D'EXAMEN figurent
+//   dans le document (directive IEPP) ; les écoles sans centre sont
+//   signalées à l'écran (warnings, jamais imprimés) pour rattachement
+//   dans le module Écoles.
 //
 //   Section B — « ACCROÎTRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX
 //   EXAMENS DES ÉLÈVES DE TOUS LES NIVEAUX » : par école, le nombre
@@ -51,6 +57,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"sygren-api/database"
 	"sygren-api/middleware"
@@ -61,8 +68,8 @@ import (
 type planDisciplineStats struct {
 	Presents       pdaCountRow `json:"presents"`
 	Admis          pdaCountRow `json:"admis"`
-	PctAdmis       float64     `json:"pct_admis"`        // Admis / Présents
-	PctAdmisFilles float64     `json:"pct_admis_filles"` // Admises / Filles présentes
+	PctAdmis       float64     `json:"pct_admis"`        // Admis / Inscrits (modèle reçu)
+	PctAdmisFilles float64     `json:"pct_admis_filles"` // Admises / Filles inscrites
 }
 
 // planSchoolRow — une ligne école des documents A et B (et l'agrégat
@@ -78,10 +85,14 @@ type planSchoolRow struct {
 	Difficultes pdaCountRow `json:"difficultes"`
 	MiseANiveau pdaCountRow `json:"mise_a_niveau"`
 	Remediation pdaCountRow `json:"remediation"`
+	// HasRemediation : au moins une ligne PDARemediation saisie pour
+	// l'école — distingue un « 00 » saisi d'une case non renseignée
+	// (le modèle imprime 00 pour les zéros saisis, rien pour les vides).
+	HasRemediation bool `json:"has_remediation"`
 }
 
-// planCenterGroup — un groupe CENTRE D'EXAMEN (ou le groupe des écoles
-// non affectées, ID vide).
+// planCenterGroup — un groupe CENTRE D'EXAMEN (les écoles sans centre
+// sont exclues du document côté handler).
 type planCenterGroup struct {
 	ID       string          `json:"id"`
 	Name     string          `json:"name"`
@@ -159,10 +170,8 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	schoolIDs := make([]string, len(schools))
 	schoolByID := make(map[string]models.School, len(schools))
-	for i, s := range schools {
-		schoolIDs[i] = s.ID
+	for _, s := range schools {
 		schoolByID[s.ID] = s
 	}
 
@@ -184,6 +193,35 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 	centerByID := make(map[string]models.ExamCenter, len(centers))
 	for _, c := range centers {
 		centerByID[c.ID] = c
+	}
+
+	// === Directive IEPP : le plan ne liste QUE les écoles rattachées à
+	// un centre d'examen. Les écoles sans centre (ou rattachées à un
+	// centre hors périmètre) sont EXCLUES du document — elles sont
+	// signalées à l'écran (warnings, jamais imprimés) pour rattachement
+	// au module Écoles. Le filtre est appliqué AVANT l'agrégation :
+	// ni calculs ni requêtes pour les écoles exclues.
+	warnings := []string{}
+	included := make([]models.School, 0, len(schools))
+	excludedNames := []string{}
+	for _, sch := range schools {
+		if sch.ExamCenterID != nil {
+			if _, ok := centerByID[*sch.ExamCenterID]; ok {
+				included = append(included, sch)
+				continue
+			}
+		}
+		excludedNames = append(excludedNames, sch.Name)
+	}
+	if len(excludedNames) > 0 {
+		warnings = append(warnings, fmt.Sprintf(
+			"%d école(s) sans centre d'examen rattaché, exclue(s) du document : %s.",
+			len(excludedNames), strings.Join(excludedNames, ", ")))
+	}
+	schools = included
+	schoolIDs := make([]string, len(schools))
+	for i, s := range schools {
+		schoolIDs[i] = s.ID
 	}
 
 	// === Classes CM2 actives (toutes écoles, 1 requête) ===
@@ -303,7 +341,6 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// === Agrégat par école ===
-	warnings := []string{}
 	rowBySchool := map[string]*planSchoolRow{}
 	for _, sch := range schools {
 		row := &planSchoolRow{
@@ -406,6 +443,7 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 
 			// Remédiation saisie (mise à niveau + mécanismes).
 			if rem, ok := remByClass[exam.ID+"|"+cls.ID]; ok {
+				row.HasRemediation = true
 				row.MiseANiveau.Total += rem.MiseANiveauTotal
 				row.MiseANiveau.Filles += rem.MiseANiveauFilles
 				row.MiseANiveau.Garcons += rem.MiseANiveauGarcons
@@ -419,11 +457,21 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Pourcentages de la section A (admis/présents — convention du système).
+		// Évaluation suivie mais aucune note saisie : ligne vide à
+		// l'impression — signalé à l'écran seulement.
+		if !row.HasData {
+			warnings = append(warnings, fmt.Sprintf(
+				"%s : évaluation suivie mais aucune note saisie — ligne vide.", sch.Name))
+		}
+
+		// Pourcentages de la section A — formule du modèle reçu
+		// (% Admis = Admis / Inscrits ; % Admis Filles = Admises /
+		// Filles inscrites), recalculables depuis les colonnes
+		// imprimées.
 		for _, key := range planActionDisciplines {
 			disc := row.Disciplines[key]
-			disc.PctAdmis = pct1(disc.Admis.Total, disc.Presents.Total)
-			disc.PctAdmisFilles = pct1(disc.Admis.Filles, disc.Presents.Filles)
+			disc.PctAdmis = pct1(disc.Admis.Total, row.Inscrits.Total)
+			disc.PctAdmisFilles = pct1(disc.Admis.Filles, row.Inscrits.Filles)
 		}
 	}
 
@@ -438,38 +486,26 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// === Regroupement par centre (ordre : position puis nom) ; les écoles
-	// sans centre forment un groupe final « (Sans centre d'examen) » —
-	// elles restent visibles (le document officiel liste TOUTES les écoles).
+	// === Regroupement par centre (ordre : position puis nom). Toutes
+	// les écoles restantes ont un centre rattaché (filtrées plus haut) ;
+	// un centre sans école rattachée ne génère pas de groupe vide (le
+	// modèle officiel ne liste que des centres peuplés).
 	groups := map[string]*planCenterGroup{}
 	for _, c := range centers {
 		groups[c.ID] = &planCenterGroup{ID: c.ID, Name: c.Name, Position: c.Position, Schools: []planSchoolRow{}}
 	}
-	unassigned := &planCenterGroup{Name: "(Sans centre d'examen)", Schools: []planSchoolRow{}}
 	for _, sch := range schools {
-		row := rowBySchool[sch.ID]
-		if sch.ExamCenterID != nil {
-			if g, ok := groups[*sch.ExamCenterID]; ok {
-				g.Schools = append(g.Schools, *row)
-				continue
-			}
-		}
-		unassigned.Schools = append(unassigned.Schools, *row)
+		g := groups[*sch.ExamCenterID]
+		g.Schools = append(g.Schools, *rowBySchool[sch.ID])
 	}
-	centerList := make([]planCenterGroup, 0, len(centers)+1)
+	centerList := make([]planCenterGroup, 0, len(centers))
 	for _, c := range centers {
 		g := groups[c.ID]
 		if len(g.Schools) == 0 {
-			// Centre sans aucune école rattachée : pas de groupe dans le
-			// document (le modèle officiel ne liste que des centres peuplés).
 			continue
 		}
 		g.Totals = aggregatePlanRows(g.Schools)
 		centerList = append(centerList, *g)
-	}
-	if len(unassigned.Schools) > 0 {
-		unassigned.Totals = aggregatePlanRows(unassigned.Schools)
-		centerList = append(centerList, *unassigned)
 	}
 
 	grand := []planSchoolRow{}
@@ -532,18 +568,27 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 		"centers":       centerList,
 		"grand_total":   aggregatePlanRows(grand),
 		"warnings":      warnings,
-		"count":         len(schools),
+		"count":         len(grand), // écoles réellement dans le document
 	})
 }
 
 // aggregatePlanRows — totaux d'un groupe (somme des lignes écoles) ;
-// les pourcentages sont recalculés sur les effectifs cumulés.
+// les pourcentages sont recalculés sur les effectifs cumulés avec la
+// formule du modèle (% Admis = Admis / Inscrits). HasData / HasRemediation
+// ne sont vrais que si AU MOINS une école du groupe a réellement des
+// données (les zéros cumulés d'un groupe sans notes ne s'impriment pas).
 func aggregatePlanRows(rows []planSchoolRow) planSchoolRow {
-	tot := planSchoolRow{SchoolName: "TOTAL", HasData: len(rows) > 0, Disciplines: map[string]*planDisciplineStats{}}
+	tot := planSchoolRow{SchoolName: "TOTAL", Disciplines: map[string]*planDisciplineStats{}}
 	for _, key := range planActionDisciplines {
 		tot.Disciplines[key] = &planDisciplineStats{}
 	}
 	for _, row := range rows {
+		if row.HasData {
+			tot.HasData = true
+		}
+		if row.HasRemediation {
+			tot.HasRemediation = true
+		}
 		addCountRow(&tot.Inscrits, row.Inscrits)
 		for _, key := range planActionDisciplines {
 			d := tot.Disciplines[key]
@@ -556,8 +601,8 @@ func aggregatePlanRows(rows []planSchoolRow) planSchoolRow {
 	}
 	for _, key := range planActionDisciplines {
 		d := tot.Disciplines[key]
-		d.PctAdmis = pct1(d.Admis.Total, d.Presents.Total)
-		d.PctAdmisFilles = pct1(d.Admis.Filles, d.Presents.Filles)
+		d.PctAdmis = pct1(d.Admis.Total, tot.Inscrits.Total)
+		d.PctAdmisFilles = pct1(d.Admis.Filles, tot.Inscrits.Filles)
 	}
 	return tot
 }

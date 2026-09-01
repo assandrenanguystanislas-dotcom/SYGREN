@@ -792,12 +792,14 @@ export interface PdaPlanCountTF {
 }
 
 // Stats de maîtrise d'une discipline (section A) — colonnes du modèle
-// officiel : Total | Filles | Présents | % Admis | Admis (Filles) | % Admis (Filles)
+// officiel : Total | Filles | Présents (admis) | % Admis | Admis (Filles) |
+// % Admis (Filles). « admis » = élèves présents ayant atteint le seuil :
+// c'est cette valeur que porte la colonne « Présents (admis) » du modèle.
 export interface PdaPlanDisciplineStats {
   presents: PdaCountRow;
   admis: PdaCountRow;
-  pct_admis: number; // Admis / Présents
-  pct_admis_filles: number; // Admises / Filles présentes
+  pct_admis: number; // Admis / Inscrits (formule du modèle reçu)
+  pct_admis_filles: number; // Admises / Filles inscrites (modèle reçu)
 }
 
 // Une ligne école des sections A et B (et l'agrégat TOTAL d'un groupe)
@@ -814,10 +816,12 @@ export interface PdaPlanSchoolRow {
   difficultes: PdaPlanCountTF;
   mise_a_niveau: PdaPlanCountTF;
   remediation: PdaPlanCountTF;
+  has_remediation?: boolean; // au moins une saisie remédiation (« 00 » saisi ≠ case vide)
 }
 
-// Un groupe CENTRE D'EXAMEN (les écoles non affectées forment le groupe
-// final « (Sans centre d'examen) », id="")
+// Un groupe CENTRE D'EXAMEN — seules les écoles rattachées à un centre
+// figurent dans le document (les écoles sans centre sont exclues et
+// signalées côté API via warnings).
 export interface PdaPlanCenterGroup {
   id: string;
   name: string;
@@ -836,7 +840,7 @@ export interface PdaPlanActionResponse {
   centers: PdaPlanCenterGroup[];
   grand_total: PdaPlanSchoolRow;
   warnings: string[];
-  count: number; // nombre d'écoles du périmètre
+  count: number; // écoles réellement dans le document (avec centre d'examen)
 }
 
 // === Suivi pluriannuel (GET /api/pda/timeline) — matrice élève × évaluations ===
@@ -858,6 +862,15 @@ export interface PdaTimelineEvaluation {
   read_only: boolean;
   subject_maxes: [number, number, number];
   subject_seuils: [number, number, number];
+  // Totaux de COLONNE (directive IEPP : admis et non admis calculés pour
+  // chaque évaluation) — présents avec au moins une note, admis = les 3
+  // matières réunies au-dessus du seuil, non_admis = présents − admis,
+  // pct_admis = admis / présents. Presents == 0 → évaluation sans notes
+  // (cases vides à l'impression).
+  presents: number;
+  admis: number;
+  non_admis: number;
+  pct_admis: number;
 }
 
 export interface PdaTimelineCell {

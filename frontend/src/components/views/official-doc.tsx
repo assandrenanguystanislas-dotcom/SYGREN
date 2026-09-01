@@ -57,8 +57,10 @@ export interface OfficialDocIep {
 const leftLine: CSSProperties = { lineHeight: 1.32 };
 
 /** En-tête institutionnel complet (bloc ministériel + bloc République).
- *  size « sm » = A4 paysage (plan réseau, suivi pluriannuel) ;
- *  size « lg » = A4 portrait (fiche résultat par école). */
+ *  size « lg » = A4 portrait (fiche résultat par école) ;
+ *  size « sm » = A4 paysage (suivi pluriannuel) ;
+ *  size « xs » = A4 paysage compact (plan réseau : tient sur 4 pages,
+ *  l'en-tête du modèle consommait presque la moitié de la page 1). */
 export function OfficialDocHeader({
   iep,
   variant,
@@ -66,19 +68,19 @@ export function OfficialDocHeader({
 }: {
   iep?: OfficialDocIep | null;
   variant: "plan" | "fiche";
-  size: "sm" | "lg";
+  size: "sm" | "lg" | "xs";
 }) {
   const name = (iep?.name || "…………").toUpperCase();
   const region = (iep?.region || iep?.name || "…………").toUpperCase();
-  const base = size === "lg" ? 14 : 11;
-  const arms = size === "lg" ? 64 : 50;
+  const base = size === "lg" ? 14 : size === "sm" ? 11 : 9.5;
+  const arms = size === "lg" ? 64 : size === "sm" ? 50 : 38;
   return (
     <div
       style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "flex-start",
-        marginBottom: size === "lg" ? "10px" : "8px",
+        marginBottom: size === "lg" ? "10px" : size === "sm" ? "8px" : "4px",
       }}
     >
       {/* --- Bloc gauche : administration --- */}

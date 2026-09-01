@@ -1243,6 +1243,12 @@ func GetPDASummary(w http.ResponseWriter, r *http.Request) {
 // ordre de création (= ordre de déroulé du plan). Objectif : voir le niveau
 // d'étude de chaque élève dans les matières désignées, évaluation après
 // évaluation.
+//
+// Directive IEPP : les ADMIS et les NON ADMIS de chaque COLONNE sont
+// calculés côté API (source unique de vérité) — admis = élèves présents
+// ayant atteint le seuil dans LES 3 MATIÈRES (AdmisGlobal), non admis =
+// présents n'y parvenant pas (dont notes manquantes), % Admis = Admis /
+// Présents. Le document imprime deux lignes de synthèse par colonne.
 type pdaTimelineEval struct {
 	ID         string `json:"id"`
 	Kind       string `json:"kind"`
@@ -1259,6 +1265,16 @@ type pdaTimelineEval struct {
 	ReadOnly      bool       `json:"read_only"`
 	SubjectMaxes  [3]float64 `json:"subject_maxes"`
 	SubjectSeuils [3]float64 `json:"subject_seuils"`
+	// Totaux de COLONNE (directive IEPP : admis et non admis calculés
+	// pour chaque évaluation) — Presents = élèves présents avec au
+	// moins une note saisie, Admis = présents maîtrisant les 3
+	// matières, NonAdmis = Presents − Admis, PctAdmis = Admis /
+	// Presents (0 si aucune note). Une évaluation sans notes imprime
+	// des cases vides (frontend : Presents == 0).
+	Presents int     `json:"presents"`
+	Admis    int     `json:"admis"`
+	NonAdmis int     `json:"non_admis"`
+	PctAdmis float64 `json:"pct_admis"`
 }
 
 type pdaTimelineCell struct {
@@ -1445,6 +1461,11 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 		evals = append(evals, te)
 	}
 
+	// Totaux de colonne (accumulés pendant l'assemblage des élèves,
+	// fusionnés dans evals à la fin — un seul passage, zéro requête).
+	colPresents := make(map[string]int, len(exams))
+	colAdmis := make(map[string]int, len(exams))
+
 	// Assemblage des lignes élèves.
 	studentsOut := make([]pdaTimelineStudent, 0, len(students))
 	for _, s := range students {
@@ -1484,10 +1505,37 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 			if cell.AdmisGlobal {
 				st.AdmisGlobalCount++
 			}
+			// Totaux de colonne : présents avec au moins une
+			// note (l'évaluation « a eu lieu »), admis = les 3
+			// matières réunies (même règle que la grille).
+			hasNote := false
+			for k := 0; k < 3; k++ {
+				if row.Notes[k] != nil {
+					hasNote = true
+					break
+				}
+			}
+			if hasNote {
+				colPresents[e.ID]++
+				if cell.AdmisGlobal {
+					colAdmis[e.ID]++
+				}
+			}
 			st.Cells[e.ID] = cell
 		}
 		st.PctAdmis = pct1(st.AdmisGlobalCount, len(exams))
 		studentsOut = append(studentsOut, st)
+	}
+
+	// Fusion des totaux de colonne dans les évaluations (directive
+	// IEPP : admis et non admis de chaque colonne calculés).
+	for i := range evals {
+		p := colPresents[evals[i].ID]
+		a := colAdmis[evals[i].ID]
+		evals[i].Presents = p
+		evals[i].Admis = a
+		evals[i].NonAdmis = p - a
+		evals[i].PctAdmis = pct1(a, p)
 	}
 
 	// Avertissements matières non notées dans les compositions.

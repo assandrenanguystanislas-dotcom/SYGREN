@@ -243,6 +243,14 @@
   body * {
     visibility: hidden !important;
   }
+  /* Artefacts d'exécution : jamais imprimés (notifications toast,
+     annonceur de route, portail devtools). Ils occupent sinon de la
+     place dans le flux et génèrent une page blanche en fin de document. */
+  [data-sonner-toaster],
+  next-route-announcer,
+  nextjs-portal {
+    display: none !important;
+  }
   #synthese-doc,
   #synthese-doc * {
     visibility: visible !important;
@@ -407,7 +415,15 @@
  * Version « document officiel » de la matrice : en-tête ministériel + titre
  * normalisé + matrice en encre + signatures. Même technique d'isolement
  * (la règle body * { visibility: hidden } commune cache tout le reste).
- * Réutilise la page nommée pda-timeline (A4 paysage, marge 8mm). */
+ * FORMAT : le @page par défaut de la ROUTE DÉDIÉE /pda-timeline-doc est
+ * importé par son layout (print.css — A4 paysage, marge 8mm). PAS de page
+ * nommée ici : le changement de contexte de page (nommée → défaut) après
+ * le document génère une page blanche finale, même pour des boîtes de
+ * hauteur nulle (internes Next.js après le root). Une route dédiée rend
+ * le @page par défaut sûr — aucune autre vue n'est imprimée dessus.
+ * DIRECTIVE IEPP : les lignes élèves ne doivent JAMAIS être fractionnées
+ * entre deux pages (break-inside: avoid sur chaque tr — la matrice n'a
+ * AUCUNE cellule rowSpan, la règle est sûre ici). */
 @media print {
   #pda-tl-doc,
   #pda-tl-doc * {
@@ -415,11 +431,17 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  #pda-tl-doc tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
   #pda-tl-doc {
     background: white !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    /* PAS de position:absolute : sur un élément paginé multi-pages, la
+       boîte absolue se détache du flux et se fait tronquer à la première
+       page. La page dédiée n'a aucun autre contenu en flux (barre + notes
+       en display:none) : statique = haut de la page 1. */
+    position: static !important;
     width: 100% !important;
     max-width: none !important;
     min-height: auto !important;
@@ -427,37 +449,56 @@
     padding: 4mm 6mm !important;
     border: none !important;
     box-shadow: none !important;
-    page: pda-timeline;
+    overflow: visible !important;
   }
 }
 
 /* === PDA IEPP — Document réseau « PLAN D'ACTION PLURIANNUEL DE L'IEPP » ===
  * Sections A + B groupées par CENTRES D'EXAMENS (architecture des documents
- * officiels reçus) : large → A4 paysage, page nommée pda-plan, même
- * technique d'isolement que les autres documents. */
+ * officiels reçus) : large → A4 paysage, même technique d'isolement que les
+ * autres documents.
+ * FORMAT : le @page par défaut de la ROUTE DÉDIÉE /pda-plan-doc est importé
+ * par son layout (print.css — A4 paysage, marge 5mm). PAS de page nommée :
+ * le changement de contexte de page (nommée → défaut) APRÈS le document
+ * génère une page blanche finale (portrait) même pour des boîtes de hauteur
+ * nulle (internes Next.js après le root) — constaté et reproduit : plan sur
+ * 4 pages + 1 page blanche. Route dédiée = @page par défaut sûr.
+ * DIRECTIVES IEPP : le plan tient sur 4 PAGES A4 paysage (marges et lignes
+ * compactes) — section A sur les pages 1-2, section B sur les pages 3-4
+ * (saut de page forcé avant la section B, posé dans le composant) ; les
+ * entêtes ne sont PAS répétés sur les pages suivantes (le modèle reçu
+ * poursuit les lignes directement, et chaque ligne gagnée compte pour
+ * tenir sur 4 pages).
+ * ATTENTION : PAS de break-inside: avoid sur les tr ici — avec les
+ * cellules CENTRE en rowSpan (jusqu'à 32 lignes), Chromium traite tout le
+ * groupe comme insécable et aligne UN GROUPE PAR PAGE (7 pages au lieu de
+ * 4). Les lignes à texte unique ne se fractionnent pas visiblement sans
+ * cette règle : le moteur passe déjà à la page suivante entre deux
+ * lignes de texte. */
 @media print {
-  @page pda-plan {
-    size: A4 landscape;
-    margin: 8mm;
-  }
   #pda-plan-doc,
   #pda-plan-doc * {
     visibility: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  #pda-plan-doc thead {
+    display: table-row-group !important;
+  }
   #pda-plan-doc {
     background: white !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    /* PAS de position:absolute : sur un élément paginé multi-pages, la
+       boîte absolue se détache du flux et se fait tronquer à la première
+       page. La page dédiée n'a aucun autre contenu en flux : statique =
+       haut de la page 1. */
+    position: static !important;
     width: 100% !important;
     max-width: none !important;
     min-height: auto !important;
     margin: 0 !important;
-    padding: 4mm 6mm !important;
+    padding: 2mm 4mm !important;
     border: none !important;
     box-shadow: none !important;
-    page: pda-plan;
+    overflow: visible !important;
   }
 }

@@ -384,6 +384,56 @@ export function PdaTimelineView() {
                         </TableCell>
                       </TableRow>
                     )}
+                    {/* Totaux de colonne (directive IEPP : admis et non
+                        admis calculés pour chaque évaluation) */}
+                    {evaluations.length > 0 && (
+                      <>
+                        <TableRow className="bg-muted/60 font-semibold">
+                          <TableCell colSpan={2} className="text-xs">
+                            Admis
+                          </TableCell>
+                          {evaluations.map((e) => (
+                            <TableCell
+                              key={`a-${e.id}`}
+                              className="text-center tabular-nums text-xs"
+                              title={`${e.label} — ${e.admis} admis / ${e.presents} présents (${e.pct_admis} %)`}
+                            >
+                              {(e.presents ?? 0) > 0 ? e.admis : ""}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-center tabular-nums text-xs">
+                            {evaluations.some((e) => (e.presents ?? 0) > 0)
+                              ? evaluations.reduce(
+                                  (acc, e) => acc + (e.admis ?? 0),
+                                  0,
+                                )
+                              : ""}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="bg-muted/60 font-semibold">
+                          <TableCell colSpan={2} className="text-xs">
+                            Non admis
+                          </TableCell>
+                          {evaluations.map((e) => (
+                            <TableCell
+                              key={`na-${e.id}`}
+                              className="text-center tabular-nums text-xs"
+                              title={`${e.label} — ${e.non_admis} non admis / ${e.presents} présents`}
+                            >
+                              {(e.presents ?? 0) > 0 ? e.non_admis : ""}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-center tabular-nums text-xs">
+                            {evaluations.some((e) => (e.presents ?? 0) > 0)
+                              ? evaluations.reduce(
+                                  (acc, e) => acc + (e.non_admis ?? 0),
+                                  0,
+                                )
+                              : ""}
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -426,7 +476,8 @@ export function PdaTimelineView() {
         <p className="text-center text-[11px] text-muted-foreground print:hidden">
           Le pourcentage d&apos;admission (3 matières réunies) est calculé sur
           toutes les évaluations du plan de l&apos;année — le niveau d&apos;étude de
-          chaque élève se lit colonne par colonne.
+          chaque élève se lit colonne par colonne ; les lignes Admis / Non
+          admis de chaque colonne sont calculées (admis / présents).
         </p>
       )}
     </div>

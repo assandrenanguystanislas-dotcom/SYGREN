@@ -2,32 +2,49 @@
 
 // === PDA IEPP — Document réseau « PLAN D'ACTION PLURIANNUEL DE L'IEPP » ===
 // Reproduction FIDÈLE de l'architecture du document officiel reçu de
-// l'IEPP (SUIVI PLURIANNUEL_1..4) : les écoles y sont GROUPÉES PAR CENTRE
-// D'EXAMEN, ligne TOTAL de l'inspection en bas.
+// l'IEPP (SUIVI PLURIANNUEL_1..4, 4 pages A4 paysage) : les écoles y sont
+// GROUPÉES PAR CENTRE D'EXAMEN, ligne TOTAL de l'inspection en bas.
 //
 // Architecture du modèle reçu :
 //   - En-tête institutionnel (bloc ministériel + République + armoiries)
 //   - Boîte jaune de l'évaluation : « EXAMEN BLANC N°1 DU 13/03/2025 »
 //   - Bandeau jaune pleine largeur : « PLAN D'ACTION PLURIANNUEL DE
 //     L'IEPP DABOU-1 »
-//   - Section A : NOMBRE D'ELEVES DU CM2 AYANT ATTEINT LE SEUIL SUFFISANT
-//     DE MAÎTRISE EN LECTURE (EXPLOITATION DE TEXTE), MATHEMATIQUES.
-//     Colonnes par discipline : Total | Filles | Présents (admis) |
-//     % Admis | Admis (Filles) | % Admis (Filles).
-//   - Section B : ACCROÎTRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX
-//     EXAMENS DES ELEVES DE TOUS LES NIVEAUX. — 3 indicateurs ×
-//     (TOTAL | FILLES), bande grise sous les sous-entêtes.
+//   - Section A (pages 1-2) : NOMBRE D'ELEVES DU CM2 AYANT ATTEINT LE
+//     SEUIL SUFFISANT DE MAÎTRISE EN LECTURE (EXPLOITATION DE TEXTE),
+//     MATHEMATIQUES. Colonnes par discipline : Total | Filles |
+//     Présents (admis) | % Admis | Admis (Filles) | % Admis (Filles).
+//   - Section B (pages 3-4, NOUVELLE PAGE) : ACCROÎTRE LES ACQUIS
+//     SCOLAIRES… — 3 indicateurs × (TOTAL | FILLES), bande grise sur la
+//     ligne d'entête CENTRE/ECOLES (comme le modèle).
 //   - PAS de sous-totaux par centre (le modèle n'en a pas : uniquement
-//     les lignes écoles + la ligne TOTAL finale, fond gris, en gras).
+//     les lignes écoles + la ligne TOTAL finale, fond gris, en gras) et
+//     PAS de répétition des entêtes sur les pages suivantes (le modèle
+//     poursuit les lignes directement).
 //   - Bordures « Excel » : cadre épais, séparations de groupes épaisses,
-//     filets intérieurs fins. Effectifs zéro-padés (07), % à 2 décimales
-//     (89,26%), encre noire, police Calibri (Carlito).
+//     filets intérieurs fins. Effectifs zéro-padés (07), « 00 » pour les
+//     zéros calculés ou saisis, cases vides sans données (les #DIV/0! du
+//     modèle), % à 2 décimales (89,26%), encre noire, Calibri (Carlito).
 //   - Aucune signature sur le document reçu (il s'achève sur le TOTAL).
 //
-// Écart documenté vs modèle papier : les formules Excel de l'original
-// affichaient #DIV/0! et ######## ; SYGREN laisse les cases vides et
-// applique la définition correcte % Admis = Admis/Présents (le modèle
-// divisait par les inscrits, valeurs > 100 % possibles).
+// CALCULS (directives IEPP, formules vérifiées sur la ligne TOTAL du
+// modèle : 1105/1238 = 89,26% ; 579/622 = 93,09%) :
+//   - « Présents (admis) » = les ADMIS de la discipline : élèves présents
+//     ayant atteint le seuil de maîtrise (les non admis = présents
+//     évalués − admis alimentent les difficultés de la section B).
+//   - % Admis          = Admis / Inscrits
+//   - % Admis (Filles) = Admises / Filles inscrites
+//   Chaque pourcentage imprimé est donc recalculable depuis les colonnes
+//   visibles — les admis et les non admis de chaque colonne sont calculés.
+//   - Périmètre : seules les écoles rattachées à un CENTRE D'EXAMEN
+//     figurent dans le document (directive IEPP) ; les écoles sans centre
+//     sont signalées à l'écran uniquement (jamais imprimées).
+//
+// PAGINATION (directive IEPP : le plan tient sur 4 pages A4 paysage) :
+//   - lignes compactes (9px, entêtes non répétées, saut de ligne évité
+//     dans les tr) ;
+//   - saut de page AVANT la section B (pages 1-2 = section A, pages 3-4
+//     = section B, comme le document reçu).
 //
 // Toutes les données viennent de /api/pda/plan-action (source unique de
 // vérité — le document ne recalcule rien). Impression 100 % navigateur
@@ -56,10 +73,25 @@ import {
   fmtDocPct,
 } from "./official-doc";
 
+/** Effectif avec zéro CALCULÉ affiché « 00 » (zéros saisis du modèle
+ *  reçu) — les cases sans donnée restent vides (fmtDocNum). */
+function fmtNum0(n: number | undefined | null): string {
+  if (n == null) return "";
+  return n <= 0 ? "00" : fmtDocNum(n);
+}
+
+/** Pourcentage affiché même à zéro (« 0,00% ») dès que la case est
+ *  calculée ; case vide seulement si aucune évaluation (#DIV/0!). */
+function fmtPct0(n: number | undefined | null): string {
+  if (n == null) return "";
+  return `${n.toFixed(2).replace(".", ",")}%`;
+}
+
 const thBase: CSSProperties = {
   border: THIN,
-  padding: "3px 4px",
-  fontSize: "9.5px",
+  padding: "1px 3px",
+  fontSize: "9px",
+  lineHeight: 1.15,
   fontWeight: 400, // le modèle reçu : entêtes de colonnes en régulier
   textAlign: "center",
   verticalAlign: "middle",
@@ -68,8 +100,9 @@ const thBase: CSSProperties = {
 
 const tdBase: CSSProperties = {
   border: THIN,
-  padding: "2px 4px",
-  fontSize: "9.5px",
+  padding: "0.5px 3px",
+  fontSize: "9px",
+  lineHeight: 1.15,
   textAlign: "center",
   color: INK,
 };
@@ -89,10 +122,14 @@ const schoolTd: CSSProperties = {
   borderRight: THICK,
 };
 
-/** Cellules des 6 colonnes d'une discipline (section A), dans l'ordre du
- *  modèle : Total | Filles (inscrits) | Présents | % Admis |
- *  Admis (Filles) | % Admis (Filles). Première colonne des MATHÉMATIQUES
- *  = séparation épaisse entre les 2 disciplines (modèle Excel). */
+/** Les 12 cellules de données de la section A pour une ligne école.
+ *  Ordre du modèle par discipline : Total | Filles (inscrits) |
+ *  Présents (admis) | % Admis | Admis (Filles) | % Admis (Filles).
+ *  « Présents (admis) » porte les ADMIS (présents ayant atteint le seuil)
+ *  et les % suivent les formules du modèle (Admis/Inscrits) : tout est
+ *  recalculable depuis les colonnes imprimées. Une discipline non
+ *  évaluée (aucune note) laisse ses 4 cases vides (#DIV/0! du modèle).
+ *  Première colonne des MATHÉMATIQUES = séparation épaisse (modèle). */
 function DisciplineCells({
   row,
   discipline,
@@ -102,56 +139,62 @@ function DisciplineCells({
 }) {
   const d: PdaPlanDisciplineStats | undefined = row.disciplines?.[discipline];
   const first = discipline === "math";
-  const td = first ? { ...tdBase, borderLeft: THICK } : tdBase;
+  // Trait épais UNIQUEMENT sur la 1re colonne du groupe MATHÉMATIQUES
+  // (séparation entre disciplines) — filets fins à l'intérieur (modèle).
+  const tdFirst = first ? { ...tdBase, borderLeft: THICK } : tdBase;
+  const assessed = (d?.presents?.total ?? 0) > 0; // au moins une note saisie
+  const inscrits = row.inscrits?.total ?? 0;
+  const filles = row.inscrits?.filles ?? 0;
   return (
     <>
-      <td style={td}>{fmtDocNum(row.inscrits?.total)}</td>
-      <td style={td}>{fmtDocNum(row.inscrits?.filles)}</td>
-      <td style={td}>{fmtDocNum(d?.presents?.total)}</td>
-      <td style={td}>
-        {d && (d.presents?.total ?? 0) > 0 ? fmtDocPct(d.pct_admis) : ""}
-      </td>
-      <td style={td}>{fmtDocNum(d?.admis?.filles)}</td>
-      <td style={td}>
-        {d && (d.presents?.total ?? 0) > 0 ? fmtDocPct(d.pct_admis_filles) : ""}
+      <td style={tdFirst}>{fmtDocNum(inscrits)}</td>
+      <td style={tdBase}>{fmtDocNum(filles)}</td>
+      <td style={tdBase}>{assessed ? fmtNum0(d?.admis?.total) : ""}</td>
+      <td style={tdBase}>{assessed && inscrits > 0 ? fmtPct0(d?.pct_admis) : ""}</td>
+      <td style={tdBase}>{assessed ? fmtNum0(d?.admis?.filles) : ""}</td>
+      <td style={tdBase}>
+        {assessed && filles > 0 ? fmtPct0(d?.pct_admis_filles) : ""}
       </td>
     </>
   );
 }
 
-/** Les 12 cellules de données de la section A pour une ligne TOTAL
- *  (fond gris, gras — modèle reçu). */
+/** Les 12 cellules de données de la section A pour la ligne TOTAL
+ *  (fond gris, gras — modèle reçu). Mêmes règles que les lignes écoles :
+ *  « Présents (admis) » = admis calculés, % = formules du modèle,
+ *  cases vides si la discipline n'a été évaluée nulle part. */
 function TotalRowCells({ row }: { row: PdaPlanSchoolRow }) {
-  const t = (n: number | undefined) => fmtDocNum(n);
-  const p = (v: number | undefined, ref: number | undefined) =>
-    (ref ?? 0) > 0 ? fmtDocPct(v) : "";
   const bold: CSSProperties = { ...tdBase, fontWeight: 700, background: TOTAL_BG };
   const boldMath: CSSProperties = { ...bold, borderLeft: THICK };
+  const pct = (disc: "exploitation" | "math", byFilles: boolean) => {
+    const d = row.disciplines?.[disc];
+    const assessed = (d?.presents?.total ?? 0) > 0;
+    const denom = byFilles
+      ? (row.inscrits?.filles ?? 0)
+      : (row.inscrits?.total ?? 0);
+    return assessed && denom > 0
+      ? fmtPct0(byFilles ? d?.pct_admis_filles : d?.pct_admis)
+      : "";
+  };
+  const admis = (disc: "exploitation" | "math", byFilles: boolean) => {
+    const d = row.disciplines?.[disc];
+    const assessed = (d?.presents?.total ?? 0) > 0;
+    return assessed ? fmtNum0(byFilles ? d?.admis?.filles : d?.admis?.total) : "";
+  };
   return (
     <>
-      <td style={bold}>{t(row.inscrits?.total)}</td>
-      <td style={bold}>{t(row.inscrits?.filles)}</td>
-      <td style={bold}>{t(row.disciplines?.exploitation?.presents?.total)}</td>
-      <td style={bold}>
-        {p(row.disciplines?.exploitation?.pct_admis, row.disciplines?.exploitation?.presents?.total)}
-      </td>
-      <td style={bold}>{t(row.disciplines?.exploitation?.admis?.filles)}</td>
-      <td style={bold}>
-        {p(
-          row.disciplines?.exploitation?.pct_admis_filles,
-          row.disciplines?.exploitation?.presents?.total,
-        )}
-      </td>
-      <td style={boldMath}>{t(row.inscrits?.total)}</td>
-      <td style={bold}>{t(row.inscrits?.filles)}</td>
-      <td style={bold}>{t(row.disciplines?.math?.presents?.total)}</td>
-      <td style={bold}>
-        {p(row.disciplines?.math?.pct_admis, row.disciplines?.math?.presents?.total)}
-      </td>
-      <td style={bold}>{t(row.disciplines?.math?.admis?.filles)}</td>
-      <td style={bold}>
-        {p(row.disciplines?.math?.pct_admis_filles, row.disciplines?.math?.presents?.total)}
-      </td>
+      <td style={bold}>{fmtDocNum(row.inscrits?.total)}</td>
+      <td style={bold}>{fmtDocNum(row.inscrits?.filles)}</td>
+      <td style={bold}>{admis("exploitation", false)}</td>
+      <td style={bold}>{pct("exploitation", false)}</td>
+      <td style={bold}>{admis("exploitation", true)}</td>
+      <td style={bold}>{pct("exploitation", true)}</td>
+      <td style={boldMath}>{fmtDocNum(row.inscrits?.total)}</td>
+      <td style={bold}>{fmtDocNum(row.inscrits?.filles)}</td>
+      <td style={boldMath}>{admis("math", false)}</td>
+      <td style={bold}>{pct("math", false)}</td>
+      <td style={bold}>{admis("math", true)}</td>
+      <td style={bold}>{pct("math", true)}</td>
     </>
   );
 }
@@ -223,11 +266,12 @@ export function PdaPlanDocument({
   const totalSchoolCount = centers.reduce((acc, c) => acc + c.schools.length, 0);
 
   return (
-    <div className="min-h-screen bg-gray-100 print:bg-white">
+    <div className="min-h-screen bg-gray-100 print:bg-white print:min-h-0">
       {/* Barre d'outils (masquée à l'impression) */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden">
         <h3 className="font-semibold text-sm">
           Plan d&apos;Action IEPP — {toolbarTitle} · {totalSchoolCount} école(s)
+          avec centre d&apos;examen
         </h3>
         <div className="flex items-center gap-2">
           <button
@@ -247,12 +291,13 @@ export function PdaPlanDocument({
         </div>
       </div>
 
-      {/* Avertissements (écran uniquement) : écoles sans évaluation suivie,
-          sans classe CM2, matières non notées… */}
+      {/* Avertissements (écran uniquement) : écoles exclues (sans centre
+          d'examen), sans évaluation suivie, sans classe CM2, notes
+          manquantes… */}
       {(plan.warnings ?? []).length > 0 && (
         <div className="mx-auto max-w-[297mm] mt-3 px-2 print:hidden">
-          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 text-xs p-3 space-y-1">
-            <p className="font-semibold">Données incomplètes (lignes laissées vides) :</p>
+          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 text-xs p-3 space-y-1 max-h-48 overflow-y-auto">
+            <p className="font-semibold">Données incomplètes ou écoles exclues :</p>
             <ul className="list-disc pl-4 space-y-0.5">
               {plan.warnings.map((w, i) => (
                 <li key={i}>{w}</li>
@@ -269,23 +314,23 @@ export function PdaPlanDocument({
         style={{
           width: "100%",
           maxWidth: "297mm", // A4 paysage — le tableau réseau est large
-          padding: "8mm 8mm",
+          padding: "6mm 8mm",
           fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
         }}
       >
-        {/* --- En-tête institutionnel (modèle reçu) --- */}
-        <OfficialDocHeader iep={iep} variant="plan" size="sm" />
+        {/* --- En-tête institutionnel compact (modèle reçu) --- */}
+        <OfficialDocHeader iep={iep} variant="plan" size="xs" />
 
         {/* --- Boîte jaune de l'évaluation --- */}
-        <div style={{ textAlign: "center", margin: "2px 0 8px" }}>
+        <div style={{ textAlign: "center", margin: "1px 0 5px" }}>
           <span
             style={{
               display: "inline-block",
               background: "#ffff00",
-              padding: "5px 26px",
-              fontSize: "14px",
+              padding: "3px 22px",
+              fontSize: "12.5px",
               fontWeight: 700,
               color: INK,
             }}
@@ -299,34 +344,34 @@ export function PdaPlanDocument({
           style={{
             background: "#ffff00",
             textAlign: "center",
-            padding: "7px 8px",
-            marginBottom: "10px",
-            fontSize: "17px",
+            padding: "4px 8px",
+            fontSize: "15px",
             color: INK,
             width: "82%",
-            margin: "0 auto 10px",
+            margin: "0 auto 6px",
           }}
         >
           PLAN D&apos;ACTION PLURIANNUEL DE L&apos;IEPP{" "}
           {(iep?.name || "…………").toUpperCase()}
         </div>
 
-        {/* ================= SECTION A ================= */}
-        <p style={{ fontSize: "10.5px", margin: "6px 0 4px" }}>
+        {/* ================= SECTION A (pages 1-2) ================= */}
+        <p style={{ fontSize: "9.5px", margin: "4px 0 3px" }}>
           A) NOMBRE D&apos;ELEVES DU CM2 AYANT ATTEINT LE SEUIL SUFFISANT DE
           MAÎTRISE EN LECTURE (EXPLOITATION DE TEXTE), MATHEMATIQUES.
         </p>
         <table style={{ width: "100%", borderCollapse: "collapse", border: THICK }}>
           <thead>
             {/* Ligne 1 : CENTRES | ECOLES | DISCIPLINES (2 × 6 colonnes).
-                rowSpan=3 : l'en-tête comporte 3 lignes. */}
+                rowSpan=3 : l'en-tête comporte 3 lignes. À l'impression la
+                thead n'est PAS répétée (le modèle poursuit les lignes). */}
             <tr>
               <th style={{ ...thBase, fontWeight: 700, borderRight: THICK }} rowSpan={3}>
                 CENTRES
                 <br />
                 D&apos;EXAMENS
               </th>
-              <th style={{ ...thBase, fontWeight: 700, borderRight: THICK, width: "110px" }} rowSpan={3}>
+              <th style={{ ...thBase, fontWeight: 700, borderRight: THICK, width: "120px" }} rowSpan={3}>
                 ECOLES
               </th>
               <th colSpan={12} style={{ ...thBase, borderBottom: THICK }}>
@@ -367,9 +412,10 @@ export function PdaPlanDocument({
           </thead>
           <tbody>
             {centers.map((c) => (
-              <Fragment key={c.id || "unassigned-a"}>
+              <Fragment key={c.id || "sans-centre-a"}>
                 {/* PAS de sous-totaux par centre — le modèle reçu n'en a
-                    pas : uniquement les lignes écoles. */}
+                    pas : uniquement les lignes écoles. Les écoles sans
+                    centre d'examen n'arrivent pas ici (exclues côté API). */}
                 {c.schools.map((s) => (
                   <tr key={s.school_id}>
                     {s === c.schools[0] && (
@@ -394,109 +440,146 @@ export function PdaPlanDocument({
           </tbody>
         </table>
 
-        {/* ================= SECTION B ================= */}
-        <p style={{ fontSize: "10.5px", margin: "12px 0 4px" }}>
-          B) ACCROÎTRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX EXAMENS DES
-          ELEVES DE TOUS LES NIVEAUX.
-        </p>
-        <table style={{ width: "100%", borderCollapse: "collapse", border: THICK }}>
-          <thead>
-            {/* En-tête 3 lignes du modèle reçu : les 3 indicateurs sur 2
-                lignes (titres + TOTAL/FILLES), bande grise dessous,
-                CENTRE/ECOLES sur toute la hauteur. */}
-            <tr>
-              <th style={{ ...thBase, fontWeight: 700, borderRight: THICK, width: "70px" }} rowSpan={3}>
-                CENTRE
-              </th>
-              <th style={{ ...thBase, fontWeight: 700, borderRight: THICK, width: "110px" }} rowSpan={3}>
-                ECOLES
-              </th>
-              <th colSpan={2} style={thBase}>
-                LE NOMBRE D&apos;ELEVES EN DIFFICULTES D&apos;APPRENTISSAGE
-              </th>
-              <th colSpan={2} style={{ ...thBase, borderLeft: THICK }}>
-                LE NOMBRE D&apos;ELEVES AYANT BENEFICIE DES COURS DE MISE A
-                NIVEAU (voir liste des élèves et les notes avant et après)
-              </th>
-              <th colSpan={2} style={{ ...thBase, borderLeft: THICK }}>
-                LE NOMBRE D&apos;ELEVES AYANT BENEFICIE DES MECANISMES DE
-                REMEDIATION PAR MATIERE
-              </th>
-            </tr>
-            <tr>
-              {[
-                "difficultes",
-                "mise_a_niveau",
-                "remediation",
-              ].map((k, ki) => (
-                <Fragment key={k}>
-                  <th style={ki > 0 ? { ...thBase, borderLeft: THICK } : thBase}>TOTAL</th>
-                  <th style={thBase}>FILLES</th>
+        {/* ============ SECTION B (pages 3-4 — NOUVELLE PAGE) ============ */}
+        <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
+          <p style={{ fontSize: "9.5px", margin: "4px 0 3px" }}>
+            B) ACCROÎTRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX EXAMENS
+            DES ELEVES DE TOUS LES NIVEAUX.
+          </p>
+          <table style={{ width: "100%", borderCollapse: "collapse", border: THICK }}>
+            <thead>
+              {/* Entête du modèle reçu : les 3 indicateurs sur 2 lignes,
+                  puis la ligne CENTRE/ECOLES alignée sur la bande grise. */}
+              <tr>
+                <th style={{ ...thBase, borderRight: THIN }} colSpan={2} rowSpan={2} />
+                <th colSpan={2} style={thBase}>
+                  LE NOMBRE D&apos;ELEVES EN DIFFICULTES D&apos;APPRENTISSAGE
+                </th>
+                <th colSpan={2} style={{ ...thBase, borderLeft: THICK }}>
+                  LE NOMBRE D&apos;ELEVES AYANT BENEFICIE DES COURS DE MISE A
+                  NIVEAU (voir liste des élèves et les notes avant et après)
+                </th>
+                <th colSpan={2} style={{ ...thBase, borderLeft: THICK }}>
+                  LE NOMBRE D&apos;ELEVES AYANT BENEFICIE DES MECANISMES DE
+                  REMEDIATION PAR MATIERE
+                </th>
+              </tr>
+              <tr>
+                {["difficultes", "mise_a_niveau", "remediation"].map((k, ki) => (
+                  <Fragment key={k}>
+                    <th style={ki > 0 ? { ...thBase, borderLeft: THICK } : thBase}>TOTAL</th>
+                    <th style={thBase}>FILLES</th>
+                  </Fragment>
+                ))}
+              </tr>
+              {/* Ligne CENTRE/ECOLES + bande grise (modèle reçu) */}
+              <tr>
+                <th style={{ ...thBase, fontWeight: 700, borderRight: THICK, width: "80px" }}>
+                  CENTRE
+                </th>
+                <th style={{ ...thBase, fontWeight: 700, borderRight: THICK, width: "120px" }}>
+                  ECOLES
+                </th>
+                <th colSpan={6} style={{ ...thBase, background: TOTAL_BG, height: "12px", padding: 0, borderLeft: THIN, borderRight: THIN }} />
+              </tr>
+            </thead>
+            <tbody>
+              {centers.map((c) => (
+                <Fragment key={c.id || "sans-centre-b"}>
+                  {c.schools.map((s) => (
+                    <tr key={s.school_id}>
+                      {s === c.schools[0] && (
+                        <td style={centreTd} rowSpan={c.schools.length} title={c.name}>
+                          {c.name}
+                        </td>
+                      )}
+                      <td style={schoolTd}>{s.school_name}</td>
+                      {/* Difficultés d'apprentissage : CALCULÉES (présents
+                          non admis aux 3 matières) — « 00 » dès que
+                          l'évaluation a eu lieu, vide sinon (modèle). */}
+                      <td style={tdBase}>
+                        {s.has_data ? fmtNum0(s.difficultes?.total) : ""}
+                      </td>
+                      <td style={tdBase}>
+                        {s.has_data ? fmtNum0(s.difficultes?.filles) : ""}
+                      </td>
+                      {/* Mise à niveau / remédiation : saisies — « 00 »
+                          uniquement si l'école a réellement enregistré
+                          (has_remediation), case vide sinon (modèle :
+                          PETIT-BADIEN 00 vs BONN vide). */}
+                      <td style={{ ...tdBase, borderLeft: THICK }}>
+                        {s.has_remediation
+                          ? fmtNum0(s.mise_a_niveau?.total)
+                          : fmtDocNum(s.mise_a_niveau?.total)}
+                      </td>
+                      <td style={tdBase}>
+                        {s.has_remediation
+                          ? fmtNum0(s.mise_a_niveau?.filles)
+                          : fmtDocNum(s.mise_a_niveau?.filles)}
+                      </td>
+                      <td style={{ ...tdBase, borderLeft: THICK }}>
+                        {s.has_remediation
+                          ? fmtNum0(s.remediation?.total)
+                          : fmtDocNum(s.remediation?.total)}
+                      </td>
+                      <td style={tdBase}>
+                        {s.has_remediation
+                          ? fmtNum0(s.remediation?.filles)
+                          : fmtDocNum(s.remediation?.filles)}
+                      </td>
+                    </tr>
+                  ))}
                 </Fragment>
               ))}
-            </tr>
-            {/* Bande grise sous les sous-entêtes (modèle reçu) */}
-            <tr>
-              <th colSpan={6} style={{ ...thBase, background: TOTAL_BG, height: "14px", padding: 0, borderLeft: THIN, borderRight: THIN }} />
-            </tr>
-          </thead>
-          <tbody>
-            {centers.map((c) => (
-              <Fragment key={c.id || "unassigned-b"}>
-                {c.schools.map((s) => (
-                  <tr key={s.school_id}>
-                    {s === c.schools[0] && (
-                      <td style={centreTd} rowSpan={c.schools.length} title={c.name}>
-                        {c.name}
-                      </td>
-                    )}
-                    <td style={schoolTd}>{s.school_name}</td>
-                    <td style={tdBase}>{fmtDocNum(s.difficultes?.total)}</td>
-                    <td style={tdBase}>{fmtDocNum(s.difficultes?.filles)}</td>
-                    <td style={{ ...tdBase, borderLeft: THICK }}>
-                      {fmtDocNum(s.mise_a_niveau?.total)}
-                    </td>
-                    <td style={tdBase}>{fmtDocNum(s.mise_a_niveau?.filles)}</td>
-                    <td style={{ ...tdBase, borderLeft: THICK }}>
-                      {fmtDocNum(s.remediation?.total)}
-                    </td>
-                    <td style={tdBase}>{fmtDocNum(s.remediation?.filles)}</td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-            <tr>
-              <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>TOTAL</td>
-              <td style={{ ...tdBase, background: TOTAL_BG }} />
-              <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
-                {fmtDocNum(plan.grand_total?.difficultes?.total)}
-              </td>
-              <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
-                {fmtDocNum(plan.grand_total?.difficultes?.filles)}
-              </td>
-              <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700, borderLeft: THICK }}>
-                {fmtDocNum(plan.grand_total?.mise_a_niveau?.total)}
-              </td>
-              <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
-                {fmtDocNum(plan.grand_total?.mise_a_niveau?.filles)}
-              </td>
-              <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700, borderLeft: THICK }}>
-                {fmtDocNum(plan.grand_total?.remediation?.total)}
-              </td>
-              <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
-                {fmtDocNum(plan.grand_total?.remediation?.filles)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        {/* Le document reçu s'achève sur la ligne TOTAL — aucune signature. */}
+              <tr>
+                <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }} colSpan={2}>
+                  TOTAL
+                </td>
+                <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
+                  {plan.grand_total?.has_data
+                    ? fmtNum0(plan.grand_total?.difficultes?.total)
+                    : ""}
+                </td>
+                <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
+                  {plan.grand_total?.has_data
+                    ? fmtNum0(plan.grand_total?.difficultes?.filles)
+                    : ""}
+                </td>
+                <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700, borderLeft: THICK }}>
+                  {plan.grand_total?.has_remediation
+                    ? fmtNum0(plan.grand_total?.mise_a_niveau?.total)
+                    : fmtDocNum(plan.grand_total?.mise_a_niveau?.total)}
+                </td>
+                <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
+                  {plan.grand_total?.has_remediation
+                    ? fmtNum0(plan.grand_total?.mise_a_niveau?.filles)
+                    : fmtDocNum(plan.grand_total?.mise_a_niveau?.filles)}
+                </td>
+                <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700, borderLeft: THICK }}>
+                  {plan.grand_total?.has_remediation
+                    ? fmtNum0(plan.grand_total?.remediation?.total)
+                    : fmtDocNum(plan.grand_total?.remediation?.total)}
+                </td>
+                <td style={{ ...tdBase, background: TOTAL_BG, fontWeight: 700 }}>
+                  {plan.grand_total?.has_remediation
+                    ? fmtNum0(plan.grand_total?.remediation?.filles)
+                    : fmtDocNum(plan.grand_total?.remediation?.filles)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          {/* Le document reçu s'achève sur la ligne TOTAL — aucune signature. */}
+        </div>
       </div>
 
       <p className="text-center text-[11px] text-muted-foreground py-4 print:hidden">
-        Sections A et B du plan groupées par centre d&apos;examen — même
-        architecture, en-tête et police (Calibri) que les documents officiels
-        de l&apos;IEPP. % Admis = Admis / Présents ; % Admis (Filles) =
-        Admises / Filles présentes.
+        Sections A (pages 1-2) et B (pages 3-4) du plan groupées par centre
+        d&apos;examen — architecture, en-tête et police (Calibri) du document
+        officiel reçu. Calculs : « Présents (admis) » = élèves ayant atteint le
+        seuil ; % Admis = Admis / Inscrits ; % Admis (Filles) = Admises /
+        Filles inscrites (formules du modèle) ; difficultés = présents non
+        admis aux 3 matières. Les écoles sans centre d&apos;examen sont
+        exclues (rattachement dans le module Écoles).
       </p>
     </div>
   );
