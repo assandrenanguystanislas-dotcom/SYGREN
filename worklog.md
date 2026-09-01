@@ -3744,3 +3744,22 @@ Stage Summary:
 - La liste déroulante CLASSE du dossier personnel porte désormais les 4 valeurs administratives réelles du fonctionnaire : « 1 », « 2 », « Exceptionnelle notée (E) », « Principale notée (E) » — et l'État nominatif du personnel imprime le même libellé dans sa colonne CLASSE
 - Leçon majeure : quand un utilisateur décrit des valeurs métier attendues (« 1; 2; P; E »), ne pas conclure à un artefact d'affichage sans avoir vérifié le SENS métier — demander un exemple de valeurs valides dès la première ambiguïté
 - Render LIVE + Vercel READY vérifiés ; si l'ancien affichage subsiste chez l'utilisateur : rechargement forcé (Ctrl+Shift+R)
+
+---
+Task ID: 13
+Agent: Z.ai Code (session 13 — notation courte CLASSE)
+Task: Précisions métier sur la CLASSE du fonctionnaire — (1) « elle peut être 1 ; 2 ; Exceptionnelle notée (E) ou Principale notée (P) » ; (2) « ECRIRE SEULEMENT "1"; "2"; "E"; "P" DANS LA LISTE DEROULANTE »
+
+Work Log:
+- Reprise : la session 12 (42d7be7, déjà déployée) avait implémenté le domaine (1 | 2 | Exceptionnelle | Principale) avec des libellés LONGS mappés sur l'entier 1..4 (3=Exceptionnelle, 4=Principale) — la session 13 raccourcit l'affichage, sans toucher au stockage
+- personnel-dossier-fields.tsx : CLASSE_GRADE_LABELS = {1:"1", 2:"2", 3:"E", 4:"P"} — la liste déroulante porte SEULEMENT « 1 », « 2 », « E », « P » (consigne littérale) ; groupe « Classe (1 · 2 · E · P) » ; popup recentré min-w-[8.5rem]
+- personnel-document.tsx : la colonne CLASSE de l'« ÉTAT NOMINATIF DU PERSONNEL » imprime la même notation courte (1 · 2 · E · P) — suppression du span 7.5px prévu pour les libellés longs, la cellule retrouve la police normale du tableau
+- Stockage inchangé : classe_grade reste un ENTIER 1..4 (3=E, 4=P) — zéro migration Neon, validation backend 1..4 préservée, document/API compatibles
+- Tests : tsc + eslint propres ; E2E local (SQLite 8080 + Next 3100, scripts /home/z/tmp-e2e/verify-session13*.sh, tout en un seul appel shell — le sandbox tue les processus d'arrière-plan entre les appels) : popup = — / 1 / 2 / E / P (capture), sélection « E » persiste dans le déclencheur, document imprime « E » dans CLASSE pour classe_grade=3 (capture) ; le 500 de création de l'agent de test vient de l'email soft-deleté d'un run précédent (uniqueIndex) — sans incidence
+- Déploiement : commit ddcd604 → Render LIVE (api/health 200) + Vercel READY
+- Vérification PRODUCTION (sygren.vercel.app, admin) : popup CLASSE = « Classe (1 · 2 · E · P) » + items « — », « 1 », « 2 », « E », « P » (capture) ; sélection « P » → le champ affiche « P » ; console propre ; Neon : aucune écriture (libellés frontend uniquement)
+
+Stage Summary:
+- La liste déroulante CLASSE affiche exactement « 1 », « 2 », « E », « P » (E = Exceptionnelle notée E, P = Principale notée P) ; l'État nominatif imprime la même notation courte
+- Le domaine demandé par l'utilisateur est désormais le bon : ce sont bien ces 4 valeurs administratives du fonctionnaire (et non 1..4) — l'entier stocké (3=E, 4=P) reste invisible à l'écran et à l'impression
+- Render LIVE + Vercel READY vérifiés ; recharger avec Ctrl+Shift+R si l'ancien affichage (libellés longs de la session 12) subsiste dans le navigateur
