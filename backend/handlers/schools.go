@@ -27,6 +27,13 @@ type SchoolWithStats struct {
 }
 
 // ListSchools returns schools filtered by the user's scope.
+//
+// Perf : 4 requêtes au TOTAL (écoles, IEPs, compteurs classes, compteurs
+// élèves) au lieu de 3 requêtes PAR école (pattern N+1). Avec 97 écoles,
+// l'ancienne version émettait ~291 requêtes séquentielles : invisible depuis
+// Render (co-localisé avec Neon eu-central-1, ~2 ms/requête → 0,6 s) mais
+// >2 min depuis un client éloigné du pooler (~400 ms/requête). Les agrégats
+// GROUP BY rendent le coût constant quel que soit le nombre d'écoles.
 func ListSchools(w http.ResponseWriter, r *http.Request) {
 	role := ctxRole(r)
 	query := database.DB.Model(&models.School{})
@@ -47,23 +54,80 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enrichir avec les compteurs et le nom de l'IEP
+	// IDs des écoles retournées (pour les 3 requêtes d'enrichissement en masse)
+	schoolIDs := make([]string, len(schools))
+	for i, s := range schools {
+		schoolIDs[i] = s.ID
+	}
+
+	// Noms d'IEP : 1 requête IN (...) au lieu de 1 requête par école
+	iepName := make(map[string]string)
+	iepIDs := make([]string, 0, len(schools))
+	seen := make(map[string]bool, len(schools))
+	for _, s := range schools {
+		if s.IEPID != "" && !seen[s.IEPID] {
+			seen[s.IEPID] = true
+			iepIDs = append(iepIDs, s.IEPID)
+		}
+	}
+	if len(iepIDs) > 0 {
+		var ieps []models.IEP
+		if err := database.DB.Select("id", "name").Where("id IN ?", iepIDs).Find(&ieps).Error; err != nil {
+			log.Println("[schools] enrichissement IEP:", err)
+		}
+		for _, i := range ieps {
+			iepName[i.ID] = i.Name
+		}
+	}
+
+	// Compteurs : 2 agrégats GROUP BY au lieu de 2 requêtes par école
+	// NB : une slice DISTINCTE par Scan — gorm Scan RÉUTILISE la slice
+	// passée en paramètre si sa capacité est non nulle (scan.go : « the
+	// externally initialized slice is directly used here ») ; réutiliser la
+	// même variable ferait persister les lignes de la 1re requête quand la
+	// 2de en retourne moins (ex : école avec classes mais 0 élève).
+	type idCount struct {
+		SchoolID string `json:"school_id"`
+		Count    int64  `json:"count"`
+	}
+	classCounts := make(map[string]int64, len(schools))
+	studentCounts := make(map[string]int64, len(schools))
+	if len(schoolIDs) > 0 {
+		var classRows []idCount
+		if err := database.DB.Model(&models.Class{}).
+			Select("school_id", "COUNT(*) AS count").
+			Where("school_id IN ?", schoolIDs).
+			Group("school_id").
+			Scan(&classRows).Error; err != nil {
+			log.Println("[schools] compteur classes:", err)
+		}
+		for _, row := range classRows {
+			classCounts[row.SchoolID] = row.Count
+		}
+
+		var studentRows []idCount
+		if err := database.DB.Model(&models.Student{}).
+			Joins("JOIN classes ON classes.id = students.class_id").
+			Select("classes.school_id AS school_id", "COUNT(*) AS count").
+			Where("classes.school_id IN ?", schoolIDs).
+			Group("classes.school_id").
+			Scan(&studentRows).Error; err != nil {
+			log.Println("[schools] compteur élèves:", err)
+		}
+		for _, row := range studentRows {
+			studentCounts[row.SchoolID] = row.Count
+		}
+	}
+
+	// Assemblage en mémoire — plus aucune requête dans cette boucle
 	result := make([]SchoolWithStats, 0, len(schools))
 	for _, s := range schools {
-		var stats SchoolWithStats
-		stats.School = s
-		// Nom de l'IEP
-		var iep models.IEP
-		if err := database.DB.First(&iep, "id = ?", s.IEPID).Error; err == nil {
-			stats.IEPName = iep.Name
-		}
-		// Compteurs
-		database.DB.Model(&models.Class{}).Where("school_id = ?", s.ID).Count(&stats.ClassCount)
-		database.DB.Model(&models.Student{}).
-			Joins("JOIN classes ON classes.id = students.class_id").
-			Where("classes.school_id = ?", s.ID).
-			Count(&stats.StudentCount)
-		result = append(result, stats)
+		result = append(result, SchoolWithStats{
+			School:       s,
+			IEPName:      iepName[s.IEPID],
+			ClassCount:   classCounts[s.ID],
+			StudentCount: studentCounts[s.ID],
+		})
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
