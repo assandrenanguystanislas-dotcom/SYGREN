@@ -8,12 +8,13 @@
 //   - Date et lieu de naissance — listes déroulantes JOUR / MOIS / ANNÉE + lieu
 //   - Catégorie — liste déroulante IO | IA | IS | IAS
 //   - Classe — liste déroulante des 4 valeurs administratives du
-//     fonctionnaire (précision de l'utilisateur, session 12) :
-//     « 1 », « 2 », « Exceptionnelle notée (E) », « Principale notée (E) ».
-//     Stockage inchangé : classe_grade 1..4 (1=1, 2=2, 3=Exceptionnelle,
-//     4=Principale) — backend, validation 1..4 et base Neon préservés ;
-//     le libellé est restitué à l'écran ET dans l'État nominatif via
-//     CLASSE_GRADE_LABELS.
+//     fonctionnaire (précisions utilisateur, sessions 12-13) :
+//     « 1 », « 2 », « E » (Exceptionnelle notée E), « P » (Principale
+//     notée P). Consigne session 13 : ÉCRIRE SEULEMENT 1 · 2 · E · P
+//     dans la liste. Stockage inchangé : classe_grade 1..4 (1=1, 2=2,
+//     3=E, 4=P) — backend, validation 1..4 et base Neon préservés ;
+//     le libellé court est restitué à l'écran ET dans l'État nominatif
+//     via CLASSE_GRADE_LABELS.
 //   - Date d'entrée à la F.P — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Fonction — liste déroulante DIRECTEUR | ADJOINT(E)
 //   - Date d'entrée DREN — listes déroulantes JOUR / MOIS / ANNÉE
@@ -56,16 +57,17 @@ const MONTHS = [
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 const GRADES = [1, 2, 3, 4];
 
-/** Les 4 valeurs administratives de la CLASSE du fonctionnaire
- *  (précision utilisateur) : 1 | 2 | Exceptionnelle notée (E) |
- *  Principale notée (E). La clé reste l'entier stocké en base
- *  (classe_grade 1..4) ; le libellé figure dans la liste déroulante
- *  ET dans la colonne CLASSE de l'État nominatif du personnel. */
+/** Les 4 valeurs administratives de la CLASSE du fonctionnaire :
+ *  1 | 2 | E (Exceptionnelle notée E) | P (Principale notée P).
+ *  Consigne utilisateur (session 13) : la liste déroulante porte
+ *  SEULEMENT « 1 », « 2 », « E », « P ». La clé reste l'entier stocké
+ *  en base (classe_grade 1..4) ; le libellé court figure dans la
+ *  liste déroulante ET dans la colonne CLASSE de l'État nominatif. */
 export const CLASSE_GRADE_LABELS: Record<number, string> = {
   1: "1",
   2: "2",
-  3: "Exceptionnelle notée (E)",
-  4: "Principale notée (E)",
+  3: "E",
+  4: "P",
 };
 
 /** Bornes d'années des listes :
@@ -353,11 +355,9 @@ export function PersonnelDossierFields({
             <SelectTrigger className={small} aria-label="Classe administrative">
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
-            <SelectContent className="min-w-[13rem]">
+            <SelectContent className="min-w-[8.5rem]">
               <SelectGroup>
-                <SelectLabel>
-                  Classe (1 · 2 · Exceptionnelle notée (E) · Principale notée (E))
-                </SelectLabel>
+                <SelectLabel>Classe (1 · 2 · E · P)</SelectLabel>
                 <SelectItem value={UNSET}>—</SelectItem>
                 {GRADES.map((n) => (
                   <SelectItem key={n} value={String(n)}>

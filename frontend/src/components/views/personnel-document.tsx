@@ -439,14 +439,12 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
       <td style={tdLeft}>{birthCell}</td>
       <td style={td}>{s.categorie ?? ""}</td>
       <td style={td}>
-        {/* CLASSE : libellé administratif complet (1, 2, Exceptionnelle
-            notée (E), Principale notée (E)) — la colonne étroite du
-            modèle porte le même texte que la liste déroulante. */}
-        <span style={{ fontSize: "7.5px", whiteSpace: "nowrap" }}>
-          {s.classe_grade != null
-            ? (CLASSE_GRADE_LABELS[s.classe_grade] ?? String(s.classe_grade))
-            : ""}
-        </span>
+        {/* CLASSE : notation administrative courte — 1 · 2 · E
+            (Exceptionnelle) · P (Principale) — mêmes items que la
+            liste déroulante du dossier personnel. */}
+        {s.classe_grade != null
+          ? (CLASSE_GRADE_LABELS[s.classe_grade] ?? String(s.classe_grade))
+          : ""}
       </td>
       <td style={td}>{s.echelon ?? ""}</td>
       <td style={td}>{formatDossierDate(s.date_entree_fp)}</td>
