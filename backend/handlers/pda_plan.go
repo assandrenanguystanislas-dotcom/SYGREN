@@ -459,6 +459,11 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 	centerList := make([]planCenterGroup, 0, len(centers)+1)
 	for _, c := range centers {
 		g := groups[c.ID]
+		if len(g.Schools) == 0 {
+			// Centre sans aucune école rattachée : pas de groupe dans le
+			// document (le modèle officiel ne liste que des centres peuplés).
+			continue
+		}
 		g.Totals = aggregatePlanRows(g.Schools)
 		centerList = append(centerList, *g)
 	}
