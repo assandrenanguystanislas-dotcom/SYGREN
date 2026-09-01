@@ -3683,3 +3683,25 @@ Work Log:
 Stage Summary:
 - Aucun code modifié : la demande était déjà intégralement livrée en session 8 (commit 90df142) ; cette session confirme en production que le module, les 12 champs/listes déroulantes demandés et le document « ÉTAT NOMINATIF DU PERSONNEL » sont opérationnels (Render LIVE + Vercel READY, console propre)
 - Neon : aucune écriture (lecture seule), schéma inchangé (17 colonnes déjà migrées par AutoMigrate au boot Render)
+
+---
+Task ID: 10
+Agent: Z.ai Code (session 10)
+Task: « LES LISTES DÉROULANTES DES "DATE D'ENTREE FP", "DATE D'ENTREE DREN", "DATE D'ENTREE IEP" NE S'EXECUTENT PAS ET LA LISTE DÉROULANTE DE "CLASSE" EST "1; 2; P; E" »
+
+Work Log:
+- Reproduction PROD au clavier (ArrowDown+Enter sur « 01 ») : la sélection du JOUR revenait à « Jour » — les listes de dates ne pouvaient JAMAIS conserver une valeur, quel qu'en soit l'ordre (cause : DateSelects dérivait les 3 parties de la prop iso ; la 1re sélection partielle émettait onChange(null) → re-render parent → reset immédiat des 3 triggers)
+- Fix DateSelects : état LOCAL des 3 parties initialisé depuis l'ISO (useState initializer, pas d'effet — le dialog démonte son contenu à la fermeture) ; l'ISO n'est émis au dossier que lorsque les 3 parties sont réunies ; la sélection partielle (jour seul) reste affichée sans émettre de valeur
+- Fix réhydratation édition : l'ISO zéro-padé (« 05 ») ne correspondait pas aux valeurs d'items (« 5 ») → mois invisible à la réouverture ; parseIsoParts dé-pade m/d (String(Number()))
+- Fix crash découvert au passage : SelectLabel hors SelectGroup → exception Radix « SelectLabel must be used within SelectGroup », le dialog ENTIER plantait à l'ouverture (stack capturée via window error hook) ; tous les groupes enveloppés dans SelectGroup
+- « 1 ; 2 ; P ; E » diagnostiqué : les options réelles sont — 1 2 3 4 (DOM + clic « 4 » persistant vérifiés en prod AVANT correction) ; la liste étroite s'ouvrait sur le formulaire dense et les fragments « F.P » / « Entrée » percent autour du popup → confusion visuelle ; chaque popup porte désormais un libellé auto-descriptif (SelectLabel + SelectGroup) : « Classe (1 · 2 · 3 · 4) », Échelon, Catégorie, Sexe, Fonction, Jour (01 → 31), Mois (Janvier → Décembre), Année
+- Environnement local reconstruit : Go 1.25.0 réinstallé (/home/z/go-dist) après reset sandbox ; pièges contournés : DATABASE_URL global du sandbox (env -u), processus d'arrière-plan tués entre appels outil (E2E complet en une seule session shell), OOM killer (sandbox 4 Go, next-dev ×2), agent-browser find text bloqué par overlays (clics par refs snapshot)
+- E2E local SQLite (UI au clavier, ordre utilisateur JOUR→MOIS→ANNÉE) : jour « 15 » → mois « Mai » → année « 2005 » persistants ; soumission → date_entree_fp=2005-05-15T00:00:00Z en base ; réouverture édition → 15/Mai/2005 ; DREN jour seul « 05 » conservé sans émettre d'ISO ; second cycle 20/Mars/1999 ok ; tsc + eslint propres
+- Déploiement : commit 6f16936 (auteur assandrenanguystanislas, 1 fichier +107/−52) → Render LIVE + Vercel READY vérifiés
+- Vérification PROD navigateur : dialog « Créer un enseignant » s'ouvre sans crash ; Date F.P en ordre utilisateur jour « 10 » → mois « Février » → année « 2021 » — chaque sélection persiste ; Classe : options — 1 2 3 4, « 4 » sélectionné et conservé, popup avec libellé « Classe (1 · 2 · 3 · 4) » (capture d'écran) ; console prod propre (2 warnings Fast Refresh = historique HMR local, pas des erreurs)
+
+Stage Summary:
+- Les 9 listes déroulantes de dates (naissance + F.P + DREN + IEP, JOUR/MOIS/ANNÉE) fonctionnent dans n'importe quel ordre de saisie, conservent les sélections partielles et réaffichent les valeurs enregistrées à l'édition ; la valeur ISO n'est écrite que si les 3 parties sont complètes
+- Le dialog Utilisateurs ne plante plus (SelectGroup) ; toutes les listes du dossier personnel sont auto-descriptives (fin de la confusion « 1 ; 2 ; P ; E » — les options Classe étaient et restent 1 2 3 4)
+- 1 commit 6f16936 — Render LIVE + Vercel READY ; aucune écriture métier en prod (lectures + sélections non enregistrées) ; Neon inchangé
+- Pièges pour l'avenir : SelectLabel exige SelectGroup (plantage dialog sinon) ; dériver un état de formulaire multi-parties d'une prop nullable réinitialise la saisie partielle ; les valeurs d'items Radix doivent correspondre au format dé-pauté de l'ISO réhydraté ; le sandbox tue les processus d'arrière-plan entre les appels outil (tester en session shell unique)
