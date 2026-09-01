@@ -58,6 +58,7 @@ export interface School {
   name: string;
   address: string;
   status: SchoolStatus; // public | private | community
+  logo_path?: string; // clé stockage (R2 prod / FS dev) — URL calculée par l'API
   created_at: string;
 }
 
@@ -265,6 +266,7 @@ export interface SchoolWithStats extends School {
   iep_name?: string;
   class_count: number;
   student_count: number;
+  logo_url?: string; // URL présignée (TTL court) — à recharger après expiration
 }
 
 export interface ClassWithDetails extends SchoolClass {

@@ -10,6 +10,7 @@ import {
   MapPin,
   Users,
   BookOpen,
+  ImagePlus,
   Loader2,
   ChevronDown,
   ChevronRight,
@@ -88,6 +89,10 @@ export function SchoolsView() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | SchoolStatus>("all");
   const [expandedSchoolId, setExpandedSchoolId] = useState<string | null>(null);
+  const [logoOpen, setLogoOpen] = useState(false);
+  const [logoTarget, setLogoTarget] = useState<SchoolWithStats | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const createMut = useCrudMutation(schoolsApi.create, {
     invalidateKeys: [["schools"], ["iep"]],
@@ -106,6 +111,16 @@ export function SchoolsView() {
     invalidateKeys: [["schools"], ["iep"]],
     successMessage: "École supprimée",
     actionLabel: "Suppression",
+  });
+  const uploadLogoMut = useCrudMutation(schoolsApi.uploadLogo, {
+    invalidateKeys: [["schools"]],
+    successMessage: "Logo enregistré",
+    actionLabel: "Enregistrement du logo",
+  });
+  const removeLogoMut = useCrudMutation(schoolsApi.removeLogo, {
+    invalidateKeys: [["schools"]],
+    successMessage: "Logo retiré",
+    actionLabel: "Retrait du logo",
   });
 
   function openCreate() {
@@ -142,6 +157,65 @@ export function SchoolsView() {
     try {
       await deleteMut.mutateAsync([deleteTarget.id]);
       setDeleteTarget(null);
+    } catch {
+      /* toastée */
+    }
+  }
+
+  function openLogo(s: SchoolWithStats) {
+    setLogoTarget(s);
+    setLogoFile(null);
+    setLogoPreview(null);
+    setLogoOpen(true);
+  }
+  function closeLogo() {
+    if (uploadLogoMut.isPending || removeLogoMut.isPending) return;
+    setLogoOpen(false);
+    setLogoFile(null);
+    setLogoPreview(null);
+  }
+  // Pré-vérifications client (le backend re-valide toujours : taille via
+  // MaxBytesReader, type via sniffing du contenu)
+  function onLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    if (!f) {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+      setLogoFile(null);
+      setLogoPreview(null);
+      return;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      toast.error("Logo trop volumineux", { description: "2 Mo maximum" });
+      e.target.value = "";
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(f.type)) {
+      toast.error("Format non supporté", { description: "PNG, JPEG ou WebP attendu" });
+      e.target.value = "";
+      return;
+    }
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoFile(f);
+    setLogoPreview(URL.createObjectURL(f));
+  }
+  async function onUploadLogo() {
+    if (!logoTarget || !logoFile) return;
+    try {
+      await uploadLogoMut.mutateAsync([logoTarget.id, logoFile]);
+      setLogoOpen(false);
+      setLogoFile(null);
+      setLogoPreview(null);
+    } catch {
+      /* toastée */
+    }
+  }
+  async function onRemoveLogo() {
+    if (!logoTarget) return;
+    try {
+      await removeLogoMut.mutateAsync([logoTarget.id]);
+      setLogoOpen(false);
+      setLogoFile(null);
+      setLogoPreview(null);
     } catch {
       /* toastée */
     }
@@ -282,6 +356,13 @@ export function SchoolsView() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
+                      {s.logo_url && (
+                        <img
+                          src={s.logo_url}
+                          alt={`Logo ${s.name}`}
+                          className="h-9 w-9 rounded-md object-contain border bg-white shrink-0"
+                        />
+                      )}
                       <p className="font-semibold truncate">{s.name}</p>
                       <Badge
                         variant="outline"
@@ -316,6 +397,15 @@ export function SchoolsView() {
                   </div>
                     {canEdit && (
                       <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Logo de l'école"
+                          onClick={() => openLogo(s)}
+                        >
+                          <ImagePlus className="w-3.5 h-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -479,6 +569,74 @@ export function SchoolsView() {
               </Button>
             </div>
           </form>
+        </EntityDialog>
+      )}
+
+      {canEdit && (
+        <EntityDialog
+          open={logoOpen}
+          onOpenChange={(o) => (o ? setLogoOpen(true) : closeLogo())}
+          title="Logo de l'école"
+          description={logoTarget ? logoTarget.name : ""}
+          icon={ImagePlus}
+          loading={uploadLogoMut.isPending || removeLogoMut.isPending}
+        >
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center justify-center">
+              {logoPreview || logoTarget?.logo_url ? (
+                <img
+                  src={logoPreview ?? logoTarget?.logo_url}
+                  alt="Aperçu du logo"
+                  className="h-24 w-24 rounded-lg object-contain border bg-white"
+                />
+              ) : (
+                <div className="h-24 w-24 rounded-lg border border-dashed flex items-center justify-center text-xs text-muted-foreground">
+                  Aucun logo
+                </div>
+              )}
+            </div>
+            <Input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={uploadLogoMut.isPending || removeLogoMut.isPending}
+              onChange={onLogoFileChange}
+            />
+            <p className="text-xs text-muted-foreground">
+              PNG, JPEG ou WebP — 2 Mo max. Le logo apparaît à côté du nom de
+              l&apos;école.
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              {logoTarget?.logo_path ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onRemoveLogo}
+                  disabled={uploadLogoMut.isPending || removeLogoMut.isPending}
+                >
+                  {removeLogoMut.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Retirer
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Button
+                type="button"
+                onClick={onUploadLogo}
+                disabled={
+                  !logoFile || uploadLogoMut.isPending || removeLogoMut.isPending
+                }
+              >
+                {uploadLogoMut.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Enregistrer
+              </Button>
+            </div>
+          </div>
         </EntityDialog>
       )}
 

@@ -111,8 +111,12 @@ async function apiFetch<T>(
 ): Promise<T> {
   const token = getToken();
 
+  // FormData (upload fichiers) : PAS de Content-Type — le navigateur pose
+  // lui-même multipart/form-data avec le boundary correct.
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...((options.headers as Record<string, string>) ?? {}),
   };
   if (token) {
@@ -310,6 +314,20 @@ export const schoolsApi = {
     }),
   delete: (id: string) =>
     apiFetch<{ status: string }>(`/api/schools/${id}`, {
+      method: "DELETE",
+    }),
+  // Logo d'école — multipart vers le stockage fichiers (R2 prod / FS dev).
+  // 503 si le stockage n'est pas configuré (prod sans variables R2_*).
+  uploadLogo: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append("logo", file);
+    return apiFetch<{ logo_path: string; logo_url: string }>(
+      `/api/schools/${id}/logo`,
+      { method: "POST", body: fd },
+    );
+  },
+  removeLogo: (id: string) =>
+    apiFetch<{ status: string }>(`/api/schools/${id}/logo`, {
       method: "DELETE",
     }),
 };
