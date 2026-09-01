@@ -23,11 +23,11 @@ SYGREN/
 │   ├── config/               # Configuration (env, DB, JWT)
 │   ├── database/             # GORM (SQLite dev / PostgreSQL prod)
 │   ├── models/               # 9 modèles + RBAC
-│   ├── handlers/             # 12 handlers (auth, CRUD, calcul, PDF, dashboard)
+│   ├── handlers/             # 23 handlers (auth, CRUD, calcul, rapports, PDA, dashboard)
 │   ├── router/               # Chi router + RBAC middleware
 │   ├── middleware/           # JWT auth + RequireRole + CORS
 │   ├── utils/                # JWT + bcrypt
-│   ├── storage/              # Stockage fichiers (local dev → R2 prod)
+│   ├── storage/              # Stockage fichiers (dormant — aucun consommateur actuel)
 │   ├── scripts/              # Migration SQLite → PostgreSQL
 │   ├── go.mod  go.sum  package.json
 │   └── ...
@@ -90,7 +90,7 @@ bun run migrate:db  # (nécessite DATABASE_URL pointant vers Neon)
 | **Module 1** | Gestion administrative (IEP, écoles, classes, élèves, enseignants, matières) | ✅ |
 | **Module 2** | Saisie des notes mensuelles (grille tableur + auto-save brouillon) | ✅ |
 | **Module 3** | Calcul des moyennes + classement (ex-aequo) + mentions automatiques | ✅ |
-| **Module 4** | Bulletins PDF (génération + stockage + impression par lot) | ✅ |
+| **Module 4** | Bulletins A5 (rendu navigateur + impression par lot) | ✅ |
 | **Module 5** | Tableaux de bord analytiques (KPIs + graphiques recharts) | ✅ |
 
 ## 🔐 Comptes de démonstration
@@ -111,9 +111,9 @@ bun run migrate:db  # (nécessite DATABASE_URL pointant vers Neon)
 | Couche | Technologie |
 |--------|-------------|
 | Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS 4, shadcn/ui, Recharts, Zustand, TanStack Query |
-| Backend | Go 1.25, Chi router, GORM, JWT, bcrypt, go-pdf/fpdf |
+| Backend | Go 1.25, Chi router, GORM, JWT, bcrypt |
 | Base de données | SQLite (dev) → PostgreSQL sur Neon.tech (prod) |
-| Stockage PDF | Filesystem local (dev) → Cloudflare R2 (prod) |
+| Documents | Impression navigateur A4/A5 (aucun fichier stocké serveur) |
 | Gateway | Caddy (port 81) avec routing `?XTransformPort` |
 
 ## 📜 Licence
