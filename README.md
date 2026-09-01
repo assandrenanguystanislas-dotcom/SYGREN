@@ -27,7 +27,7 @@ SYGREN/
 │   ├── router/               # Chi router + RBAC middleware
 │   ├── middleware/           # JWT auth + RequireRole + CORS
 │   ├── utils/                # JWT + bcrypt
-│   ├── storage/              # Stockage fichiers (dormant — aucun consommateur actuel)
+│   ├── storage/              # Interface stockage fichiers + client R2 (logos d'écoles)
 │   ├── scripts/              # Migration SQLite → PostgreSQL
 │   ├── go.mod  go.sum  package.json
 │   └── ...
@@ -77,6 +77,16 @@ export DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"
 export JWT_SECRET="votre-secret-jwt"
 ```
 
+**Fichiers (Cloudflare R2 en production)** — optionnel : sans ces variables, les
+fonctionnalités fichiers répondent 503 (aucun fallback disque éphémère) :
+```bash
+export R2_ACCOUNT_ID="<account-id-cloudflare>"
+export R2_ACCESS_KEY_ID="<clé-api-R2>"
+export R2_SECRET_ACCESS_KEY="<secret-clé-api-R2>"
+export R2_BUCKET_NAME="<nom-du-bucket>"
+export R2_URL_TTL_MINUTES="60"  # optionnel — TTL des URLs présignées
+```
+
 Migration des données SQLite → PostgreSQL :
 ```bash
 bun run migrate:db  # (nécessite DATABASE_URL pointant vers Neon)
@@ -111,9 +121,9 @@ bun run migrate:db  # (nécessite DATABASE_URL pointant vers Neon)
 | Couche | Technologie |
 |--------|-------------|
 | Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS 4, shadcn/ui, Recharts, Zustand, TanStack Query |
-| Backend | Go 1.25, Chi router, GORM, JWT, bcrypt |
+| Backend | Go 1.25, Chi router, GORM, JWT, bcrypt, minio-go (R2) |
 | Base de données | SQLite (dev) → PostgreSQL sur Neon.tech (prod) |
-| Documents | Impression navigateur A4/A5 (aucun fichier stocké serveur) |
+| Fichiers (logos) | Filesystem local (dev) → Cloudflare R2 (prod, URLs présignées via minio-go) |
 | Gateway | Caddy (port 81) avec routing `?XTransformPort` |
 
 ## 📜 Licence

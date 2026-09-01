@@ -3488,3 +3488,39 @@ Stage Summary:
 - Le refactor N+1 est LIVE en production : GET /api/schools passe de ~291 requêtes à 4, prod répond 0,34 s, UI prod vérifiée (écoles affichées, compteurs justes, zéro régression)
 - Les 3 artefacts de la session 3 sont déployés : perf schools (d4dcecb), README aligné (9e4c78b), worklog (7efa2a7)
 - En attente de décision utilisateur sur R2 : (a) nettoyage du paquet storage mort, (b) couche R2 dormante, (c) construire le besoin fichier qui justifiera R2
+
+---
+Task ID: Storage-R2-Layer
+Agent: Main (tuteur)
+Task: Option 1 + 2 — remplacer le paquet storage mort par une interface + client Cloudflare R2 (minio-go), activé par env, avec règle anti-éphémère stricte
+
+Work Log:
+- Décision architecture : interface storage.Storage {Put, Delete, PresignURL, Kind} + var Global (pattern database.DB) ; factory New(cfg) : R2 si les 4 env R2_* présentes → filesystem local UNIQUEMENT en dev (pas de DATABASE_URL) → nil en prod sans R2 = handlers 503 (JAMAIS de fallback disque éphémère Render, cause racine de la demande initiale)
+- storage/r2.go : client minio-go v7 (arbre de deps léger face à aws-sdk-go-v2) ; endpoint dérivé R2_ACCOUNT_ID → <account>.r2.cloudflarestorage.com, BucketLookupPath, Secure ; Put (contentType explicite), Delete (idempotent), PresignURL (SigV4 query, TTL configurable R2_URL_TTL_MINUTES, défaut 60 min) ; lectures = URL présignée → zéro octet de fichier ne transite par Render (egress R2 gratuit)
+- config.go : +R2AccountID/R2AccessKeyID/R2SecretKey/R2Bucket/R2URLTTLMinutes + R2Configured() ; main.go : log du backend choisi + suppression du commentaire périmé « utilisé plus tard pour les bulletins PDF »
+- Suppression du LocalStorage historique (méthodes multipart/bytes mortes) remplacé par une implémentation DEV de la même interface (Put/Delete/PresignURL→/storage/key) — redevient du code vivant (consommé par les logos en dev)
+- Route statique dev /storage/* publique (router, r.Handle + StripPrefix, montée SI Kind==local) — même modèle d'accès que les URLs présignées R2 ; leçon chi : r.Get exige http.HandlerFunc, r.Handle accepte http.Handler
+- go.mod : +minio-go/v7 (go mod tidy clean) ; gofmt/vet/build OK
+
+Stage Summary:
+- Couche stockage fichiers prête et dormante en prod (sans env R2 = 503 propre) ; plus aucune dépendance au filesystem en prod ; l'interface reste minimale (3 méthodes — YAGNI, un futur besoin ajoutera le sien)
+
+---
+Task ID: School-Logos-Feature
+Agent: Main (tuteur)
+Task: Option 3 — fonctionnalité réelle consommant le stockage : LOGOS D'ÉCOLES (upload/affichage/remplacement/retrait), choix motivé vs photos élèves
+
+Work Log:
+- Choix produit : logos d'écoles (zéro donnée personnelle — les photos d'élèves posent des questions RGPD/consentement mineurs non tranchées) ; surface d'affichage future : en-têtes des documents officiels imprimés (relevé, synthèse, bulletins, PDA) — INTÉGRATION DOCUMENTS NON FAITE (proposition de suite, validation visuelle requise pour ne pas dénaturer les modèles officiels)
+- models.School : +LogoPath *string (AutoMigrate ajoute la colonne — Neon synchronisée au boot de test local, protocole simple pgx déjà en place) ; SchoolWithStats : +LogoURL (présignée à la volée dans ListSchools — calcul local HMAC, PAS un appel réseau, coût négligeable pour 97 écoles)
+- Backend : POST /api/schools/{id}/logo (multipart champ « logo ») + DELETE — RBAC = même groupe RequireModule(schools, write) que le CRUD écoles ; validations : MaxBytesReader 2 Mo (400 si dépassement), type sniffré sur le CONTENU via http.DetectContentType (PNG/JPEG/WebP — extension du fichier ignorée), SVG REFUSÉ 415 (vecteur XSS servi en direct) ; clé d'objet = school-logos/<school_id>.<ext> (déduite du type détecté) ; remplacement → ancien objet supprimé si clé différente ; DeleteSchool → nettoyage best-effort du logo
+- Frontend : apiFetch conditionne Content-Type (FormData = boundary navigateur, sinon multipart cassé) ; schoolsApi.uploadLogo/removeLogo ; schools-view : img logo sur la carte (h-9 w-9), bouton ImagePlus (canEdit), dialog EntityDialog (aperçu live via URL.createObjectURL + revoke, pré-checks taille/type côté client, bouton Retirer si logo existant, toasts useCrudMutation — le message 503 du serveur s'affiche tel quel)
+- ESLint : les directives eslint-disable @next/next/no-img-element ajoutées puis RETIRÉES (règle off dans ce projet — directives « unused » warn)
+- E2E local SQLite (curl + images 1x1 base64) : upload PNG → 200 clé+URL ✓ ; GET /storage/... SANS auth → 200 image/png 70 octets ✓ ; liste : logo_url présent pour l'école, absent pour les autres ✓ ; remplacement JPEG → nouvelle clé .jpg + ancien .png supprimé du disque ✓ ; SVG+script → 415 ✓ ; DELETE → 200 + fichier supprimé ✓ ; 2e DELETE → 404 « aucun logo » ✓ ; 3 Mo → 400 « trop volumineux » ✓
+- E2E chemin prod-sans-R2 : boot avec DATABASE_URL=Neon sans env R2 → log « Aucun stockage fichiers configuré » + POST logo → 503 message explicite ✓ (test sur une vraie école de prod mais AUCUNE écriture — le handler refuse avant) ; au passage AutoMigrate a ajouté logo_path à Neon (sync schéma conforme à la consigne user)
+
+Stage Summary:
+- Fonctionnalité logos livrée de bout en bout (modèle + 2 routes + 2 handlers + 2 méthodes API + dialog + affichage carte) — le stockage a enfin un consommateur réel, dormant en prod jusqu'aux credentials R2
+- Sécurité fichier : type sniffé sur le contenu, taille bornée au niveau connexion, SVG exclu, clés d'objets dérivées des types détectés (jamais du nom client)
+- 9 fichiers : storage/storage.go (réécrit), storage/r2.go (nouveau), config/config.go, main.go, models/models.go, handlers/schools.go, router/router.go, go.mod/go.sum, types.ts, api.ts, schools-view.tsx (11 au total)
+- Prêt pour la prod : dès que l'utilisateur fournit R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY/R2_BUCKET_NAME (via API Render ou dashboard), le backend bascule sur R2 au redémarrage — les logos uploadés survivront aux redéploiements
