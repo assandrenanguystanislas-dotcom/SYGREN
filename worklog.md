@@ -3524,3 +3524,21 @@ Stage Summary:
 - Sécurité fichier : type sniffé sur le contenu, taille bornée au niveau connexion, SVG exclu, clés d'objets dérivées des types détectés (jamais du nom client)
 - 9 fichiers : storage/storage.go (réécrit), storage/r2.go (nouveau), config/config.go, main.go, models/models.go, handlers/schools.go, router/router.go, go.mod/go.sum, types.ts, api.ts, schools-view.tsx (11 au total)
 - Prêt pour la prod : dès que l'utilisateur fournit R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY/R2_BUCKET_NAME (via API Render ou dashboard), le backend bascule sur R2 au redémarrage — les logos uploadés survivront aux redéploiements
+
+---
+Task ID: Deploy-Verification-Storage-Logos
+Agent: Main (tuteur)
+Task: Vérification des déploiements Render (LIVE) + Vercel (READY) après push des 4 commits R2/logos (5b74060, 123bcda, ee3921f, d28f732) + E2E navigateur prod
+
+Work Log:
+- Push fccb48b..d28f732 — identité des commits vérifiée : assandrenanguystanislas <assandrenanguystanislas@gmail.com> ✓
+- Render : deploy LIVE sur d28f732 (go build avec minio-go OK côté Render) ; /api/health 200 ; /api/schools 97 écoles ✓
+- Prod SANS R2 configuré : POST /api/schools/{id}/logo → 503 « stockage fichiers non configuré (R2 requis en production — variables R2_* absentes) » — le comportement anti-éphémère fonctionne en vrai (jamais de fallback disque)
+- Vercel : dernier deploy production READY
+- E2E navigateur prod (sygren.vercel.app) : login admin → module Écoles → boutons « Logo de l'école » présents sur les cartes → dialog « Logo de l'école » s'ouvre : input fichier + bouton Enregistrer désactivé sans fichier + PAS de bouton Retirer (école sans logo, cohérent) → zéro erreur page/console
+- Neon : colonne schools.logo_path ajoutée par AutoMigrate (sync schéma réalisée lors du test local anti-R2 — conforme à la consigne « synchronise la base de données avec neon ») ; données inchangées (97 écoles, aucun logo_path non null)
+
+Stage Summary:
+- Les 3 options livrées et déployées : code mort remplacé par l'interface + client R2 dormant, fonctionnalité logos réelle consommant le stockage, doc alignée
+- L'activation prod ne requiert QUE les 4 variables R2_* sur Render (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) puis un redeploy — aucune modification de code
+- Reste au user : créer le bucket R2 + la clé API dans Cloudflare, fournir les valeurs, puis upload du premier logo réel ; suite possible : intégrer le logo aux en-têtes des documents officiels imprimés (relevé/synthèse/bulletins/PDA) — validation visuelle à faire avec le user avant de toucher aux modèles
