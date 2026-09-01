@@ -3667,3 +3667,19 @@ Stage Summary:
 - Le document imprimable A4 paysage reproduit l'architecture du modèle reçu (en-tête armoiries, tableau 20 colonnes, TOTAL calculé, noms des femmes en rouge, signature, 03 exemplaires) — impression 100 % navigateur, zéro PDF serveur (discipline du projet respectée)
 - Neon synchronisé automatiquement (AutoMigrate au boot Render, écritures de vérification réalisées puis restaurées) ; Render LIVE + Vercel READY vérifiés sur sygren.onrender.com / sygren.vercel.app
 - Pièges pour l'avenir : refs agent-browser périmées après ouverture de listbox (re-snapshot avant chaque clic) ; apostrophes JS dans les eval aria-label (« d'entrée ») ; nœuds texte JSX interdits dans <colgroup> (hydratation React)
+
+---
+Task ID: 9
+Agent: Z.ai Code (session 9 — vérification)
+Task: Re-vérification E2E du module « UTILISATEURS » (demande reformulée identique à la session 8) — dossier personnel + état nominatif en production
+
+Work Log:
+- git log + status : la session 8 était déjà livrée et poussée (90df142 feat, fc371f1 worklog), arborescence propre
+- Code vérifié sur disque : User 17 colonnes dossier (models.go), handlers/personnel.go, frontend personnel-dossier-fields.tsx, route /personnel-doc (layout/page/print.css) — tout présent
+- Déploiements : Render https://sygren.onrender.com → 200 LIVE ; Vercel https://sygren.vercel.app → READY sur fc371f1 (2 deployments fc371f1 + 90df142 prêts)
+- API prod : login admin OK ; GET /api/reports/personnel?school_id=… → 200 (école + année scolaire 2026 2027 + agents) ; /personnel-doc → 200
+- Navigateur PROD (agent-browser, lecture seule) : login → Utilisateurs → onglets (Enseignants/Directeurs) → bouton « État nominatif » présent → dialog « Créer un enseignant » → section « Dossier personnel — État nominatif du personnel » avec TOUS les champs demandés : Matricule (saisie), Sexe F|G, Catégorie IO|IA|IS|IAS, Date de naissance JOUR/MOIS/ANNÉE + Lieu, Classe 1..4, Échelon 1..4, Fonction (options vérifiées : Directeur / Adjoint(e)), Date d'entrée F.P J/M/A, Date d'entrée DREN J/M/A, Entrée IEP J/M/A, Effectif F/G/T, Redoublants F/G/T — console 0 erreur
+
+Stage Summary:
+- Aucun code modifié : la demande était déjà intégralement livrée en session 8 (commit 90df142) ; cette session confirme en production que le module, les 12 champs/listes déroulantes demandés et le document « ÉTAT NOMINATIF DU PERSONNEL » sont opérationnels (Render LIVE + Vercel READY, console propre)
+- Neon : aucune écriture (lecture seule), schéma inchangé (17 colonnes déjà migrées par AutoMigrate au boot Render)
