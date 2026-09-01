@@ -1,13 +1,20 @@
 "use client";
 
-// === PDA IEPP — Document officiel imprimable ===
-// Reproduction fidèle de la fiche « SUIVI DU PLAN D'ACTION PLURIANNUEL DE
-// L'IEPP » (niveaux CE/CM) pour chaque évaluation suivie : examen blanc
-// (saisie manuelle) ou composition mensuelle (notes dérivées du module
-// Notes).
-//   - Tableau 1 : Présents / Admis / % Admis (Total | Filles | Garçons)
-//   - Tableau 2 : maîtrise par matière (3 matières désignées)
+// === PDA IEPP — Document officiel imprimable (fiche par école) ===
+// Reproduction FIDÈLE de la fiche reçue de l'IEPP (PLAN D'ACTION IEPP_1) :
+// « SUIVI DU PLAN D'ACTION PLURIANNUEL DE L'IEPP — RESULTAT DE L'EXAMEN
+// BLANC N°X » pour chaque évaluation suivie (examen blanc saisie manuelle
+// ou composition mensuelle dérivée du module Notes).
+//   - En-tête institutionnel : bloc ministériel + République + armoiries
+//     + devise en italique (modèle reçu) — police Calibri (Carlito).
+//   - Titre encadré fin + titre de l'évaluation souligné en gras.
+//   - ECOLE : / CLASSE : en gras à gauche (modèle reçu).
+//   - Tableau 1 : Présents / Admis / % Admis × (Total | Filles | Garçons)
+//   - Tableau 2 : maîtrise par matière (Exploitation de texte,
+//     Mathématiques, Dictée) × (Total | Garçons | Filles)
 //   - Tableau 3 : difficultés (calculé) + remédiation (saisissable ici)
+//   - Signatures Le Directeur / L'Inspecteur + nom de l'inspecteur en bas
+//     à droite (comme « DOSSO LACINE » sur le modèle reçu).
 // Tous les agrégats sont calculés côté serveur (/summary) — le document ne
 // recalcule rien. Impression 100 % navigateur (isolement #pda-doc).
 
@@ -20,28 +27,31 @@ import { pdaApi } from "@/lib/api";
 import { monthLabel } from "@/lib/session-utils";
 import type { PdaCountRow, PdaSummary } from "@/lib/types";
 
-const INK = "#1f2937"; // gris encre — cohérent avec les documents officiels
-const BORDER = "1px solid #374151";
+import { INK, OFFICIAL_FONT, OfficialDocHeader, fmtDocNum } from "./official-doc";
 
-/** Pourcentages formatés à la française (66.7 → « 66,7 », 50 → « 50 »). */
+/** Pourcentages à 2 décimales, virgule française (modèle reçu). */
 function fmtPct(n: number): string {
-  const s = n.toFixed(1).replace(".", ",");
-  return s.endsWith(",0") ? s.slice(0, -2) : s;
+  return `${n.toFixed(2).replace(".", ",")}%`;
+}
+
+/** Ordinal français du modèle reçu : 1er, 2e, 3e… */
+function ordinal(n: number): string {
+  return n === 1 ? "1er" : `${n}e`;
 }
 
 const thStyle: CSSProperties = {
-  border: BORDER,
+  border: "1px solid #000000",
   padding: "4px 6px",
-  fontSize: "10px",
-  fontWeight: 700,
+  fontSize: "12px",
+  fontWeight: 400, // entêtes réguliers sur le modèle reçu
   textAlign: "center",
   color: INK,
 };
 
 const tdStyle: CSSProperties = {
-  border: BORDER,
+  border: "1px solid #000000",
   padding: "3px 6px",
-  fontSize: "10px",
+  fontSize: "12px",
   textAlign: "center",
   color: INK,
 };
@@ -49,7 +59,7 @@ const tdStyle: CSSProperties = {
 const labelTdStyle: CSSProperties = {
   ...tdStyle,
   textAlign: "left",
-  fontWeight: 600,
+  fontWeight: 400,
 };
 
 /** Cellules d'effectifs dans l'ordre demandé (Total/Filles/Garçons etc.). */
@@ -64,7 +74,7 @@ function CountCells({
     <>
       {order.map((k) => (
         <td key={k} style={tdStyle}>
-          {row[k]}
+          {fmtDocNum(row[k])}
         </td>
       ))}
     </>
@@ -155,20 +165,18 @@ export function PdaDocument({
   const s: PdaSummary = data;
   const t2 = s.table2;
   const isComposition = s.exam.kind === "composition";
-  const examDate = s.exam.exam_date
-    ? new Date(s.exam.exam_date).toLocaleDateString("fr-FR")
-    : "";
-  // Libellés officiels selon le type d'évaluation suivie par le plan.
+  // Libellés officiels selon le type d'évaluation suivie par le plan
+  // (modèle reçu : « RESULTAT DE L'EXAMEN BLANC N° 2 »).
   const evalTitle = isComposition
     ? `RESULTAT DE LA COMPOSITION N° ${s.exam.number} — ${
         s.exam.session_month && s.exam.session_month >= 1 && s.exam.session_month <= 12
           ? `${monthLabel(s.exam.session_month).toUpperCase()} `
           : ""
       }${s.exam.year}`
-    : `RESULTAT DE L'EXAMEN BLANC N° ${s.exam.number} — ANNEE ${s.exam.year}`;
+    : `RESULTAT DE L'EXAMEN BLANC N° ${s.exam.number}`;
   const evalColHeader = isComposition
-    ? `${s.exam.number}° COMPOSITION`
-    : `${s.exam.number}° EXAMEN BLANC`;
+    ? `${ordinal(s.exam.number)} COMPOSITION`
+    : `${ordinal(s.exam.number)} EXAMEN BLANC`;
   const toolbarTitle = isComposition
     ? `Composition N°${s.exam.number}${
         s.exam.session_month ? ` — ${monthLabel(s.exam.session_month)} ${s.exam.year}` : ""
@@ -219,78 +227,50 @@ export function PdaDocument({
         style={{
           width: "100%",
           maxWidth: "210mm",
-          minHeight: "297mm",
-          padding: "14mm 12mm",
-          fontFamily: "Helvetica, Arial, sans-serif",
+          minHeight: "275mm", // zone imprimable A4 (marges 8mm) — jamais 297 (2e page blanche)
+          padding: "12mm 14mm",
+          fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
         }}
       >
-        {/* --- En-tête institutionnel --- */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: "10px",
-          }}
-        >
-          <div style={{ fontSize: "9px", fontWeight: 700, lineHeight: 1.5 }}>
-            <div>MINISTERE DE L&apos;EDUCATION NATIONALE ET</div>
-            <div>DE L&apos;ALPHABETISATION</div>
-            <div>DIRECTION REGIONALE DE {(s.iep?.region || s.iep?.name || "…………").toUpperCase()}</div>
-            <div>INSPECTION DE L&apos;ENSEIGNEMENT</div>
-            <div>PRESCOLAIRE ET PRIMAIRE DE {(s.iep?.name || "…………").toUpperCase()}</div>
-            <div>
-              BP {s.iep?.bp || "……"} · Tel {s.iep?.inspector_phone || "…………"}
-            </div>
-            <div>Courriel : {s.iep?.inspector_email || "…………"}</div>
-          </div>
-          <div style={{ fontSize: "10px", fontWeight: 700, textAlign: "right", lineHeight: 1.5 }}>
-            <div>REPUBLIQUE DE CÔTE D&apos;IVOIRE</div>
-            <div style={{ fontStyle: "italic", fontWeight: 400, fontSize: "8px", marginTop: "18px" }}>
-              Union-Discipline-Travail
-            </div>
-          </div>
-        </div>
+        {/* --- En-tête institutionnel (modèle reçu : armoiries + devise) --- */}
+        <OfficialDocHeader iep={s.iep} variant="fiche" size="lg" />
 
-        {/* --- Titre encadré --- */}
-        <div style={{ border: `2px solid ${INK}`, padding: "8px", textAlign: "center", marginBottom: "10px" }}>
-          <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.3px" }}>
+        {/* --- Titre encadré + titre de l'évaluation souligné (modèle) --- */}
+        <div style={{ textAlign: "center", margin: "4px 0 10px" }}>
+          <div
+            style={{
+              display: "inline-block",
+              border: "1px solid #000000",
+              padding: "8px 26px",
+              fontSize: "15px",
+              fontWeight: 700,
+              lineHeight: 1.45,
+              maxWidth: "150mm",
+            }}
+          >
             SUIVI DU PLAN D&apos;ACTION PLURIANNUEL DE L&apos;IEPP
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 800, textDecoration: "underline", marginTop: "6px" }}>
+          <div
+            style={{
+              fontSize: "14.5px",
+              fontWeight: 700,
+              textDecoration: "underline",
+              marginTop: "10px",
+            }}
+          >
             {evalTitle}
           </div>
         </div>
 
-        {/* --- École / Classe / Date / Seuils --- */}
-        <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "8px", lineHeight: 1.6 }}>
-          <span>ECOLE : {s.school.name}</span>
-          <span style={{ marginLeft: "32px" }}>
-            CLASSE : {s.class.name}
-            {examDate ? ` — PASSAGE : ${examDate}` : ""}
-          </span>
-          <span style={{ marginLeft: "32px", fontWeight: 400 }}>
-            {s.exam.kind === "composition" ? (
-              <>
-                Seuils de maîtrise ({s.exam.threshold} %) :{" "}
-                {s.subjects.map((sub, i) => (
-                  <span key={sub.key}>
-                    {i > 0 ? " · " : ""}
-                    {sub.label} {sub.seuil}/{sub.max_score || "—"}
-                  </span>
-                ))}
-              </>
-            ) : (
-              <>
-                Seuil de maîtrise : {s.class.seuil}/{s.class.max_score} ({s.exam.threshold} %)
-              </>
-            )}
-          </span>
+        {/* --- ECOLE / CLASSE en gras à gauche (modèle reçu) --- */}
+        <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "8px", lineHeight: 1.7 }}>
+          <div>ECOLE : {s.school.name}</div>
+          <div>CLASSE : {s.class.name}</div>
         </div>
 
-        {/* --- TABLEAU 1 : vue d'ensemble de l'examen blanc --- */}
+        {/* --- TABLEAU 1 : vue d'ensemble de l'évaluation --- */}
         <table style={{ width: "70%", borderCollapse: "collapse", marginBottom: "6px" }}>
           <thead>
             <tr>
@@ -308,15 +288,15 @@ export function PdaDocument({
           </thead>
           <tbody>
             <tr>
-              <td style={labelTdStyle}>PRESENTS</td>
+              <td style={{ ...tdStyle, border: "none" }}>PRESENTS</td>
               <CountCells row={s.table1.presents} order={["total", "filles", "garcons"]} />
             </tr>
             <tr>
-              <td style={labelTdStyle}>ADMIS</td>
+              <td style={{ ...tdStyle, border: "none" }}>ADMIS</td>
               <CountCells row={s.table1.admis} order={["total", "filles", "garcons"]} />
             </tr>
             <tr>
-              <td style={labelTdStyle}>% ADMIS</td>
+              <td style={{ ...tdStyle, border: "none" }}>% ADMIS</td>
               <td style={tdStyle} colSpan={3}>
                 {fmtPct(s.table1.pct_admis)}
               </td>
@@ -324,9 +304,9 @@ export function PdaDocument({
           </tbody>
         </table>
 
-        <p style={{ fontSize: "10px", margin: "6px 0", lineHeight: 1.5 }}>
+        <p style={{ fontSize: "12px", margin: "6px 0", lineHeight: 1.5 }}>
           Le nombre d&apos;élèves du {s.class.name} ayant atteint le seuil suffisant de
-          maîtrise en lecture (Exploitation de texte, Mathématiques, Dictée).
+          maîtrise en lecture (Exploitation de texte, Mathématiques, Dictée ).
         </p>
 
         {/* --- TABLEAU 2 : maîtrise par matière --- */}
@@ -368,7 +348,7 @@ export function PdaDocument({
               <td style={labelTdStyle}>% Admis</td>
               {(["exploitation", "math", "dictee"] as const).map((k) => (
                 <td key={`pa-${k}`} style={tdStyle} colSpan={3}>
-                  {fmtPct(t2[k].pct_admis)}
+                  {t2[k].presents.total > 0 ? fmtPct(t2[k].pct_admis) : ""}
                 </td>
               ))}
             </tr>
@@ -382,14 +362,14 @@ export function PdaDocument({
               <td style={labelTdStyle}>% non admis</td>
               {(["exploitation", "math", "dictee"] as const).map((k) => (
                 <td key={`pna-${k}`} style={tdStyle} colSpan={3}>
-                  {fmtPct(t2[k].pct_non_admis)}
+                  {t2[k].presents.total > 0 ? fmtPct(t2[k].pct_non_admis) : ""}
                 </td>
               ))}
             </tr>
           </tbody>
         </table>
 
-        <p style={{ fontSize: "10px", margin: "6px 0" }}>
+        <p style={{ fontSize: "12px", margin: "6px 0" }}>
           Accroître les acquis scolaires et la performance aux examens des élèves de
           tous les niveaux :
         </p>
@@ -412,7 +392,7 @@ export function PdaDocument({
               <CountCells row={s.table3.difficultes} order={["total", "garcons", "filles"]} />
             </tr>
             <tr>
-              <td style={{ ...labelTdStyle, fontWeight: 400, fontSize: "9px" }}>
+              <td style={{ ...labelTdStyle, fontSize: "11px" }}>
                 Le nombre d&apos;élèves ayant bénéficié des cours de mise à niveau
                 (voir liste des élèves et les notes avant et après)
               </td>
@@ -425,17 +405,17 @@ export function PdaDocument({
               ).map((k) => (
                 <td key={k} style={{ ...tdStyle, padding: 0 }}>
                   <input
-                    value={rem[k]}
+                    value={rem[k] ? fmtDocNum(rem[k]) : ""}
                     onChange={(e) => updateRem(k, e.target.value)}
                     inputMode="numeric"
                     aria-label={k}
-                    className="w-full h-7 text-center text-[10px] bg-transparent outline-none focus:bg-amber-50 print:bg-white"
+                    className="w-full h-7 text-center text-[12px] bg-transparent outline-none focus:bg-amber-50 print:bg-white"
                   />
                 </td>
               ))}
             </tr>
             <tr>
-              <td style={{ ...labelTdStyle, fontWeight: 400, fontSize: "9px" }}>
+              <td style={{ ...labelTdStyle, fontSize: "11px" }}>
                 Le nombre d&apos;élèves ayant bénéficié des mécanismes de remédiation
                 par niveau et par matière.
               </td>
@@ -448,11 +428,11 @@ export function PdaDocument({
               ).map((k) => (
                 <td key={k} style={{ ...tdStyle, padding: 0 }}>
                   <input
-                    value={rem[k]}
+                    value={rem[k] ? fmtDocNum(rem[k]) : ""}
                     onChange={(e) => updateRem(k, e.target.value)}
                     inputMode="numeric"
                     aria-label={k}
-                    className="w-full h-7 text-center text-[10px] bg-transparent outline-none focus:bg-amber-50 print:bg-white"
+                    className="w-full h-7 text-center text-[12px] bg-transparent outline-none focus:bg-amber-50 print:bg-white"
                   />
                 </td>
               ))}
@@ -460,25 +440,46 @@ export function PdaDocument({
           </tbody>
         </table>
 
-        {/* --- Signatures --- */}
+        {/* --- Signatures + nom de l'inspecteur (modèle reçu) --- */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            fontSize: "10px",
-            fontWeight: 700,
-            textDecoration: "underline",
+            alignItems: "flex-end",
+            fontSize: "13px",
             marginTop: "24px",
           }}
         >
-          <span>Le Directeur</span>
-          <span>L&apos;Inspecteur</span>
+          <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+          <div style={{ textAlign: "center" }}>
+            <span style={{ textDecoration: "underline" }}>L&apos;Inspecteur</span>
+            {s.iep?.inspector_name ? (
+              <div
+                style={{
+                  fontSize: "12px",
+                  marginTop: "28px",
+                }}
+              >
+                {s.iep.inspector_name.toUpperCase()}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
       <p className="text-center text-[11px] text-muted-foreground py-4 print:hidden">
-        Les lignes « mise à niveau » et « remédiation » sont saisissables directement
-        dans le document — pensez à enregistrer avant impression.
+        Architecture, en-tête et police (Calibri) du document officiel de
+        l&apos;IEPP. Les lignes « mise à niveau » et « remédiation » sont
+        saisissables directement dans le document — pensez à enregistrer avant
+        impression.
+        {!isComposition && s.exam.exam_date
+          ? ` Passage : ${new Date(s.exam.exam_date).toLocaleDateString("fr-FR")}.`
+          : ""}
+        {isComposition
+          ? ` Seuils de maîtrise (${s.exam.threshold} %) : ${s.subjects
+              .map((sub) => `${sub.label} ${sub.seuil}/${sub.max_score || "—"}`)
+              .join(" · ")}.`
+          : ` Seuil de maîtrise : ${s.class.seuil}/${s.class.max_score} (${s.exam.threshold} %).`}
       </p>
     </div>
   );

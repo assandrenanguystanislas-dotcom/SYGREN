@@ -2,12 +2,13 @@
 
 // === PDA IEPP — Document officiel imprimable du SUIVI PLURIANNUEL ===
 // Version « document officiel » de la matrice élève × évaluations :
-// en-tête ministériel + titre normalisé « SUIVI DU PLAN D'ACTION
-// PLURIANNUEL DE L'IEPP » + matrice des niveaux (E/M/D par évaluation)
-// + signatures. Toutes les données viennent de /api/pda/timeline
-// (source unique de vérité — le document ne recalcule rien).
-// Impression A4 paysage 100 % navigateur (isolement #pda-tl-doc,
-// page nommée pda-timeline).
+// en-tête ministériel (bloc + République + armoiries, police Calibri/
+// Carlito — même en-tête que les documents officiels reçus de l'IEPP) +
+// titre normalisé « SUIVI DU PLAN D'ACTION PLURIANNUEL DE L'IEPP » +
+// matrice des niveaux (E/M/D par évaluation) + signatures. Toutes les
+// données viennent de /api/pda/timeline (source unique de vérité — le
+// document ne recalcule rien). Impression A4 paysage 100 % navigateur
+// (isolement #pda-tl-doc, page nommée pda-timeline).
 
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,8 +17,14 @@ import { Loader2, Printer, X } from "lucide-react";
 import { pdaApi } from "@/lib/api";
 import type { PdaTimelineResponse } from "@/lib/types";
 
-const INK = "#1f2937"; // gris encre — cohérent avec les documents officiels
-const BORDER = "1px solid #374151";
+import {
+  INK,
+  OFFICIAL_FONT,
+  OfficialDocHeader,
+  THIN,
+} from "./official-doc";
+
+const BORDER = THIN;
 
 const thStyle: CSSProperties = {
   border: BORDER,
@@ -141,74 +148,34 @@ export function PdaTimelineDocument({
           width: "100%",
           maxWidth: "297mm", // A4 paysage — la matrice est large
           padding: "10mm 8mm",
-          fontFamily: "Helvetica, Arial, sans-serif",
+          fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
         }}
       >
-        {/* --- En-tête institutionnel (identique au document officiel par évaluation) --- */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: "10px",
-          }}
-        >
-          <div style={{ fontSize: "9px", fontWeight: 700, lineHeight: 1.5 }}>
-            <div>MINISTERE DE L&apos;EDUCATION NATIONALE ET</div>
-            <div>DE L&apos;ALPHABETISATION</div>
-            <div>
-              DIRECTION REGIONALE DE{" "}
-              {(iep?.region || iep?.name || "…………").toUpperCase()}
-            </div>
-            <div>INSPECTION DE L&apos;ENSEIGNEMENT</div>
-            <div>PRESCOLAIRE ET PRIMAIRE DE {(iep?.name || "…………").toUpperCase()}</div>
-            <div>
-              BP {iep?.bp || "……"} · Tel {iep?.inspector_phone || "…………"}
-            </div>
-            <div>Courriel : {iep?.inspector_email || "…………"}</div>
-          </div>
+        {/* --- En-tête institutionnel (identique aux documents officiels reçus) --- */}
+        <OfficialDocHeader iep={iep} variant="plan" size="sm" />
+
+        {/* --- Titre encadré + sous-titre souligné (patron de la fiche reçue) --- */}
+        <div style={{ textAlign: "center", margin: "4px 0 10px" }}>
           <div
             style={{
-              fontSize: "10px",
+              display: "inline-block",
+              border: `1px solid ${INK}`,
+              padding: "6px 24px",
+              fontSize: "13.5px",
               fontWeight: 700,
-              textAlign: "right",
-              lineHeight: 1.5,
+              lineHeight: 1.45,
             }}
           >
-            <div>REPUBLIQUE DE CÔTE D&apos;IVOIRE</div>
-            <div
-              style={{
-                fontStyle: "italic",
-                fontWeight: 400,
-                fontSize: "8px",
-                marginTop: "18px",
-              }}
-            >
-              Union-Discipline-Travail
-            </div>
-          </div>
-        </div>
-
-        {/* --- Titre encadré --- */}
-        <div
-          style={{
-            border: `2px solid ${INK}`,
-            padding: "8px",
-            textAlign: "center",
-            marginBottom: "8px",
-          }}
-        >
-          <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.3px" }}>
             SUIVI DU PLAN D&apos;ACTION PLURIANNUEL DE L&apos;IEPP
           </div>
           <div
             style={{
-              fontSize: "12px",
-              fontWeight: 800,
+              fontSize: "12.5px",
+              fontWeight: 700,
               textDecoration: "underline",
-              marginTop: "6px",
+              marginTop: "8px",
             }}
           >
             SUIVI PLURIANNUEL DES NIVEAUX — CLASSE {tl.class.name.toUpperCase()} —
@@ -216,10 +183,12 @@ export function PdaTimelineDocument({
           </div>
         </div>
 
-        {/* --- École / Classe / Effectif --- */}
-        <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "8px" }}>
-          <span>ECOLE : {schoolName}</span>
-          <span style={{ marginLeft: "32px" }}>CLASSE : {tl.class.name}</span>
+        {/* --- École / Classe / Effectif (labels gras, modèle reçu) --- */}
+        <div style={{ fontSize: "11.5px", marginBottom: "8px" }}>
+          <span style={{ fontWeight: 700 }}>ECOLE : {schoolName}</span>
+          <span style={{ marginLeft: "32px", fontWeight: 700 }}>
+            CLASSE : {tl.class.name}
+          </span>
           <span style={{ marginLeft: "32px", fontWeight: 400 }}>
             {students.length} élève(s) · {evaluations.length} évaluation(s)
           </span>
@@ -312,19 +281,30 @@ export function PdaTimelineDocument({
           .
         </p>
 
-        {/* --- Signatures --- */}
+        {/* --- Signatures + nom de l'inspecteur (patron de la fiche reçue) --- */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            fontSize: "10px",
-            fontWeight: 700,
-            textDecoration: "underline",
+            alignItems: "flex-end",
+            fontSize: "12px",
             marginTop: "20px",
           }}
         >
-          <span>Le Directeur</span>
-          <span>L&apos;Inspecteur</span>
+          <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+          <div style={{ textAlign: "center" }}>
+            <span style={{ textDecoration: "underline" }}>L&apos;Inspecteur</span>
+            {iep?.inspector_name ? (
+              <div
+                style={{
+                  fontSize: "11px",
+                  marginTop: "24px",
+                }}
+              >
+                {iep.inspector_name.toUpperCase()}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 

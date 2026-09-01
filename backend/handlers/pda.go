@@ -254,12 +254,13 @@ type pdaCountRow struct {
 	Garcons int `json:"garcons"`
 }
 
-// pct1 — pourcentage arrondi à 1 décimale (0 si dénominateur nul).
+// pct1 — pourcentage arrondi à 2 décimales (0 si dénominateur nul),
+// précision du document officiel reçu (ex : 89,26 % / 100,00 %).
 func pct1(a, b int) float64 {
 	if b == 0 {
 		return 0
 	}
-	return math.Round(float64(a)/float64(b)*1000) / 10
+	return math.Round(float64(a)/float64(b)*10000) / 100
 }
 
 // pdaSchoolScopeForUser retourne l'école imposée au user (director/teacher)

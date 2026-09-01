@@ -1,6 +1,42 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* === Police officielle des documents ministériels (Calibri) ===
+ * Les documents officiels reçus de l'IEPP (Plan d'action pluriannuel,
+ * fiche par école) sont composés en Calibri (police Office). Carlito est
+ * le clone métrique exact de Calibri : auto-hébergé (public/fonts) pour un
+ * rendu IDENTIQUE sur Windows (Calibri installée → utilisée), macOS/Linux
+ * (Carlito webfont) et à l'impression. Aucune dépendance réseau.
+ * fontFamily officielle dans les documents : "Calibri","Carlito",Arial. */
+@font-face {
+  font-family: "Carlito";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/carlito-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Carlito";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/carlito-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Carlito";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/carlito-400-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Carlito";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/carlito-700-italic.woff2") format("woff2");
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
