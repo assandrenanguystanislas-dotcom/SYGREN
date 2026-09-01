@@ -9,8 +9,8 @@
 //   2. Examen blanc : grille de saisie (Présent + 3 notes, maîtrise en direct)
 //      Composition mensuelle : grille LECTURE SEULE dérivée des notes du
 //      module Notes (aucune double saisie — barèmes réels GradeScale)
-//   3. Document officiel imprimable (pda-document.tsx) — agrégats calculés
-//      côté serveur (source unique de vérité)
+//   3. Document officiel imprimable (page dédiée /pda-doc — pattern
+//      /synthese : l'isolement print est tronqué dans le shell)
 // Maîtrise : Admis = présent ET note >= barème × seuil % (par matière).
 
 import { Fragment, useMemo, useState } from "react";
@@ -72,7 +72,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { PdaDocument } from "./pda-document";
 
 // === Helpers de maîtrise (miroir de la logique serveur) ===
 
@@ -174,7 +173,6 @@ export function PdaView() {
   const [classId, setClassId] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
-  const [showDoc, setShowDoc] = useState(false);
 
   const hasSchool = schoolFilter !== "" && schoolFilter !== "all";
 
@@ -360,16 +358,10 @@ export function PdaView() {
       }),
   });
 
-  // === Vue document plein écran ===
-  if (showDoc && examId && classId) {
-    return (
-      <PdaDocument
-        examId={examId}
-        classId={classId}
-        onClose={() => setShowDoc(false)}
-      />
-    );
-  }
+  // === Document officiel : page dédiée (pattern /synthese) ===
+  // L'isolement print (#pda-doc) est tronqué par les conteneurs flex/overflow
+  // du shell — le document s'ouvre donc sur sa propre page (nouvel onglet)
+  // où l'impression A4 portrait ressort fidèle, et « Fermer » referme l'onglet.
 
   const pendingChanges = dirty ? " • modifications non enregistrées" : "";
   const examKindLabel = selectedExam
@@ -527,7 +519,12 @@ export function PdaView() {
                 size="sm"
                 variant="outline"
                 disabled={!examId || !classId}
-                onClick={() => setShowDoc(true)}
+                onClick={() =>
+                  window.open(
+                    `/pda-doc?exam_id=${encodeURIComponent(examId)}&class_id=${encodeURIComponent(classId)}`,
+                    "_blank",
+                  )
+                }
               >
                 <FileText className="w-4 h-4 mr-1.5" />
                 Document officiel

@@ -7,7 +7,10 @@
 // Mathématiques, Dictée) à CHAQUE évaluation du plan — compositions
 // mensuelles (notes dérivées du module Notes) ET examens blancs (saisie
 // manuelle). Agrégats calculés côté serveur (/api/pda/timeline).
-// Impression A4 paysage 100 % navigateur (isolement #pda-timeline).
+// Impression A4 paysage 100 % navigateur :
+//   - « Imprimer / PDF » : matrice à l'écran (isolement #pda-timeline)
+//   - « Document officiel » : page dédiée /pda-timeline-doc (en-tête
+//     ministériel — pattern /synthese, isolement #pda-tl-doc)
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -24,7 +27,6 @@ import { classesApi, pdaApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import type { PdaTimelineCell } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { PdaTimelineDocument } from "@/components/views/pda-timeline-document";
 import {
   Card,
   CardContent,
@@ -95,9 +97,6 @@ export function PdaTimelineView() {
   );
   const [classId, setClassId] = useState<string>("");
   const [year, setYear] = useState<string>(String(new Date().getFullYear()));
-  // Document officiel plein écran (même pattern que le plan d'action :
-  // le composant se rend à la place de la vue).
-  const [showDoc, setShowDoc] = useState(false);
 
   const hasSchool = schoolFilter !== "" && schoolFilter !== "all";
   const yearNum = Number(year);
@@ -134,17 +133,6 @@ export function PdaTimelineView() {
   const evaluations = data?.evaluations ?? [];
   const students = data?.students ?? [];
   const subjects = data?.subjects ?? [];
-
-  // Document officiel du suivi pluriannuel (A4 paysage, en-tête ministériel).
-  if (showDoc && classId && Number.isFinite(yearNum)) {
-    return (
-      <PdaTimelineDocument
-        classId={classId}
-        year={yearNum}
-        onClose={() => setShowDoc(false)}
-      />
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -229,7 +217,12 @@ export function PdaTimelineView() {
                 size="sm"
                 variant="outline"
                 disabled={!data || evaluations.length === 0}
-                onClick={() => setShowDoc(true)}
+                onClick={() =>
+                  window.open(
+                    `/pda-timeline-doc?class_id=${encodeURIComponent(classId)}&year=${yearNum}`,
+                    "_blank",
+                  )
+                }
               >
                 <FileText className="w-4 h-4 mr-1.5" />
                 Document officiel
