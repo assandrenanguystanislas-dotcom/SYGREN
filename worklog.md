@@ -3471,3 +3471,20 @@ Stage Summary:
 - R2 NON intégré (décision justifiée : zéro consommateur, discipline anti-code-mort du projet) ; 3 options présentées à l'utilisateur : (a) nettoyage du paquet storage mort, (b) couche R2 dormante si besoin fichier proche, (c) construire le besoin fichier réel qui justifiera R2 (ex : photos élèves, logos écoles, archives de documents signés)
 - README re-aligné sur le code réel (5 lignes corrigées) — la documentation ne doit jamais devancer l'architecture
 - Commit : docs(readme)
+
+---
+Task ID: Deploy-Verification-Schools-N1
+Agent: Main (tuteur)
+Task: Vérification des déploiements Render (LIVE) + Vercel (READY) après push des 3 commits session 3 (d4dcecb perf, 9e4c78b readme, 7efa2a7 worklog) + E2E navigateur prod
+
+Work Log:
+- Push c2e361a..7efa2a7 — identité des 3 commits vérifiée : assandrenanguystanislas <assandrenanguystanislas@gmail.com> ✓
+- Render : deploy dep-dab7nvjncjis73etn7o0 LIVE sur 7efa2a7 (les 3 commits ont déclenché des builds, seul le dernier est live) ; /api/health 200 ; GET /api/schools prod = 200 en 0,34 s (nouveau binaire, compteurs corrects : 97 écoles / 582 classes / 185 élèves — identiques à la référence d'avant-deploy)
+- Vercel : dernier deploy production dpl_7pv67Jt4TuoqZ92qsqpodr54Rc4x READY (code frontend inchangé — rebuild de même code)
+- E2E navigateur prod (sygren.vercel.app) : login admin@sygren.ci → Tableau de bord rendu (8 modules nav) → module Écoles : filtres « Tous 97 / Public 75 / Privé 10 / Communautaire 12 » (=97 ✓), cartes écoles rendues, dépliage « Classes (CP1 → CM2) » affiche CP1/CP2/CE1/CE2+ checkboxes actives ✓ ; zéro erreur page/console ; screenshot desktop 1440px + mobile 390px (layout empilé propre)
+- DB Neon : aucune migration de schéma nécessaire (refactor logique pure) — AutoMigrate idempotent au boot du nouveau binaire, données intactes (97/582/185)
+
+Stage Summary:
+- Le refactor N+1 est LIVE en production : GET /api/schools passe de ~291 requêtes à 4, prod répond 0,34 s, UI prod vérifiée (écoles affichées, compteurs justes, zéro régression)
+- Les 3 artefacts de la session 3 sont déployés : perf schools (d4dcecb), README aligné (9e4c78b), worklog (7efa2a7)
+- En attente de décision utilisateur sur R2 : (a) nettoyage du paquet storage mort, (b) couche R2 dormante, (c) construire le besoin fichier qui justifiera R2
