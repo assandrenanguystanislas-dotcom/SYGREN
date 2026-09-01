@@ -26,12 +26,18 @@ func main() {
 	// au démarrage si elle est vide. En goroutine pour ne pas bloquer le boot.
 	go handlers.BackfillStudentSessionResults()
 
-	// Initialize file storage
+	// Initialize file storage — R2 (prod, env R2_*) / filesystem (dev).
+	// nil en prod sans R2 : les handlers fichiers répondent 503 (jamais de
+	// fallback disque éphémère sur Render).
 	store, err := storage.New(cfg)
 	if err != nil {
 		log.Fatalf("[FATAL] Échec initialisation stockage: %v", err)
 	}
-	_ = store // utilisé plus tard pour les bulletins PDF (Module 4)
+	if store == nil {
+		log.Println("[STORAGE] Aucun stockage fichiers configuré (R2 absent) — fonctionnalités fichiers désactivées")
+	} else {
+		log.Println("[STORAGE] Stockage fichiers:", store.Kind())
+	}
 
 	// Build router
 	r := router.New(cfg)
