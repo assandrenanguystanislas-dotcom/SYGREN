@@ -3414,3 +3414,60 @@ Stage Summary:
 - Le PDA IEPP couvre désormais TOUTES les évaluations de l'année : compositions mensuelles (dérivées automatiquement du module Notes, barèmes réels par matière) + examens blancs (saisie manuelle, barème PDA) — l'objectif « voir le niveau d'étude de chaque élève dans les matières désignées » est servi par la grille par évaluation ET par le nouvel onglet Suivi pluriannuel (matrice élève × évaluations imprimable A4 paysage)
 - 11 fichiers : models.go (+Kind/+SessionID), database.go (backfill), handlers/pda.go (sources unifiées + timeline), router.go (+1 route), types.ts, api.ts, pda-view.tsx, pda-document.tsx, pda-timeline-view.tsx (nouveau), results-view.tsx (3e onglet), globals.css (print paysage)
 - ⚠️ Action requise côté user : vérifier le service Render dans le dashboard (x-render-routing: no-server = service suspendu/stoppé — si quota gratuit épuisé, il reprendra le 1er septembre ; sinon « Manual Deploy → Deploy latest commit ») — le commit 518351b se déploiera automatiquement dès que le service reprend ; Vercel est déjà à jour
+
+---
+Task ID: Session3-Environnement-Reconstitution
+Agent: Main (tuteur)
+Task: Ouverture session tuteur #3 — reconstitution de l'environnement après reset du sandbox (l'entrée de la session précédente avait été perdue avant commit — reconstituée condensée ici)
+
+Work Log:
+- Sandbox réinitialisé entre-temps (clone + Go + entrée worklog non commitée perdus — leçon : COMMITTER le worklog à la fin de chaque session, même sans changement de code)
+- Re-clone repo (main @ c2e361a), identité git reconfigurée (assandrenanguystanislas <assandrenanguystanislas@gmail.com>), Go 1.25.0 réinstallé (~/.local/go), backend build OK, frontend bun install OK + tsc --noEmit EXIT 0
+- Prod vérifiée via API (tokens user) : Render srv-da0t6lnlk1mc738nvvf0 not_suspended (suspension fin août levée seule le 1er sept comme anticipé), deploy LIVE sur 518351b ; URL réelle = https://sygren.onrender.com (worklog session 2 notait sygren-api.onrender.com — erreur) ; Vercel 3 deploys production READY, NEXT_PUBLIC_API_URL=https://sygren.onrender.com ; /api/health prod 200
+- Neon validé E2E : boot backend LOCAL sur l'endpoint POOLER (identique env prod, channel_binding=require) → connexion OK, AutoMigrate idempotent 62s, données réelles lues : 97 écoles / 582 classes / 185 élèves / 2 sessions validées
+- Piège env sandbox confirmé : DATABASE_URL=file:...custom.db global → TOUJOURS env -u DATABASE_URL (SQLite) ou chaîne Neon explicite (tests DB)
+- Login API : le champ est `identifier` (pas `email`) — détail utile pour les tests curl
+
+Stage Summary:
+- Environnement session 3 opérationnel ; prod en ligne et à jour (Render LIVE 518351b + Vercel READY) ; base Neon synchronisée et peuplée
+- Leçon process : toujours committer+pusher le worklog en fin de session (même documentation seule) — les sandboxes sont éphémères
+
+---
+Task ID: Perf-Schools-N1-Refactor
+Agent: Main (tuteur)
+Task: Refactor du pattern N+1 dans GET /api/schools — enrichissement en masse (4 requêtes au total au lieu de 3 par école)
+
+Work Log:
+- Diagnostic (session précédente, re-confirmé) : ListSchools émettait ~291 requêtes pour 97 écoles (1 IEP First + 2 Count par école) — invisible depuis Render (co-localisé Neon eu-central-1, 0,57 s) mais hang >40 s depuis un client éloigné du pooler (~300-500 ms/requête) ; coût non constant vs nombre d'écoles
+- Refactor handlers/schools.go : requête écoles (inchangée, scope rôle préservé) + 3 requêtes en masse : IEP `IN (...)` (IDs dédupliqués), compteurs classes `COUNT(*) GROUP BY school_id`, compteurs élèves `JOIN classes ... GROUP BY classes.school_id` + assemblage en mémoire via maps — plus aucune requête dans la boucle
+- BUG INTRODUIT PAR LE REFACTOR ET CORRIGÉ (leçon clé) : réutiliser la même slice `rows` pour 2 `gorm.Scan` fait persister les lignes de la 1re requête quand la 2de en retourne moins — gorm scan.go réutilise la slice si sa capacité est non nulle (« the externally initialized slice is directly used here ») ; symptôme : école avec classes mais 0 élève → student_count = class_count (testé : école 6 classes 0 élèves affichait students=6) ; fix : slice DISTINCTE par Scan + commentaire explicatif dans le code
+- PIÈGE ÉVITÉ : le test Neon seul n'aurait pas attrapé le bug (chaque école de prod a ≥1 élève, 185/97, donc la 2de requête retournait autant de lignes que la 1re) — c'est le test SQLite avec une école SANS élève qui l'a révélé ; leçon : tester les CAS LIMITES sur des données contrôlées, pas seulement l'équivalence sur données réelles
+- Vérifs : gofmt clean (schools.go), go vet CLEAN, go build OK
+- Équivalence AVANT/APRÈS : réponse prod capturée AVANT refactor (/tmp, 97 écoles) vs backend refactoré connecté à Neon : 97 écoles comparées champ par champ (iep_id/code/name/address/status/iep_name/class_count/student_count) = 0 différence ; latence : >40 s (hang) → 1,05-1,11 s depuis le sandbox
+- Cas limites SQLite vérifiés : base vide → {"schools":[],"count":0} sans requête d'agrégat (garde len(schoolIDs)>0) ; école avec 6 classes auto + 1 élève → 6/1 ✓ ; école 6 classes 0 élèves → 6/0 ✓ (le bug, maintenant fixé)
+- 4 fichiers préexistants non gofmt (config/config.go, models/rbac_defaults.go, scripts/migrate_sqlite_to_neon.go, storage/storage.go) — hors périmètre, non touchés (candidat chore séparé)
+
+Stage Summary:
+- GET /api/schools : ~291 requêtes → 4 requêtes, coût constant quel que soit le nombre d'écoles ; latence d'un client éloigné >40 s → ~1 s ; prod inchangée (0,57 s → pareil)
+- Comportement strictement préservé (équivalence champ par champ sur les 97 écoles réelles) — y compris le scope director/teacher
+- Leçon GORM documentée dans le code : Scan réutilise la slice destination si cap>0 — une slice par Scan, TOUJOURS
+- Commit : perf(schools)
+
+---
+Task ID: R2-Diagnostic-README-Alignement
+Agent: Main (tuteur)
+Task: Tâche « Intégration Cloudflare R2 » demandée par l'utilisateur — diagnostic d'architecture et alignement de la documentation (la demande reposait sur une premise périmée que j'avais énoncée moi-même en session précédente)
+
+Work Log:
+- CORRECTION DE MA PROPRE ANALYSE (session précédente) : j'avais affirmé « les PDF en prod sont éphémères » en me basant sur le README — périmé ; la réalité du code : les endpoints de génération PDF ont été SUPPRIMÉS volontairement (commits 86d72db → 958637e « module Bulletins 100 % impression A5 » → efd9121 retire go-pdf/fpdf), le modèle officiel A5 est rendu et imprimé par le NAVIGATEUR, aucun fichier n'est généré ni stocké serveur
+- Inventaire exhaustif des besoins fichiers actuels : zéro handler multipart/FormFile ; l'import Excel élèves est parsé CLIENT-side (import-students-dialog.tsx, parseExcel local) et POSTé en JSON ; pas de photos/logos ; reports.go ne renvoie que du JSON pour rendu HTML
+- Conclusion : le paquet storage (LocalStorage) est du CODE MORT — storage.New(cfg) appelé dans main.go mais storage.Global jamais consommé ; intégrer R2 aujourd'hui = ajouter une dépendance sans consommateur, contraire à la discipline anti-code-mort du projet (564 lignes de PDF supprimées pour cette raison, documentées au worklog)
+- Décision tutorale : NE PAS intégrer R2 maintenant ; présenter les options à l'utilisateur (nettoyage du code mort / couche R2 dormante si besoin fichier proche / construire la fonctionnalité fichier qui justifiera R2)
+- README aligné sur l'état réel (5 corrections) : Module 4 « Bulletins PDF (génération + stockage) » → « Bulletins A5 (rendu navigateur + impression par lot) » ; ligne stack « Stockage PDF | Filesystem → R2 » → « Documents | Impression navigateur A4/A5 (aucun fichier stocké serveur) » ; « go-pdf/fpdf » retiré de la ligne Backend (dépendance morte depuis efd9121) ; handlers « 12 (…PDF…) » → « 23 (…rapports, PDA…) » (comptage réel : 23 fichiers) ; storage/ marqué « dormant — aucun consommateur actuel »
+- Vérifié : rg "go-pdf|fpdf" go.mod = absent ; le README était la seule source d'information périmée
+
+Stage Summary:
+- L'argument « PDF éphémères en prod » était OBSOLÈTE : l'architecture a déjà éliminé les fichiers serveur (impression navigateur A5) — ma correction est documentée pour la transparence
+- R2 NON intégré (décision justifiée : zéro consommateur, discipline anti-code-mort du projet) ; 3 options présentées à l'utilisateur : (a) nettoyage du paquet storage mort, (b) couche R2 dormante si besoin fichier proche, (c) construire le besoin fichier réel qui justifiera R2 (ex : photos élèves, logos écoles, archives de documents signés)
+- README re-aligné sur le code réel (5 lignes corrigées) — la documentation ne doit jamais devancer l'architecture
+- Commit : docs(readme)
