@@ -32,7 +32,7 @@ export interface PersonnelDossier {
   date_naissance?: string | null;
   lieu_naissance?: string | null;
   categorie?: CategorieCode | null;
-  classe_grade?: number | null; // classe administrative 1..4
+  classe_grade?: number | null; // classe administrative : 1, 2, 3 = Exceptionnelle notée (E), 4 = Principale notée (E)
   echelon?: number | null; // échelon 1..4
   date_entree_fp?: string | null; // entrée à la Fonction Publique
   fonction?: FonctionCode | null;
