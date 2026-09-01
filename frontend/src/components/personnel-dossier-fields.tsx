@@ -20,6 +20,7 @@
 // Le dossier part entier à chaque enregistrement (sémantique « mise à
 // jour complète » du backend — un champ vide efface la valeur stockée).
 
+import { useState } from "react";
 import { type LucideIcon, IdCard } from "lucide-react";
 
 import type { PersonnelDossier } from "@/lib/types";
@@ -28,10 +29,16 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+// NB : SelectLabel DOIT être enveloppé dans SelectGroup (exigence Radix —
+// sans groupe : « SelectLabel must be used within SelectGroup » et
+// plantage du dialog entier à l'ouverture).
 
 // Valeur sentinelle des listes « non renseigné » (Radix refuse value="")
 const UNSET = "?";
@@ -54,9 +61,29 @@ function yearRange(from: number): number[] {
   return out;
 }
 
+type IsoParts = { y: string; m: string; d: string };
+
+function parseIsoParts(iso: string | null | undefined): IsoParts {
+  if (!iso || iso.length < 10) return { y: "", m: "", d: "" };
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  // L'ISO est zéro-padé ("05") mais les items des listes portent les valeurs
+  // simples ("5") : dé-pader pour que la valeur retrouve son item à l'édition.
+  const unpad = (s: string) => (s ? String(Number(s)) : "");
+  return { y: y || "", m: unpad(m), d: unpad(d) };
+}
+
 /** Sélecteur de date en 3 listes déroulantes (Jour / Mois / Année).
  *  ISO vaut "YYYY-MM-DD…" (API) ou null ; la date n'est posée que si les
- *  3 parties sont choisies. */
+ *  3 parties sont choisies.
+ *
+ *  ⚠ Les 3 parties vivent dans un ÉTAT LOCAL initialisé depuis l'ISO :
+ *  chaque liste garde sa sélection pendant qu'on complète les deux autres.
+ *  (Version initiale : les parties dérivées directement de la prop iso —
+ *  la sélection partielle était écrasée par le re-render parent dès la
+ *  première liste choisie, les listes semblaient « ne pas fonctionner ».)
+ *  L'ISO n'est émis au dossier que lorsque les 3 parties sont réunies.
+ *  Le dialog démonte son contenu à la fermeture : chaque ouverture
+ *  réinitialise proprement les parties depuis la valeur enregistrée. */
 function DateSelects({
   id,
   label,
@@ -70,13 +97,17 @@ function DateSelects({
   years: number[];
   onChange: (iso: string | null) => void;
 }) {
-  const [yy, mm, dd] = iso ? iso.slice(0, 10).split("-") : ["", "", ""];
-  const set = (part: "y" | "m" | "d", v: string) => {
-    const clean = (s: string) => (s === UNSET ? "" : s);
-    const y = part === "y" ? clean(v) : yy;
-    const m = part === "m" ? clean(v) : mm;
-    const d = part === "d" ? clean(v) : dd;
-    onChange(y && m && d ? `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}` : null);
+  const [parts, setParts] = useState<IsoParts>(() => parseIsoParts(iso));
+
+  const set = (part: keyof IsoParts, raw: string) => {
+    const v = raw === UNSET ? "" : raw;
+    const next = { ...parts, [part]: v };
+    setParts(next);
+    onChange(
+      next.y && next.m && next.d
+        ? `${next.y}-${next.m.padStart(2, "0")}-${next.d.padStart(2, "0")}`
+        : null,
+    );
   };
   const trigger = "h-8 w-full text-xs px-2";
   return (
@@ -85,43 +116,52 @@ function DateSelects({
         {label}
       </Label>
       <div className="flex gap-1.5" id={id}>
-        <Select value={dd || UNSET} onValueChange={(v) => set("d", v)}>
+        <Select value={parts.d || UNSET} onValueChange={(v) => set("d", v)}>
           <SelectTrigger className={trigger} aria-label={`${label} — jour`}>
             <SelectValue placeholder="Jour" />
           </SelectTrigger>
           <SelectContent className="max-h-56">
-            <SelectItem value={UNSET}>Jour</SelectItem>
-            {DAYS.map((d) => (
-              <SelectItem key={d} value={String(d)}>
-                {String(d).padStart(2, "0")}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel>Jour (01 → 31)</SelectLabel>
+              <SelectItem value={UNSET}>—</SelectItem>
+              {DAYS.map((d) => (
+                <SelectItem key={d} value={String(d)}>
+                  {String(d).padStart(2, "0")}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
-        <Select value={mm || UNSET} onValueChange={(v) => set("m", v)}>
+        <Select value={parts.m || UNSET} onValueChange={(v) => set("m", v)}>
           <SelectTrigger className={trigger} aria-label={`${label} — mois`}>
             <SelectValue placeholder="Mois" />
           </SelectTrigger>
           <SelectContent className="max-h-56">
-            <SelectItem value={UNSET}>Mois</SelectItem>
-            {MONTHS.map((name, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>
-                {name}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel>Mois (Janvier → Décembre)</SelectLabel>
+              <SelectItem value={UNSET}>—</SelectItem>
+              {MONTHS.map((name, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
-        <Select value={yy || UNSET} onValueChange={(v) => set("y", v)}>
+        <Select value={parts.y || UNSET} onValueChange={(v) => set("y", v)}>
           <SelectTrigger className={trigger} aria-label={`${label} — année`}>
             <SelectValue placeholder="Année" />
           </SelectTrigger>
           <SelectContent className="max-h-56">
-            <SelectItem value={UNSET}>Année</SelectItem>
-            {years.map((y) => (
-              <SelectItem key={y} value={String(y)}>
-                {y}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel>Année</SelectLabel>
+              <SelectItem value={UNSET}>—</SelectItem>
+              {years.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
       </div>
@@ -226,9 +266,12 @@ export function PersonnelDossierFields({
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>—</SelectItem>
-              <SelectItem value="F">F</SelectItem>
-              <SelectItem value="G">G</SelectItem>
+              <SelectGroup>
+                <SelectLabel>Sexe (F · G)</SelectLabel>
+                <SelectItem value={UNSET}>—</SelectItem>
+                <SelectItem value="F">F</SelectItem>
+                <SelectItem value="G">G</SelectItem>
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
@@ -244,11 +287,14 @@ export function PersonnelDossierFields({
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>—</SelectItem>
-              <SelectItem value="IO">IO</SelectItem>
-              <SelectItem value="IA">IA</SelectItem>
-              <SelectItem value="IS">IS</SelectItem>
-              <SelectItem value="IAS">IAS</SelectItem>
+              <SelectGroup>
+                <SelectLabel>Catégorie (IO · IA · IS · IAS)</SelectLabel>
+                <SelectItem value={UNSET}>—</SelectItem>
+                <SelectItem value="IO">IO</SelectItem>
+                <SelectItem value="IA">IA</SelectItem>
+                <SelectItem value="IS">IS</SelectItem>
+                <SelectItem value="IAS">IAS</SelectItem>
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
@@ -291,12 +337,15 @@ export function PersonnelDossierFields({
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>—</SelectItem>
-              {GRADES.map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectLabel>Classe (1 · 2 · 3 · 4)</SelectLabel>
+                <SelectItem value={UNSET}>—</SelectItem>
+                {GRADES.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
@@ -310,12 +359,15 @@ export function PersonnelDossierFields({
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>—</SelectItem>
-              {GRADES.map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectLabel>Échelon (1 · 2 · 3 · 4)</SelectLabel>
+                <SelectItem value={UNSET}>—</SelectItem>
+                {GRADES.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
@@ -335,9 +387,12 @@ export function PersonnelDossierFields({
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>—</SelectItem>
-              <SelectItem value="DIRECTEUR">Directeur</SelectItem>
-              <SelectItem value="ADJOINT(E)">Adjoint(e)</SelectItem>
+              <SelectGroup>
+                <SelectLabel>Fonction (Directeur · Adjoint(e))</SelectLabel>
+                <SelectItem value={UNSET}>—</SelectItem>
+                <SelectItem value="DIRECTEUR">Directeur</SelectItem>
+                <SelectItem value="ADJOINT(E)">Adjoint(e)</SelectItem>
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
