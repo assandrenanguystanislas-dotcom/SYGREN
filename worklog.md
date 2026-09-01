@@ -3705,3 +3705,23 @@ Stage Summary:
 - Le dialog Utilisateurs ne plante plus (SelectGroup) ; toutes les listes du dossier personnel sont auto-descriptives (fin de la confusion « 1 ; 2 ; P ; E » — les options Classe étaient et restent 1 2 3 4)
 - 1 commit 6f16936 — Render LIVE + Vercel READY ; aucune écriture métier en prod (lectures + sélections non enregistrées) ; Neon inchangé
 - Pièges pour l'avenir : SelectLabel exige SelectGroup (plantage dialog sinon) ; dériver un état de formulaire multi-parties d'une prop nullable réinitialise la saisie partielle ; les valeurs d'items Radix doivent correspondre au format dé-pauté de l'ISO réhydraté ; le sandbox tue les processus d'arrière-plan entre les appels outil (tester en session shell unique)
+
+---
+Task ID: 11
+Agent: Z.ai Code (session 11 — correction CLASSE)
+Task: « LA CLASSE N'A PAS ETE CORRIGÉE. LA LISTE DEROULANTE EST PLUTOT "1; 2 ; P; E" AU LIEU DE "1;2;3:4" » — la liste déroulante CLASSE du dossier personnel (module Utilisateurs) est lue « 1 ; 2 ; P ; E » au lieu de 1 ; 2 ; 3 ; 4
+
+Work Log:
+- Reprise du dossier : git log (session 10 livrée : 6f16936 + f09ab1f), arborescence propre, main synchronisée avec origin
+- Enquête exhaustive sur « 1 ; 2 ; P ; E » : AUCUNE version git du composant n'a jamais contenu d'options P/E (90df142 et 6f16936 vérifiés : GRADES = 1..4) ; base de prod sondée via API (582 classes = CP1→CM2 uniquement, 0 classe « 1/2/P/E » ; 11 centres d'examen à noms réels) ; AUCUN autre dropdown « Classe » dans le module (enseignants/directeurs partagent personnel-dossier-fields.tsx ; Niveau du module Classes = CP1..CM2)
+- Diagnostic EN PRODUCTION au navigateur (sygren.vercel.app, admin) : dialog « Créer un enseignant » → popup CLASSE rendait « — 1 2 3 4 » (arbre d'accessibilité + capture) — le code déployé était correct ; les items en CHIFFRES NUS dans un popup étroit (largeur = cellule grid-cols-3 du formulaire dense) restent ambiguës à la lecture (fragments « F.P » / « Entrée à l'IEP » autour) — le diagnostic « confusion visuelle » de la session 10 était donc le bon, mais insuffisamment traité
+- Correctif (personnel-dossier-fields.tsx) : items auto-descriptifs « Classe 1 » … « Classe 4 » (Échelon traité pareil : « Échelon 1..4 »), groupe retitré « Classe administrative (1 · 2 · 3 · 4) », min-w-[8.5rem] sur les deux popups — plus aucune ambiguïté possible quel que soit l'écran/la police/le recouvrement ; la valeur STOCKÉE reste le nombre 1..4 (aucun changement backend, ni du document État nominatif qui imprime le chiffre nu du modèle reçu)
+- Tests locaux : tsc + eslint propres ; harnais E2E reconstruit (backend Go SQLite :8080 via /tmp/sygren-api-bin, frontend Next :3100 avec NEXT_PUBLIC_API_URL=http://localhost:8080) — piqûre de rappel : le sandbox OOM-kill/tue les processus d'arrière-plan entre les appels outil (dmesg : oom-killer actif) → tout le flux navigateur doit tenir dans UN SEUL appel shell (scripts /home/z/tmp-e2e/verify-*.sh) ; refs agent-browser périmées dès qu'une listbox s'ouvre (re-snapshot avant chaque clic)
+- E2E local (UI réelle) : login → Utilisateurs → Créer un enseignant → popup CLASSE = « Classe 1 / Classe 2 / Classe 3 / Classe 4 » (capture) → clic « Classe 3 » → déclencheur affiche « Classe 3 » (capture)
+- Déploiement : commit 1d909a1 poussé (auteur assandrenanguystanislas) → Render LIVE (api/health 200) + Vercel READY
+- Vérification EN PRODUCTION : login → dialog → popup CLASSE = « Classe administrative (1 · 2 · 3 · 4) » + items « Classe 1..4 » (capture) → sélection « Classe 3 » persiste à l'écran ; régression dates F.P/JOUR testée AU CLAVIER (flèches + Entrée) : « 02 » sélectionné et affiché — les dates fonctionnent pour l'utilisateur (le clic souris agent-browser sur option de liste longue reste « covered », limite harnais documentée depuis la session 8) ; console prod : 0 erreur ; Neon : aucune écriture (changement 100 % libellés frontend)
+
+Stage Summary:
+- La liste déroulante CLASSE affiche désormais des items explicites « Classe 1 » … « Classe 4 » (Échelon : « Échelon 1..4 ») — impossible de les confondre avec un fragment du formulaire ; valeurs stockées inchangées (1..4)
+- Le diagnostic complet (code, historique git, base prod, rendu prod) prouve qu'il n'a jamais existé d'options « P »/« E » : l'affichage « 1 ; 2 ; P ; E » provenait de la lecture d'items chiffres nus dans un popup étroit superposé au formulaire dense
+- Render LIVE + Vercel READY vérifiés sur sygren.onrender.com / sygren.vercel.app ; console propre ; worklog à jour ; si l'utilisateur voit encore l'ancien affichage : forcer le rechargement (Ctrl+Shift+R) pour vider le cache du navigateur
