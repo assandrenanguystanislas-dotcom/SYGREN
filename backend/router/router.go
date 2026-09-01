@@ -227,6 +227,9 @@ func New(cfg *config.Config) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireModule(models.ModuleGrades, "write"))
 			r.Post("/api/pda/exams", handlers.CreatePDAExam)
+			// Rattrapage : abonne les compositions actives non suivies
+			// (sessions créées avant l'auto-abonnement). Idempotent.
+			r.Post("/api/pda/exams/backfill", handlers.BackfillPDAExams)
 			r.Delete("/api/pda/exams/{id}", handlers.DeletePDAExam)
 			r.Post("/api/pda/exams/{id}/results", handlers.SavePDAResults)
 			r.Put("/api/pda/exams/{id}/remediation", handlers.SavePDARemediation)

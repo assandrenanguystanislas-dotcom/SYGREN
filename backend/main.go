@@ -88,12 +88,27 @@ func startSessionScheduler() {
 		now := time.Now()
 
 		// 1. Ouvrir automatiquement les sessions draft dont OpenAt est passé
-		result1 := database.DB.Model(&models.EvaluationSession{}).
+		//    (sélection d'abord, update par IDs, puis auto-abonnement PDA :
+		//    une composition publiée automatiquement entre dans le plan
+		//    d'action comme si elle était publiée manuellement).
+		var toOpen []models.EvaluationSession
+		database.DB.
 			Where("status = ? AND auto_open = ? AND open_at IS NOT NULL AND open_at <= ?",
 				"draft", true, now).
-			Updates(map[string]interface{}{"status": "open", "updated_at": now})
-		if result1.RowsAffected > 0 {
-			log.Printf("[SCHEDULER] %d session(s) ouverte(s) automatiquement", result1.RowsAffected)
+			Find(&toOpen)
+		if len(toOpen) > 0 {
+			openIDs := make([]string, len(toOpen))
+			for i, s := range toOpen {
+				openIDs[i] = s.ID
+			}
+			database.DB.Model(&models.EvaluationSession{}).
+				Where("id IN ?", openIDs).
+				Updates(map[string]interface{}{"status": "open", "updated_at": now})
+			log.Printf("[SCHEDULER] %d session(s) ouverte(s) automatiquement", len(toOpen))
+			for i := range toOpen {
+				toOpen[i].Status = "open"
+				handlers.PDAAutoSubscribe(toOpen[i])
+			}
 		}
 
 		// 2. Clôturer automatiquement les sessions open dont CloseAt est passé

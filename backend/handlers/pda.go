@@ -37,6 +37,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -588,6 +589,152 @@ func DeletePDAExam(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// === Liaison automatique sessions ↔ plan d'action ===
+//
+// Le plan suit TOUTES les évaluations de l'année : une session de
+// composition mensuelle ACTIVE (open/closed/validated) entre donc
+// automatiquement dans le plan, sans double saisie côté utilisateur :
+//   - à la création (CreateSession / BulkCreateSessions) ;
+//   - à la publication d'un brouillon (UpdateSessionStatus draft→open) ;
+//   - à l'ouverture automatique (scheduler main.go).
+//
+// Idempotent : une session déjà suivie n'est jamais dupliquée (même unicité
+// par session que CreatePDAExam). Le seuil est le défaut du plan (50 % du
+// barème). Les brouillons (draft) restent exclus — même règle que
+// CreatePDAExam — pour que le plan ne suive que des évaluations réelles.
+func pdaAutoSubscribeSession(s *models.EvaluationSession) {
+	if s == nil || s.EvalType != "composition" {
+		return
+	}
+	if s.Status == "draft" || s.Status == "cancelled" {
+		return
+	}
+	var count int64
+	database.DB.Model(&models.PDAExam{}).Where("session_id = ?", s.ID).Count(&count)
+	if count > 0 {
+		return // déjà suivie
+	}
+	exam := models.PDAExam{
+		SchoolID:  s.SchoolID,
+		Kind:      models.PDAKindComposition,
+		SessionID: &s.ID,
+		Number:    s.EvalNumber,
+		Year:      s.Year,
+		Threshold: 50,
+	}
+	if err := database.DB.Create(&exam).Error; err != nil {
+		// Non bloquant : la session existe, l'abonnement peut être refait
+		// via l'endpoint de rattrapage (BackfillPDAExams).
+		log.Printf("[PDA] auto-abonnement composition N°%d (%d, école %s) échoué : %v",
+			s.EvalNumber, s.Year, s.SchoolID, err)
+		return
+	}
+	log.Printf("[PDA] Composition N°%d (%d) ajoutée au plan d'action (auto, école %s)",
+		s.EvalNumber, s.Year, s.SchoolID)
+}
+
+// PDAAutoSubscribe — wrapper exporté pour le scheduler de main.go
+// (ouverture automatique des brouillons : voir pdaAutoSubscribeSession).
+func PDAAutoSubscribe(s models.EvaluationSession) {
+	pdaAutoSubscribeSession(&s)
+}
+
+// pdaUnsubscribeSession — retire du plan l'évaluation liée à une session
+// supprimée (hard delete : DeleteSession / CancelSession). La composition
+// n'existe plus : garder une entrée orpheline laisserait une colonne vide
+// et trompeuse dans le plan et le suivi pluriannuel. Cascade identique à
+// DeletePDAExam (résultats + remédiation) ; les notes du module Notes ne
+// sont pas concernées (déjà supprimées par la suppression de session).
+func pdaUnsubscribeSession(sessionID string) {
+	var exams []models.PDAExam
+	if err := database.DB.Where("session_id = ?", sessionID).Find(&exams).Error; err != nil || len(exams) == 0 {
+		return
+	}
+	for _, e := range exams {
+		exam := e
+		if err := database.DB.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("exam_id = ?", exam.ID).Delete(&models.PDAResult{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("exam_id = ?", exam.ID).Delete(&models.PDARemediation{}).Error; err != nil {
+				return err
+			}
+			return tx.Delete(&exam).Error
+		}); err != nil {
+			log.Printf("[PDA] retrait de l'évaluation du plan (session %s) échoué : %v", sessionID, err)
+			return
+		}
+		log.Printf("[PDA] évaluation du plan retirée (session %s supprimée)", sessionID)
+	}
+}
+
+// === Rattrapage : suivre les compositions existantes non suivies ===
+// POST /api/pda/exams/backfill?school_id=
+//
+// Abonne au plan d'action toutes les sessions de composition actives
+// (open/closed/validated) d'une école qui ne sont pas encore suivies —
+// couvre les sessions créées AVANT l'introduction de l'auto-abonnement.
+// Idempotent : les sessions déjà suivies sont comptées « skipped ».
+// RBAC : ModuleGrades write (route) ; director/teacher limités à leur
+// école (pdaSchoolScopeForUser), admin/inspector doivent passer school_id.
+func BackfillPDAExams(w http.ResponseWriter, r *http.Request) {
+	schoolID := r.URL.Query().Get("school_id")
+	switch ctxRole(r) {
+	case models.RoleDirector, models.RoleTeacher:
+		schoolID = pdaSchoolScopeForUser(r)
+	}
+	if schoolID == "" {
+		middleware.JSONError(w, "school_id est requis", http.StatusBadRequest)
+		return
+	}
+	var school models.School
+	if err := database.DB.First(&school, "id = ?", schoolID).Error; err != nil {
+		middleware.JSONError(w, "école introuvable", http.StatusBadRequest)
+		return
+	}
+	var sessions []models.EvaluationSession
+	if err := database.DB.
+		Where("school_id = ? AND eval_type = ? AND status IN ?",
+			schoolID, "composition", []string{"open", "closed", "validated"}).
+		Order("year ASC, eval_number ASC").Find(&sessions).Error; err != nil {
+		middleware.JSONError(w, "erreur récupération compositions", http.StatusInternalServerError)
+		return
+	}
+	created := 0
+	skipped := 0
+	for i := range sessions {
+		s := &sessions[i]
+		var count int64
+		database.DB.Model(&models.PDAExam{}).Where("session_id = ?", s.ID).Count(&count)
+		if count > 0 {
+			skipped++
+			continue
+		}
+		exam := models.PDAExam{
+			SchoolID:  s.SchoolID,
+			Kind:      models.PDAKindComposition,
+			SessionID: &s.ID,
+			Number:    s.EvalNumber,
+			Year:      s.Year,
+			Threshold: 50,
+		}
+		if err := database.DB.Create(&exam).Error; err != nil {
+			log.Printf("[PDA] backfill composition N°%d (%d) échoué : %v", s.EvalNumber, s.Year, err)
+			continue
+		}
+		created++
+	}
+	log.Printf("[PDA] backfill école %s : %d composition(s) ajoutée(s), %d déjà suivie(s)",
+		schoolID, created, skipped)
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"status":    "ok",
+		"school_id": schoolID,
+		"eligible":  len(sessions),
+		"created":   created,
+		"skipped":   skipped,
+	})
+}
+
 // === Résultats d'une classe pour une évaluation du plan ===
 // GET /api/pda/exams/{id}/results?class_id=
 // Retourne le roster complet de la classe avec les notes (saisies pour un
@@ -1096,13 +1243,17 @@ func GetPDASummary(w http.ResponseWriter, r *http.Request) {
 // d'étude de chaque élève dans les matières désignées, évaluation après
 // évaluation.
 type pdaTimelineEval struct {
-	ID            string     `json:"id"`
-	Kind          string     `json:"kind"`
-	Label         string     `json:"label"`
-	ShortLabel    string     `json:"short_label"`
-	Number        int        `json:"number"`
-	Year          int        `json:"year"`
-	Month         *int       `json:"month,omitempty"`
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Label      string `json:"label"`
+	ShortLabel string `json:"short_label"`
+	Number     int    `json:"number"`
+	Year       int    `json:"year"`
+	Month      *int   `json:"month,omitempty"`
+	// SessionStatus — statut de la session de composition liée
+	// (open/closed/validated/archived). Vide si session introuvable
+	// (orpheline, donnée antérieure à la cascade) ou examen blanc.
+	SessionStatus string     `json:"session_status,omitempty"`
 	Threshold     int        `json:"threshold"`
 	ReadOnly      bool       `json:"read_only"`
 	SubjectMaxes  [3]float64 `json:"subject_maxes"`
@@ -1213,14 +1364,16 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Métadonnées de session (mois) pour les compositions.
+	// Métadonnées de session (mois + statut) pour les compositions.
 	sessMonth := map[string]int{}
+	sessStatus := map[string]string{}
 	if len(compSessionIDs) > 0 {
 		var sessions []models.EvaluationSession
-		if err := database.DB.Select("id, month").
+		if err := database.DB.Select("id, month, status").
 			Where("id IN ?", compSessionIDs).Find(&sessions).Error; err == nil {
 			for _, s := range sessions {
 				sessMonth[s.ID] = s.Month
+				sessStatus[s.ID] = s.Status
 			}
 		}
 	}
@@ -1252,6 +1405,15 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 		if e.Kind == models.PDAKindComposition && e.SessionID != nil {
 			m := sessMonth[*e.SessionID]
 			te.Month = &m
+			te.SessionStatus = sessStatus[*e.SessionID]
+			if te.SessionStatus == "" {
+				// Session liée introuvable (supprimée avant la cascade PDA —
+				// donnée antérieure à pdaUnsubscribeSession). Ne peut plus
+				// produire aucune note : signaler plutôt que laisser une
+				// colonne vide silencieuse.
+				warnings = append(warnings, fmt.Sprintf(
+					"Composition N°%d : la session liée est introuvable (supprimée) — retirez cette évaluation du plan.", e.Number))
+			}
 			if m >= 1 && m <= 12 {
 				te.Label = fmt.Sprintf("Composition N°%d — %s %d", e.Number, pdaMonthsFr[m-1], e.Year)
 			} else {
@@ -1339,6 +1501,21 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// École + IEP pour l'en-tête officiel du document pluriannuel imprimé
+	// (même convention que GetPDASummary — le frontend ne recalcule rien).
+	var school models.School
+	if err := database.DB.First(&school, "id = ?", cls.SchoolID).Error; err != nil {
+		middleware.JSONError(w, "école introuvable", http.StatusInternalServerError)
+		return
+	}
+	var iep *models.IEP
+	if school.IEPID != "" {
+		var i models.IEP
+		if err := database.DB.First(&i, "id = ?", school.IEPID).Error; err == nil {
+			iep = &i
+		}
+	}
+
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"class":       map[string]interface{}{"id": cls.ID, "name": cls.Name, "level": cls.Level},
 		"year":        year,
@@ -1346,6 +1523,8 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 		"students":    studentsOut,
 		"subjects":    subjectsOut,
 		"warnings":    warnings,
+		"school":      map[string]interface{}{"id": school.ID, "name": school.Name, "code": school.Code},
+		"iep":         iep,
 		"count":       len(studentsOut),
 	})
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar,
+  CalendarRange,
   Plus,
   Loader2,
   Lock,
@@ -26,7 +27,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { sessionsApi, classesApi, schoolsApi } from "@/lib/api";
+import { sessionsApi, classesApi, schoolsApi, pdaApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import {
@@ -135,6 +136,22 @@ export function SessionsView() {
     queryFn: () =>
       sessionsApi.list({ view: statusFilter }),
   });
+  // Liaison plan d'action IEPP : les compositions actives entrent
+  // automatiquement dans le plan (auto-abonnement côté backend) — on
+  // marque ici les sessions déjà suivies (module Résultats → PDA).
+  const { data: pdaExamsData } = useQuery({
+    queryKey: ["pda-exams", "sessions-view"],
+    queryFn: () => pdaApi.listExams(),
+  });
+  const pdaSessionIds = useMemo(
+    () =>
+      new Set(
+        (pdaExamsData?.exams ?? [])
+          .map((e) => e.session_id)
+          .filter((v): v is string => !!v),
+      ),
+    [pdaExamsData],
+  );
   const { data: classesData } = useQuery({
     queryKey: ["classes"],
     queryFn: () => classesApi.list(),
@@ -491,6 +508,18 @@ export function SessionsView() {
                         {s.archived_by === "system-cron" ? " (auto fin d'année)" : " (manuel)"}
                         {" — notes conservées pour le bilan annuel"}
                       </span>
+                    </div>
+                  )}
+
+                  {/* Badge plan d'action : la composition est suivie par le
+                      plan (auto-abonnement — module Résultats → PDA). */}
+                  {s.eval_type === "composition" && pdaSessionIds.has(s.id) && (
+                    <div
+                      className="mb-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      title="Cette composition est suivie par le plan d'action IEPP (module Résultats)"
+                    >
+                      <CalendarRange className="w-3 h-3" />
+                      Plan d&apos;action IEPP
                     </div>
                   )}
 

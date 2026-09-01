@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarRange,
+  FileText,
   Loader2,
   Printer,
   Table2,
@@ -23,6 +24,7 @@ import { classesApi, pdaApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import type { PdaTimelineCell } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { PdaTimelineDocument } from "@/components/views/pda-timeline-document";
 import {
   Card,
   CardContent,
@@ -93,6 +95,9 @@ export function PdaTimelineView() {
   );
   const [classId, setClassId] = useState<string>("");
   const [year, setYear] = useState<string>(String(new Date().getFullYear()));
+  // Document officiel plein écran (même pattern que le plan d'action :
+  // le composant se rend à la place de la vue).
+  const [showDoc, setShowDoc] = useState(false);
 
   const hasSchool = schoolFilter !== "" && schoolFilter !== "all";
   const yearNum = Number(year);
@@ -129,6 +134,17 @@ export function PdaTimelineView() {
   const evaluations = data?.evaluations ?? [];
   const students = data?.students ?? [];
   const subjects = data?.subjects ?? [];
+
+  // Document officiel du suivi pluriannuel (A4 paysage, en-tête ministériel).
+  if (showDoc && classId && Number.isFinite(yearNum)) {
+    return (
+      <PdaTimelineDocument
+        classId={classId}
+        year={yearNum}
+        onClose={() => setShowDoc(false)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -208,7 +224,16 @@ export function PdaTimelineView() {
               />
             </div>
 
-            <div className="flex items-center sm:ml-auto">
+            <div className="flex items-center gap-2 sm:ml-auto">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!data || evaluations.length === 0}
+                onClick={() => setShowDoc(true)}
+              >
+                <FileText className="w-4 h-4 mr-1.5" />
+                Document officiel
+              </Button>
               <Button
                 size="sm"
                 variant="outline"

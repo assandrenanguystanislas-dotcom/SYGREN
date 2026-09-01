@@ -282,6 +282,10 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Plan d'action IEPP : toute composition active entre automatiquement
+	// dans le plan (les brouillons y entreront à leur publication).
+	pdaAutoSubscribeSession(&session)
+
 	// Examen Blanc : seul le CM2 passe l'Examen Blanc. On exempté
 	// automatiquement toutes les autres classes (CP1, CP2, CE1, CE2, CM1)
 	// pour qu'elles n'apparaissent pas dans les résultats ni la saisie.
@@ -498,6 +502,9 @@ func BulkCreateSessions(w http.ResponseWriter, r *http.Request) {
 			failed = append(failed, sch.Name)
 			continue
 		}
+
+		// Plan d'action IEPP : auto-abonnement des compositions actives.
+		pdaAutoSubscribeSession(&session)
 
 		// Examen Blanc : exempter automatiquement les classes non-CM2
 		if req.EvalType == "exam_blanc" {
@@ -793,6 +800,12 @@ func UpdateSessionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Publication d'un brouillon : la composition entre automatiquement dans
+	// le plan d'action (l'auto-abonnement exclut les brouillons à la création).
+	if req.Status == "open" && session.EvalType == "composition" {
+		pdaAutoSubscribeSession(&session)
+	}
+
 	// Si validation : marquer toutes les notes comme non-brouillon
 	if req.Status == "validated" {
 		database.DB.Model(&models.Grade{}).
@@ -814,6 +827,9 @@ func DeleteSession(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
 		return
 	}
+	// Cascade PDA : si la composition était suivie par le plan d'action,
+	// l'évaluation liée est retirée (plus d'entrée orpheline).
+	pdaUnsubscribeSession(id)
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -895,6 +911,8 @@ func CancelSession(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[CANCEL→DELETE] Session %s supprimée par %s (%s) — hard delete (notes+exemptions+moyennes supprimées)",
 		id, userID, role)
+	// Cascade PDA : retrait de l'évaluation du plan d'action liée à la session.
+	pdaUnsubscribeSession(id)
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

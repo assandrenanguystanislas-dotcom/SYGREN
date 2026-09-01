@@ -776,6 +776,9 @@ export interface PdaTimelineEvaluation {
   number: number;
   year: number;
   month?: number | null;
+  // Statut de la session de composition liée (open/closed/validated/
+  // archived). Absent si session orpheline ou examen blanc.
+  session_status?: string;
   threshold: number;
   read_only: boolean;
   subject_maxes: [number, number, number];
@@ -818,5 +821,18 @@ export interface PdaTimelineResponse {
   students: PdaTimelineStudent[];
   subjects: PdaTimelineSubject[];
   warnings: string[];
+  // École + IEP pour l'en-tête officiel du document imprimable.
+  school?: { id: string; name: string; code: string };
+  iep?: PdaIepInfo | null;
   count: number;
+}
+
+// Rattrapage (POST /api/pda/exams/backfill) — abonne les compositions
+// actives non suivies d'une école (idempotent).
+export interface PdaBackfillResponse {
+  status: string;
+  school_id: string;
+  eligible: number;
+  created: number;
+  skipped: number;
 }

@@ -366,3 +366,31 @@
     box-shadow: none !important;
   }
 }
+
+/* === PDA IEPP — Document officiel du suivi pluriannuel (A4 paysage) ===
+ * Version « document officiel » de la matrice : en-tête ministériel + titre
+ * normalisé + matrice en encre + signatures. Même technique d'isolement
+ * (la règle body * { visibility: hidden } commune cache tout le reste).
+ * Réutilise la page nommée pda-timeline (A4 paysage, marge 8mm). */
+@media print {
+  #pda-tl-doc,
+  #pda-tl-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #pda-tl-doc {
+    background: white !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 4mm 6mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    page: pda-timeline;
+  }
+}

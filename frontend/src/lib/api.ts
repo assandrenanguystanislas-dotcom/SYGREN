@@ -54,6 +54,7 @@ import type {
   PdaRemediation,
   PdaSummary,
   PdaTimelineResponse,
+  PdaBackfillResponse,
   PdaExamKind,
 } from "./types";
 
@@ -1067,6 +1068,14 @@ export const pdaApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  /** Rattrapage : abonne au plan toutes les compositions actives non suivies
+   *  de l'école (idempotent — les sessions déjà suivies sont ignorées). */
+  backfillExams: (schoolId: string) =>
+    apiFetch<PdaBackfillResponse>(
+      `/api/pda/exams/backfill?school_id=${encodeURIComponent(schoolId)}`,
+      { method: "POST" },
+    ),
 
   /** Supprime un examen blanc (cascade résultats + remédiation). */
   deleteExam: (id: string) =>

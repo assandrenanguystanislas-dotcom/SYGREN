@@ -19,6 +19,7 @@ import {
   CalendarPlus,
   ClipboardCheck,
   FileText,
+  ListPlus,
   Loader2,
   Save,
   ScrollText,
@@ -218,6 +219,30 @@ export function PdaView() {
 
   const readOnly = resultsData?.read_only ?? false;
   const subjects: PdaSubjectInfo[] = resultsData?.subjects ?? [];
+
+  // Rattrapage : abonner au plan les compositions actives non suivies
+  // (sessions créées avant l'auto-abonnement). Idempotent.
+  const backfillMutation = useMutation({
+    mutationFn: () => pdaApi.backfillExams(schoolFilter),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["pda-exams", schoolFilter] });
+      if (res.created > 0) {
+        toast.success(
+          `${res.created} composition(s) ajoutée(s) au plan d'action`,
+          { description: `${res.skipped} déjà suivie(s) sur ${res.eligible} éligible(s).` },
+        );
+      } else {
+        toast.info("Aucune composition à ajouter", {
+          description:
+            "Toutes les compositions actives de l'école sont déjà suivies par le plan.",
+        });
+      }
+    },
+    onError: (e) =>
+      toast.error("Erreur", {
+        description: e instanceof Error ? e.message : "Erreur inconnue",
+      }),
+  });
 
   // === État local de la grille (dérivation + override — zéro effet) ===
   // serverRows : dérivé de la réponse serveur. override : saisie locale en
@@ -438,6 +463,20 @@ export function PdaView() {
                   onClick={() => setShowCreate(true)}
                 >
                   <CalendarPlus className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="shrink-0"
+                  title="Suivre les compositions mensuelles actives non encore suivies (rattrapage)"
+                  disabled={!hasSchool || backfillMutation.isPending}
+                  onClick={() => backfillMutation.mutate()}
+                >
+                  {backfillMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ListPlus className="w-4 h-4" />
+                  )}
                 </Button>
                 <Button
                   size="icon"
