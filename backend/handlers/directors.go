@@ -72,6 +72,8 @@ type CreateDirectorRequest struct {
 	Email    *string `json:"email,omitempty"`
 	Password string  `json:"password"`
 	SchoolID *string `json:"school_id,omitempty"` // école dirigée (optionnel à la création, mais recommandé)
+	// Dossier personnel (état nominatif) — optionnel, voir personnel.go
+	Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
 }
 
 // CreateDirector creates a director account.
@@ -142,6 +144,12 @@ func CreateDirector(w http.ResponseWriter, r *http.Request) {
 		SchoolID: req.SchoolID,
 		Active:   true,
 	}
+	if req.Personnel != nil {
+		if err := req.Personnel.applyTo(&director); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	if err := database.DB.Create(&director).Error; err != nil {
 		middleware.JSONError(w, "erreur création directeur", http.StatusInternalServerError)
 		return
@@ -160,6 +168,9 @@ func UpdateDirector(w http.ResponseWriter, r *http.Request) {
 		Password string  `json:"password,omitempty"`
 		SchoolID *string `json:"school_id,omitempty"`
 		Active   *bool   `json:"active,omitempty"`
+		// Dossier personnel (état nominatif) — nil = non touché,
+		// non-nil = mise à jour complète (voir personnel.go)
+		Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
@@ -169,6 +180,12 @@ func UpdateDirector(w http.ResponseWriter, r *http.Request) {
 	if err := database.DB.First(&director, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "directeur introuvable", http.StatusNotFound)
 		return
+	}
+	if req.Personnel != nil {
+		if err := req.Personnel.applyTo(&director); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	if req.FullName != "" {
 		director.FullName = req.FullName

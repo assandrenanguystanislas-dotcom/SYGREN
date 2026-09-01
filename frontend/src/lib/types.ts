@@ -17,7 +17,51 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin: "Administration globale du système SYGREN",
 };
 
-export interface User {
+// === Dossier personnel (module Utilisateurs — ÉTAT NOMINATIF DU PERSONNEL) ===
+
+export type SexeCode = "F" | "G";
+export type CategorieCode = "IO" | "IA" | "IS" | "IAS";
+export type FonctionCode = "DIRECTEUR" | "ADJOINT(E)";
+
+/** Dossier administratif d'un agent (directeur ou enseignant).
+ *  Les dates sérialisées par l'API sont RFC3339 ("1980-05-12T00:00:00Z") ;
+ *  dans les payloads create/update elles partent en "YYYY-MM-DD" ou null. */
+export interface PersonnelDossier {
+  matricule?: string | null;
+  sexe?: SexeCode | null;
+  date_naissance?: string | null;
+  lieu_naissance?: string | null;
+  categorie?: CategorieCode | null;
+  classe_grade?: number | null; // classe administrative 1..4
+  echelon?: number | null; // échelon 1..4
+  date_entree_fp?: string | null; // entrée à la Fonction Publique
+  fonction?: FonctionCode | null;
+  date_entree_dren?: string | null;
+  date_entree_iep?: string | null;
+  effectif_f?: number | null; // effectif du cours tenu — Filles
+  effectif_g?: number | null; // — Garçons
+  effectif_t?: number | null; // — Total
+  redoublant_f?: number | null; // redoublants — Filles
+  redoublant_g?: number | null; // — Garçons
+  redoublant_t?: number | null; // — Total
+}
+
+/** Payload du dossier (création / mise à jour complète — voir personnel.go). */
+export type PersonnelDossierInput = PersonnelDossier;
+
+/** Dossier par défaut (formulaire vierge). */
+export const EMPTY_PERSONNEL: PersonnelDossier = {};
+
+/** « jj/mm/aaaa » depuis une date API (RFC3339) — sans objet Date, donc
+ *  aucun décalage de fuseau possible. */
+export function formatDossierDate(iso?: string | null): string {
+  if (!iso || iso.length < 10) return "";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  if (!y || !m || !d) return "";
+  return `${d}/${m}/${y}`;
+}
+
+export interface User extends PersonnelDossier {
   id: string;
   phone?: string | null;
   email?: string | null;
@@ -305,6 +349,35 @@ export interface TeacherWithDetails extends User {
 export interface DirectorWithDetails extends User {
   school_name?: string;
   iep_name?: string;
+}
+
+// === ÉTAT NOMINATIF DU PERSONNEL (module Utilisateurs) ===
+
+/** Agent enrichi pour le document (cours tenu résolu côté serveur). */
+export interface PersonnelStaffRow extends PersonnelDossier {
+  id: string;
+  full_name: string;
+  role: Role;
+  phone?: string | null;
+  email?: string | null;
+  active: boolean;
+  class_name?: string; // cours tenu (CP1..CM2)
+}
+
+/** Données complètes du document « ÉTAT NOMINATIF DU PERSONNEL ».
+ *  annee_scolaire = "2025 2026" (rentrée en cours). */
+export interface PersonnelSheet {
+  school: { id: string; name: string; code: string };
+  iep: {
+    name: string;
+    region: string;
+    bp: string;
+    inspector_phone: string;
+    inspector_email: string;
+  };
+  annee_scolaire: string;
+  staff: PersonnelStaffRow[];
+  count: number;
 }
 
 // Inspecteur IEP (User avec role=inspector + iep_id)

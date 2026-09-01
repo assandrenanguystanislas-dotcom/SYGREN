@@ -104,6 +104,8 @@ type CreateTeacherRequest struct {
 	Email    *string `json:"email,omitempty"`
 	Password string  `json:"password"`
 	SchoolID *string `json:"school_id,omitempty"`
+	// Dossier personnel (état nominatif) — optionnel, voir personnel.go
+	Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
 }
 
 // CreateTeacher creates a teacher account (cahier des charges §3 Module 1).
@@ -172,6 +174,12 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 		SchoolID: req.SchoolID,
 		Active:   true,
 	}
+	if req.Personnel != nil {
+		if err := req.Personnel.applyTo(&teacher); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	if err := database.DB.Create(&teacher).Error; err != nil {
 		middleware.JSONError(w, "erreur création enseignant", http.StatusInternalServerError)
 		return
@@ -191,6 +199,9 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 		Password string  `json:"password,omitempty"`
 		SchoolID *string `json:"school_id,omitempty"`
 		Active   *bool   `json:"active,omitempty"`
+		// Dossier personnel (état nominatif) — nil = non touché,
+		// non-nil = mise à jour complète (voir personnel.go)
+		Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
@@ -200,6 +211,12 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 	if err := database.DB.First(&teacher, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "enseignant introuvable", http.StatusNotFound)
 		return
+	}
+	if req.Personnel != nil {
+		if err := req.Personnel.applyTo(&teacher); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	if req.FullName != "" {
 		teacher.FullName = req.FullName

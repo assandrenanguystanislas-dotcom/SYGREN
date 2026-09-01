@@ -1,0 +1,13 @@
+/* === /personnel-doc — format d'impression de l'état nominatif ===
+ * @page PAR DÉFAUT de la route dédiée : A4 paysage, marge 5mm.
+ * PAS de page nommée (même raison que /pda-plan-doc) : le changement de
+ * contexte de page après le document génère une page blanche finale.
+ * La route est dédiée au document : le @page par défaut ne fuit sur
+ * aucune autre vue. Importé par layout.tsx (après globals.css → gagne
+ * la cascade). */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 5mm;
+  }
+}

@@ -28,6 +28,8 @@ import type {
   TeacherWithDetails,
   DirectorWithDetails,
   InspectorWithDetails,
+  PersonnelDossierInput,
+  PersonnelSheet,
   EvaluationSession,
   SessionWithDetails,
   SessionExemption,
@@ -494,6 +496,7 @@ export const teachersApi = {
     email?: string;
     password: string;
     school_id?: string;
+    personnel?: PersonnelDossierInput; // dossier « état nominatif »
   }) =>
     apiFetch<User>("/api/teachers", {
       method: "POST",
@@ -508,6 +511,7 @@ export const teachersApi = {
       password: string;
       school_id: string | null;
       active: boolean;
+      personnel: PersonnelDossierInput; // mise à jour COMPLÈTE du dossier
     }>,
   ) =>
     apiFetch<User>(`/api/teachers/${id}`, {
@@ -533,6 +537,7 @@ export const directorsApi = {
     email?: string;
     password: string;
     school_id?: string;
+    personnel?: PersonnelDossierInput; // dossier « état nominatif »
   }) =>
     apiFetch<User>("/api/directors", {
       method: "POST",
@@ -547,6 +552,7 @@ export const directorsApi = {
       password: string;
       school_id: string | null;
       active: boolean;
+      personnel: PersonnelDossierInput; // mise à jour COMPLÈTE du dossier
     }>,
   ) =>
     apiFetch<User>(`/api/directors/${id}`, {
@@ -849,6 +855,17 @@ export const dashboardApi = {
 // === Synthèse des Résultats (document officiel) ===
 
 export const reportsApi = {
+  /**
+   * Données du document « ÉTAT NOMINATIF DU PERSONNEL » (module
+   * Utilisateurs) pour une école : école + IEP (en-tête officiel), année
+   * scolaire en cours et agents (dossier personnel, cours tenu résolu).
+   * RBAC : director = son école, inspector = son IEP, admin = tout.
+   */
+  personnelSheet: (schoolId: string) =>
+    apiFetch<PersonnelSheet>(
+      `/api/reports/personnel?school_id=${encodeURIComponent(schoolId)}`,
+    ),
+
   /**
    * Liste les classes associées à une session (pour itérer et générer
    * un relevé/bulletin par classe). Endpoint utilisé par /releve/batch

@@ -15,12 +15,18 @@ import {
   Search,
   School as SchoolIcon,
   MapPin,
+  Printer,
+  IdCard,
 } from "lucide-react";
 
 import { teachersApi, schoolsApi, iepApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { TeacherWithDetails, SchoolWithStats } from "@/lib/types";
+import type {
+  TeacherWithDetails,
+  SchoolWithStats,
+  PersonnelDossier,
+} from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +41,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  PersonnelDossierFields,
+  personnelOf,
+} from "@/components/personnel-dossier-fields";
 
 interface FormData {
   full_name: string;
@@ -42,6 +52,7 @@ interface FormData {
   phone: string;
   password: string;
   school_id: string;
+  personnel: PersonnelDossier;
 }
 
 const EMPTY: FormData = {
@@ -50,6 +61,7 @@ const EMPTY: FormData = {
   phone: "",
   password: "",
   school_id: "",
+  personnel: {},
 };
 
 export function TeachersView() {
@@ -102,6 +114,7 @@ export function TeachersView() {
         phone: data.phone || null,
         password: data.password || undefined,
         school_id: data.school_id || null,
+        personnel: data.personnel, // dossier toujours envoyé (mise à jour complète)
       }),
     {
       invalidateKeys: [["teachers"], ["classes"]],
@@ -131,6 +144,7 @@ export function TeachersView() {
       phone: t.phone ?? "",
       password: "",
       school_id: t.school_id ?? "",
+      personnel: personnelOf(t),
     });
     setEditing(t);
     setDialogOpen(true);
@@ -151,6 +165,7 @@ export function TeachersView() {
             phone: form.phone || undefined,
             password: form.password,
             school_id: form.school_id || undefined,
+            personnel: form.personnel,
           },
         ]);
       }
@@ -224,10 +239,40 @@ export function TeachersView() {
               </div>
             </div>
             {canEdit && (
-              <Button onClick={openCreate} size="sm" className="shadow-sm">
-                <Plus className="w-4 h-4 mr-1.5" />
-                Créer un enseignant
-              </Button>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  // Cible de l'état nominatif : le directeur imprime son école,
+                  // admin/inspecteur l'école sélectionnée dans le filtre.
+                  const target =
+                    user?.role === "director"
+                      ? user?.school_id ?? ""
+                      : schoolFilter !== "all"
+                        ? schoolFilter
+                        : "";
+                  return (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!target}
+                      title={
+                        target
+                          ? "Imprimer l'état nominatif du personnel"
+                          : "Sélectionnez d'abord une école dans le filtre"
+                      }
+                      onClick={() =>
+                        window.open(`/personnel-doc?school=${target}`, "_blank")
+                      }
+                    >
+                      <Printer className="w-4 h-4 mr-1.5" />
+                      État nominatif
+                    </Button>
+                  );
+                })()}
+                <Button onClick={openCreate} size="sm" className="shadow-sm">
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Créer un enseignant
+                </Button>
+              </div>
             )}
           </div>
           {/* === Filtres en cascade : IEP → École → recherche ===
@@ -347,6 +392,11 @@ export function TeachersView() {
                       )}
                     </div>
                     <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {t.matricule && (
+                        <p className="flex items-center gap-1.5 font-mono">
+                          <IdCard className="w-3 h-3" /> {t.matricule}
+                        </p>
+                      )}
                       {t.email && (
                         <p className="flex items-center gap-1.5">
                           <Mail className="w-3 h-3" /> {t.email}
@@ -393,6 +443,25 @@ export function TeachersView() {
                     Classe : {t.class_name}
                   </Badge>
                 )}
+                {(t.fonction || t.categorie || t.echelon != null) && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {t.fonction && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {t.fonction === "ADJOINT(E)" ? "Adjoint(e)" : t.fonction}
+                      </Badge>
+                    )}
+                    {t.categorie && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {t.categorie}
+                      </Badge>
+                    )}
+                    {t.echelon != null && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Éch. {t.echelon}
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -406,11 +475,12 @@ export function TeachersView() {
           title={editing ? "Modifier l'enseignant" : "Créer un enseignant"}
           description={
             editing
-              ? "Modifiez les informations du compte enseignant."
+              ? "Modifiez les informations du compte enseignant et son dossier personnel."
               : "Créez un compte enseignant (login par email OU téléphone)."
           }
           icon={Users}
           loading={createMut.isPending || updateMut.isPending}
+          maxWidth="sm:max-w-2xl"
         >
           <form onSubmit={onSubmit} className="space-y-4 pt-2">
             <div className="space-y-1.5">
@@ -479,6 +549,10 @@ export function TeachersView() {
                 </SelectContent>
               </Select>
             </div>
+            <PersonnelDossierFields
+              value={form.personnel}
+              onChange={(p) => setForm({ ...form, personnel: p })}
+            />
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"

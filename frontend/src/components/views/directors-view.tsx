@@ -14,12 +14,17 @@ import {
   ShieldCheck,
   MapPin,
   Search,
+  IdCard,
 } from "lucide-react";
 
 import { directorsApi, schoolsApi, iepApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { DirectorWithDetails, SchoolWithStats } from "@/lib/types";
+import type {
+  DirectorWithDetails,
+  SchoolWithStats,
+  PersonnelDossier,
+} from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +39,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  PersonnelDossierFields,
+  personnelOf,
+} from "@/components/personnel-dossier-fields";
 
 interface FormData {
   full_name: string;
@@ -41,6 +50,7 @@ interface FormData {
   phone: string;
   password: string;
   school_id: string;
+  personnel: PersonnelDossier;
 }
 
 const EMPTY: FormData = {
@@ -49,6 +59,7 @@ const EMPTY: FormData = {
   phone: "",
   password: "",
   school_id: "",
+  personnel: {},
 };
 
 export function DirectorsView() {
@@ -97,6 +108,7 @@ export function DirectorsView() {
         phone: data.phone || null,
         password: data.password || undefined,
         school_id: data.school_id || null,
+        personnel: data.personnel, // dossier toujours envoyé (mise à jour complète)
       }),
     {
       invalidateKeys: [["directors"], ["schools"]],
@@ -122,6 +134,7 @@ export function DirectorsView() {
       phone: d.phone ?? "",
       password: "",
       school_id: d.school_id ?? "",
+      personnel: personnelOf(d),
     });
     setEditing(d);
     setDialogOpen(true);
@@ -141,6 +154,7 @@ export function DirectorsView() {
             phone: form.phone || undefined,
             password: form.password,
             school_id: form.school_id || undefined,
+            personnel: form.personnel,
           },
         ]);
       }
@@ -331,6 +345,11 @@ export function DirectorsView() {
                       )}
                     </div>
                     <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {d.matricule && (
+                        <p className="flex items-center gap-1.5 font-mono">
+                          <IdCard className="w-3 h-3" /> {d.matricule}
+                        </p>
+                      )}
                       {d.email && (
                         <p className="flex items-center gap-1.5">
                           <Mail className="w-3 h-3" /> {d.email}
@@ -384,11 +403,12 @@ export function DirectorsView() {
         title={editing ? "Modifier le directeur" : "Créer un directeur"}
         description={
           editing
-            ? "Modifiez les informations du compte directeur."
+            ? "Modifiez les informations du compte directeur et son dossier personnel."
             : "Créez un compte directeur (login par email OU téléphone)."
         }
         icon={Building2}
         loading={createMut.isPending || updateMut.isPending}
+        maxWidth="sm:max-w-2xl"
       >
         <form onSubmit={onSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
@@ -460,6 +480,10 @@ export function DirectorsView() {
               Un seul directeur actif par école.
             </p>
           </div>
+          <PersonnelDossierFields
+            value={form.personnel}
+            onChange={(p) => setForm({ ...form, personnel: p })}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"

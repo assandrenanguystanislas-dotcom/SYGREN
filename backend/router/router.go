@@ -262,6 +262,9 @@ func New(cfg *config.Config) http.Handler {
 		r.Get("/api/reports/synthese-data", handlers.GetSyntheseData)
 		r.Get("/api/reports/releve-data", handlers.GetReleveData)
 		r.Get("/api/reports/releve-classes", handlers.ListReleveClasses)
+		// Document « ÉTAT NOMINATIF DU PERSONNEL » (module Utilisateurs) :
+		// école + IEP + agents (dossier personnel) pour une école.
+		r.Get("/api/reports/personnel", handlers.GetPersonnelSheet)
 
 		// === Module 5 — Tableau de bord analytique ===
 		r.Get("/api/dashboard", handlers.GetDashboard)

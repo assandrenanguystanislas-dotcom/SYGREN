@@ -502,3 +502,38 @@
     overflow: visible !important;
   }
 }
+
+/* === ÉTAT NOMINATIF DU PERSONNEL — Print CSS (A4 paysage) ===
+ * Document du module Utilisateurs (dossier personnel des agents) :
+ * une école par document — en-tête institutionnel (armoiries), tableau
+ * 20 colonnes, ligne TOTAL calculée, signature « Le Directeur » et
+ * mention « (A RETOURNER EN 03 EXEMPLAIRES) ».
+ * Même technique d'isolement que #pda-plan-doc : route dédiée
+ * /personnel-doc (son print.css pose le @page par défaut A4 paysage),
+ * document statique en flux → haut de la page 1, tout le reste masqué
+ * par .print:hidden. */
+@media print {
+  #personnel-doc,
+  #personnel-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #personnel-doc {
+    background: white !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 3mm 4mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  /* Lignes du tableau insécables (pas de ligne coupée entre deux pages) */
+  #personnel-doc tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
