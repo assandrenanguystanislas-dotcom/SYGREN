@@ -7,8 +7,10 @@
 //   - Matricule (saisie libre)
 //   - Date et lieu de naissance — listes déroulantes JOUR / MOIS / ANNÉE + lieu
 //   - Catégorie — liste déroulante IO | IA | IS | IAS
-//   - Classe — liste déroulante 1 | 2 | 3 | 4
-//   - Échelon — liste déroulante 1 | 2 | 3 | 4
+//   - Classe — liste déroulante « Classe 1 | Classe 2 | Classe 3 | Classe 4 »
+//     (libellés EXPLICITES dans le popup — l'utilisateur a signalé lire
+//     « 1 ; 2 ; P ; E » sur des items en chiffres nus trop étroits/ambigus ;
+//     la valeur stockée reste le nombre 1..4)
 //   - Date d'entrée à la F.P — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Fonction — liste déroulante DIRECTEUR | ADJOINT(E)
 //   - Date d'entrée DREN — listes déroulantes JOUR / MOIS / ANNÉE
@@ -336,13 +338,13 @@ export function PersonnelDossierFields({
             <SelectTrigger className={small} aria-label="Classe administrative">
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="min-w-[8.5rem]">
               <SelectGroup>
-                <SelectLabel>Classe (1 · 2 · 3 · 4)</SelectLabel>
+                <SelectLabel>Classe administrative (1 · 2 · 3 · 4)</SelectLabel>
                 <SelectItem value={UNSET}>—</SelectItem>
                 {GRADES.map((n) => (
                   <SelectItem key={n} value={String(n)}>
-                    {n}
+                    {`Classe ${n}`}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -358,13 +360,13 @@ export function PersonnelDossierFields({
             <SelectTrigger className={small} aria-label="Échelon">
               <SelectValue placeholder="Choisir…" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="min-w-[8.5rem]">
               <SelectGroup>
                 <SelectLabel>Échelon (1 · 2 · 3 · 4)</SelectLabel>
                 <SelectItem value={UNSET}>—</SelectItem>
                 {GRADES.map((n) => (
                   <SelectItem key={n} value={String(n)}>
-                    {n}
+                    {`Échelon ${n}`}
                   </SelectItem>
                 ))}
               </SelectGroup>
