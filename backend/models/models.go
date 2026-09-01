@@ -74,6 +74,26 @@ func (i *IEP) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// === ExamCenter (Centre d'examen) ===
+// Lieu de regroupement des écoles pour les examens (documents officiels
+// « PLAN D'ACTION PLURIANNUEL DE L'IEPP » : la colonne CENTRES D'EXAMENS
+// groupe les lignes écoles). Rattaché à une IEP ; l'ordre d'affichage
+// (Position) respecte le classement de l'inspection dans ses documents.
+type ExamCenter struct {
+	ID        string    `gorm:"primaryKey;type:text" json:"id"`
+	IEPID     string    `gorm:"type:text;index" json:"iep_id"`
+	Name      string    `gorm:"type:text" json:"name"`     // ex : « BOUBOURY », « DABOU AGNIMEL »
+	Position  int       `gorm:"default:0" json:"position"` // ordre d'affichage dans les documents
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (c *ExamCenter) BeforeCreate(tx *gorm.DB) error {
+	if c.ID == "" {
+		c.ID = uuid.NewString()
+	}
+	return nil
+}
+
 // === School ===
 type School struct {
 	ID      string `gorm:"primaryKey;type:text" json:"id"`
@@ -85,8 +105,13 @@ type School struct {
 	// LogoPath — clé de l'objet logo dans le stockage fichiers (R2 en prod,
 	// filesystem en dev). Nullable : NULL = aucun logo. L'URL de lecture
 	// (présignée) est calculée par les handlers, jamais stockée.
-	LogoPath  *string   `gorm:"type:text" json:"logo_path,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	LogoPath *string `gorm:"type:text" json:"logo_path,omitempty"`
+	// ExamCenterID — centre d'examen de rattachement (documents officiels
+	// « PLAN D'ACTION PLURIANNUEL DE L'IEPP » : les écoles y sont groupées
+	// par CENTRES D'EXAMENS). Nullable : NULL = école non encore affectée
+	// (affichée hors groupe dans les documents IEPP).
+	ExamCenterID *string   `gorm:"type:text;index" json:"exam_center_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (s *School) BeforeCreate(tx *gorm.DB) error {
@@ -594,5 +619,8 @@ func AllModels() []interface{} {
 		&Role{}, &RoleModule{}, &AuditLog{},
 		// PDA IEPP — Plan d'Action Pluriannuel (examens blancs CE/CM)
 		&PDAExam{}, &PDAResult{}, &PDARemediation{},
+		// Centres d'examen — regroupement des écoles dans les
+		// documents officiels du plan (colonne CENTRES D'EXAMENS)
+		&ExamCenter{},
 	}
 }

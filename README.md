@@ -22,8 +22,8 @@ SYGREN/
 │   ├── main.go
 │   ├── config/               # Configuration (env, DB, JWT)
 │   ├── database/             # GORM (SQLite dev / PostgreSQL prod)
-│   ├── models/               # 9 modèles + RBAC
-│   ├── handlers/             # 23 handlers (auth, CRUD, calcul, rapports, PDA, dashboard)
+│   ├── models/               # 21 modèles + RBAC (dont ExamCenter, PDA IEPP)
+│   ├── handlers/             # 25 handlers (auth, CRUD, calcul, rapports, PDA + plan réseau, centres d'examen, dashboard)
 │   ├── router/               # Chi router + RBAC middleware
 │   ├── middleware/           # JWT auth + RequireRole + CORS
 │   ├── utils/                # JWT + bcrypt
@@ -102,6 +102,12 @@ bun run migrate:db  # (nécessite DATABASE_URL pointant vers Neon)
 | **Module 3** | Calcul des moyennes + classement (ex-aequo) + mentions automatiques | ✅ |
 | **Module 4** | Bulletins A5 (rendu navigateur + impression par lot) | ✅ |
 | **Module 5** | Tableaux de bord analytiques (KPIs + graphiques recharts) | ✅ |
+
+## 📄 Documents officiels IEPP (impression navigateur, aucun fichier serveur)
+
+- **Fiche par école** « SUIVI DU PLAN D'ACTION PLURIANNUEL — RÉSULTAT DE L'EXAMEN BLANC / COMPOSITION N°X » (A4 portrait).
+- **Suivi pluriannuel par classe** : matrice élève × évaluations (E/M/D), A4 paysage.
+- **Plan d'action pluriannuel de l'IEPP** (réseau) : sections A (maîtrise CM2 Exploitation de texte / Mathématiques) et B (difficultés, mise à niveau, remédiation) — écoles **groupées par centres d'examen** (rattachés aux écoles dans le module Écoles), sous-totaux par centre + TOTAL inspection, A4 paysage.
 
 ## 🔐 Comptes de démonstration
 

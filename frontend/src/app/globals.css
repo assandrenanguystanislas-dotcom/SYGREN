@@ -394,3 +394,34 @@
     page: pda-timeline;
   }
 }
+
+/* === PDA IEPP — Document réseau « PLAN D'ACTION PLURIANNUEL DE L'IEPP » ===
+ * Sections A + B groupées par CENTRES D'EXAMENS (architecture des documents
+ * officiels reçus) : large → A4 paysage, page nommée pda-plan, même
+ * technique d'isolement que les autres documents. */
+@media print {
+  @page pda-plan {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+  #pda-plan-doc,
+  #pda-plan-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #pda-plan-doc {
+    background: white !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 4mm 6mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    page: pda-plan;
+  }
+}

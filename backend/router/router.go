@@ -106,6 +106,18 @@ func New(cfg *config.Config) http.Handler {
 			r.Delete("/api/schools/{id}/logo", handlers.DeleteSchoolLogo)
 		})
 
+		// Centres d'examen — regroupement des écoles pour les documents
+		// officiels du plan IEPP (colonne « CENTRES D'EXAMENS »).
+		// Lecture ouverte (scope dans le handler), écriture = mêmes droits
+		// que le module Écoles dont le rattachement est l'extension naturelle.
+		r.Get("/api/exam-centers", handlers.ListExamCenters)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleSchools, "write"))
+			r.Post("/api/exam-centers", handlers.CreateExamCenter)
+			r.Put("/api/exam-centers/{id}", handlers.UpdateExamCenter)
+			r.Delete("/api/exam-centers/{id}", handlers.DeleteExamCenter)
+		})
+
 		// Classes — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/classes", handlers.ListClasses)
 		r.Group(func(r chi.Router) {
@@ -224,6 +236,10 @@ func New(cfg *config.Config) http.Handler {
 		r.Get("/api/pda/exams/{id}/remediation", handlers.GetPDARemediation)
 		r.Get("/api/pda/exams/{id}/summary", handlers.GetPDASummary)
 		r.Get("/api/pda/timeline", handlers.GetPDATimeline)
+		// Document réseau « PLAN D'ACTION PLURIANNUEL DE L'IEPP » :
+		// toutes les écoles du périmètre pour UNE évaluation
+		// (année+numéro+type), groupées par CENTRE D'EXAMEN.
+		r.Get("/api/pda/plan-action", handlers.GetPDAPlanAction)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireModule(models.ModuleGrades, "write"))
 			r.Post("/api/pda/exams", handlers.CreatePDAExam)

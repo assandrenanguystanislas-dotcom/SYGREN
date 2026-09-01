@@ -19,6 +19,7 @@ import {
   CalendarPlus,
   ClipboardCheck,
   FileText,
+  Landmark,
   ListPlus,
   Loader2,
   Save,
@@ -515,6 +516,24 @@ export function PdaView() {
             </div>
 
             <div className="flex items-center gap-2 sm:ml-auto">
+              {/* Document réseau groupé par centres d'examen — toutes les
+                  écoles du périmètre pour CETTE évaluation (année+numéro). */}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!selectedExam}
+                title="Plan d'action pluriannuel de l'IEPP — toutes les écoles groupées par centre d'examen"
+                onClick={() =>
+                  selectedExam &&
+                  window.open(
+                    `/pda-plan-doc?year=${selectedExam.year}&number=${selectedExam.number}&kind=${selectedExam.kind}`,
+                    "_blank",
+                  )
+                }
+              >
+                <Landmark className="w-4 h-4 mr-1.5" />
+                Plan IEPP (centres)
+              </Button>
               <Button
                 size="sm"
                 variant="outline"

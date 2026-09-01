@@ -59,6 +59,7 @@ export interface School {
   address: string;
   status: SchoolStatus; // public | private | community
   logo_path?: string; // clé stockage (R2 prod / FS dev) — URL calculée par l'API
+  exam_center_id?: string | null; // centre d'examen de rattachement (plan IEPP)
   created_at: string;
 }
 
@@ -267,6 +268,21 @@ export interface SchoolWithStats extends School {
   class_count: number;
   student_count: number;
   logo_url?: string; // URL présignée (TTL court) — à recharger après expiration
+  exam_center_name?: string; // résolu côté serveur (liste des écoles)
+}
+
+// === Centres d'examen (documents officiels du plan IEPP) ===
+
+export interface ExamCenter {
+  id: string;
+  iep_id: string;
+  name: string;
+  position: number; // ordre d'affichage dans les documents
+  created_at: string;
+}
+
+export interface ExamCenterWithStats extends ExamCenter {
+  school_count: number;
 }
 
 export interface ClassWithDetails extends SchoolClass {
@@ -762,6 +778,65 @@ export interface PdaRemediation {
   remediation_total: number;
   remediation_garcons: number;
   remediation_filles: number;
+}
+
+// === Document réseau « PLAN D'ACTION PLURIANNUEL DE L'IEPP » ===
+// (GET /api/pda/plan-action) — toutes les écoles du périmètre pour UNE
+// évaluation (année + numéro + type), groupées par CENTRE D'EXAMEN.
+
+// Effectifs Total | Filles (architecture de la section B du document reçu)
+export interface PdaPlanCountTF {
+  total: number;
+  filles: number;
+  garcons: number;
+}
+
+// Stats de maîtrise d'une discipline (section A) — colonnes du modèle
+// officiel : Total | Filles | Présents | % Admis | Admis (Filles) | % Admis (Filles)
+export interface PdaPlanDisciplineStats {
+  presents: PdaCountRow;
+  admis: PdaCountRow;
+  pct_admis: number; // Admis / Présents
+  pct_admis_filles: number; // Admises / Filles présentes
+}
+
+// Une ligne école des sections A et B (et l'agrégat TOTAL d'un groupe)
+export interface PdaPlanSchoolRow {
+  school_id: string;
+  school_name: string;
+  class_id?: string;
+  has_data: boolean; // évaluation suivie + classe CM2 + notes
+  inscrits: PdaCountRow;
+  disciplines: {
+    exploitation: PdaPlanDisciplineStats;
+    math: PdaPlanDisciplineStats;
+  };
+  difficultes: PdaPlanCountTF;
+  mise_a_niveau: PdaPlanCountTF;
+  remediation: PdaPlanCountTF;
+}
+
+// Un groupe CENTRE D'EXAMEN (les écoles non affectées forment le groupe
+// final « (Sans centre d'examen) », id="")
+export interface PdaPlanCenterGroup {
+  id: string;
+  name: string;
+  position: number;
+  schools: PdaPlanSchoolRow[];
+  totals: PdaPlanSchoolRow;
+}
+
+export interface PdaPlanActionResponse {
+  year: number;
+  number: number;
+  kind: PdaExamKind;
+  exam_date?: string; // date la plus fréquente chez les écoles concernées
+  session_month?: number; // mois des compositions (le plus fréquent)
+  iep: PdaIepInfo | null; // null = périmètre multi-IEP
+  centers: PdaPlanCenterGroup[];
+  grand_total: PdaPlanSchoolRow;
+  warnings: string[];
+  count: number; // nombre d'écoles du périmètre
 }
 
 // === Suivi pluriannuel (GET /api/pda/timeline) — matrice élève × évaluations ===

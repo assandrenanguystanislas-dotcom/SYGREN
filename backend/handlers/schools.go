@@ -30,6 +30,9 @@ type SchoolWithStats struct {
 	// LogoURL — URL de lecture présignée (R2) ou chemin public (dev),
 	// calculée par le handler à partir de LogoPath (jamais stockée en DB).
 	LogoURL string `json:"logo_url,omitempty"`
+	// ExamCenterName — nom du centre d'examen de rattachement (documents
+	// officiels du plan IEPP), résolu en masse par ListSchools.
+	ExamCenterName string `json:"exam_center_name,omitempty"`
 }
 
 // ListSchools returns schools filtered by the user's scope.
@@ -86,6 +89,28 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Noms des centres d'examen : 1 requête IN (...) (pattern anti-N+1,
+	// même convention que les noms d'IEP ci-dessus) — affichés sur les
+	// cartes écoles et utilisés par le filtre « centre d'examen ».
+	centerName := make(map[string]string)
+	centerIDs := make([]string, 0, len(schools))
+	centerSeen := make(map[string]bool, len(schools))
+	for _, s := range schools {
+		if s.ExamCenterID != nil && *s.ExamCenterID != "" && !centerSeen[*s.ExamCenterID] {
+			centerSeen[*s.ExamCenterID] = true
+			centerIDs = append(centerIDs, *s.ExamCenterID)
+		}
+	}
+	if len(centerIDs) > 0 {
+		var centers []models.ExamCenter
+		if err := database.DB.Select("id", "name").Where("id IN ?", centerIDs).Find(&centers).Error; err != nil {
+			log.Println("[schools] enrichissement centres d'examen:", err)
+		}
+		for _, c := range centers {
+			centerName[c.ID] = c.Name
+		}
+	}
+
 	// Compteurs : 2 agrégats GROUP BY au lieu de 2 requêtes par école
 	// NB : une slice DISTINCTE par Scan — gorm Scan RÉUTILISE la slice
 	// passée en paramètre si sa capacité est non nulle (scan.go : « the
@@ -135,6 +160,9 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
 			ClassCount:   classCounts[s.ID],
 			StudentCount: studentCounts[s.ID],
 		}
+		if s.ExamCenterID != nil && *s.ExamCenterID != "" {
+			stats.ExamCenterName = centerName[*s.ExamCenterID]
+		}
 		if s.LogoPath != nil && *s.LogoPath != "" && storage.Global != nil {
 			if u, err := storage.Global.PresignURL(r.Context(), *s.LogoPath); err == nil {
 				stats.LogoURL = u
@@ -165,6 +193,27 @@ type CreateSchoolRequest struct {
 	Name    string `json:"name"`
 	Address string `json:"address"`
 	Status  string `json:"status"` // public | private | community
+	// ExamCenterID — rattachement au centre d'examen (documents du plan IEPP).
+	// Pointeur pour distinguer « absent » (inchangé) de « vide » (détacher).
+	ExamCenterID *string `json:"exam_center_id,omitempty"`
+}
+
+// resolveExamCenter — valide le rattachement d'une école à un centre
+// d'examen. Règles : "" = détacher (nil) ; sinon le centre doit exister ET
+// appartenir à la même IEP que l'école (les documents officiels groupent
+// les écoles PAR centre au sein d'une IEP).
+func resolveExamCenter(centerID string, iepID string) (*string, error) {
+	if centerID == "" {
+		return nil, nil
+	}
+	var center models.ExamCenter
+	if err := database.DB.First(&center, "id = ?", centerID).Error; err != nil {
+		return nil, fmt.Errorf("centre d'examen introuvable")
+	}
+	if center.IEPID != iepID {
+		return nil, fmt.Errorf("ce centre d'examen appartient à une autre IEP")
+	}
+	return &center.ID, nil
 }
 
 // CreateSchool creates a new school (admin only).
@@ -207,6 +256,15 @@ func CreateSchool(w http.ResponseWriter, r *http.Request) {
 		Name:    req.Name,
 		Address: req.Address,
 		Status:  req.Status,
+	}
+	// Rattachement optionnel au centre d'examen (documents du plan IEPP).
+	if req.ExamCenterID != nil {
+		centerID, err := resolveExamCenter(*req.ExamCenterID, req.IEPID)
+		if err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		school.ExamCenterID = centerID
 	}
 	if err := database.DB.Create(&school).Error; err != nil {
 		middleware.JSONError(w, "erreur création école", http.StatusInternalServerError)
@@ -269,6 +327,16 @@ func UpdateSchool(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		school.Status = req.Status
+	}
+	// Centre d'examen : nil = inchangé, "" = détacher, sinon rattacher
+	// (le centre doit exister et appartenir à l'IEP de l'école).
+	if req.ExamCenterID != nil {
+		centerID, err := resolveExamCenter(*req.ExamCenterID, school.IEPID)
+		if err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		school.ExamCenterID = centerID
 	}
 	if err := database.DB.Save(&school).Error; err != nil {
 		middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)

@@ -17,10 +17,17 @@ import {
   Check,
   X,
   Search,
+  Landmark,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { schoolsApi, iepApi, classesApi, teachersApi } from "@/lib/api";
+import {
+  schoolsApi,
+  iepApi,
+  classesApi,
+  teachersApi,
+  examCentersApi,
+} from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type {
@@ -29,6 +36,7 @@ import type {
   ClassWithDetails,
   TeacherWithDetails,
   SchoolStatus,
+  ExamCenterWithStats,
 } from "@/lib/types";
 import { SCHOOL_STATUS_LABELS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +66,7 @@ interface FormData {
   name: string;
   address: string;
   status: SchoolStatus;
+  exam_center_id: string; // "" = aucun centre (sentinel UI __none__)
 }
 
 const EMPTY: FormData = {
@@ -66,6 +75,7 @@ const EMPTY: FormData = {
   name: "",
   address: "",
   status: "public",
+  exam_center_id: "",
 };
 
 export function SchoolsView() {
@@ -81,6 +91,12 @@ export function SchoolsView() {
     queryFn: iepApi.list,
     enabled: canEdit,
   });
+  // Centres d'examen (documents officiels du plan IEPP) — le backend
+  // renvoie déjà le périmètre du user (admin : tous, directeur : le sien).
+  const { data: centersData } = useQuery({
+    queryKey: ["exam-centers"],
+    queryFn: examCentersApi.list,
+  });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolWithStats | null>(null);
@@ -88,27 +104,31 @@ export function SchoolsView() {
   const [deleteTarget, setDeleteTarget] = useState<SchoolWithStats | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | SchoolStatus>("all");
+  const [centerFilter, setCenterFilter] = useState<string>("all");
   const [expandedSchoolId, setExpandedSchoolId] = useState<string | null>(null);
+  const [centersOpen, setCentersOpen] = useState(false);
   const [logoOpen, setLogoOpen] = useState(false);
   const [logoTarget, setLogoTarget] = useState<SchoolWithStats | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const createMut = useCrudMutation(schoolsApi.create, {
-    invalidateKeys: [["schools"], ["iep"]],
+    invalidateKeys: [["schools"], ["iep"], ["exam-centers"]],
     successMessage: "École créée avec succès",
     actionLabel: "Création",
   });
   const updateMut = useCrudMutation(
     (id: string, data: FormData) => schoolsApi.update(id, data),
     {
-      invalidateKeys: [["schools"]],
+      // exam-centers aussi : le compteur school_count d'un centre change
+      // quand une école est (re)rattachée ou détachée.
+      invalidateKeys: [["schools"], ["exam-centers"]],
       successMessage: "École modifiée avec succès",
       actionLabel: "Modification",
     },
   );
   const deleteMut = useCrudMutation(schoolsApi.delete, {
-    invalidateKeys: [["schools"], ["iep"]],
+    invalidateKeys: [["schools"], ["iep"], ["exam-centers"]],
     successMessage: "École supprimée",
     actionLabel: "Suppression",
   });
@@ -135,6 +155,7 @@ export function SchoolsView() {
       name: s.name,
       address: s.address,
       status: (s.status as SchoolStatus) ?? "public",
+      exam_center_id: s.exam_center_id ?? "",
     });
     setEditing(s);
     setDialogOpen(true);
@@ -227,8 +248,9 @@ export function SchoolsView() {
 
   const allSchools = data?.schools ?? [];
   const ieps = iepData?.ieps ?? [];
+  const examCenters: ExamCenterWithStats[] = centersData?.exam_centers ?? [];
 
-  // Filtrage local : recherche textuelle + filtre par statut
+  // Filtrage local : recherche textuelle + filtres statut et centre d'examen
   const schools = allSchools.filter((s) => {
     const matchSearch =
       !search ||
@@ -237,7 +259,9 @@ export function SchoolsView() {
       (s.address ?? "").toLowerCase().includes(search.toLowerCase());
     const matchStatus =
       statusFilter === "all" || s.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchCenter =
+      centerFilter === "all" || s.exam_center_id === centerFilter;
+    return matchSearch && matchStatus && matchCenter;
   });
 
   // Compteurs par statut pour les badges du filtre
@@ -267,10 +291,21 @@ export function SchoolsView() {
               </div>
             </div>
             {canEdit && (
-              <Button onClick={openCreate} size="sm" className="shadow-sm">
-                <Plus className="w-4 h-4 mr-1.5" />
-                Nouvelle école
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCentersOpen(true)}
+                  title="Gérer les centres d'examen (regroupement des écoles dans les documents officiels du plan IEPP)"
+                >
+                  <Landmark className="w-4 h-4 mr-1.5" />
+                  Centres d&apos;examens
+                </Button>
+                <Button onClick={openCreate} size="sm" className="shadow-sm">
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Nouvelle école
+                </Button>
+              </div>
             )}
           </div>
 
@@ -315,6 +350,25 @@ export function SchoolsView() {
                   color="emerald"
                 />
               </div>
+              {/* Filtre par centre d'examen (documents du plan IEPP) */}
+              {examCenters.length > 0 && (
+                <Select
+                  value={centerFilter}
+                  onValueChange={setCenterFilter}
+                >
+                  <SelectTrigger className="w-[190px] h-8 text-xs">
+                    <SelectValue placeholder="Centre d'examen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les centres</SelectItem>
+                    {examCenters.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.school_count})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
         </CardContent>
@@ -391,6 +445,15 @@ export function SchoolsView() {
                       {s.iep_name && (
                         <Badge variant="outline" className="text-[10px]">
                           {s.iep_name}
+                        </Badge>
+                      )}
+                      {s.exam_center_name && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-violet-200 bg-violet-50 text-violet-700"
+                        >
+                          <Landmark className="w-3 h-3 mr-1" />
+                          {s.exam_center_name}
                         </Badge>
                       )}
                     </div>
@@ -533,6 +596,49 @@ export function SchoolsView() {
                 </Select>
               </div>
             </div>
+            {/* Centre d'examen — regroupement des écoles dans les documents
+                officiels du plan IEPP (PLAN D'ACTION PLURIANNUEL). Options
+                limitées aux centres de l'IEP choisie ci-dessus. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="school-exam-center">
+                Centre d&apos;examen de rattachement
+              </Label>
+              <Select
+                value={form.exam_center_id || "__none__"}
+                onValueChange={(v) =>
+                  setForm({
+                    ...form,
+                    exam_center_id: v === "__none__" ? "" : v,
+                  })
+                }
+                disabled={!form.iep_id}
+              >
+                <SelectTrigger id="school-exam-center">
+                  <SelectValue
+                    placeholder={
+                      form.iep_id
+                        ? "Choisir un centre d'examen…"
+                        : "Choisir une IEP d'abord"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Aucun centre —</SelectItem>
+                  {examCenters
+                    .filter((c) => c.iep_id === form.iep_id)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Regroupe les écoles par lieu d&apos;examen dans le
+                « Plan d&apos;action pluriannuel de l&apos;IEPP » (module
+                Résultats).
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="school-name">Nom de l'école</Label>
               <Input
@@ -638,6 +744,14 @@ export function SchoolsView() {
             </div>
           </div>
         </EntityDialog>
+      )}
+
+      {canEdit && (
+        <ExamCentersDialog
+          open={centersOpen}
+          onOpenChange={setCentersOpen}
+          ieps={ieps}
+        />
       )}
 
       <ConfirmDialog
@@ -896,6 +1010,302 @@ function SchoolClassesPanel({
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * ExamCentersDialog — gestion des centres d'examen (admin).
+ *
+ * Les centres regroupent les écoles dans les documents officiels du plan
+ * IEPP (« PLAN D'ACTION PLURIANNUEL DE L'IEPP », colonne CENTRES D'EXAMENS).
+ * Liste + création + renommage + ordre (position) + suppression (refusée
+ * par le backend tant que des écoles sont rattachées).
+ */
+function ExamCentersDialog({
+  open,
+  onOpenChange,
+  ieps,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  ieps: IEPWithStats[];
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["exam-centers"],
+    queryFn: examCentersApi.list,
+    enabled: open,
+  });
+  const centers = data?.exam_centers ?? [];
+
+  const [name, setName] = useState("");
+  const [position, setPosition] = useState("");
+  const [iepId, setIepId] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deleteTarget, setDeleteTarget] =
+    useState<ExamCenterWithStats | null>(null);
+
+  const createMut = useCrudMutation(examCentersApi.create, {
+    invalidateKeys: [["exam-centers"], ["schools"]],
+    successMessage: "Centre d'examen créé",
+    actionLabel: "Création du centre",
+  });
+  const updateMut = useCrudMutation(
+    (id: string, payload: { name?: string; position?: number }) =>
+      examCentersApi.update(id, payload),
+    {
+      invalidateKeys: [["exam-centers"], ["schools"]],
+      successMessage: "Centre d'examen modifié",
+      actionLabel: "Modification du centre",
+    },
+  );
+  const deleteMut = useCrudMutation(examCentersApi.remove, {
+    invalidateKeys: [["exam-centers"], ["schools"]],
+    successMessage: "Centre d'examen supprimé",
+    actionLabel: "Suppression du centre",
+  });
+
+  function resetCreate() {
+    setName("");
+    setPosition("");
+  }
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const targetIep = iepId || ieps[0]?.id || "";
+    if (!targetIep) {
+      toast.error("Aucune IEP", {
+        description: "Créez une IEP avant d'ajouter un centre d'examen.",
+      });
+      return;
+    }
+    try {
+      await createMut.mutateAsync([
+        {
+          iep_id: targetIep,
+          name: name.trim(),
+          position: position ? Number(position) : undefined,
+        },
+      ]);
+      resetCreate();
+    } catch {
+      /* toastée par useCrudMutation */
+    }
+  }
+
+  async function onSaveEdit(c: ExamCenterWithStats) {
+    try {
+      await updateMut.mutateAsync([c.id, { name: editName.trim() }]);
+      setEditId(null);
+    } catch {
+      /* toastée */
+    }
+  }
+
+  async function onDelete() {
+    if (!deleteTarget) return;
+    try {
+      await deleteMut.mutateAsync([deleteTarget.id]);
+      setDeleteTarget(null);
+    } catch {
+      /* toastée */
+    }
+  }
+
+  function bumpPosition(c: ExamCenterWithStats, delta: number) {
+    updateMut.mutate([c.id, { position: Math.max(0, c.position + delta) }]);
+  }
+
+  return (
+    <>
+      <EntityDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Centres d'examen"
+        description="Lieux de regroupement des écoles dans les documents officiels du plan IEPP. Rattachez ensuite chaque école à un centre via son formulaire."
+        icon={Landmark}
+        loading={createMut.isPending || updateMut.isPending}
+      >
+        <div className="space-y-4 pt-2">
+          {/* Création */}
+          <form onSubmit={onCreate} className="space-y-2">
+            {ieps.length > 1 && (
+              <Select value={iepId || ieps[0]?.id} onValueChange={setIepId}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="IEP" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ieps.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nom du centre (ex : DABOU AGNIMEL)"
+                required
+                className="flex-1"
+              />
+              <Input
+                value={position}
+                onChange={(e) =>
+                  setPosition(e.target.value.replace(/[^0-9]/g, ""))
+                }
+                placeholder="Ordre"
+                inputMode="numeric"
+                className="w-24 shrink-0"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!name.trim() || createMut.isPending}
+                className="shrink-0"
+              >
+                {createMut.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4 mr-1" />
+                )}
+                Ajouter
+              </Button>
+            </div>
+          </form>
+
+          {/* Liste des centres */}
+          <div className="max-h-72 overflow-y-auto rounded-md border border-border/60 divide-y divide-border/60">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Chargement…
+              </div>
+            ) : centers.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">
+                Aucun centre d&apos;examen — créez le premier ci-dessus.
+              </p>
+            ) : (
+              centers.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-2 px-3 py-2.5"
+                >
+                  {editId === c.id ? (
+                    <>
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="h-8 flex-1"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") onSaveEdit(c);
+                          if (e.key === "Escape") setEditId(null);
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        className="h-8"
+                        disabled={!editName.trim() || updateMut.isPending}
+                        onClick={() => onSaveEdit(c)}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8"
+                        onClick={() => setEditId(null)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex flex-col items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-primary"
+                          title="Monter dans l'ordre des documents"
+                          onClick={() => bumpPosition(c, -1)}
+                          disabled={updateMut.isPending}
+                        >
+                          <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                        </button>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-primary"
+                          title="Descendre dans l'ordre des documents"
+                          onClick={() => bumpPosition(c, +1)}
+                          disabled={updateMut.isPending}
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <span className="font-mono text-[10px] text-muted-foreground w-6 text-center shrink-0">
+                        {c.position}
+                      </span>
+                      <span className="font-medium text-sm truncate flex-1">
+                        {c.name}
+                      </span>
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] shrink-0"
+                      >
+                        {c.school_count} école(s)
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        title="Renommer"
+                        onClick={() => {
+                          setEditId(c.id);
+                          setEditName(c.name);
+                        }}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                        title="Supprimer (si aucune école rattachée)"
+                        onClick={() => setDeleteTarget(c)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            L&apos;ordre (position) détermine l&apos;ordre des groupes dans le
+            « Plan d&apos;action pluriannuel de l&apos;IEPP » imprimé.
+          </p>
+        </div>
+      </EntityDialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Supprimer le centre d'examen ?"
+        description={
+          deleteTarget
+            ? `Supprimer « ${deleteTarget.name} » ? Le backend refuse si des écoles y sont encore rattachées.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={Trash2}
+        onConfirm={onDelete}
+        loading={deleteMut.isPending}
+      />
+    </>
   );
 }
 

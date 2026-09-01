@@ -56,6 +56,10 @@ import type {
   PdaTimelineResponse,
   PdaBackfillResponse,
   PdaExamKind,
+  PdaPlanActionResponse,
+  // Centres d'examen (documents officiels du plan IEPP)
+  ExamCenter,
+  ExamCenterWithStats,
 } from "./types";
 
 // En production (Vercel), NEXT_PUBLIC_API_URL pointe vers le backend déployé.
@@ -307,6 +311,7 @@ export const schoolsApi = {
       name?: string;
       address?: string;
       status?: "public" | "private" | "community";
+      exam_center_id?: string | null; // "" / null = détacher du centre
     },
   ) =>
     apiFetch<School>(`/api/schools/${id}`, {
@@ -329,6 +334,30 @@ export const schoolsApi = {
   },
   removeLogo: (id: string) =>
     apiFetch<{ status: string }>(`/api/schools/${id}/logo`, {
+      method: "DELETE",
+    }),
+};
+
+// === Centres d'examen (documents officiels du plan IEPP) ===
+
+export const examCentersApi = {
+  list: () =>
+    apiFetch<{ exam_centers: ExamCenterWithStats[]; count: number }>(
+      "/api/exam-centers",
+    ),
+  create: (data: { iep_id: string; name: string; position?: number }) =>
+    apiFetch<ExamCenter>("/api/exam-centers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: { name?: string; position?: number }) =>
+    apiFetch<ExamCenter>(`/api/exam-centers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  /** Refusé (409) tant que des écoles sont rattachées au centre. */
+  remove: (id: string) =>
+    apiFetch<{ status: string }>(`/api/exam-centers/${id}`, {
       method: "DELETE",
     }),
 };
@@ -1130,6 +1159,24 @@ export const pdaApi = {
     apiFetch<PdaTimelineResponse>(
       `/api/pda/timeline?class_id=${classId}&year=${year}`,
     ),
+
+  /** Document réseau « PLAN D'ACTION PLURIANNUEL DE L'IEPP » : toutes les
+   *  écoles du périmètre pour UNE évaluation (année+numéro+type), groupées
+   *  par centre d'examen (sections A + B du document officiel). */
+  getPlanAction: (params: {
+    year: number;
+    number: number;
+    kind?: PdaExamKind;
+    iep_id?: string;
+  }) => {
+    const q = new URLSearchParams({
+      year: String(params.year),
+      number: String(params.number),
+      kind: params.kind ?? "blanc",
+    });
+    if (params.iep_id) q.set("iep_id", params.iep_id);
+    return apiFetch<PdaPlanActionResponse>(`/api/pda/plan-action?${q}`);
+  },
 };
 
 // Barrel agrégé pour rétro-compat
@@ -1154,4 +1201,5 @@ export const api = {
   audit: auditApi,
   usersAdmin: usersAdminApi,
   pda: pdaApi,
+  examCenters: examCentersApi,
 };
