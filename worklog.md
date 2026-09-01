@@ -3725,3 +3725,22 @@ Stage Summary:
 - La liste déroulante CLASSE affiche désormais des items explicites « Classe 1 » … « Classe 4 » (Échelon : « Échelon 1..4 ») — impossible de les confondre avec un fragment du formulaire ; valeurs stockées inchangées (1..4)
 - Le diagnostic complet (code, historique git, base prod, rendu prod) prouve qu'il n'a jamais existé d'options « P »/« E » : l'affichage « 1 ; 2 ; P ; E » provenait de la lecture d'items chiffres nus dans un popup étroit superposé au formulaire dense
 - Render LIVE + Vercel READY vérifiés sur sygren.onrender.com / sygren.vercel.app ; console propre ; worklog à jour ; si l'utilisateur voit encore l'ancien affichage : forcer le rechargement (Ctrl+Shift+R) pour vider le cache du navigateur
+
+---
+Task ID: 12
+Agent: Z.ai Code (session 12 — vraies valeurs de la CLASSE fonctionnaire)
+Task: « LA CLASSE ICI EST RELATIF AUX FONCTIONNAIRES. IL PEUT ETRE EN 1; 2; EXCEPTIONNEL NOTÉ (E) OU PRINCIPALE NOTÉE (E). C'EST CELA QUI DOIT FIGURER DANS LA LISTE DEROULANTE »
+
+Work Log:
+- RÉVÉLATION du signalement initial : le « 1 ; 2 ; P ; E » de la session 11 désignait les 4 VALEURS ATTENDUES (P = Principale, E = Exceptionnelle), pas un artefact d'affichage — la classe administrative du fonctionnaire ivoirien ∈ {1, 2, Exceptionnelle notée (E), Principale notée (E)}
+- Frontend personnel-dossier-fields.tsx : map partagée exportée CLASSE_GRADE_LABELS {1:"1", 2:"2", 3:"Exceptionnelle notée (E)", 4:"Principale notée (E)"} — items de la liste = libellés complets, groupe retitré « Classe (1 · 2 · Exceptionnelle notée (E) · Principale notée (E)) », popup élargi min-w-[13rem]
+- Stockage INCHANGÉ (classe_grade 1..4) : zéro migration Neon, validation backend 1..4 inchangée, ancien code compatible (1/2 identiques ; 3/4 redeviennent Exceptionnelle/Principale)
+- personnel-document.tsx : colonne CLASSE de l'« ÉTAT NOMINATIF DU PERSONNEL » restitue le libellé administratif complet (span 7.5px nowrap) au lieu du chiffre nu ; types.ts commenté
+- Tests : tsc + eslint propres ; E2E local (SQLite 8080 + Next 3100, scripts /home/z/tmp-e2e/verify-classe-fp*.sh) : popup = les 4 valeurs (a11y + capture), document DABOU-YACE 2 rendu avec « Exceptionnelle notée (E) » (KOUMAN Brice) et « Principale notée (E) » (TRAORÉ Salif) dans la colonne CLASSE — pièges grep : \( \) en BRE = groupe (utiliser grep -F pour les options à parenthèses) ; refs fantômes sur les boutons-crayons sans aria-label
+- Déploiement : commit 42d7be7 → Render LIVE + Vercel READY
+- Vérification EN PRODUCTION (sygren.vercel.app) : popup = « — / 1 / 2 / Exceptionnelle notée (E) / Principale notée (E) » (a11y + capture) ; clic « Exceptionnelle notée (E) » → déclencheur « Exceptionnelle notée (E) » ; clic « Principale notée (E) » → « Principale notée (E) » ; console 0 erreur ; /personnel-doc 200 ; Neon inchangé
+
+Stage Summary:
+- La liste déroulante CLASSE du dossier personnel porte désormais les 4 valeurs administratives réelles du fonctionnaire : « 1 », « 2 », « Exceptionnelle notée (E) », « Principale notée (E) » — et l'État nominatif du personnel imprime le même libellé dans sa colonne CLASSE
+- Leçon majeure : quand un utilisateur décrit des valeurs métier attendues (« 1; 2; P; E »), ne pas conclure à un artefact d'affichage sans avoir vérifié le SENS métier — demander un exemple de valeurs valides dès la première ambiguïté
+- Render LIVE + Vercel READY vérifiés ; si l'ancien affichage subsiste chez l'utilisateur : rechargement forcé (Ctrl+Shift+R)
