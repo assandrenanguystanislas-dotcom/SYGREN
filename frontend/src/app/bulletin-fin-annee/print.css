@@ -1,7 +1,13 @@
 /* === /bulletin-fin-annee — format d'impression des bulletins individuels
  * « RESULTATS DE FIN D'ANNEE » (modèle IEPP) ===
- * UN bulletin PAR ÉLÈVE, DEUX exemplaires côte à côte (école + parents —
- * à découper), comme le modèle reçu : la feuille est A4 PAYSAGE.
+ * S'inspirer du module « bulletins » : la feuille A4 PAYSAGE est
+ * reconvertie en DEUX demi-pages (format B5) — DEUX ÉLÈVES DIFFÉRENTS par
+ * feuille (appariés dans l'ordre de mérite), séparés par un TRAIT
+ * DISCONTINU de découpe (ciseaux + pointillés) qui partage la feuille en
+ * deux parties égales. Page embellie aux couleurs du drapeau ivoirien
+ * (rubans orange-blanc-vert, bandeaux titres) — les aplats de couleur
+ * exigent « Graphiques d'arrière-plan » cochée dans le dialogue
+ * d'impression (print-color-adjust: exact le garantit).
  *
  * @page en forme TOP-LEVEL avec DIMENSIONS EXPLICITES « 297mm 210mm »
  * (= A4 paysage, largeur × hauteur — zéro ambiguïté d'orientation, même
@@ -11,10 +17,11 @@
  * génère une page blanche finale ; la route est dédiée au document.
  *
  * CEINTURE + SUSPENS — si le moteur ignore @page size (vieux Firefox /
- * Chromium) ou imprime en portrait : chaque bulletin (136mm de large)
- * passe à la ligne (flex-wrap) et s'impose UN PAR PAGE en portrait,
- * centré — jamais rogné ni étiré. Chaque exemplaire est insécable
- * (break-inside: avoid) et chaque élève commence une nouvelle feuille. */
+ * Chromium) ou imprime en portrait : les demi-feuilles (137mm) passent à
+ * la ligne (flex-wrap) et s'imposent UN BULLETIN PAR PAGE, centrés —
+ * jamais rognés ni étirés. Chaque bulletin est insécable
+ * (break-inside: avoid) et chaque feuille (paire) commence une nouvelle
+ * page. */
 @page {
   size: 297mm 210mm; /* A4 PAYSAGE — dimensions explicites */
   margin: 8mm;
@@ -41,18 +48,27 @@
     box-shadow: none !important;
     overflow: visible !important;
   }
-  /* Un élève = une feuille (2 exemplaires côte à côte) ; le dernier ne
-     génère pas de page blanche finale. */
+  /* UNE FEUILLE = UNE PAIRE D'ÉLÈVES (2 demi-pages B5 + trait discontinu
+     pleine hauteur). Hauteur 192mm = zone imprimable exacte de la page
+     (210mm − 2×8mm) : le trait de découpe traverse toute la feuille sans
+     déborder sur une seconde page. Le dernier ne génère pas de page
+     blanche finale. */
   .bulletin-pair {
     break-after: page;
     page-break-after: always;
+    margin: 0 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    max-width: none !important;
+    height: 192mm;
+    align-items: stretch !important;
   }
   .bulletin-pair:last-child {
     break-after: auto;
     page-break-after: auto;
   }
-  /* Un exemplaire de bulletin ne se coupe JAMAIS entre deux pages
-     (secours portrait : un exemplaire complet par page). */
+  /* Un bulletin (demi-feuille) ne se coupe JAMAIS entre deux pages
+     (secours portrait : un bulletin complet par page). */
   .bulletin-copy {
     break-inside: avoid;
     page-break-inside: avoid;

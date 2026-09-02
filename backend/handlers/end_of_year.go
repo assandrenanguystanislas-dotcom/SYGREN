@@ -77,6 +77,11 @@ type EndOfYearRow struct {
 	MoyenneAnnuelle    float64 `json:"moyenne_annuelle"`
 	HasMoyenneAnnuelle bool    `json:"has_moyenne_annuelle"`
 
+	// Barème des moyennes (10 pour CP/CE, 20 pour CM — barème du niveau
+	// de la classe, déjà appliqué par computeSessionResults) : le bulletin
+	// individuel affiche « … / 10 » ou « … / 20 » selon la classe.
+	AverageScale int `json:"average_scale,omitempty"`
+
 	DecisionConseil *string `json:"decision_conseil,omitempty"` // A | R | ABD
 }
 
@@ -232,6 +237,7 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 	type perStudent struct {
 		sumComp, sumPass float64
 		nbComp, nbPass   int
+		scale            int // barème du niveau (toutes sessions identiques)
 	}
 	agg := make(map[string]*perStudent, len(students))
 	// Mois de RÉFÉRENCE du bulletin (ligne « Session de … ») : la (dernière)
@@ -262,6 +268,9 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				a = &perStudent{}
 				agg[res.StudentID] = a
+			}
+			if res.AverageScale > 0 {
+				a.scale = res.AverageScale
 			}
 			if s.EvalType == "composition_passage" {
 				a.sumPass += res.Average
@@ -316,6 +325,7 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 
 		// Moyennes
 		if a, ok := agg[st.ID]; ok {
+			row.AverageScale = a.scale
 			if a.nbComp > 0 {
 				row.MoyenneCompositions = round2(a.sumComp / float64(a.nbComp))
 				row.HasMoyenneCompositions = true

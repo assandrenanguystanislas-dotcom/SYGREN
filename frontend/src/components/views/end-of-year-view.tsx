@@ -185,10 +185,12 @@ export function EndOfYearView() {
     window.open(url, "_blank");
   }
 
-  // Bulletins individuels « RESULTATS DE FIN D'ANNEE » : un bulletin PAR
-  // ÉLÈVE (moyennes, rang/effectif, décision OUI/NON entourée, Fait à…
-  // le [date du jour], signatures Maître + Directeur) — 2 exemplaires
-  // côte à côte par feuille A4 paysage (à découper).
+  // Bulletins individuels « RESULTATS DE FIN D'ANNEE » (modèle du module
+  // « bulletins ») : feuille A4 paysage reconvertie en 2 demi-pages B5 —
+  // 2 ÉLÈVES DIFFÉRENTS par feuille (ordre de mérite), trait discontinu
+  // de découpe, drapeau ivoirien ; moyennes, rang/effectif, décision
+  // OUI/NON entourée, Fait à… le [date du jour], signatures Maître +
+  // Directeur.
   function openBulletins() {
     if (!effectiveSchoolId || !classId) return;
     let token = "";

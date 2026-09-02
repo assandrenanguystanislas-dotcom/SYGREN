@@ -1044,6 +1044,9 @@ export interface EndOfYearRow {
   // (passage compte double ; cas limites → valeur disponible).
   moyenne_annuelle: number;
   has_moyenne_annuelle: boolean;
+  // Barème des moyennes du niveau de la classe (10 pour CP/CE, 20 pour CM)
+  // — affiché « … / 10 » ou « … / 20 » sur le bulletin individuel.
+  average_scale?: number;
   decision_conseil?: DecisionConseil | null;
 }
 

@@ -1,13 +1,20 @@
 "use client";
 
 // === Bulletins individuels « RESULTATS DE FIN D'ANNEE » (modèle IEPP) ===
-// UN bulletin PAR ÉLÈVE, imprimé A4 PAYSAGE avec DEUX exemplaires côte à
-// côte (un pour l'école, un pour les parents — à découper), rempli depuis
-// la MÊME source que le tableau de classe (/api/reports/end-of-year — le
-// document ne recalcule rien) :
+// S'INSPIRER DU MODÈLE DU MODULE « BULLETINS » (bulletins-a5-landscape) :
+// une feuille A4 PAYSAGE reconvertie en DEUX demi-pages (format B5) —
+// DEUX ÉLÈVES DIFFÉRENTS sur la même feuille (appariés dans l'ordre de
+// mérite : 1er+2e, 3e+4e, …), séparés par un TRAIT DISCONTINU (zone de
+// découpe avec ciseaux) qui partage la feuille en deux parties égales.
+// La page est EMBELLIE AUX COULEURS DU DRAPEAU DE LA CÔTE D'IVOIRE
+// (bandes orange-blanc-vert : rubans, bandeaux de titres, bordures).
+//
+// Chaque bulletin est rempli depuis la MÊME source que le tableau de
+// classe (/api/reports/end-of-year — le document ne recalcule rien) :
 //   - Moyenne de la composition de Passage, Moyenne des compositions
 //     Mensuelles, Moyenne Annuelle = (MC + 2 × MCP)/3 — calculées par le
-//     backend (module Évaluations → Sessions) ;
+//     backend (module Évaluations → Sessions), au barème du niveau
+//     (average_scale : « / 10 » CP-CE, « / 20 » CM) ;
 //   - « Rang : X sur Y élèves. » — X = position de l'élève dans l'ORDRE DE
 //     MÉRITE (rows arrive trié : moyenne annuelle décroissante, N° = rang),
 //     Y = effectif de la classe (récapitulatif) ;
@@ -19,8 +26,8 @@
 //   - « Fait à DABOU, le … » = DATE DU JOUR au format jj/mm/aaaa (le lieu
 //     est celui de la Direction Régionale de l'IEP — DABOU) ;
 //   - Signatures : noms du Maître chargé du cours (tenant de la classe) et
-//     du Directeur de l'école écrits sous les mentions — place réservée à
-//     la signature et au cachet.
+//     du Directeur de l'école écrits au-dessus de la ligne de signature —
+//     place réservée à la signature et au cachet.
 // En-tête institutionnel identique au tableau de classe (IEP : Direction
 // Régionale, Inspection, BP/Tél, Courriel, armoiries). Noms des FILLES en
 // rouge (même convention que le tableau). Session de passage en fin
@@ -30,7 +37,7 @@
 // serveur, discipline du projet).
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Printer, X } from "lucide-react";
+import { Loader2, Printer, Scissors, X } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import { reportsApi } from "@/lib/api";
@@ -39,10 +46,18 @@ import type { EndOfYearRow, EndOfYearSheet } from "@/lib/types";
 
 import { INK, OFFICIAL_FONT } from "./official-doc";
 
-/** Bleu du modèle reçu (cadres du bulletin). */
-const BLUE_LINE = "#3b6fd4";
-/** Bleu des titres « RESULTATS DE FIN D'ANNEE » / « DÉCISION… ». */
-const BLUE_TITLE = "#1d4fb8";
+// === Couleurs du drapeau de la Côte d'Ivoire (bandes verticales) ===
+// Orange #F77F00 · Blanc #FFFFFF · Vert #009E60 — variantes pastel pour
+// les fonds et variantes assombries pour le texte (contraste impression).
+const CI_ORANGE = "#F77F00";
+const CI_GREEN = "#009E60";
+/** Vert assombri pour le TEXTE (contraste impression sur fond blanc). */
+const GREEN_TEXT = "#00734A";
+const ORANGE_BG = "#FDEBDA";
+const GREEN_BG = "#E4F4ED";
+/** Gris du trait discontinu de découpe. */
+const CUT_DASH = "#9aa2ad";
+const CUT_ICON = "#6b7280";
 /** Rouge des noms de FILLES (convention des documents de classement). */
 const FILLE_RED = "#c00000";
 
@@ -122,27 +137,90 @@ function OuiNon({ choice, circled }: { choice: "OUI" | "NON"; circled: boolean }
   );
 }
 
-/** Bordure bleue des cadres du bulletin. */
-const B: CSSProperties = { border: `1.4px solid ${BLUE_LINE}` };
+/** Ruban tricolore ivoirien (trois bandes VERTICALES orange-blanc-vert,
+ *  comme le drapeau) — filet décoratif haut et bas de chaque bulletin. */
+function FlagRibbon({ height = "2.6mm" }: { height?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        display: "flex",
+        height,
+        boxSizing: "border-box",
+        border: "0.5px solid #d1d5db",
+      }}
+    >
+      <div style={{ flex: 1, background: CI_ORANGE }} />
+      <div style={{ flex: 1, background: "#FFFFFF" }} />
+      <div style={{ flex: 1, background: CI_GREEN }} />
+    </div>
+  );
+}
+
+/** Trait DISCONTINU vertical entre les deux bulletins : partage la feuille
+ *  en deux parties égales — zone de découpe (ciseaux + pointillés). */
+function CutLine() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        flex: "0 0 5mm",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "0.8mm 0",
+      }}
+    >
+      <Scissors
+        style={{
+          width: 12,
+          height: 12,
+          transform: "rotate(90deg)",
+          color: CUT_ICON,
+          flexShrink: 0,
+        }}
+      />
+      <div
+        style={{
+          flex: 1,
+          borderLeft: `1.5px dashed ${CUT_DASH}`,
+          marginTop: "0.6mm",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Bordure verte des cadres du bulletin (couleur drapeau). */
+const B: CSSProperties = { border: `1.4px solid ${CI_GREEN}` };
+
+/** Libellé de champ du bloc d'identification (vert drapeau, gras). */
+const LABEL: CSSProperties = { fontWeight: 700, color: GREEN_TEXT };
 
 /** Une ligne « Moyenne … | ………/ 10 » du tableau des résultats. */
 function MoyRow({
   label,
   value,
-  bold,
+  scale,
+  highlight,
 }: {
   label: string;
   value: string;
-  bold?: boolean;
+  scale: number;
+  highlight?: boolean;
 }) {
   return (
-    <tr>
+    <tr
+      style={
+        highlight ? { background: GREEN_BG } : undefined
+      }
+    >
       <td
         style={{
           ...B,
-          padding: "1.6mm 2mm",
-          fontWeight: bold ? 700 : 400,
-          fontSize: bold ? "12px" : "11.5px",
+          padding: "2.2mm 2.4mm",
+          fontWeight: highlight ? 700 : 400,
+          fontSize: highlight ? "13px" : "12.5px",
           width: "64%",
         }}
       >
@@ -151,19 +229,28 @@ function MoyRow({
       <td
         style={{
           ...B,
-          padding: "1.6mm 2mm",
-          fontWeight: bold ? 700 : 400,
-          fontSize: "12px",
+          padding: "2.2mm 2.4mm",
+          fontWeight: 700,
+          fontSize: "13px",
           whiteSpace: "nowrap",
+          textAlign: "right",
         }}
       >
-        {value}/ 10
+        {value}/ {scale}
       </td>
     </tr>
   );
 }
 
-/** UN exemplaire du bulletin d'UN élève (deux exemplaires par feuille). */
+/** Barème des moyennes du bulletin : donnée backend (average_scale) sinon
+ *  déduit du niveau de la classe — 20 pour CM, 10 pour CP/CE. */
+function scaleOf(data: EndOfYearSheet, row: EndOfYearRow): number {
+  if (row.average_scale && row.average_scale > 0) return row.average_scale;
+  return (data.class.level || "").toUpperCase().startsWith("CM") ? 20 : 10;
+}
+
+/** UN bulletin d'UN élève (demi-feuille « B5 » — deux élèves DIFFÉRENTS
+ *  par feuille A4, séparés par le trait discontinu). */
 function BulletinCopy({
   data,
   row,
@@ -178,6 +265,7 @@ function BulletinCopy({
   const iep = data.iep;
   const annee = anneeScolaireBulletin(data);
   const isFille = row.gender === "F";
+  const scale = scaleOf(data, row);
   // « Fait à … » : ville de la Direction Régionale (DABOU sur le modèle).
   const faitA = (iep?.region || "DABOU").toUpperCase();
 
@@ -191,25 +279,32 @@ function BulletinCopy({
     <div
       className="bulletin-copy"
       style={{
-        width: "136mm",
-        flexShrink: 0,
+        flex: "1 1 137mm",
+        maxWidth: "137mm",
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
         background: "#ffffff",
         color: INK,
-        fontSize: "11px",
-        lineHeight: 1.3,
+        fontSize: "12px",
+        lineHeight: 1.35,
       }}
     >
+      {/* --- Ruban tricolore (haut) --- */}
+      <FlagRibbon />
+
       {/* --- En-tête institutionnel (identique au tableau de classe) --- */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          marginBottom: "1.5mm",
+          margin: "1.8mm 0 2mm",
           gap: "2mm",
+          padding: "0 0.8mm",
         }}
       >
-        <div style={{ fontSize: "8.4px", lineHeight: 1.32 }}>
+        <div style={{ fontSize: "8.8px", lineHeight: 1.35 }}>
           <div>Ministère de l&apos;Education Nationale Et de l&apos;Alphabétisation</div>
           <div>et de l&apos;Enseignement Technique</div>
           <div style={{ fontStyle: "italic", marginTop: "1px" }}>
@@ -230,38 +325,38 @@ function BulletinCopy({
           </div>
         </div>
         <div style={{ textAlign: "center", flexShrink: 0 }}>
-          <div style={{ fontSize: "9.2px" }}>République de Côte d&apos;Ivoire</div>
-          <div style={{ fontSize: "8.8px", padding: "1px 0" }}>
+          <div style={{ fontSize: "9.6px" }}>République de Côte d&apos;Ivoire</div>
+          <div style={{ fontSize: "9px", padding: "1px 0" }}>
             Union-Discipline-Travail
           </div>
           <img
             src="/ci-coat-of-arms.png"
             alt="Armoiries de la République de Côte d'Ivoire"
-            style={{ height: "34px", margin: "1px auto 0", display: "block" }}
+            style={{ height: "38px", margin: "1px auto 0", display: "block" }}
           />
         </div>
       </div>
 
-      {/* --- Boîte du titre + session --- */}
+      {/* --- Bandeau du titre (vert drapeau) + session --- */}
       <div
         style={{
-          border: "1.4px solid #000000",
-          padding: "2.2mm 3mm 2mm",
+          background: CI_GREEN,
+          color: "#ffffff",
           textAlign: "center",
-          marginBottom: "1.8mm",
+          padding: "2.4mm 2mm 2.2mm",
+          marginBottom: "2.4mm",
         }}
       >
         <div
           style={{
-            fontSize: "16.5px",
+            fontSize: "18px",
             fontWeight: 700,
-            color: BLUE_TITLE,
-            letterSpacing: "0.4px",
+            letterSpacing: "0.5px",
           }}
         >
           RESULTATS DE FIN D&apos;ANNÉE
         </div>
-        <div style={{ fontSize: "12px", marginTop: "1mm" }}>
+        <div style={{ fontSize: "12.5px", marginTop: "0.8mm", fontWeight: 600 }}>
           {sessionLabel(data)}
         </div>
       </div>
@@ -271,38 +366,43 @@ function BulletinCopy({
         style={{
           ...B,
           borderWidth: "1.8px",
-          padding: "1.8mm 2.5mm",
+          padding: "2mm 2.6mm",
           display: "flex",
           flexDirection: "column",
-          gap: "1.1mm",
-          marginBottom: "2mm",
+          gap: "1.2mm",
+          marginBottom: "2.4mm",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: "2mm" }}>
-          <span style={{ fontWeight: 600, overflowWrap: "anywhere" }}>
+          <span style={LABEL}>
             Élève :{" "}
-            <span style={{ color: isFille ? FILLE_RED : undefined }}>
+            <span style={{ color: isFille ? FILLE_RED : undefined, fontWeight: 600 }}>
               {row.full_name}
             </span>
           </span>
-          <span style={{ whiteSpace: "nowrap" }}>
-            Matricule : <b>{row.matricule}</b>
+          <span style={LABEL}>
+            Matricule :{" "}
+            <span style={{ color: INK, fontWeight: 700 }}>{row.matricule}</span>
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>
-            Classe : <b>{data.class.name}</b>
+          <span style={LABEL}>
+            Classe :{" "}
+            <span style={{ color: INK, fontWeight: 700 }}>{data.class.name}</span>
           </span>
-          <span>
-            Effectif : <b>{effectif}</b>
+          <span style={LABEL}>
+            Effectif :{" "}
+            <span style={{ color: INK, fontWeight: 700 }}>{effectif}</span>
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>
-            Sexe : <b>{row.gender}</b>
+          <span style={LABEL}>
+            Sexe :{" "}
+            <span style={{ color: INK, fontWeight: 700 }}>{row.gender}</span>
           </span>
-          <span>
-            Année scolaire : <b>{annee}</b>
+          <span style={LABEL}>
+            Année scolaire :{" "}
+            <span style={{ color: INK, fontWeight: 700 }}>{annee}</span>
           </span>
         </div>
       </div>
@@ -313,43 +413,30 @@ function BulletinCopy({
           width: "100%",
           borderCollapse: "collapse",
           tableLayout: "fixed",
-          marginBottom: "2mm",
+          marginBottom: "2.4mm",
         }}
       >
         <tbody>
-          <tr>
-            <td
-              colSpan={2}
-              style={{
-                ...B,
-                borderWidth: "1.8px",
-                textAlign: "center",
-                fontSize: "14px",
-                fontWeight: 700,
-                color: BLUE_TITLE,
-                padding: "1.8mm 2mm",
-              }}
-            >
-              RESULTATS DE FIN D&apos;ANNÉE
-            </td>
-          </tr>
           <MoyRow
             label="Moyenne de la composition de Passage"
             value={fmtMoy(row.moyenne_passage, row.has_moyenne_passage)}
+            scale={scale}
           />
           <MoyRow
             label="Moyenne des compositions Mensuelles"
             value={fmtMoy(row.moyenne_compositions, row.has_moyenne_compositions)}
+            scale={scale}
           />
           <MoyRow
             label="Moyenne Annuelle"
             value={fmtMoy(row.moyenne_annuelle, row.has_moyenne_annuelle)}
-            bold
+            scale={scale}
+            highlight
           />
           <tr>
             <td
               colSpan={2}
-              style={{ ...B, padding: "1.5mm 2mm", fontSize: "12px" }}
+              style={{ ...B, padding: "2mm 2.4mm", fontSize: "13px" }}
             >
               <b>Rang :</b> {rang} sur <b>{effectif}</b> élèves.
             </td>
@@ -368,20 +455,16 @@ function BulletinCopy({
               style={{
                 ...B,
                 borderWidth: "1.8px",
+                background: CI_ORANGE,
+                color: "#ffffff",
                 textAlign: "center",
-                padding: "1.6mm 2mm",
+                padding: "2mm 2mm",
+                fontSize: "13.5px",
+                fontWeight: 700,
+                letterSpacing: "0.3px",
               }}
             >
-              <span
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  color: BLUE_TITLE,
-                  textDecoration: "underline",
-                }}
-              >
-                DÉCISION DU CONSEIL DES MAÎTRES
-              </span>
+              DÉCISION DU CONSEIL DES MAÎTRES
             </td>
           </tr>
           {decisionRows.map((d) => (
@@ -389,9 +472,9 @@ function BulletinCopy({
               <td
                 style={{
                   ...B,
-                  padding: "1.4mm 2mm",
+                  padding: "1.8mm 2.2mm",
                   fontWeight: 700,
-                  fontSize: "11.2px",
+                  fontSize: "12px",
                   width: "58%",
                 }}
               >
@@ -414,7 +497,13 @@ function BulletinCopy({
           <tr>
             <td
               colSpan={3}
-              style={{ ...B, textAlign: "center", fontSize: "10.3px", padding: "1.1mm 2mm" }}
+              style={{
+                ...B,
+                textAlign: "center",
+                fontSize: "10.6px",
+                fontStyle: "italic",
+                padding: "1.2mm 2mm",
+              }}
             >
               (Rayer les mentions inutiles)
             </td>
@@ -422,7 +511,7 @@ function BulletinCopy({
           <tr>
             <td
               colSpan={3}
-              style={{ ...B, textAlign: "center", fontSize: "11.5px", padding: "1.5mm 2mm" }}
+              style={{ ...B, textAlign: "center", fontSize: "12.5px", padding: "1.8mm 2mm" }}
             >
               Fait à {faitA}, le <b>{todayFr()}</b>
             </td>
@@ -430,72 +519,105 @@ function BulletinCopy({
         </tbody>
       </table>
 
-      {/* --- Signatures (noms écrits, place pour signature + cachet) --- */}
-      <table
-        style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}
-      >
-        <tbody>
-          <tr>
-            <td
-              style={{
-                ...B,
-                borderWidth: "1.8px",
-                verticalAlign: "top",
-                padding: "1.6mm 2.5mm",
-                height: "27mm",
-              }}
-            >
-              <div
+      {/* --- Signatures (noms écrits, place pour signature + cachet) ---
+           collées au bas de la demi-feuille (marginTop auto). */}
+      <div style={{ marginTop: "auto", paddingTop: "3mm" }}>
+        <table
+          style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}
+        >
+          <tbody>
+            <tr>
+              <td
                 style={{
-                  fontSize: "11.5px",
-                  fontWeight: 700,
-                  color: BLUE_TITLE,
-                  textDecoration: "underline",
+                  ...B,
+                  borderWidth: "1.8px",
+                  verticalAlign: "top",
+                  padding: "1.8mm 2.6mm",
+                  height: "30mm",
                 }}
               >
-                Le Maître chargé du cours
-              </div>
-              {data.class.teacher_name ? (
-                <div style={{ fontSize: "11px", fontWeight: 600, marginTop: "1.2mm" }}>
-                  {data.class.teacher_name}
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: GREEN_TEXT,
+                    textDecoration: "underline",
+                  }}
+                >
+                  Le Maître chargé du cours
                 </div>
-              ) : null}
-            </td>
-            <td
-              style={{
-                ...B,
-                borderWidth: "1.8px",
-                verticalAlign: "top",
-                padding: "1.6mm 2.5mm",
-                height: "27mm",
-                textAlign: "center",
-              }}
-            >
-              <div
+                {data.class.teacher_name ? (
+                  <div style={{ fontSize: "11.5px", fontWeight: 600, marginTop: "1.2mm" }}>
+                    {data.class.teacher_name}
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    marginTop: "8mm",
+                    marginInline: "6mm",
+                    borderBottom: `1px dotted ${CUT_DASH}`,
+                  }}
+                />
+              </td>
+              <td
                 style={{
-                  fontSize: "11.5px",
-                  fontWeight: 700,
-                  color: BLUE_TITLE,
-                  textDecoration: "underline",
+                  ...B,
+                  borderWidth: "1.8px",
+                  verticalAlign: "top",
+                  padding: "1.8mm 2.6mm",
+                  height: "30mm",
+                  textAlign: "center",
                 }}
               >
-                Le Directeur
-              </div>
-              {data.directeur ? (
-                <div style={{ fontSize: "11px", fontWeight: 600, marginTop: "1.2mm" }}>
-                  {data.directeur}
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: GREEN_TEXT,
+                    textDecoration: "underline",
+                  }}
+                >
+                  Le Directeur
                 </div>
-              ) : null}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                {data.directeur ? (
+                  <div style={{ fontSize: "11.5px", fontWeight: 600, marginTop: "1.2mm" }}>
+                    {data.directeur}
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    marginTop: "8mm",
+                    marginInline: "6mm",
+                    borderBottom: `1px dotted ${CUT_DASH}`,
+                  }}
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* --- Ruban tricolore (bas) --- */}
+      <div style={{ paddingTop: "2mm" }}>
+        <FlagRibbon height="2mm" />
+      </div>
     </div>
   );
 }
 
-/** Page complète : barre d'outils + un bulletin × 2 exemplaires par élève
- *  (ordre de mérite — les rows arrivent triés par l'API). */
+/** Demi-feuille vide (nombre impair d'élèves : le dernier bulletin seul,
+ *  la moitié droite reste blanche — prête à la découpe). */
+function EmptyHalf() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{ flex: "1 1 137mm", maxWidth: "137mm", minWidth: 0 }}
+    />
+  );
+}
+
+/** Page complète : barre d'outils + les feuilles (2 élèves DIFFÉRENTS par
+ *  feuille A4 paysage, appariés dans l'ordre de mérite). */
 export function EndOfYearBulletin({
   schoolId,
   classId,
@@ -547,6 +669,14 @@ export function EndOfYearBulletin({
   const rows = data.rows;
   const effectif = data.summary?.effectif?.total ?? data.count;
 
+  // Appariement des élèves (ordre de mérite — les rows arrivent triés) :
+  // 1er + 2e sur la première feuille, 3e + 4e sur la suivante, etc.
+  // (nombre impair → le dernier bulletin est seul sur sa feuille).
+  const pairs: EndOfYearRow[][] = [];
+  for (let i = 0; i < rows.length; i += 2) {
+    pairs.push(rows.slice(i, i + 2));
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
       {/* Barre d'outils (masquée à l'impression) */}
@@ -557,7 +687,8 @@ export function EndOfYearBulletin({
         </h3>
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline text-xs text-muted-foreground mr-1">
-            Format : A4 paysage — 2 exemplaires par élève (à découper)
+            Format : A4 paysage — 2 bulletins par feuille (2 élèves
+            différents, à découper)
           </span>
           <button
             onClick={() => window.print()}
@@ -579,41 +710,53 @@ export function EndOfYearBulletin({
       {/* === BULLETINS (isolement impression #bulletins-fin-annee-doc) === */}
       <div
         id="bulletins-fin-annee-doc"
-        className="bg-white mx-auto shadow-lg print:shadow-none mt-3 print:mt-0"
         style={{
-          width: "fit-content",
-          maxWidth: "100%",
-          padding: "6mm",
           fontFamily: OFFICIAL_FONT,
           color: INK,
+          padding: "16px 8px 24px",
         }}
       >
-        {rows.map((row, i) => (
-          <div
-            key={row.student_id}
-            className="bulletin-pair"
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              alignItems: "flex-start",
-              gap: "5mm",
-            }}
-          >
-            <BulletinCopy
-              data={data}
-              row={row}
-              rang={i + 1}
-              effectif={effectif}
-            />
-            <BulletinCopy
-              data={data}
-              row={row}
-              rang={i + 1}
-              effectif={effectif}
-            />
-          </div>
-        ))}
+        {pairs.map((pair, pageIdx) => {
+          const isLastPage = pageIdx === pairs.length - 1;
+          return (
+            <div
+              key={pageIdx}
+              className="bulletin-pair"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                alignItems: "stretch",
+                width: "fit-content",
+                maxWidth: "100%",
+                margin: "0 auto 16px",
+                background: "#ffffff",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+                pageBreakAfter: isLastPage ? "auto" : "always",
+              }}
+            >
+              {pair.length > 0 && (
+                <BulletinCopy
+                  data={data}
+                  row={pair[0]}
+                  rang={pageIdx * 2 + 1}
+                  effectif={effectif}
+                />
+              )}
+              <CutLine />
+              {pair.length > 1 ? (
+                <BulletinCopy
+                  data={data}
+                  row={pair[1]}
+                  rang={pageIdx * 2 + 2}
+                  effectif={effectif}
+                />
+              ) : (
+                <EmptyHalf />
+              )}
+            </div>
+          );
+        })}
         {rows.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-10">
             Aucun élève inscrit dans ce cours.
