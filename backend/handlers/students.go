@@ -10,6 +10,7 @@ import (
 	"sygren-api/database"
 	"sygren-api/middleware"
 	"sygren-api/models"
+	"sygren-api/rbac"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -297,6 +298,15 @@ func CreateStudent(w http.ResponseWriter, r *http.Request) {
 
 // UpdateStudent updates a student.
 // Le matricule peut être modifié (ou effacé en envoyant une string vide).
+//
+// RBAC — la route PUT /api/students/{id} est ouverte à tout utilisateur
+// authentifié (router.go) ; le contrôle fin est fait ICI :
+//   - admin / inspector / director : module students:write (matrice RBAC) ;
+//   - teacher (tenant du cours) : peut CORRIGER un élève de SA classe
+//     (erreur de saisie sur le nom, les prénoms, l'année de naissance…) —
+//     il ne peut NI déplacer l'élève vers une autre classe, NI modifier
+//     le matricule (données administratives du Ministère), NI toucher aux
+//     élèves des autres classes (création/suppression toujours interdites).
 func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req CreateStudentRequest
@@ -304,11 +314,37 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
 		return
 	}
+
+	role := ctxRole(r)
+	if role != models.RoleTeacher && !rbac.CanWrite(role, models.ModuleStudents) {
+		middleware.JSONError(w, "accès refusé : modification d'élève non autorisée pour votre rôle", http.StatusForbidden)
+		return
+	}
+	if role == models.RoleTeacher {
+		// Le tenant du cours : pas de changement de classe ni de
+		// matricule (les champs sont ignorés, pas rejetés — le
+		// formulaire renvoie les valeurs inchangées).
+		req.ClassID = ""
+		req.Matricule = nil
+	}
+
 	var student models.Student
 	if err := database.DB.First(&student, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "élève introuvable", http.StatusNotFound)
 		return
 	}
+
+	// Scope teacher : l'élève doit appartenir à la classe dont il est
+	// le titulaire (classes.teacher_id).
+	if role == models.RoleTeacher {
+		var cls models.Class
+		if err := database.DB.First(&cls, "id = ?", student.ClassID).Error; err != nil ||
+			cls.TeacherID == nil || *cls.TeacherID != ctxUserID(r) {
+			middleware.JSONError(w, "accès refusé : élève hors de votre classe", http.StatusForbidden)
+			return
+		}
+	}
+
 	if req.FirstName != "" {
 		student.FirstName = req.FirstName
 	}

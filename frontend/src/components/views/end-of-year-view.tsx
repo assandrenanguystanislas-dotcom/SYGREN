@@ -402,7 +402,15 @@ export function EndOfYearView() {
                         <TableCell className="tabular-nums text-muted-foreground">
                           {i + 1}
                         </TableCell>
-                        <TableCell className="font-medium">{r.full_name}</TableCell>
+                        <TableCell
+                          className={cn(
+                            "font-medium",
+                            // Noms des FILLES en rouge (comme le document).
+                            r.gender === "F" && "text-red-600 dark:text-red-400",
+                          )}
+                        >
+                          {r.full_name}
+                        </TableCell>
                         <TableCell className="tabular-nums">{r.age ?? "—"}</TableCell>
                         <TableCell className="tabular-nums">
                           {r.scolarite_cours ?? "—"}

@@ -127,15 +127,21 @@ func New(cfg *config.Config) http.Handler {
 			r.Delete("/api/classes/{id}", handlers.DeleteClass)
 		})
 
-		// Élèves — lecture ouverte, écriture admin + inspector + director
+		// Élèves — lecture ouverte.
+		// Écriture (créer / importer / supprimer) : admin + inspector +
+		// director (matrice RBAC students:write).
+		// La MISE À JOUR (PUT) est traitée à part : le tenant du cours
+		// (teacher) peut CORRIGER un élève de SA classe (erreur de
+		// saisie sur le nom, les prénoms, l'année de naissance…) —
+		// contrôle RBAC + scope effet dans le handler UpdateStudent.
 		r.Get("/api/students", handlers.ListStudents)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireModule(models.ModuleStudents, "write"))
 			r.Post("/api/students", handlers.CreateStudent)
 			r.Post("/api/students/bulk", handlers.BulkCreateStudents)
-			r.Put("/api/students/{id}", handlers.UpdateStudent)
 			r.Delete("/api/students/{id}", handlers.DeleteStudent)
 		})
+		r.Put("/api/students/{id}", handlers.UpdateStudent)
 
 		// Enseignants — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/teachers", handlers.ListTeachers)

@@ -20,7 +20,10 @@ import (
 //     Moyenne des compositions, Moyenne de la composition de passage,
 //     Moyenne annuelle, Décision du conseil des maîtres (A | R | ABD) ;
 //   - le tableau récapitulatif du bas : Effectif / Admis / Redoublants /
-//     Exclus / Abandons × Garçons / Filles / Total.
+//     Exclus / Abandons × Garçons / Filles / Total ;
+//   - rangement des élèves PAR ORDRE DE MÉRITE (moyenne annuelle
+//     décroissante, N° = rang) ; les noms des filles s'affichent en rouge
+//     côté frontend (convention des tableaux de classement).
 //
 // Formules (demande explicite de l'utilisateur) :
 //   - Moyenne des compositions = somme des moyennes des compositions
@@ -193,7 +196,8 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Élèves de la classe (tri du document : alphabétique)
+	// Élèves de la classe (l'ORDRE DE MÉRITE est appliqué plus bas,
+	// après le calcul des moyennes).
 	var students []models.Student
 	if err := database.DB.Where("class_id = ?", cls.ID).
 		Order("last_name ASC, first_name ASC").Find(&students).Error; err != nil {
@@ -341,9 +345,27 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		start--
 	}
 
-	// Tri de sécurité (les élèves sont déjà triés par la requête SQL)
+	// Tri PAR ORDRE DE MÉRITE (demande utilisateur — le rangement des
+	// élèves du document se fait selon leurs résultats) :
+	//   1. moyenne annuelle décroissante (les élèves sans moyenne
+	//      annuelle passent en fin de tableau) ;
+	//   2. ex-aequo départagés par la moyenne des compositions
+	//      décroissante ;
+	//   3. à défaut, ordre alphabétique (tri stable → N° = rang).
 	sort.SliceStable(rows, func(i, j int) bool {
-		return rows[i].FullName < rows[j].FullName
+		a, b := rows[i], rows[j]
+		switch {
+		case a.HasMoyenneAnnuelle != b.HasMoyenneAnnuelle:
+			return a.HasMoyenneAnnuelle // classés d'abord
+		case a.HasMoyenneAnnuelle && a.MoyenneAnnuelle != b.MoyenneAnnuelle:
+			return a.MoyenneAnnuelle > b.MoyenneAnnuelle
+		case a.HasMoyenneCompositions != b.HasMoyenneCompositions:
+			return a.HasMoyenneCompositions
+		case a.HasMoyenneCompositions && a.MoyenneCompositions != b.MoyenneCompositions:
+			return a.MoyenneCompositions > b.MoyenneCompositions
+		default:
+			return a.FullName < b.FullName
+		}
 	})
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{

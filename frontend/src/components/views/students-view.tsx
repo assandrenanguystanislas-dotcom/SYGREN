@@ -49,6 +49,7 @@ import {
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImportStudentsDialog } from "@/components/import-students-dialog";
+import { cn } from "@/lib/utils";
 
 interface FormData {
   class_id: string;
@@ -92,13 +93,19 @@ export function StudentsView() {
   // l'année de référence de la feuille « Résultats de fin d'année »).
   const currentYear = new Date().getFullYear();
   const user = useAuthStore((s) => s.user);
-  const canEdit = user?.role === "admin" || user?.role === "director";
   // isAdmin : voit toutes les écoles (filtre École actif)
   // isDirector : son école est pré-sélectionnée (filtre École désactivé)
   // isTeacher : pas de filtre du tout, sa classe s'affiche directement
   const isAdmin = user?.role === "admin";
   const isDirector = user?.role === "director";
   const isTeacher = user?.role === "teacher";
+  // Gestion (inscrire / importer Excel / supprimer) : admin + director.
+  const canManage = isAdmin || isDirector;
+  // MODIFICATION (correction d'une erreur de saisie) : admin + director +
+  // teacher — le tenant du cours peut corriger les élèves de SA classe
+  // (nom, prénoms, année de naissance…) ; le scope est vérifié par le
+  // backend (élève de sa classe uniquement, classe et matricule figés).
+  const canEdit = canManage || isTeacher;
 
   // === Filtres en cascade stricte ===
   // - admin : schoolFilter démarre à "" (vide) → doit choisir une école
@@ -296,7 +303,7 @@ export function StudentsView() {
                 </p>
               </div>
             </div>
-            {canEdit && (
+            {canManage && (
               <div className="flex items-center gap-2">
                 <Button onClick={openCreate} size="sm" className="shadow-sm">
                   <Plus className="w-4 h-4 mr-1.5" />
@@ -498,8 +505,24 @@ export function StudentsView() {
                           {s.matricule || "N/A"}
                         </span>
                       </TableCell>
-                      <TableCell className="font-medium">{s.last_name}</TableCell>
-                      <TableCell>{s.first_name}</TableCell>
+                      <TableCell
+                        className={cn(
+                          "font-medium",
+                          // Noms des FILLES en rouge (convention des
+                          // tableaux de classement — comme le document
+                          // « RESULTATS DE FIN D'ANNEE »).
+                          s.gender === "F" && "text-red-600 dark:text-red-400",
+                        )}
+                      >
+                        {s.last_name}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          s.gender === "F" && "text-red-600 dark:text-red-400",
+                        )}
+                      >
+                        {s.first_name}
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -548,17 +571,20 @@ export function StudentsView() {
                               size="icon"
                               className="h-8 w-8"
                               onClick={() => openEdit(s)}
+                              title="Modifier l'élève (nom, prénoms, année de naissance…)"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteTarget(s)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            {canManage && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => setDeleteTarget(s)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       )}
@@ -578,50 +604,56 @@ export function StudentsView() {
           title={editing ? "Modifier l'élève" : "Inscrire un élève"}
           description={
             editing
-              ? "Modifiez les informations de l'élève."
+              ? isTeacher
+                ? "Corrigez les informations de l'élève (le matricule et la classe ne sont pas modifiables par le tenant du cours)."
+                : "Modifiez les informations de l'élève."
               : "Le matricule est fourni par le Ministère de l'Éducation. Laissez vide si non disponible."
           }
           icon={Users}
           loading={createMut.isPending || updateMut.isPending}
         >
           <form onSubmit={onSubmit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="student-matricule">Matricule (Ministère)</Label>
-              <Input
-                id="student-matricule"
-                value={form.matricule}
-                onChange={(e) =>
-                  setForm({ ...form, matricule: e.target.value })
-                }
-                placeholder="Laisser vide si non disponible — affiché « N/A »"
-              />
-              <p className="text-xs text-muted-foreground">
-                Numéro administratif fourni par le Ministère de l'Éducation. Optionnel.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="student-class">Classe</Label>
-              <Select
-                value={form.class_id}
-                onValueChange={(v) => setForm({ ...form, class_id: v })}
-              >
-                <SelectTrigger id="student-class">
-                  <SelectValue placeholder="Choisir une classe…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((c: ClassWithDetails) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} — {c.school_name ?? "École"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {classes.length === 0 && (
-                <p className="text-xs text-destructive">
-                  Aucune classe disponible — créez-en une d'abord.
+            {!isTeacher && (
+              <div className="space-y-1.5">
+                <Label htmlFor="student-matricule">Matricule (Ministère)</Label>
+                <Input
+                  id="student-matricule"
+                  value={form.matricule}
+                  onChange={(e) =>
+                    setForm({ ...form, matricule: e.target.value })
+                  }
+                  placeholder="Laisser vide si non disponible — affiché « N/A »"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Numéro administratif fourni par le Ministère de l'Éducation. Optionnel.
                 </p>
-              )}
-            </div>
+              </div>
+            )}
+            {!isTeacher && (
+              <div className="space-y-1.5">
+                <Label htmlFor="student-class">Classe</Label>
+                <Select
+                  value={form.class_id}
+                  onValueChange={(v) => setForm({ ...form, class_id: v })}
+                >
+                  <SelectTrigger id="student-class">
+                    <SelectValue placeholder="Choisir une classe…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((c: ClassWithDetails) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} — {c.school_name ?? "École"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {classes.length === 0 && (
+                  <p className="text-xs text-destructive">
+                    Aucune classe disponible — créez-en une d'abord.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="student-lastname">Nom</Label>

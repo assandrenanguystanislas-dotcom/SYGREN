@@ -17,7 +17,9 @@
 //     compositions | Moyenne de la composition de passage | Moyenne annuelle
 //     | Décision du Conseil des Maîtres (sous-colonnes Admis | Red | Abd —
 //     croix « X » selon la décision A / R / ABD de l'élève) ;
-//   - Lignes numérotées 1 → 72 (élèves d'abord, lignes vierges ensuite) ;
+//   - Lignes numérotées 1 → 72 (élèves d'abord, lignes vierges ensuite),
+//     rangées PAR ORDRE DE MÉRITE (moyenne annuelle décroissante — le N°
+//     vaut rang) ; noms des FILLES en rouge ;
 //   - Tableau récapitulatif du bas : Effectif / Admis / Redoublants
 //     (CALCULÉS depuis les décisions) et Exclus / Abandons (saisies
 //     manuelles de la classe) × Garçons / Filles / Total ;
@@ -97,6 +99,10 @@ const COL_WIDTHS = [
   "7.5%", // Décision — Red
   "7.5%", // Décision — Abd
 ];
+
+/** Rouge des noms de FILLES (convention des tableaux de classement —
+ *  rouge sombre, lisible et fidèle à l'impression). */
+const FILLE_RED = "#c00000";
 
 /** Nombre total de lignes numérotées du modèle reçu (1 → 72). */
 const TOTAL_ROWS = 72;
@@ -457,7 +463,17 @@ function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) 
   return (
     <tr style={{ pageBreakInside: "avoid" }}>
       <td style={td}>{n}</td>
-      <td style={{ ...tdLeft, fontWeight: 600 }}>{row.full_name}</td>
+      <td
+        style={{
+          ...tdLeft,
+          fontWeight: 600,
+          // Noms des FILLES en rouge (demande utilisateur — les garçons
+          // restent en encre noire).
+          color: row.gender === "F" ? FILLE_RED : undefined,
+        }}
+      >
+        {row.full_name}
+      </td>
       <td style={td}>{row.age ?? ""}</td>
       <td style={td}>{row.scolarite_cours ?? ""}</td>
       <td style={td}>{row.scolarite_totale ?? ""}</td>

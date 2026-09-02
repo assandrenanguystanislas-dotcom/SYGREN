@@ -537,3 +537,41 @@
     page-break-inside: avoid;
   }
 }
+
+/* === RESULTATS DE FIN D'ANNEE — Print CSS (A4 portrait) ===
+ * Document du module Résultats (onglet « Fin d'année »), route dédiée
+ * /resultats-fin-annee-doc (son print.css pose le @page par défaut A4
+ * PORTRAIT, marge 8mm). Même technique d'isolement que #personnel-doc :
+ * la règle commune body * { visibility: hidden } (bloc « Synthèse » en
+ * haut de ce fichier) masque TOUT à l'impression — SANS cette
+ * contre-règle le document s'imprime en pages BLANCHES (bug signalé :
+ * « le résultat de fin d'année ne peut pas être imprimé »).
+ * Le document coule sur 2 pages (72 lignes numérotées + récapitulatif) :
+ * boîte statique dans le flux (PAS de position:absolute — une boîte
+ * absolue multi-pages se fait tronquer à la première page), l'entête du
+ * tableau se répète naturellement sur chaque page. */
+@media print {
+  #resultats-fin-annee-doc,
+  #resultats-fin-annee-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #resultats-fin-annee-doc {
+    background: white !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 2mm 4mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  /* Lignes élèves insécables entre deux pages (72 lignes sur 2 pages) */
+  #resultats-fin-annee-doc tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
