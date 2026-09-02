@@ -126,6 +126,13 @@ export interface SchoolClass {
   teacher_id?: string | null;
   active: boolean;
   created_at: string;
+  // === Résultats de fin d'année — compteurs MANUELS du tableau
+  // récapitulatif (Exclus / Abandons, colonnes Garçons/Filles ; listes
+  // 1..15, Total = G+F calculé). null = case vide du document.
+  exclus_garcons?: number | null;
+  exclus_filles?: number | null;
+  abandons_garcons?: number | null;
+  abandons_filles?: number | null;
 }
 
 export interface Student {
@@ -137,6 +144,10 @@ export interface Student {
   gender: "M" | "F" | string;
   birth_date?: string | null;
   birth_year?: number | null; // année de naissance seule (ex: 2006) — null si non renseignée
+  // === Résultats de fin d'année (document officiel) ===
+  scolarite_cours?: number | null; // scolarité dans le cours (années, 1..10)
+  scolarite_totale?: number | null; // scolarité totale (années, 1..10)
+  decision_conseil?: "A" | "R" | "ABD" | null; // décision du conseil des maîtres
   created_at: string;
 }
 
@@ -213,11 +224,12 @@ export type SessionStatus =
   | "validated"
   | "cancelled"
   | "archived";
-export type EvalType = "composition" | "exam_blanc";
+export type EvalType = "composition" | "exam_blanc" | "composition_passage";
 
 export const EVAL_TYPE_LABELS: Record<EvalType, string> = {
   composition: "Composition",
   exam_blanc: "Examen Blanc",
+  composition_passage: "Composition de passage",
 };
 
 export interface EvaluationSession {
@@ -996,4 +1008,75 @@ export interface PdaBackfillResponse {
   eligible: number;
   created: number;
   skipped: number;
+}
+
+// === RÉSULTATS DE FIN D'ANNÉE (module Résultats → onglet « Fin d'année »,
+// document officiel du même nom — modèle IEPP) ===
+
+/** Décision du conseil des maîtres : A = Admis, R = Redoublant,
+ *  ABD = Abandon (listes déroulantes du dossier élève). */
+export type DecisionConseil = "A" | "R" | "ABD";
+
+export const DECISION_CONSEIL_LABELS: Record<DecisionConseil, string> = {
+  A: "A",
+  R: "R",
+  ABD: "ABD",
+};
+
+/** Une ligne élève du document (API /api/reports/end-of-year). */
+export interface EndOfYearRow {
+  student_id: string;
+  matricule: string;
+  full_name: string; // NOM + prénoms
+  gender: "M" | "F" | string;
+  age?: number | null; // année de référence − année de naissance
+  scolarite_cours?: number | null;
+  scolarite_totale?: number | null;
+  // Moyenne des compositions mensuelles = Σ moyennes ÷ nombre de
+  // compositions effectuées (has_*=false → case vide du document).
+  moyenne_compositions: number;
+  has_moyenne_compositions: boolean;
+  // Moyenne de la composition de passage (session type
+  // « composition_passage » — Module Évaluations → Sessions).
+  moyenne_passage: number;
+  has_moyenne_passage: boolean;
+  // Moyenne annuelle = (moyenne des compositions + 2 × moyenne de passage)/3
+  // (passage compte double ; cas limites → valeur disponible).
+  moyenne_annuelle: number;
+  has_moyenne_annuelle: boolean;
+  decision_conseil?: DecisionConseil | null;
+}
+
+/** Une ligne du petit tableau du bas (G/F/T) — null = case vide. */
+export interface EndOfYearSummaryRow {
+  garcons?: number | null;
+  filles?: number | null;
+  total?: number | null;
+}
+
+export interface EndOfYearSummary {
+  effectif: EndOfYearSummaryRow; // calculé (liste des élèves)
+  admis: EndOfYearSummaryRow; // calculé (décision A)
+  redoublants: EndOfYearSummaryRow; // calculé (décision R)
+  exclus: EndOfYearSummaryRow; // manuel (compteurs de la classe, 1..15)
+  abandons: EndOfYearSummaryRow; // manuel (compteurs de la classe, 1..15)
+}
+
+/** Réponse complète de GET /api/reports/end-of-year. */
+export interface EndOfYearSheet {
+  school: { id: string; name: string; code?: string };
+  iep?: {
+    name?: string;
+    region?: string;
+    bp?: string;
+    inspector_phone?: string;
+    inspector_email?: string;
+  } | null;
+  class: { id: string; name: string; level: string; teacher_name?: string };
+  inspecteur?: string | null; // Visa de l'Inspecteur du modèle reçu
+  year: number; // année de référence (âge + moyennes)
+  annee_scolaire: string; // « 2025 2026 »
+  rows: EndOfYearRow[];
+  summary: EndOfYearSummary;
+  count: number;
 }

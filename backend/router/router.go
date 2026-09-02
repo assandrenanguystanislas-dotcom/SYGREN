@@ -265,6 +265,12 @@ func New(cfg *config.Config) http.Handler {
 		// Document « ÉTAT NOMINATIF DU PERSONNEL » (module Utilisateurs) :
 		// école + IEP + agents (dossier personnel) pour une école.
 		r.Get("/api/reports/personnel", handlers.GetPersonnelSheet)
+		// Document « RESULTATS DE FIN D'ANNEE » (module Résultats → onglet
+		// Fin d'année) : élèves d'une classe avec âge, scolarités (1..10),
+		// moyennes (compositions / composition de passage / annuelle),
+		// décision du conseil des maîtres (A|R|ABD) + tableau récapitulatif
+		// Effectif/Admis/Redoublants (calculés) + Exclus/Abandons (manuels).
+		r.Get("/api/reports/end-of-year", handlers.GetEndOfYearSheet)
 
 		// === Module 5 — Tableau de bord analytique ===
 		r.Get("/api/dashboard", handlers.GetDashboard)

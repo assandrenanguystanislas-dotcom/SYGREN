@@ -155,6 +155,16 @@ type Class struct {
 	TeacherID *string   `gorm:"type:text;index" json:"teacher_id,omitempty"`
 	Active    bool      `gorm:"default:true" json:"active"`
 	CreatedAt time.Time `json:"created_at"`
+	// === Résultats de fin d'année — compteurs MANUELS du tableau
+	// récapitulatif (lignes « Exclus » et « Abandons », colonnes
+	// Garçons/Filles ; Total = G+F calculé à l'affichage). Saisis par le
+	// conseil des maîtres (listes 1..15), NULL = case vide du document.
+	// L'entité Class est pérenne : ces compteurs portent l'année courante
+	// et sont réajustables à chaque fin d'année.
+	ExclusGarcons   *int `gorm:"type:integer" json:"exclus_garcons,omitempty"`
+	ExclusFilles    *int `gorm:"type:integer" json:"exclus_filles,omitempty"`
+	AbandonsGarcons *int `gorm:"type:integer" json:"abandons_garcons,omitempty"`
+	AbandonsFilles  *int `gorm:"type:integer" json:"abandons_filles,omitempty"`
 }
 
 func (c *Class) BeforeCreate(tx *gorm.DB) error {
@@ -183,7 +193,19 @@ type Student struct {
 	// mais n'est pas exposé dans l'UI (champ dormant depuis l'origine).
 	BirthYear *int       `gorm:"type:integer" json:"birth_year,omitempty"`
 	BirthDate *time.Time `json:"birth_date,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
+	// === Résultats de fin d'année (document officiel « RESULTATS DE FIN
+	// D'ANNEE ») ===
+	// ScolariteCours — scolarité dans le cours (années passées dans l'école),
+	// liste déroulante 1..10. Nullable : NULL = non renseigné (case vide du
+	// document). AutoMigrate ajoute les colonnes sans backfill.
+	ScolariteCours *int `gorm:"type:integer" json:"scolarite_cours,omitempty"`
+	// ScolariteTotale — scolarité totale (toutes écoles confondues), 1..10.
+	ScolariteTotale *int `gorm:"type:integer" json:"scolarite_totale,omitempty"`
+	// DecisionConseil — décision du conseil des maîtres :
+	//   "A" = Admis, "R" = Redoublant, "ABD" = Abandon.
+	// Saisie en fin d'année ; NULL = pas encore statué (case vide).
+	DecisionConseil *string   `gorm:"type:text" json:"decision_conseil,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (s *Student) BeforeCreate(tx *gorm.DB) error {

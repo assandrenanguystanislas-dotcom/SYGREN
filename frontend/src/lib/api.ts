@@ -38,6 +38,9 @@ import type {
   GradeScaleWithSubject,
   SessionStatus,
   SessionResults,
+  DecisionConseil,
+  EndOfYearSheet,
+  EvalType,
   AnnualResult,
   ReportCard,
   DashboardData,
@@ -391,6 +394,13 @@ export const classesApi = {
       name?: string;
       teacher_id?: string | null;
       active?: boolean;
+      // Résultats de fin d'année — compteurs manuels du tableau
+      // récapitulatif (Exclus / Abandons, colonnes Garçons/Filles ; 0..15,
+      // 0 = zéro saisi ; absent = inchangé).
+      exclus_garcons?: number;
+      exclus_filles?: number;
+      abandons_garcons?: number;
+      abandons_filles?: number;
     }>,
   ) =>
     apiFetch<SchoolClass>(`/api/classes/${id}`, {
@@ -422,6 +432,10 @@ export const studentsApi = {
     gender: "M" | "F";
     matricule?: string; // fourni par le Ministère de l'Éducation (optionnel)
     birth_year?: number; // année de naissance seule, ex: 2006 — 0/absent = non renseignée
+    // === Résultats de fin d'année ===
+    scolarite_cours?: number; // 1..10 — 0/absent = non renseignée
+    scolarite_totale?: number; // 1..10 — 0/absent = non renseignée
+    decision_conseil?: DecisionConseil | ""; // A | R | ABD — "" = non statuée
   }) =>
     apiFetch<Student>("/api/students", {
       method: "POST",
@@ -437,6 +451,10 @@ export const studentsApi = {
       birth_year: number; // année seule — 0 = effacer (NULL)
       birth_date: string;
       matricule: string; // string vide = effacer le matricule
+      // === Résultats de fin d'année — 0/"" = effacer (NULL) ===
+      scolarite_cours: number; // 1..10
+      scolarite_totale: number; // 1..10
+      decision_conseil: DecisionConseil | ""; // A | R | ABD
     }>,
   ) =>
     apiFetch<Student>(`/api/students/${id}`, {
@@ -635,7 +653,7 @@ export const sessionsApi = {
     month: number;
     year: number;
     status?: SessionStatus;
-    eval_type?: "composition" | "exam_blanc";
+    eval_type?: EvalType; // composition | exam_blanc | composition_passage
     eval_number?: number;
     open_at: string;
     close_at: string;
@@ -656,7 +674,7 @@ export const sessionsApi = {
     school_code?: string;
     month: number;
     year: number;
-    eval_type?: "composition" | "exam_blanc";
+    eval_type?: EvalType; // composition | exam_blanc | composition_passage
     eval_number?: number;
     open_at: string;
     close_at: string;
@@ -865,6 +883,24 @@ export const reportsApi = {
     apiFetch<PersonnelSheet>(
       `/api/reports/personnel?school_id=${encodeURIComponent(schoolId)}`,
     ),
+
+  /**
+   * Données du document « RESULTATS DE FIN D'ANNEE » (module Résultats →
+   * onglet « Fin d'année ») pour UNE classe : âge (année de naissance),
+   * scolarités (1..10), moyennes (compositions / composition de passage /
+   * annuelle), décision du conseil des maîtres (A|R|ABD) et tableau
+   * récapitulatif Effectif/Admis/Redoublants (calculés) + Exclus/Abandons
+   * (compteurs manuels de la classe). RBAC : director = son école,
+   * inspector = son IEP, teacher = sa classe, admin = tout.
+   */
+  endOfYearSheet: (schoolId: string, classId: string, year?: number) => {
+    const qs = new URLSearchParams({
+      school_id: schoolId,
+      class_id: classId,
+    });
+    if (year) qs.set("year", String(year));
+    return apiFetch<EndOfYearSheet>(`/api/reports/end-of-year?${qs.toString()}`);
+  },
 
   /**
    * Liste les classes associées à une session (pour itérer et générer

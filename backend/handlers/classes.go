@@ -156,6 +156,13 @@ type CreateClassRequest struct {
 	Level     string  `json:"level"` // CP, CE, CM
 	TeacherID *string `json:"teacher_id"`
 	Active    *bool   `json:"active,omitempty"` // soft-delete toggle
+	// === Résultats de fin d'année — compteurs manuels du tableau
+	// récapitulatif (Exclus / Abandons, colonnes Garçons/Filles ; listes
+	// 1..15). nil = inchangé ; 0..15 = valeur explicite (0 = zéro saisi).
+	ExclusGarcons   *int `json:"exclus_garcons,omitempty"`
+	ExclusFilles    *int `json:"exclus_filles,omitempty"`
+	AbandonsGarcons *int `json:"abandons_garcons,omitempty"`
+	AbandonsFilles  *int `json:"abandons_filles,omitempty"`
 }
 
 // ValidClassNames — classes autorisées (cahier des charges §3 Module 1)
@@ -291,11 +298,54 @@ func UpdateClass(w http.ResponseWriter, r *http.Request) {
 		}
 		cls.Active = *req.Active
 	}
+	// === Résultats de fin d'année — compteurs manuels Exclus / Abandons ===
+	// Chaque champ est indépendant : nil = non envoyé (inchangé) ;
+	// 0..15 = valeur explicite (0 = zéro SAISI, imprimé « 00 » comme le
+	// modèle ; case vide du document = NULL). Total G+F calculé à l'affichage.
+	if req.ExclusGarcons != nil {
+		if err := validateCompteurFinAnnee("exclus (garçons)", *req.ExclusGarcons); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		cls.ExclusGarcons = req.ExclusGarcons
+	}
+	if req.ExclusFilles != nil {
+		if err := validateCompteurFinAnnee("exclus (filles)", *req.ExclusFilles); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		cls.ExclusFilles = req.ExclusFilles
+	}
+	if req.AbandonsGarcons != nil {
+		if err := validateCompteurFinAnnee("abandons (garçons)", *req.AbandonsGarcons); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		cls.AbandonsGarcons = req.AbandonsGarcons
+	}
+	if req.AbandonsFilles != nil {
+		if err := validateCompteurFinAnnee("abandons (filles)", *req.AbandonsFilles); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		cls.AbandonsFilles = req.AbandonsFilles
+	}
 	if err := database.DB.Save(&cls).Error; err != nil {
 		middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
 		return
 	}
 	jsonResponse(w, http.StatusOK, cls)
+}
+
+
+// validateCompteurFinAnnee vérifie la plage d'un compteur manuel du tableau
+// récapitulatif du document « RESULTATS DE FIN D'ANNEE » (Exclus / Abandons,
+// colonnes Garçons/Filles) : liste déroulante 0..15 (0 = zéro saisi).
+func validateCompteurFinAnnee(field string, v int) error {
+	if v < 0 || v > 15 {
+		return fmt.Errorf("%s invalide : %d (attendu entre 0 et 15)", field, v)
+	}
+	return nil
 }
 
 // DeleteClass removes a class (must have no students).

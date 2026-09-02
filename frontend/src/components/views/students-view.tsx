@@ -18,7 +18,12 @@ import {
 import { studentsApi, classesApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { StudentWithClass, ClassWithDetails, SchoolWithStats } from "@/lib/types";
+import type {
+  DecisionConseil,
+  StudentWithClass,
+  ClassWithDetails,
+  SchoolWithStats,
+} from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +31,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -50,6 +57,10 @@ interface FormData {
   gender: "M" | "F";
   matricule: string; // fourni par le Ministère de l'Éducation (optionnel)
   birth_year: string; // année de naissance seule, ex: "2006" — state string (input), parse à la soumission ; "" = non renseignée
+  // === Résultats de fin d'année (listes déroulantes) ===
+  scolarite_cours: string; // "1".."10" — "" = non renseignée
+  scolarite_totale: string; // "1".."10" — "" = non renseignée
+  decision_conseil: string; // "A" | "R" | "ABD" — "" = pas encore statuée
 }
 
 const EMPTY: FormData = {
@@ -59,12 +70,27 @@ const EMPTY: FormData = {
   gender: "M",
   matricule: "",
   birth_year: "",
+  scolarite_cours: "",
+  scolarite_totale: "",
+  decision_conseil: "",
 };
 
-// Payload API : birth_year est un number (0 = non renseignée / effacer).
-type StudentPayload = Omit<FormData, "birth_year"> & { birth_year: number };
+// Payload API : birth_year / scolarités sont des numbers (0 = non
+// renseignée / effacer) ; decision_conseil "" = pas encore statuée / effacer.
+type StudentPayload = Omit<
+  FormData,
+  "birth_year" | "scolarite_cours" | "scolarite_totale" | "decision_conseil"
+> & {
+  birth_year: number;
+  scolarite_cours: number;
+  scolarite_totale: number;
+  decision_conseil: DecisionConseil | "";
+};
 
 export function StudentsView() {
+  // Année courante (colonne Âge indicative — le document officiel utilise
+  // l'année de référence de la feuille « Résultats de fin d'année »).
+  const currentYear = new Date().getFullYear();
   const user = useAuthStore((s) => s.user);
   const canEdit = user?.role === "admin" || user?.role === "director";
   // isAdmin : voit toutes les écoles (filtre École actif)
@@ -171,15 +197,31 @@ export function StudentsView() {
       gender: s.gender as "M" | "F",
       matricule: s.matricule ?? "",
       birth_year: s.birth_year != null ? String(s.birth_year) : "",
+      scolarite_cours: s.scolarite_cours != null ? String(s.scolarite_cours) : "",
+      scolarite_totale: s.scolarite_totale != null ? String(s.scolarite_totale) : "",
+      decision_conseil: s.decision_conseil ?? "",
     });
     setEditing(s);
     setDialogOpen(true);
   }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // birth_year : "" (champ vide) → 0 → backend = NULL (non renseignée / effacée).
+    // birth_year / scolarités : "" (champ vide) → 0 → backend = NULL (non
+    // renseignée / effacée). decision_conseil : "" → backend = NULL.
     const birth_year = form.birth_year ? parseInt(form.birth_year, 10) : 0;
-    const payload: StudentPayload = { ...form, birth_year };
+    const scolarite_cours = form.scolarite_cours
+      ? parseInt(form.scolarite_cours, 10)
+      : 0;
+    const scolarite_totale = form.scolarite_totale
+      ? parseInt(form.scolarite_totale, 10)
+      : 0;
+    const payload: StudentPayload = {
+      ...form,
+      birth_year,
+      scolarite_cours,
+      scolarite_totale,
+      decision_conseil: form.decision_conseil as DecisionConseil | "",
+    };
     try {
       if (editing) {
         await updateMut.mutateAsync([editing.id, payload]);
@@ -435,6 +477,8 @@ export function StudentsView() {
                     <TableHead>Prénom</TableHead>
                     <TableHead>Sexe</TableHead>
                     <TableHead>Naissance</TableHead>
+                    <TableHead>Âge</TableHead>
+                    <TableHead>Décision</TableHead>
                     <TableHead>Classe</TableHead>
                     <TableHead>École</TableHead>
                     {canEdit && <TableHead className="text-right">Actions</TableHead>}
@@ -470,6 +514,27 @@ export function StudentsView() {
                       </TableCell>
                       <TableCell className="text-muted-foreground tabular-nums">
                         {s.birth_year ?? "—"}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {s.birth_year ? currentYear - s.birth_year : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {s.decision_conseil ? (
+                          <Badge
+                            variant="outline"
+                            className={
+                              s.decision_conseil === "A"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : s.decision_conseil === "R"
+                                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                                  : "border-rose-200 bg-rose-50 text-rose-700"
+                            }
+                          >
+                            {s.decision_conseil}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>{s.class_name ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">
@@ -616,9 +681,100 @@ export function StudentsView() {
                   autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Format court — uniquement l&apos;année. Optionnel.
+                  Format court — uniquement l&apos;année. Optionnel. Définit
+                  l&apos;âge de l&apos;élève dans les Résultats de fin
+                  d&apos;année.
                 </p>
               </div>
+            </div>
+            {/* === Résultats de fin d'année — listes déroulantes === */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="student-scolarite-cours">
+                  Scolarité dans le cours
+                </Label>
+                <Select
+                  value={form.scolarite_cours}
+                  onValueChange={(v) =>
+                    setForm({ ...form, scolarite_cours: v })
+                  }
+                >
+                  <SelectTrigger id="student-scolarite-cours">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    <SelectGroup>
+                      <SelectLabel>Scolarité dans le cours (1 → 10)</SelectLabel>
+                      {Array.from({ length: 10 }, (_, k) => (
+                        <SelectItem key={k + 1} value={String(k + 1)}>
+                          {k + 1}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Années passées dans l&apos;école.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="student-scolarite-totale">
+                  Scolarité totale
+                </Label>
+                <Select
+                  value={form.scolarite_totale}
+                  onValueChange={(v) =>
+                    setForm({ ...form, scolarite_totale: v })
+                  }
+                >
+                  <SelectTrigger id="student-scolarite-totale">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    <SelectGroup>
+                      <SelectLabel>Scolarité totale (1 → 10)</SelectLabel>
+                      {Array.from({ length: 10 }, (_, k) => (
+                        <SelectItem key={k + 1} value={String(k + 1)}>
+                          {k + 1}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Toutes écoles confondues.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="student-decision-conseil">
+                Décision du conseil des maîtres
+              </Label>
+              <Select
+                value={form.decision_conseil}
+                onValueChange={(v) => setForm({ ...form, decision_conseil: v })}
+              >
+                <SelectTrigger
+                  id="student-decision-conseil"
+                  className="w-full sm:w-64"
+                >
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>
+                      Décision (A = Admis · R = Redoublant · ABD = Abandon)
+                    </SelectLabel>
+                    <SelectItem value="A">A</SelectItem>
+                    <SelectItem value="R">R</SelectItem>
+                    <SelectItem value="ABD">ABD</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Statuée en fin d&apos;année — les A et R alimentent
+                automatiquement le tableau Admis / Redoublants du document.
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button

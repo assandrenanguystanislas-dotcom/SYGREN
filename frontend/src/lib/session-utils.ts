@@ -90,3 +90,14 @@ export function nextStatus(status: string): {
       return { status: null, label: "" };
   }
 }
+
+// Libellé d'un type d'évaluation (« Composition », « Examen Blanc »,
+// « Composition de passage ») — affichages du formulaire « {type} N°x ».
+// « composition_passage » = Composition de passage : évaluation de fin
+// d'année qui alimente la « Moyenne de la composition de passage » du
+// document « RESULTATS DE FIN D'ANNEE » (moyenne annuelle).
+export function evalTypeLabel(evalType: string): string {
+  if (evalType === "exam_blanc") return "Examen Blanc";
+  if (evalType === "composition_passage") return "Composition de passage";
+  return "Composition";
+}

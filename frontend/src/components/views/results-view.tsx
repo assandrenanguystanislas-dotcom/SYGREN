@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Trophy,
+  ClipboardCheck,
   Loader2,
   TrendingUp,
   Users,
@@ -58,6 +59,7 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PdaView } from "./pda-view";
 import { PdaTimelineView } from "./pda-timeline-view";
+import { EndOfYearView } from "./end-of-year-view";
 
 function ResultsRankingView() {
   const user = useAuthStore((s) => s.user);
@@ -715,6 +717,9 @@ function ErrorState({ message }: { message: string }) {
 //   et par matière ; compositions dérivées du module Notes).
 // « Suivi pluriannuel » : matrice élève × évaluations — niveau d'étude de
 //   chaque élève dans les 3 matières désignées, évaluation après évaluation.
+// « Fin d'année » : document officiel « RESULTATS DE FIN D'ANNEE » — âge,
+//   scolarités, moyennes (compositions / composition de passage / annuelle),
+//   décision du conseil des maîtres + tableau récapitulatif G/F/T.
 export function ResultsView() {
   return (
     <Tabs defaultValue="classement" className="space-y-4">
@@ -731,6 +736,10 @@ export function ResultsView() {
           <TrendingUp className="w-3.5 h-3.5" />
           Suivi pluriannuel
         </TabsTrigger>
+        <TabsTrigger value="fin-annee" className="gap-1.5">
+          <ClipboardCheck className="w-3.5 h-3.5" />
+          Fin d&apos;année
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="classement" className="space-y-4">
         <ResultsRankingView />
@@ -740,6 +749,9 @@ export function ResultsView() {
       </TabsContent>
       <TabsContent value="timeline" className="space-y-4">
         <PdaTimelineView />
+      </TabsContent>
+      <TabsContent value="fin-annee" className="space-y-4">
+        <EndOfYearView />
       </TabsContent>
     </Tabs>
   );

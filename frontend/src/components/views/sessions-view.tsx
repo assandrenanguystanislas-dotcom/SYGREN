@@ -31,6 +31,7 @@ import { sessionsApi, classesApi, schoolsApi, pdaApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import {
+  evalTypeLabel,
   monthLabel,
   SESSION_STATUS_CONFIG,
   nextStatus,
@@ -67,7 +68,7 @@ interface FormData {
   school_code: string; // identifiant de l'école (son code unique)
   month: string;
   year: string;
-  eval_type: "composition" | "exam_blanc";
+  eval_type: "composition" | "exam_blanc" | "composition_passage";
   eval_number: string;
   open_at: string;
   close_at: string;
@@ -450,7 +451,7 @@ export function SessionsView() {
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-base">
-                        {s.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{s.eval_number}
+                        {evalTypeLabel(s.eval_type)} N°{s.eval_number}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">
                         {monthLabel(s.month)} {s.year} · {s.school_name ?? "École inconnue"}
@@ -815,7 +816,13 @@ export function SessionsView() {
                 <Select
                   value={form.eval_type}
                   onValueChange={(v) =>
-                    setForm({ ...form, eval_type: v as "composition" | "exam_blanc" })
+                    setForm({
+                      ...form,
+                      eval_type: v as
+                        | "composition"
+                        | "exam_blanc"
+                        | "composition_passage",
+                    })
                   }
                 >
                   <SelectTrigger id="session-eval-type">
@@ -823,13 +830,18 @@ export function SessionsView() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="composition">Composition</SelectItem>
+                    <SelectItem value="composition_passage">
+                      Composition de passage
+                    </SelectItem>
                     <SelectItem value="exam_blanc">Examen Blanc (CM2)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
                   {form.eval_type === "exam_blanc"
                     ? "⚠️ Examen Blanc réservé au CM2 — inclut la matière EPS."
-                    : "Composition classique (sans EPS sauf si configurée pour la classe)."}
+                    : form.eval_type === "composition_passage"
+                      ? "Évaluation de fin d'année — alimente la « Moyenne de la composition de passage » des Résultats de fin d'année."
+                      : "Composition classique (sans EPS sauf si configurée pour la classe)."}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -1011,7 +1023,7 @@ export function SessionsView() {
                 Prolonger la session
               </h3>
               <p className="text-sm text-muted-foreground">
-                {extendTarget.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{extendTarget.eval_number}
+                {evalTypeLabel(extendTarget.eval_type)} N°{extendTarget.eval_number}
                 {" — "}
                 {extendTarget.school_name ?? "École inconnue"}
               </p>
@@ -1083,7 +1095,7 @@ export function SessionsView() {
                 <div className="min-w-0">
                   <h3 className="font-semibold text-base">Supprimer la session</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {cancelTarget.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{cancelTarget.eval_number}
+                    {evalTypeLabel(cancelTarget.eval_type)} N°{cancelTarget.eval_number}
                     {" — "}
                     {monthLabel(cancelTarget.month)} {cancelTarget.year} · {cancelTarget.school_name ?? "École inconnue"}
                   </p>
@@ -1305,7 +1317,7 @@ function ExemptionDialog({ session, classesOfSchool, onClose }: ExemptionDialogP
               Exemptions — session {session.school_name ?? "École inconnue"}
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              {session.eval_type === "exam_blanc" ? "Examen Blanc" : "Composition"} N°{session.eval_number} · {monthLabel(session.month)} {session.year}
+              {evalTypeLabel(session.eval_type)} N°{session.eval_number} · {monthLabel(session.month)} {session.year}
             </p>
           </div>
 

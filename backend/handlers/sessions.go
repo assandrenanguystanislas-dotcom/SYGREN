@@ -203,8 +203,8 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 	if req.EvalType == "" {
 		req.EvalType = "composition"
 	}
-	if req.EvalType != "composition" && req.EvalType != "exam_blanc" {
-		middleware.JSONError(w, "eval_type invalide (composition|exam_blanc)", http.StatusBadRequest)
+	if req.EvalType != "composition" && req.EvalType != "exam_blanc" && req.EvalType != "composition_passage" {
+		middleware.JSONError(w, "eval_type invalide (composition|exam_blanc|composition_passage)", http.StatusBadRequest)
 		return
 	}
 	if req.EvalNumber < 1 {
@@ -404,8 +404,8 @@ func BulkCreateSessions(w http.ResponseWriter, r *http.Request) {
 	if req.EvalType == "" {
 		req.EvalType = "composition"
 	}
-	if req.EvalType != "composition" && req.EvalType != "exam_blanc" {
-		middleware.JSONError(w, "eval_type invalide (composition|exam_blanc)", http.StatusBadRequest)
+	if req.EvalType != "composition" && req.EvalType != "exam_blanc" && req.EvalType != "composition_passage" {
+		middleware.JSONError(w, "eval_type invalide (composition|exam_blanc|composition_passage)", http.StatusBadRequest)
 		return
 	}
 	if req.EvalNumber < 1 {
@@ -733,11 +733,17 @@ func isExempted(sessionID, classID, level string) bool {
 	return isExemptedList(exemptions, classID, level)
 }
 
-// evalTypeLabel retourne le label lisible d'un type d'évaluation
+// evalTypeLabel retourne le label lisible d'un type d'évaluation.
+// « composition_passage » = Composition de passage : évaluation de fin
+// d'année qui alimente la « Moyenne de la composition de passage » du
+// document « RESULTATS DE FIN D'ANNEE » (moyenne annuelle = (moyenne des
+// compositions + 2 × moyenne de passage) / 3).
 func evalTypeLabel(t string) string {
 	switch t {
 	case "exam_blanc":
 		return "Examen Blanc"
+	case "composition_passage":
+		return "Composition de passage"
 	default:
 		return "Composition"
 	}

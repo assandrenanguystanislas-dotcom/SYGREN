@@ -100,6 +100,14 @@ type CreateStudentRequest struct {
 	Gender    string  `json:"gender"`               // M / F
 	BirthYear *int    `json:"birth_year,omitempty"` // année de naissance seule, ex: 2006 (optionnel)
 	BirthDate *string `json:"birth_date,omitempty"` // ISO 8601 (dormant — pas d'UI)
+	// === Résultats de fin d'année (document officiel) ===
+	// Scolarités : listes déroulantes 1..10 (création : 0/absent = non
+	// renseigné ; mise à jour : nil = inchangé, 0 = effacer).
+	ScolariteCours  *int `json:"scolarite_cours,omitempty"`
+	ScolariteTotale *int `json:"scolarite_totale,omitempty"`
+	// DecisionConseil — décision du conseil des maîtres : A | R | ABD
+	// (mise à jour : nil = inchangé, "" = effacer).
+	DecisionConseil *string `json:"decision_conseil,omitempty"`
 }
 
 // normalizeMatricule retourne nil si la string est vide (→ NULL en base),
@@ -121,6 +129,70 @@ func validateBirthYear(y int) error {
 	if y < 1900 || y > current {
 		return fmt.Errorf("année de naissance invalide : %d (attendu entre 1900 et %d)", y, current)
 	}
+	return nil
+}
+
+// validateScolarite vérifie la plage d'une scolarité (années) du document
+// « RESULTATS DE FIN D'ANNEE » : liste déroulante 1..10.
+func validateScolarite(field string, v int) error {
+	if v < 1 || v > 10 {
+		return fmt.Errorf("%s invalide : %d (attendu entre 1 et 10)", field, v)
+	}
+	return nil
+}
+
+// DecisionConseilA / R / ABD — domaine de la décision du conseil des
+// maîtres (document « RESULTATS DE FIN D'ANNEE »).
+const (
+	DecisionConseilAdmis      = "A"
+	DecisionConseilRedoublant = "R"
+	DecisionConseilAbandon    = "ABD"
+)
+
+// isValidDecisionConseil — décision du conseil des maîtres valide.
+func isValidDecisionConseil(d string) bool {
+	switch d {
+	case DecisionConseilAdmis, DecisionConseilRedoublant, DecisionConseilAbandon:
+		return true
+	}
+	return false
+}
+
+// applyScolariteUpdate reporte une scolarité (cours ou totale) du payload sur
+// le student en mode MISE À JOUR : nil = inchangé ; 0 = effacer (NULL) ;
+// sinon valider la plage 1..10 puis affecter. Retourne une erreur (400).
+func applyScolariteUpdate(field string, in *int, dst **int) error {
+	if in == nil {
+		return nil
+	}
+	if *in == 0 {
+		*dst = nil
+		return nil
+	}
+	if err := validateScolarite(field, *in); err != nil {
+		return err
+	}
+	v := *in
+	*dst = &v
+	return nil
+}
+
+// applyDecisionConseilUpdate reporte la décision du conseil des maîtres en
+// mode MISE À JOUR : nil = inchangé ; "" = effacer (NULL) ; sinon valider
+// le domaine A|R|ABD puis affecter. Retourne une erreur (400).
+func applyDecisionConseilUpdate(in *string, dst **string) error {
+	if in == nil {
+		return nil
+	}
+	d := strings.ToUpper(strings.TrimSpace(*in))
+	if d == "" {
+		*dst = nil
+		return nil
+	}
+	if !isValidDecisionConseil(d) {
+		return fmt.Errorf("décision du conseil des maîtres invalide : %q (attendu A, R ou ABD)", *in)
+	}
+	*dst = &d
 	return nil
 }
 
@@ -190,6 +262,32 @@ func CreateStudent(w http.ResponseWriter, r *http.Request) {
 		student.BirthYear = &y
 	}
 
+	// === Résultats de fin d'année (création : 0/absent → NULL) ===
+	if req.ScolariteCours != nil && *req.ScolariteCours != 0 {
+		if err := validateScolarite("scolarité dans le cours", *req.ScolariteCours); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		v := *req.ScolariteCours
+		student.ScolariteCours = &v
+	}
+	if req.ScolariteTotale != nil && *req.ScolariteTotale != 0 {
+		if err := validateScolarite("scolarité totale", *req.ScolariteTotale); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		v := *req.ScolariteTotale
+		student.ScolariteTotale = &v
+	}
+	if req.DecisionConseil != nil && strings.TrimSpace(*req.DecisionConseil) != "" {
+		d := strings.ToUpper(strings.TrimSpace(*req.DecisionConseil))
+		if !isValidDecisionConseil(d) {
+			middleware.JSONError(w, fmt.Sprintf("décision du conseil des maîtres invalide : %q (attendu A, R ou ABD)", *req.DecisionConseil), http.StatusBadRequest)
+			return
+		}
+		student.DecisionConseil = &d
+	}
+
 	if err := database.DB.Create(&student).Error; err != nil {
 		middleware.JSONError(w, "erreur création élève: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -257,6 +355,20 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 			y := *req.BirthYear
 			student.BirthYear = &y
 		}
+	}
+
+	// === Résultats de fin d'année : nil = inchangé ; 0/"" = effacer (NULL) ===
+	if err := applyScolariteUpdate("scolarité dans le cours", req.ScolariteCours, &student.ScolariteCours); err != nil {
+		middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := applyScolariteUpdate("scolarité totale", req.ScolariteTotale, &student.ScolariteTotale); err != nil {
+		middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := applyDecisionConseilUpdate(req.DecisionConseil, &student.DecisionConseil); err != nil {
+		middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	if err := database.DB.Save(&student).Error; err != nil {
