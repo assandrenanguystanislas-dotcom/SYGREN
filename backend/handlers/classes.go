@@ -197,6 +197,10 @@ func CreateClass(w http.ResponseWriter, r *http.Request) {
 	}
 	// Garde-fou : un enseignant/directeur ne peut être affecté qu'à une classe
 	// de SON école (cahier des charges §3 Module 1 — règle d'affectation).
+	// Normalisation : "" = pas d'enseignant (→ NULL en base).
+	if req.TeacherID != nil && *req.TeacherID == "" {
+		req.TeacherID = nil
+	}
 	if req.TeacherID != nil && *req.TeacherID != "" {
 		if err := validateTeacherSameSchool(*req.TeacherID, req.SchoolID); err != nil {
 			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
@@ -276,15 +280,25 @@ func UpdateClass(w http.ResponseWriter, r *http.Request) {
 		cls.Level = ValidClassNames[req.Name]
 	}
 	// Affectation dynamique enseignant (cahier des charges §3 Module 1)
-	// Garde-fou : un enseignant/directeur ne peut être affecté qu'à une classe
-	// de SON école.
+	// SÉMANTIQUE PARTIELLE (comme les compteurs Exclus/Abandons ci-dessous) :
+	//   - teacher_id ABSENT du corps (nil) = INCHANGÉ — un PUT partiel
+	//     (compteurs de fin d'année, toggle actif depuis la vue Écoles)
+	//     ne doit PAS désaffecter l'enseignant de la classe ;
+	//   - "" = désaffectation explicite (dialogue Classes, option « Aucun ») ;
+	//   - valeur = affectation, avec garde-fou même école.
 	if req.TeacherID != nil && *req.TeacherID != "" {
 		if err := validateTeacherSameSchool(*req.TeacherID, cls.SchoolID); err != nil {
 			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
-	cls.TeacherID = req.TeacherID
+	if req.TeacherID != nil {
+		if *req.TeacherID == "" {
+			cls.TeacherID = nil
+		} else {
+			cls.TeacherID = req.TeacherID
+		}
+	}
 	// Toggle active (soft-delete) avec garde-fou élèves
 	if req.Active != nil {
 		// Si on tente de désactiver (active=false) alors qu'il y a des élèves
@@ -336,7 +350,6 @@ func UpdateClass(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, http.StatusOK, cls)
 }
-
 
 // validateCompteurFinAnnee vérifie la plage d'un compteur manuel du tableau
 // récapitulatif du document « RESULTATS DE FIN D'ANNEE » (Exclus / Abandons,

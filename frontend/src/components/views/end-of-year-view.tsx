@@ -17,7 +17,13 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
-import { CalendarDays, FileText, Loader2, School as SchoolIcon } from "lucide-react";
+import {
+  CalendarDays,
+  FileText,
+  Loader2,
+  School as SchoolIcon,
+  UserRound,
+} from "lucide-react";
 
 import { classesApi, reportsApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -179,6 +185,23 @@ export function EndOfYearView() {
     window.open(url, "_blank");
   }
 
+  // Bulletins individuels « RESULTATS DE FIN D'ANNEE » : un bulletin PAR
+  // ÉLÈVE (moyennes, rang/effectif, décision OUI/NON entourée, Fait à…
+  // le [date du jour], signatures Maître + Directeur) — 2 exemplaires
+  // côte à côte par feuille A4 paysage (à découper).
+  function openBulletins() {
+    if (!effectiveSchoolId || !classId) return;
+    let token = "";
+    try {
+      const raw = localStorage.getItem("sygren-auth");
+      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+    } catch {
+      /* token absent — l'API refusera, la page l'affichera */
+    }
+    const url = `${window.location.origin}/bulletin-fin-annee?school=${encodeURIComponent(effectiveSchoolId)}&class=${encodeURIComponent(classId)}&year=${encodeURIComponent(year)}&t=${encodeURIComponent(token)}`;
+    window.open(url, "_blank");
+  }
+
   return (
     <div className="space-y-4">
       {/* === Sélections === */}
@@ -278,6 +301,15 @@ export function EndOfYearView() {
             >
               <FileText className="w-4 h-4 mr-1.5" />
               Document officiel
+            </Button>
+            <Button
+              onClick={openBulletins}
+              disabled={!effectiveSchoolId || !classId}
+              variant="outline"
+              className="shadow-sm"
+            >
+              <UserRound className="w-4 h-4 mr-1.5" />
+              Bulletins individuels
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">

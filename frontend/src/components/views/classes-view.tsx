@@ -87,7 +87,9 @@ export function ClassesView() {
     (id: string, data: FormData) =>
       classesApi.update(id, {
         name: data.name || undefined,
-        teacher_id: data.teacher_id || null,
+        // null (« Aucun ») = désaffectation EXPLICITE (chaîne vide) —
+        // backend : clé absente = inchangé, "" = retirer l'enseignant.
+        teacher_id: data.teacher_id ?? "",
       }),
     {
       invalidateKeys: [["classes"], ["teachers"]],

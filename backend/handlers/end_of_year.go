@@ -195,6 +195,15 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 			inspectorName = insp.FullName
 		}
 	}
+	// Nom du directeur de l'école (bulletin individuel de fin d'année :
+	// signature « Le Directeur » — premier directeur actif de l'école).
+	directeurName := ""
+	var dir models.User
+	if err := database.DB.Select("full_name").
+		Where("school_id = ? AND role = ? AND active = ?", school.ID, models.RoleDirector, true).
+		Order("created_at ASC").First(&dir).Error; err == nil {
+		directeurName = dir.FullName
+	}
 
 	// Élèves de la classe (l'ORDRE DE MÉRITE est appliqué plus bas,
 	// après le calcul des moyennes).
@@ -225,7 +234,13 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		nbComp, nbPass   int
 	}
 	agg := make(map[string]*perStudent, len(students))
+	// Mois de la (dernière) composition de passage de l'année — bulletin
+	// individuel : ligne « Session de … » (mois + année de référence).
+	passageMonth := 0
 	for _, s := range sessions {
+		if s.EvalType == "composition_passage" && s.Month > passageMonth {
+			passageMonth = s.Month
+		}
 		results, err := computeSessionResults(s.ID)
 		if err != nil {
 			continue // session supprimée entre-temps — non bloquant
@@ -338,6 +353,13 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		Abandons:    manualRow(cls.AbandonsGarcons, cls.AbandonsFilles),
 	}
 
+	// Session « composition de passage » de l'année (la plus récente) —
+	// nil si aucune : le bulletin retombe sur l'année de référence seule.
+	var sessionPassage interface{}
+	if passageMonth > 0 {
+		sessionPassage = map[string]int{"month": passageMonth, "year": year}
+	}
+
 	// Année scolaire « 2025 2026 » (rentrée d'août/septembre → juillet)
 	now := time.Now()
 	start := now.Year()
@@ -387,12 +409,14 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 			"level":        cls.Level,
 			"teacher_name": teacherName,
 		},
-		"inspecteur":     inspectorName,
-		"year":           year,
-		"annee_scolaire": fmt.Sprintf("%d %d", start, start+1),
-		"rows":           rows,
-		"summary":        summary,
-		"count":          len(rows),
+		"inspecteur":      inspectorName,
+		"directeur":       directeurName,
+		"session_passage": sessionPassage,
+		"year":            year,
+		"annee_scolaire":  fmt.Sprintf("%d %d", start, start+1),
+		"rows":            rows,
+		"summary":         summary,
+		"count":           len(rows),
 	})
 }
 

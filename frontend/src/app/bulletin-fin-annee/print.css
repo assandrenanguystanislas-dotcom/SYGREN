@@ -1,0 +1,65 @@
+/* === /bulletin-fin-annee — format d'impression des bulletins individuels
+ * « RESULTATS DE FIN D'ANNEE » (modèle IEPP) ===
+ * UN bulletin PAR ÉLÈVE, DEUX exemplaires côte à côte (école + parents —
+ * à découper), comme le modèle reçu : la feuille est A4 PAYSAGE.
+ *
+ * @page en forme TOP-LEVEL avec DIMENSIONS EXPLICITES « 297mm 210mm »
+ * (= A4 paysage, largeur × hauteur — zéro ambiguïté d'orientation, même
+ * technique que /resultats-fin-annee-doc en portrait). Marge 8mm.
+ *
+ * PAS de page nommée : le changement de contexte de page après le document
+ * génère une page blanche finale ; la route est dédiée au document.
+ *
+ * CEINTURE + SUSPENS — si le moteur ignore @page size (vieux Firefox /
+ * Chromium) ou imprime en portrait : chaque bulletin (136mm de large)
+ * passe à la ligne (flex-wrap) et s'impose UN PAR PAGE en portrait,
+ * centré — jamais rogné ni étiré. Chaque exemplaire est insécable
+ * (break-inside: avoid) et chaque élève commence une nouvelle feuille. */
+@page {
+  size: 297mm 210mm; /* A4 PAYSAGE — dimensions explicites */
+  margin: 8mm;
+}
+
+@media print {
+  /* Isolement print (la feuille globale masque tout en print) : le
+     conteneur du document et son contenu redeviennent visibles. */
+  #bulletins-fin-annee-doc,
+  #bulletins-fin-annee-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #bulletins-fin-annee-doc {
+    background: white !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  /* Un élève = une feuille (2 exemplaires côte à côte) ; le dernier ne
+     génère pas de page blanche finale. */
+  .bulletin-pair {
+    break-after: page;
+    page-break-after: always;
+  }
+  .bulletin-pair:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  /* Un exemplaire de bulletin ne se coupe JAMAIS entre deux pages
+     (secours portrait : un exemplaire complet par page). */
+  .bulletin-copy {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* Lignes des tableaux du bulletin insécables (redondance défensive). */
+  #bulletins-fin-annee-doc tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
