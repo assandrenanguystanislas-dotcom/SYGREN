@@ -1,14 +1,44 @@
 /* === /resultats-fin-annee-doc — format d'impression du document
  * « RESULTATS DE FIN D'ANNEE » (modèle IEPP) ===
  * @page PAR DÉFAUT de la route dédiée : A4 PORTRAIT, marge 8mm.
+ *
+ * FORME TOP-LEVEL (hors @media print) : @page ne concerne que le média
+ * paginé — la forme canonique maximise la compatibilité (certains moteurs
+ * n'appliquent @page imbriqué que partiellement).
+ *
+ * DIMENSIONS EXPLICITES « 210mm 297mm » (= A4 portrait, largeur × hauteur)
+ * plutôt que le mot-clé « A4 portrait » : équivalent pour les moteurs qui
+ * honorent size, mais ne laisse AUCUNE ambiguïté d'orientation. Demande
+ * utilisateur : « le résultat de fin d'année doit être disposé en portrait
+ * pour être imprimé ».
+ *
  * PAS de page nommée (même raison que /personnel-doc) : le changement de
  * contexte de page après le document génère une page blanche finale.
  * La route est dédiée au document : le @page par défaut ne fuit sur
  * aucune autre vue. Importé par layout.tsx (après globals.css → gagne
- * la cascade). */
+ * la cascade sur le @page A4 portrait du relevé, identique).
+ *
+ * CEINTURE + SUSPENS — largeur plafonnée à 194mm (largeur imprimable A4
+ * portrait avec marge 8mm) : si le navigateur ignore quand même @page size
+ * (Firefox < 133, vieux Chromium, réglage « Paysage » resté collé dans la
+ * boîte de dialogue après l'impression d'un document paysage type
+ * /personnel-doc), le document reste DISPOSÉ EN PORTRAIT — boîte plafonnée
+ * à la largeur portrait, centrée sur la feuille — au lieu d'être étiré sur
+ * toute la largeur paysage. Sur un moteur qui honore @page (Chrome, Edge,
+ * Firefox ≥ 133) : 194mm = exactement la largeur imprimable, rendu
+ * identique à l'ancien width:100% — aucun changement visuel. */
+@page {
+  size: 210mm 297mm; /* A4 PORTRAIT — dimensions explicites */
+  margin: 8mm;
+}
+
 @media print {
-  @page {
-    size: A4 portrait;
-    margin: 8mm;
+  #resultats-fin-annee-doc {
+    /* width:auto (et pas 194mm fixe) : suit la largeur imprimable réelle
+       — si le moteur ignore aussi @page margin (vieilles marges par défaut
+       ≈ 12.7mm), la boîte rétrécit au lieu de déborder/cliper. */
+    width: auto !important;
+    max-width: 194mm !important;
+    margin: 0 auto !important; /* centré si la feuille sort en paysage */
   }
 }
