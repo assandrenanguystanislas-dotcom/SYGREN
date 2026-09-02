@@ -1075,8 +1075,9 @@ export interface EndOfYearSheet {
   class: { id: string; name: string; level: string; teacher_name?: string };
   inspecteur?: string | null; // Visa de l'Inspecteur du modèle reçu
   directeur?: string | null; // nom du directeur de l'école (bulletin individuel)
-  // Session « composition de passage » la plus récente de l'année
-  // (bulletin : ligne « Session de … » + année scolaire déduite).
+  // Session de référence du bulletin (composition de passage de l'année
+  // si elle existe, sinon la dernière session de l'année) : ligne
+  // « Session de … » + année scolaire déduite.
   session_passage?: { month: number; year: number } | null;
   year: number; // année de référence (âge + moyennes)
   annee_scolaire: string; // « 2025 2026 »

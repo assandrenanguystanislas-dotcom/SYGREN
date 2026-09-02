@@ -234,10 +234,15 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		nbComp, nbPass   int
 	}
 	agg := make(map[string]*perStudent, len(students))
-	// Mois de la (dernière) composition de passage de l'année — bulletin
-	// individuel : ligne « Session de … » (mois + année de référence).
+	// Mois de RÉFÉRENCE du bulletin (ligne « Session de … ») : la (dernière)
+	// composition de passage de l'année si elle existe, sinon la dernière
+	// session de l'année (compositions mensuelles — ex. Décembre).
 	passageMonth := 0
+	lastMonth := 0
 	for _, s := range sessions {
+		if s.Month > lastMonth {
+			lastMonth = s.Month
+		}
 		if s.EvalType == "composition_passage" && s.Month > passageMonth {
 			passageMonth = s.Month
 		}
@@ -353,11 +358,16 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		Abandons:    manualRow(cls.AbandonsGarcons, cls.AbandonsFilles),
 	}
 
-	// Session « composition de passage » de l'année (la plus récente) —
-	// nil si aucune : le bulletin retombe sur l'année de référence seule.
+	// Session de référence du bulletin (passage si elle existe, sinon la
+	// dernière session de l'année) — nil si aucune session : le bulletin
+	// retombe sur l'année de référence seule.
+	refMonth := passageMonth
+	if refMonth == 0 {
+		refMonth = lastMonth
+	}
 	var sessionPassage interface{}
-	if passageMonth > 0 {
-		sessionPassage = map[string]int{"month": passageMonth, "year": year}
+	if refMonth > 0 {
+		sessionPassage = map[string]int{"month": refMonth, "year": year}
 	}
 
 	// Année scolaire « 2025 2026 » (rentrée d'août/septembre → juillet)
