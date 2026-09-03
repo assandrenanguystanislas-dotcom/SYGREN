@@ -57,6 +57,10 @@ func New(cfg *config.Config) http.Handler {
 	// Public routes
 	r.Get("/api/health", handlers.Health)
 	r.Post("/api/auth/login", handlers.Login(cfg))
+	// Task 26 — auto-inscription (fin de la phase pilote) : les directeurs
+	// et enseignants créent leurs accès directement depuis l'interface
+	// SYGREN (code école + mot de passe standard = numéro de téléphone).
+	r.Post("/api/auth/register", handlers.Register)
 	r.Post("/api/auth/reset-request", handlers.ResetRequest)
 	r.Post("/api/auth/reset-password", handlers.ResetPasswordWithToken)
 

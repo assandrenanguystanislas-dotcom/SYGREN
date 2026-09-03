@@ -176,6 +176,24 @@ export const DIRECTOR_ALLOWED_VIEWS: ReadonlySet<string> = WORKSPACE_VIEWS;
  *  zone Imprimer / PDF grisée). */
 export const TEACHER_ALLOWED_VIEWS: ReadonlySet<string> = WORKSPACE_VIEWS;
 
+/** Task 26 — périmètre UI du PARENT : TOUT est grisé SAUF le Portail
+ *  Parent. Dans la navigation, tous les modules restent affichés (comme
+ *  pour le Directeur / l'Enseignant) mais seul « Portail Parent » est
+ *  cliquable — le parent atterrit directement dessus. */
+export const PARENT_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
+  "parent-portal",
+]);
+
+/** Task 23 + 24 + 26 — périmètre UI par rôle : retourne l'ensemble des vues
+ *  autorisées pour les rôles « espace restreint » (Directeur, Enseignant,
+ *  Parent) ou null pour les autres rôles (admin / inspector → filtrage
+ *  dynamique par modules[] inchangé, tout est actif). */
+function allowedViewsForRole(role: Role): ReadonlySet<string> | null {
+  if (role === "director" || role === "teacher") return WORKSPACE_VIEWS;
+  if (role === "parent") return PARENT_ALLOWED_VIEWS;
+  return null;
+}
+
 interface DashboardShellProps {
   activeView: string;
   onViewChange: (view: string) => void;
@@ -203,13 +221,14 @@ function SidebarContent({
   const logout = useAuthStore((s) => s.logout);
   if (!user) return null;
 
-  // Task 23 + 24 — Directeur et Enseignant : TOUS les modules restent
-  // affichés, ceux hors de leur périmètre commun sont grisés (voir
-  // TEACHER_ALLOWED_VIEWS / DIRECTOR_ALLOWED_VIEWS — même ensemble). Les
-  // autres rôles conservent le filtrage existant (modules masqués).
-  const isWorkspaceRole =
-    user.role === "director" || user.role === "teacher";
-  const items = isWorkspaceRole
+  // Task 23 + 24 + 26 — Directeur, Enseignant et Parent : TOUS les modules
+  // restent affichés, ceux hors de leur périmètre sont GRISÉS (voir
+  // TEACHER_ALLOWED_VIEWS / DIRECTOR_ALLOWED_VIEWS / PARENT_ALLOWED_VIEWS).
+  // Le parent ne peut cliquer QUE « Portail Parent » — tout le reste est
+  // cadenassé. Les autres rôles conservent le filtrage existant (modules
+  // masqués, tout actif).
+  const allowedViews = allowedViewsForRole(user.role);
+  const items = allowedViews
     ? NAV_ITEMS
     : NAV_ITEMS.filter((i) => isItemVisible(i, modules, user.role));
 
@@ -232,11 +251,13 @@ function SidebarContent({
       <nav className="flex-1 overflow-y-auto scroll-sygren px-3 py-4 space-y-0.5">
         {items.map((item) => {
           const active = item.id === activeView;
-          // Task 23 + 24 — module GRISÉ : hors du périmètre du rôle espace
-          // de travail (Directeur / Enseignant) — visible mais non cliquable,
-          // curseur interdit, cadenassé.
-          const grayed =
-            isWorkspaceRole && !WORKSPACE_VIEWS.has(item.id);
+          // Task 23 + 24 + 26 — module GRISÉ : hors du périmètre du rôle
+          // (Directeur / Enseignant : espace de travail — Parent : Portail
+          // Parent uniquement). Visible mais non cliquable, curseur
+          // interdit, cadenassé.
+          const grayed = allowedViews
+            ? !allowedViews.has(item.id)
+            : false;
           return (
             <button
               key={item.id}
@@ -245,7 +266,9 @@ function SidebarContent({
               aria-disabled={grayed}
               title={
                 grayed
-                  ? "Module réservé — accès non autorisé pour votre fonction"
+                  ? user.role === "parent"
+                    ? "Réservé au personnel — le parent accède uniquement au Portail Parent"
+                    : "Module réservé — accès non autorisé pour votre fonction"
                   : undefined
               }
               className={cn(

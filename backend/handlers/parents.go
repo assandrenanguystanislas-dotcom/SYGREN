@@ -57,11 +57,14 @@ func ListParents(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateParentRequest — payload de création d'un compte parent.
+// Task 26 — le mot de passe devient OPTIONNEL : vide → STANDARD = numéro
+// de téléphone. Le parent se connecte à l'interface avec son numéro de
+// téléphone comme CODE et comme MOT DE PASSE.
 type CreateParentRequest struct {
 	FullName string  `json:"full_name"`
 	Phone    *string `json:"phone,omitempty"`
 	Email    *string `json:"email,omitempty"`
-	Password string  `json:"password"`
+	Password string  `json:"password,omitempty"`
 	// Matricule de l'enfant (optionnel — pré-remplit le portail parent).
 	ChildMatricule *string `json:"child_matricule,omitempty"`
 }
@@ -73,14 +76,27 @@ func CreateParent(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
 		return
 	}
-	if req.FullName == "" || req.Password == "" {
-		middleware.JSONError(w, "full_name et password requis", http.StatusBadRequest)
+	if req.FullName == "" {
+		middleware.JSONError(w, "full_name requis", http.StatusBadRequest)
 		return
 	}
 	// Au moins un identifiant de connexion (téléphone OU email)
 	if (req.Phone == nil || *req.Phone == "") && (req.Email == nil || *req.Email == "") {
 		middleware.JSONError(w, "au moins un email ou téléphone est requis", http.StatusBadRequest)
 		return
+	}
+	// Task 26 — mot de passe STANDARD = numéro de téléphone : si aucun
+	// mot de passe n'est fourni, on utilise le téléphone. Le parent saisit
+	// alors son numéro comme CODE et comme MOT DE PASSE à la connexion.
+	// Modifiable à tout moment via « Modifier votre mot de passe ».
+	if req.Password == "" {
+		if req.Phone == nil || *req.Phone == "" {
+			middleware.JSONError(w,
+				"mot de passe requis (ou renseignez un téléphone : le mot de passe standard est le numéro de téléphone)",
+				http.StatusBadRequest)
+			return
+		}
+		req.Password = *req.Phone
 	}
 
 	// Unicité téléphone/email

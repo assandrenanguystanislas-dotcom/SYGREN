@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { GraduationCap, Loader2, Lock, User as UserIcon, ShieldCheck, KeyRound } from "lucide-react";
+import { GraduationCap, Loader2, Lock, User as UserIcon, ShieldCheck, KeyRound, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthStore } from "@/lib/auth-store";
 import { authApi } from "@/lib/api";
+import { RegisterAccessDialog } from "@/components/register-access-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -40,25 +41,44 @@ type LoginValues = z.infer<typeof loginSchema>;
 export function LoginView() {
   const login = useAuthStore((s) => s.login);
   const [submitting, setSubmitting] = useState(false);
-  const [loginRole, setLoginRole] = useState<"admin" | "director" | "teacher">("director");
+  // Task 26 — ajout de l'onglet « Parent » : code ET mot de passe = numéro
+  // de téléphone. Tout le reste est grisé pour le parent sauf le Portail
+  // Parent (dashboard-shell + page.tsx).
+  const [loginRole, setLoginRole] = useState<
+    "admin" | "director" | "teacher" | "parent"
+  >("director");
 
   // Config adaptative selon le rôle sélectionné.
-  // Task 25 — Directeur ET Enseignant se connectent avec le CODE ÉCOLE
-  // dédié à leur école ; le mot de passe standard est le numéro de
-  // téléphone du compte (modifiable à tout moment).
+  // Task 25/26 — Directeur ET Enseignant se connectent avec le CODE ÉCOLE
+  // dédié à leur école (créé eux-mêmes via « Créer vos accès ») ; le mot
+  // de passe standard est le numéro de téléphone (modifiable à tout
+  // moment). Le PARENT saisit son numéro de téléphone comme code ET mot
+  // de passe.
   const roleConfig = {
     admin: { label: "Email", placeholder: "admin@sygren.ci" },
     director: { label: "Code école", placeholder: "ex: EPPCP001" },
     teacher: { label: "Code école", placeholder: "ex: EPPCP001" },
+    parent: { label: "Code (numéro de téléphone)", placeholder: "ex: 0701020304" },
   }[loginRole];
 
-  // Task 25 — indice mot de passe standard (directeur + enseignant)
-  const showStandardPwdHint = loginRole === "director" || loginRole === "teacher";
+  // Task 25/26 — indice sous le champ mot de passe, adapté au rôle
+  const passwordHint =
+    loginRole === "director" || loginRole === "teacher"
+      ? "Mot de passe standard : votre numéro de téléphone. À modifier à tout moment via « Modifier votre mot de passe » après connexion."
+      : loginRole === "parent"
+        ? "Votre code et votre mot de passe correspondent à votre numéro de téléphone."
+        : null;
+
+  // Task 26 — auto-inscription (fin de la phase pilote) : les directeurs
+  // et enseignants créent leurs accès depuis cette interface.
+  const isRegisterableRole = loginRole === "director" || loginRole === "teacher";
+  const [registerOpen, setRegisterOpen] = useState(false);
 
   const roles = [
     { v: "admin" as const, l: "Admin" },
     { v: "director" as const, l: "Directeur" },
     { v: "teacher" as const, l: "Enseignant" },
+    { v: "parent" as const, l: "Parent" },
   ];
 
   // === Reset password modal ===
@@ -147,15 +167,25 @@ export function LoginView() {
             <CardTitle className="text-xl">Connexion</CardTitle>
           </CardHeader>
           <CardContent>
-            {/* Sélecteur de fonction (pills animées) */}
+            {/* Sélecteur de fonction (pills animées — 4 onglets depuis la Task 26) */}
             <div className="relative flex p-1 bg-muted rounded-full mb-5">
-              {/* Fond coulissant animé */}
+              {/* Fond coulissant animé — position calculée par index (générique) */}
               <div
                 className="absolute top-1 bottom-1 rounded-full bg-primary transition-all duration-300 ease-out"
-                style={{
-                  left: loginRole === "admin" ? "4px" : loginRole === "director" ? "calc(33.33% + 2px)" : "calc(66.66% + 0px)",
-                  right: loginRole === "admin" ? "calc(66.66% + 0px)" : loginRole === "director" ? "calc(33.33% + 2px)" : "4px",
-                }}
+                style={(() => {
+                  const idx = roles.findIndex((r) => r.v === loginRole);
+                  const seg = 100 / roles.length; // 25 % par onglet
+                  return {
+                    left:
+                      idx === 0
+                        ? "4px"
+                        : `calc(${idx * seg}% + 2px)`,
+                    right:
+                      idx === roles.length - 1
+                        ? "4px"
+                        : `calc(${(roles.length - 1 - idx) * seg}% + 2px)`,
+                  };
+                })()}
               />
               {roles.map(({ v, l }) => (
                 <button
@@ -214,18 +244,20 @@ export function LoginView() {
                             {...field}
                             type="password"
                             autoComplete="current-password"
-                            placeholder={showStandardPwdHint ? "Votre numéro de téléphone" : "••••••••"}
+                            placeholder={
+                              loginRole === "director" || loginRole === "teacher" || loginRole === "parent"
+                                ? "Votre numéro de téléphone"
+                                : "••••••••"
+                            }
                             className="pl-9"
                             disabled={submitting}
                           />
                         </div>
                       </FormControl>
                       <FormMessage />
-                      {showStandardPwdHint && (
+                      {passwordHint && (
                         <p className="text-[11px] text-muted-foreground">
-                          Mot de passe standard : votre numéro de téléphone. À
-                          modifier à tout moment via «&nbsp;Modifier votre mot
-                          de passe&nbsp;» après connexion.
+                          {passwordHint}
                         </p>
                       )}
                     </FormItem>
@@ -249,6 +281,20 @@ export function LoginView() {
               </form>
             </Form>
 
+            {/* Task 26 — auto-inscription (directeur / enseignant uniquement) */}
+            {isRegisterableRole && (
+              <div className="text-center mt-3">
+                <button
+                  type="button"
+                  onClick={() => setRegisterOpen(true)}
+                  className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1.5"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Pas encore d&apos;accès ? Créer vos accès
+                </button>
+              </div>
+            )}
+
             {/* Mot de passe oublié */}
             <div className="text-center mt-3">
               <button
@@ -260,6 +306,19 @@ export function LoginView() {
                 Mot de passe oublié ?
               </button>
             </div>
+
+            {/* === Task 26 — Modal auto-inscription === */}
+            <RegisterAccessDialog
+              open={registerOpen}
+              onOpenChange={setRegisterOpen}
+              role={loginRole === "teacher" ? "teacher" : "director"}
+              onRegistered={(schoolCode, phone) => {
+                // Pré-remplit la connexion : identifiant = code école,
+                // mot de passe = numéro de téléphone (standard).
+                form.setValue("identifier", schoolCode);
+                form.setValue("password", phone);
+              }}
+            />
 
             {/* === Modal reset password === */}
             <Dialog open={resetOpen} onOpenChange={setResetOpen}>

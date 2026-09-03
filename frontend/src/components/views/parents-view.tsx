@@ -127,13 +127,15 @@ export function ParentsView() {
       if (editing) {
         await updateMut.mutateAsync([editing.id, form]);
       } else {
-        if (!form.password) return; // mot de passe requis à la création
+        // Task 26 — mot de passe OPTIONNEL : vide → standard = numéro de
+        // téléphone (le parent se connecte avec son numéro comme code ET
+        // comme mot de passe).
         await createMut.mutateAsync([
           {
             full_name: form.full_name.trim(),
             email: form.email.trim() || undefined,
             phone: form.phone.trim() || undefined,
-            password: form.password,
+            password: form.password || undefined,
             child_matricule: form.child_matricule.trim() || undefined,
           },
         ]);
@@ -365,7 +367,7 @@ export function ParentsView() {
               <Label htmlFor="parent-password">
                 {editing
                   ? "Nouveau mot de passe (optionnel)"
-                  : "Mot de passe *"}
+                  : "Mot de passe (optionnel)"}
               </Label>
               <Input
                 id="parent-password"
@@ -374,7 +376,11 @@ export function ParentsView() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
                 }
-                placeholder={editing ? "Laisser vide pour conserver" : "••••••••"}
+                placeholder={
+                  editing
+                    ? "Laisser vide pour conserver"
+                    : "Laisser vide → numéro de téléphone"
+                }
               />
             </div>
             <div className="space-y-1.5">
@@ -395,7 +401,10 @@ export function ParentsView() {
           <p className="text-xs text-muted-foreground">
             Au moins un email OU un téléphone est requis (identifiant de
             connexion). Le matricule de l&apos;enfant pré-remplit la recherche
-            du portail parent.
+            du portail parent. Mot de passe standard = numéro de téléphone : le
+            parent se connecte avec son numéro comme code ET comme mot de
+            passe, modifiable à tout moment via «&nbsp;Modifier votre mot de
+            passe&nbsp;».
           </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
@@ -410,8 +419,7 @@ export function ParentsView() {
             type="submit"
             disabled={
               !form.full_name.trim() ||
-              (!editing &&
-                (!form.password || (!form.email.trim() && !form.phone.trim())))
+              (!editing && !form.email.trim() && !form.phone.trim())
             }
           >
             {editing ? "Enregistrer" : "Créer le compte"}

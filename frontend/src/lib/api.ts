@@ -177,6 +177,22 @@ export const authApi = {
       body: JSON.stringify({ identifier, password }),
     }),
 
+  /** Task 26 — Auto-inscription Directeur / Enseignant (PUBLIC — fin de la
+   *  phase pilote) : création des accès depuis l'écran de connexion. Le
+   *  mot de passe est optionnel (vide → standard = numéro de téléphone). */
+  registerAccess: (data: {
+    role: "director" | "teacher";
+    school_code: string;
+    full_name: string;
+    phone: string;
+    email?: string;
+    password?: string;
+  }) =>
+    apiFetch<{ status: string; message: string }>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   /** Récupère le profil de l'utilisateur connecté. */
   me: () => apiFetch<User>("/api/me"),
 
@@ -648,7 +664,10 @@ export const parentsApi = {
     full_name: string;
     phone?: string;
     email?: string;
-    password: string;
+    // Task 26 — optionnel : vide → mot de passe standard = numéro de
+    // téléphone (le parent se connecte avec son numéro comme code ET mot
+    // de passe).
+    password?: string;
     child_matricule?: string;
   }) =>
     apiFetch<User>("/api/parents", {

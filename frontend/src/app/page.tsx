@@ -16,6 +16,7 @@ import {
   NAV_ITEMS,
   DIRECTOR_ALLOWED_VIEWS,
   TEACHER_ALLOWED_VIEWS,
+  PARENT_ALLOWED_VIEWS,
 } from "@/components/dashboard-shell";
 import { WelcomeDashboard } from "@/components/dashboards/welcome-dashboard";
 import { IepView } from "@/components/views/iep-view";
@@ -68,6 +69,9 @@ function isViewAllowed(item: NavItem, user: User | null, modules: string[]): boo
   // des documents autorisée, impression verrouillée côté frontend).
   if (user.role === "director") return DIRECTOR_ALLOWED_VIEWS.has(item.id);
   if (user.role === "teacher") return TEACHER_ALLOWED_VIEWS.has(item.id);
+  // Task 26 — le PARENT n'accède QU'AU Portail Parent : tout le reste est
+  // grisé dans la navigation et refusé en accès direct par hash.
+  if (user.role === "parent") return PARENT_ALLOWED_VIEWS.has(item.id);
   if (modules.length === 0) {
     return item.roles.includes(user.role);
   }
@@ -211,9 +215,9 @@ function AppContent() {
   const allowed = navItem ? isViewAllowed(navItem, user, modules) : false;
 
   // Vue par défaut si la vue active n'est pas autorisée pour ce rôle
-  // (v2 : le PARENT atterrit sur son Portail Parent — pas de dashboard ;
-  // Task 23 + 24 : le DIRECTEUR et l'ENSEIGNANT atterrissent sur le module
-  // Utilisateurs).
+  // (Task 26 : le PARENT atterrit sur son Portail Parent — tout le reste
+  // est grisé ; Tasks 23 + 24 : le DIRECTEUR et l'ENSEIGNANT atterrissent
+  // sur le module Utilisateurs).
   const view = allowed
     ? activeView
     : user.role === "parent"
