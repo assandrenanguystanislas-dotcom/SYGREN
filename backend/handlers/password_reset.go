@@ -21,20 +21,21 @@ import (
 // Workflow :
 //   1. User (non authentifié) soumet une demande (identifier + role_hint).
 //   2. Admin voit les demandes pending → approve (option 1: temp password,
-//      option 2: reset link) OU reject.
+//      option 2: reset link, option 3: standard téléphone) OU reject.
 //   3. User change son mot de passe (option 1: login avec temp password →
-//      doit changer ; option 2: reset link avec token).
+//      doit changer ; option 2: reset link avec token ; option 3: se
+//      reconnecte avec SON numéro de téléphone — standard Task 25).
 
 // --- Types ---
 
 type ResetRequestInput struct {
 	Identifier string `json:"identifier"` // email, téléphone, ou code école
-	RoleHint   string `json:"role_hint"`  // "admin" | "inspector" | "director" | "teacher"
+	RoleHint   string `json:"role_hint"`  // "admin" | "inspector" | "director" | "teacher" | "parent"
 	Message    string `json:"message"`    // optionnel
 }
 
 type ApproveRequestInput struct {
-	Method string `json:"method"` // "temp_password" | "reset_link"
+	Method string `json:"method"` // "temp_password" | "reset_link" | "reset_to_phone"
 	Note   string `json:"note"`   // optionnel
 }
 
@@ -153,8 +154,8 @@ func ApproveResetRequest(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
 		return
 	}
-	if req.Method != "temp_password" && req.Method != "reset_link" {
-		middleware.JSONError(w, "method doit être 'temp_password' ou 'reset_link'", http.StatusBadRequest)
+	if req.Method != "temp_password" && req.Method != "reset_link" && req.Method != "reset_to_phone" {
+		middleware.JSONError(w, "method doit être 'temp_password', 'reset_link' ou 'reset_to_phone'", http.StatusBadRequest)
 		return
 	}
 
@@ -206,6 +207,11 @@ func ApproveResetRequest(w http.ResponseWriter, r *http.Request) {
 		resetReq.TempPassword = &tempPwd
 		_ = database.DB.Save(&resetReq)
 
+		uid := user.ID
+		LogAction(r, "auth.password_reset_approved", "user", &uid, map[string]string{
+			"method": req.Method,
+		})
+
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
 			"status":        "approved",
 			"method":        "temp_password",
@@ -213,11 +219,51 @@ func ApproveResetRequest(w http.ResponseWriter, r *http.Request) {
 			"user_name":     user.FullName,
 			"message":       "Mot de passe temporaire généré. Communiquez-le à l'utilisateur. Il devra le changer à la première connexion.",
 		})
+	} else if req.Method == "reset_to_phone" {
+		// Option 3 (Task 27) — remettre le mot de passe au STANDARD : le
+		// numéro de téléphone de l'utilisateur (standard Task 25). C'est la
+		// réinitialisation la plus simple à communiquer : l'utilisateur se
+		// reconnecte exactement comme à la création de son compte, puis
+		// peut changer son mot de passe via « Modifier votre mot de passe ».
+		if user.Phone == nil || strings.TrimSpace(*user.Phone) == "" {
+			middleware.JSONError(w, "aucun numéro de téléphone enregistré pour ce compte — utilisez un mot de passe temporaire ou un lien", http.StatusBadRequest)
+			return
+		}
+		phonePwd := *user.Phone
+		hash, err := utils.HashPassword(phonePwd)
+		if err != nil {
+			middleware.JSONError(w, "erreur hash mot de passe", http.StatusInternalServerError)
+			return
+		}
+		user.Password = hash
+		// Le standard est CONNU de l'utilisateur → pas de changement forcé.
+		user.MustChangePassword = false
+		database.DB.Save(&user)
+		resetReq.TempPassword = &phonePwd
+		_ = database.DB.Save(&resetReq)
+
+		uid := user.ID
+		LogAction(r, "auth.password_reset_approved", "user", &uid, map[string]string{
+			"method": req.Method,
+		})
+
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"status":        "approved",
+			"method":        "reset_to_phone",
+			"temp_password": phonePwd, // = numéro de téléphone (communiqué tel quel)
+			"user_name":     user.FullName,
+			"message":       "Mot de passe réinitialisé au standard : le numéro de téléphone de l'utilisateur.",
+		})
 	} else {
 		// Option 2 : générer un reset link avec token
 		token := uuid.NewString()
 		resetReq.ResetToken = &token
 		_ = database.DB.Save(&resetReq)
+
+		uid := user.ID
+		LogAction(r, "auth.password_reset_approved", "user", &uid, map[string]string{
+			"method": req.Method,
+		})
 
 		resetLink := fmt.Sprintf("https://sygren.vercel.app/reset?token=%s", token)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
@@ -255,6 +301,12 @@ func RejectResetRequest(w http.ResponseWriter, r *http.Request) {
 	resetReq.ResolvedBy = &adminID
 	resetReq.AdminNote = strings.TrimSpace(req.Note)
 	database.DB.Save(&resetReq)
+
+	if resetReq.UserID != nil {
+		LogAction(r, "auth.password_reset_rejected", "user", resetReq.UserID, map[string]string{})
+	} else {
+		LogAction(r, "auth.password_reset_rejected", "password_reset_request", &resetReq.ID, map[string]string{})
+	}
 
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "rejected"})
 }

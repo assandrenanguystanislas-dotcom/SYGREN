@@ -346,7 +346,7 @@ export function LoginView() {
                   <div className="space-y-4">
                     <div>
                       <label className="text-xs font-medium mb-1.5 block">Votre fonction</label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {([
                           { v: "admin" as const, l: "Admin" },
                           { v: "director" as const, l: "Directeur" },

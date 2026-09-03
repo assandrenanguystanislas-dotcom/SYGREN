@@ -230,7 +230,7 @@ export const authApi = {
       `/api/auth/reset-requests${status ? `?status=${status}` : ""}`,
     ),
 
-  /** Admin approuve une demande (option 1: temp_password, option 2: reset_link). */
+  /** Admin approuve une demande (option 1: temp_password, option 2: reset_link, option 3: reset_to_phone — standard téléphone). */
   approveResetRequest: (id: string, data: { method: string; note?: string }) =>
     apiFetch<{
       status: string;

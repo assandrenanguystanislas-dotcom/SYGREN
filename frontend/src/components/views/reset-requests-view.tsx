@@ -10,6 +10,7 @@ import {
   XCircle,
   Copy,
   Clock,
+  Phone,
 } from "lucide-react";
 import { authApi } from "@/lib/api";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ const ROLE_LABELS: Record<string, string> = {
   inspector: "Admin IEP",
   director: "Directeur",
   teacher: "Enseignant",
+  parent: "Parent",
 };
 
 export function ResetRequestsView({ embedded = false }: { embedded?: boolean }) {
@@ -52,10 +54,22 @@ export function ResetRequestsView({ embedded = false }: { embedded?: boolean }) 
 
   const requests = data?.requests ?? [];
 
-  async function handleApprove(req: PasswordResetRequest, method: "temp_password" | "reset_link") {
+  async function handleApprove(
+    req: PasswordResetRequest,
+    method: "temp_password" | "reset_link" | "reset_to_phone",
+  ) {
     try {
       const res = await authApi.approveResetRequest(req.id, { method });
-      if (method === "temp_password" && res.temp_password) {
+      // Task 27 — option « Standard » : le mot de passe redevient le numéro
+      // de téléphone (standard Task 25), connu de l'utilisateur.
+      if (method === "reset_to_phone" && res.temp_password) {
+        setResultDialog({
+          title: "Mot de passe réinitialisé au standard",
+          value: res.temp_password,
+          isLink: false,
+          message: `Le mot de passe de ${res.user_name} est de nouveau son numéro de téléphone. Il se connecte comme à la création de son compte, puis peut le modifier via « Modifier votre mot de passe ».`,
+        });
+      } else if (method === "temp_password" && res.temp_password) {
         setResultDialog({
           title: "Mot de passe temporaire généré",
           value: res.temp_password,
@@ -190,6 +204,16 @@ export function ResetRequestsView({ embedded = false }: { embedded?: boolean }) 
                       <td className="p-2">
                         {req.status === "pending" ? (
                           <div className="flex items-center justify-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                              title="Réinitialiser au numéro de téléphone (standard)"
+                              onClick={() => handleApprove(req, "reset_to_phone")}
+                            >
+                              <Phone className="w-3 h-3 mr-1" />
+                              Standard
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
