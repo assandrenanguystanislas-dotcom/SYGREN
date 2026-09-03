@@ -305,11 +305,14 @@ function buildBulletinEleve(
 // Injecté dans le body (après la <link> globals.css en head) : gagne la
 // cascade sur la règle @page A4 portrait (module /releve) et ne s'applique
 // qu'au présent document.
-function PrintStyle() {
+// v3 — mode `b5` (PORTAIL PARENT) : page B5 PORTRAIT (176×250 mm, marge 0)
+// — UN SEUL bulletin par page, sans trait de découpe. Dimensions
+// explicites (comme /resultats-fin-annee-doc) : zéro ambiguïté d'orientation.
+function PrintStyle({ b5 }: { b5?: boolean }) {
   return (
     <style>{`
       @media print {
-        @page { size: A4 landscape; margin: 0; }
+        @page { size: ${b5 ? "176mm 250mm" : "A4 landscape"}; margin: 0; }
       }
     `}</style>
   );
@@ -347,7 +350,7 @@ export default function BulletinsPage() {
     // Absent = toutes les classes (comportement historique).
     const classIdParam = params.get("class_id");
     // v2 — mode PORTAIL PARENT : matricule de l'enfant présent dans l'URL
-    // → un seul bulletin (2 exemplaires), données via /api/parent/…
+    // → un seul bulletin (UN exemplaire, format B5), données via /api/parent/…
     const matriculeParam = params.get("matricule");
 
     // Si pas de session_id → erreur immédiate.
@@ -397,7 +400,8 @@ export default function BulletinsPage() {
     }
 
     // === v2 — MODE PORTAIL PARENT ===
-    // Un seul bulletin (2 exemplaires) : celui de l'enfant identifié par
+    // Un seul bulletin (UN exemplaire, page B5 portrait) : celui de
+    // l'enfant identifié par
     // son matricule, pour la session demandée. Données via le portail
     // parent (rangs inclus — les endpoints génériques lui sont fermés).
     if (matriculeParam) {
@@ -447,8 +451,9 @@ export default function BulletinsPage() {
             classStat,
             new Map(),
           );
-          // DEUX EXEMPLAIRES (famille + école) — même feuille A4, à découper.
-          setEleves([eleve, eleve]);
+          // v3 — UN SEUL EXEMPLAIRE : le bulletin de l'enfant, seul sur sa
+          // page B5 portrait (plus de double ni de trait de découpe).
+          setEleves([eleve]);
           setIepInfo({
             name: releve.iep_name,
             region: releve.iep_region,
@@ -627,7 +632,7 @@ export default function BulletinsPage() {
   if (loading) {
     return (
       <>
-        <PrintStyle />
+        <PrintStyle b5={parentMode} />
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
           <Loader2 className="w-8 h-8 animate-spin text-blue-700" />
           <p className="mt-2 text-sm text-gray-700">Chargement des bulletins…</p>
@@ -639,7 +644,7 @@ export default function BulletinsPage() {
   if (error) {
     return (
       <>
-        <PrintStyle />
+        <PrintStyle b5={parentMode} />
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
           <div className="text-center max-w-md">
             <AlertCircle className="w-10 h-10 text-red-600 mx-auto" />
@@ -667,7 +672,7 @@ export default function BulletinsPage() {
   if (eleves.length === 0) {
     return (
       <>
-        <PrintStyle />
+        <PrintStyle b5={parentMode} />
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
           <div className="text-center max-w-md">
             <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
@@ -689,18 +694,19 @@ export default function BulletinsPage() {
 
   return (
     <>
-      <PrintStyle />
+      <PrintStyle b5={parentMode} />
       <div className="bg-gray-100 min-h-screen py-6 print:bg-white print:py-0 print:min-h-0">
         {/* Barre d'outils — cachée à l'impression */}
         <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden shadow-sm">
           <div>
             <h1 className="font-semibold text-sm text-gray-900">
-              Bulletins A5 — {meta?.schoolName ?? "École"} —{" "}
+              {parentMode ? "Bulletin — " : "Bulletins A5 — "}{meta?.schoolName ?? "École"} —{" "}
               {meta?.sessionLabel ?? "Session"}
             </h1>
             <p className="text-[11px] text-gray-500">
-              {eleves.length} élève(s) · 2 bulletins/page A4 paysage · entête
-              institutionnel officiel
+              {parentMode
+                ? "1 bulletin · format B5 portrait — bulletin unique (un seul exemplaire)"
+                : `${eleves.length} élève(s) · 2 bulletins/page A4 paysage · entête institutionnel officiel`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -732,7 +738,7 @@ export default function BulletinsPage() {
           id="bulletins-doc"
           className={`py-4 print:p-0 print:py-0 ${canPrint ? "" : "print-locked"}`}
         >
-          <BulletinsA5Landscape eleves={eleves} iepInfo={iepInfo} />
+          <BulletinsA5Landscape eleves={eleves} iepInfo={iepInfo} singleB5={parentMode} />
         </div>
       </div>
     </>

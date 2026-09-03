@@ -7,11 +7,13 @@
 // Parents). Le parent saisit (ou retrouve pré-saisi) LE MATRICULE DE SON
 // ENFANT, puis :
 //   - « Bulletin de fin d'année » (module Résultats) : ouvre le bulletin
-//     individuel « RESULTATS DE FIN D'ANNEE » de l'enfant (2 exemplaires,
-//     A4 paysage 2×B5, drapeau CI) — CONSULTATION + IMPRESSION autorisées ;
+//     individuel « RESULTATS DE FIN D'ANNEE » de l'enfant (v3 : UN SEUL
+//     exemplaire, page B5 portrait, drapeau CI) — CONSULTATION +
+//     IMPRESSION autorisées ;
 //   - « Bulletins de période » (module Bulletins) : choisit une session
 //     (composition mensuelle / passage) et ouvre le bulletin individuel
-//     A5 de l'enfant — CONSULTATION + IMPRESSION autorisées.
+//     B5 de l'enfant (UN seul exemplaire) — CONSULTATION + IMPRESSION
+//     autorisées.
 //
 // L'impression est VERROUILLÉE pour le parent sur tout autre document :
 // les pages d'impression vérifient le rôle (lib/print-guard) et n'autorisent
@@ -270,7 +272,7 @@ function ParentPortalResults({
                 Bulletin individuel « Résultats de fin d&apos;année » —
                 moyennes (compositions, composition de passage, annuelle),
                 rang dans la classe, décision du conseil des maîtres, signatures.
-                Deux exemplaires à découper (famille + école).
+                Bulletin UNIQUE au format B5 (un seul exemplaire).
               </p>
             </CardContent>
           </Card>
@@ -331,9 +333,9 @@ function ParentPortalResults({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Bulletin individuel de période (modèle officiel A5) — notes par
-                matière, moyenne, rang, appréciation et visas. Deux exemplaires
-                à découper (famille + école).
+                Bulletin individuel de période (modèle officiel B5) — notes par
+                matière, moyenne, rang, appréciation et visas. Bulletin UNIQUE
+                (un seul exemplaire).
               </p>
               {sessions.length === 0 && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">

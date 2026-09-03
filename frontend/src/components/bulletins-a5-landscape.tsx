@@ -134,17 +134,26 @@ function fmt(v: number): string {
 export default function BulletinsA5Landscape({
   eleves,
   iepInfo,
+  singleB5,
 }: {
   eleves: BulletinEleve[];
   iepInfo?: IEPInfo;
+  /** v3 — PORTAIL PARENT : UN SEUL bulletin par page, au FORMAT B5
+   *  PORTRAIT (176×250 mm) — pas de second exemplaire ni de trait de
+   *  découpe (impression famille). La règle @page correspondante est
+   *  injectée par la page appelante (<PrintStyle b5 />). */
+  singleB5?: boolean;
 }) {
-  // Découpage par pages de 2 bulletins — sans jamais mélanger deux classes
-  // sur la même page (facilite la découpe et la distribution par classe) :
-  // un changement de classe force une nouvelle page.
+  // Découpage par pages — sans jamais mélanger deux classes sur la même
+  // page (facilite la découpe et la distribution par classe) : un
+  // changement de classe force une nouvelle page. Mode admin : 2
+  // bulletins par feuille A4 paysage ; mode parent (singleB5) : UN SEUL
+  // bulletin par feuille B5 portrait.
+  const perPage = singleB5 ? 1 : 2;
   const chunked: BulletinEleve[][] = [];
   for (const e of eleves) {
     const last = chunked[chunked.length - 1];
-    if (!last || last.length === 2 || last[0].classe !== e.classe) {
+    if (!last || last.length === perPage || last[0].classe !== e.classe) {
       chunked.push([e]);
     } else {
       last.push(e);
@@ -158,7 +167,7 @@ export default function BulletinsA5Landscape({
         return (
           <div
             key={pageIdx}
-            className={`page-bulletins w-[297mm] h-[210mm] bg-white mx-auto mb-6 p-4 print:p-2 print:m-0 flex flex-row border border-gray-300 print:border-none overflow-hidden ${!isLastPage ? "break-after-page" : ""}`}
+            className={`page-bulletins bg-white mx-auto mb-6 p-4 print:p-2 print:m-0 flex flex-row border border-gray-300 print:border-none overflow-hidden ${!isLastPage ? "break-after-page" : ""} ${singleB5 ? "w-[176mm] h-[250mm]" : "w-[297mm] h-[210mm]"}`}
             style={{ pageBreakAfter: isLastPage ? "auto" : "always" }}
           >
             {pair.map((eleve, idx) => {
@@ -173,8 +182,8 @@ export default function BulletinsA5Landscape({
 
               return (
                 <React.Fragment key={eleve.id}>
-                  {/* Moitié A5 */}
-                  <div className="w-1/2 h-full px-3 py-1 flex flex-col justify-between text-black font-sans text-[11px] relative overflow-hidden">
+                  {/* Moitié A5 (mode admin) ou page B5 pleine (mode parent) */}
+                  <div className={`${singleB5 ? "w-full" : "w-1/2"} h-full px-3 py-1 flex flex-col justify-between text-black font-sans text-[11px] relative overflow-hidden`}>
                     {/* ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond) */}
                     <CIArmoiriesWatermark opacity={0.06} width="64%" />
                     {/* Ruban tricolore ivoirien (haut du bulletin) */}

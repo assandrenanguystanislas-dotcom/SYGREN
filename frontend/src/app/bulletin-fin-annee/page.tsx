@@ -8,9 +8,9 @@
 // Query params : school (id école), class (id classe), year (année de
 // référence, optionnel) — OU, en mode PORTAIL PARENT (v2) :
 // matricule (matricule de l'enfant). En mode parent, les données sont
-// chargées via /api/parent/end-of-year et seuls les DEUX EXEMPLAIRES du
-// bulletin de l'enfant sont rendus (impression autorisée pour le rôle
-// parent sur CE document uniquement).
+// chargées via /api/parent/end-of-year et SEUL LE BULLETIN de l'enfant
+// est rendu (v3 : UN SEUL exemplaire, page B5 portrait — impression
+// autorisée pour le rôle parent sur CE document uniquement).
 
 import { useSearchParams } from "next/navigation";
 

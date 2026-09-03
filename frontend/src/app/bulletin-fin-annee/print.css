@@ -79,3 +79,47 @@
     page-break-inside: avoid;
   }
 }
+
+/* === v3 — MODE PORTAIL PARENT : UN SEUL BULLETIN, FORMAT B5 PORTRAIT ===
+ * Le parent consulte/imprime le bulletin de SON enfant en UN SEUL
+ * exemplaire, seul sur une page B5 (176×250 mm) — sans trait de découpe
+ * ni second exemplaire. La règle @page correspondante (176mm 250mm,
+ * marge 8 mm) est injectée par le composant (mode parent uniquement) et
+ * prime sur la règle A4 paysage ci-dessus. Sur papier A4, le dialogue
+ * d'impression met à l'échelle la page B5 (« Ajuster pour remplir »). */
+.parent-b5-sheet {
+  /* Écran : feuille B5 blanche centrée (l'atelier parent voit le
+     bulletin tel qu'il sera imprimé). */
+  display: flex;
+  width: 176mm;
+  min-height: 250mm;
+  margin: 0 auto;
+  padding: 5mm;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.parent-b5-sheet .bulletin-copy {
+  /* Le bulletin occupe TOUTE la feuille (pas une demi-largeur). */
+  max-width: none !important;
+  width: 100%;
+}
+
+@media print {
+  .parent-b5-sheet {
+    /* Impression : zone imprimable exacte de la page B5
+       (250mm − 2×8mm de marge @page = 234mm) — une seule page,
+       insécable, sans ombre ni bordure. */
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: 234mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

@@ -257,17 +257,23 @@ function scaleOf(data: EndOfYearSheet, row: EndOfYearRow): number {
 }
 
 /** UN bulletin d'UN élève (demi-feuille « B5 » — deux élèves DIFFÉRENTS
- *  par feuille A4, séparés par le trait discontinu). */
+ *  par feuille A4, séparés par le trait discontinu). En mode PORTAIL
+ *  PARENT (`full`), le même bulletin occupe SEUL une page B5 portrait
+ *  (176×250 mm) : largeur pleine, sans contrainte de demi-feuille. */
 function BulletinCopy({
   data,
   row,
   rang,
   effectif,
+  full,
 }: {
   data: EndOfYearSheet;
   row: EndOfYearRow;
   rang: number;
   effectif: number;
+  /** Portail parent : le bulletin est SEUL sur sa page B5 — pleine
+   *  largeur (pas de demi-feuille A4 paysage). */
+  full?: boolean;
 }) {
   const iep = data.iep;
   const annee = anneeScolaireBulletin(data);
@@ -286,8 +292,8 @@ function BulletinCopy({
     <div
       className="bulletin-copy"
       style={{
-        flex: "1 1 137mm",
-        maxWidth: "137mm",
+        flex: full ? "1 1 auto" : "1 1 137mm",
+        maxWidth: full ? "none" : "137mm",
         minWidth: 0,
         display: "flex",
         flexDirection: "column",
@@ -642,7 +648,8 @@ export function EndOfYearBulletin({
   onClose: () => void;
   /** v2 — PORTAIL PARENT : si présent, mode « bulletin individuel de
    *  l'enfant » — données chargées par MATRICULE via /api/parent/… et la
-   *  page n'affiche que le bulletin de CET élève (2 exemplaires). */
+   *  page n'affiche que le bulletin de CET élève (v3 : UN SEUL
+   *  exemplaire, page B5 portrait). */
   matricule?: string;
 }) {
   const role = usePrintRole();
@@ -710,13 +717,10 @@ export function EndOfYearBulletin({
   // Appariement des élèves (ordre de mérite — les rows arrivent triés) :
   // 1er + 2e sur la première feuille, 3e + 4e sur la suivante, etc.
   // (nombre impair → le dernier bulletin est seul sur sa feuille).
-  // Mode parent : DEUX EXEMPLAIRES du bulletin de l'enfant (un pour la
-  // famille, un pour l'école) — même feuille A4, à découper.
-  const pairs: EndOfYearRow[][] = parentMode
-    ? rows.length === 1
-      ? [[rows[0], rows[0]]]
-      : [rows]
-    : [];
+  // v3 — MODE PARENT : plus de double exemplaire — UN SEUL bulletin,
+  // seul sur sa page au FORMAT B5 PORTRAIT (176×250 mm), sans trait de
+  // découpe (rendu dédié `parent-b5-sheet`, voir plus bas).
+  const pairs: EndOfYearRow[][] = [];
   if (!parentMode) {
     for (let i = 0; i < rows.length; i += 2) {
       pairs.push(rows.slice(i, i + 2));
@@ -733,8 +737,9 @@ export function EndOfYearBulletin({
         </h3>
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline text-xs text-muted-foreground mr-1">
-            Format : A4 paysage — 2 bulletins par feuille (2 élèves
-            différents, à découper)
+            {parentMode
+              ? "Format : B5 portrait — bulletin unique (un seul exemplaire)"
+              : "Format : A4 paysage — 2 bulletins par feuille (2 élèves différents, à découper)"}
           </span>
           {canPrint ? (
             <button
@@ -759,6 +764,13 @@ export function EndOfYearBulletin({
 
       {/* Message imprimé à la place du document si impression verrouillée */}
       {!canPrint && <PrintLockDocumentMessage />}
+      {/* v3 — MODE PORTAIL PARENT : @page B5 portrait (176×250 mm, marge
+          8 mm) — <style> rendu dans le corps (APRÈS le <link> print.css de
+          la tête) : il prime sur la règle @page « 297mm 210mm » (A4
+          paysage) du mode admin, même technique que /bulletins. */}
+      {parentMode && (
+        <style>{`@page { size: 176mm 250mm; margin: 8mm; }`}</style>
+      )}
       {/* === BULLETINS (isolement impression #bulletins-fin-annee-doc) === */}
       <div
         id="bulletins-fin-annee-doc"
@@ -769,7 +781,24 @@ export function EndOfYearBulletin({
           padding: "16px 8px 24px",
         }}
       >
-        {pairs.map((pair, pageIdx) => {
+        {parentMode ? (
+          /* === MODE PARENT : UN SEUL BULLETIN — FEUILLE B5 PORTRAIT ===
+             Le bulletin de l'enfant occupe SEUL sa page (176×250 mm) :
+             pleine largeur, signatures poussées en bas, AUCUN trait de
+             découpe ni second exemplaire. */
+          <div className="parent-b5-sheet">
+            {rows.length > 0 && (
+              <BulletinCopy
+                data={data}
+                row={rows[0]}
+                rang={childRang}
+                effectif={effectif}
+                full
+              />
+            )}
+          </div>
+        ) : (
+          pairs.map((pair, pageIdx) => {
           const isLastPage = pageIdx === pairs.length - 1;
           return (
             <div
@@ -792,7 +821,7 @@ export function EndOfYearBulletin({
                 <BulletinCopy
                   data={data}
                   row={pair[0]}
-                  rang={parentMode ? childRang : pageIdx * 2 + 1}
+                  rang={pageIdx * 2 + 1}
                   effectif={effectif}
                 />
               )}
@@ -801,7 +830,7 @@ export function EndOfYearBulletin({
                 <BulletinCopy
                   data={data}
                   row={pair[1]}
-                  rang={parentMode ? childRang : pageIdx * 2 + 2}
+                  rang={pageIdx * 2 + 2}
                   effectif={effectif}
                 />
               ) : (
@@ -809,7 +838,8 @@ export function EndOfYearBulletin({
               )}
             </div>
           );
-        })}
+          })
+        )}
         {rows.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-10">
             Aucun élève inscrit dans ce cours.
