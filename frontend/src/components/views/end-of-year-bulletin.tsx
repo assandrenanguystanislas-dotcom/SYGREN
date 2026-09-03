@@ -40,11 +40,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Printer, Scissors, X } from "lucide-react";
 import type { CSSProperties } from "react";
 
-import { reportsApi } from "@/lib/api";
+import { parentPortalApi, reportsApi } from "@/lib/api";
+import {
+  canPrintDocument,
+  PrintLockBadge,
+  PrintLockDocumentMessage,
+  usePrintRole,
+} from "@/lib/print-guard";
 import { monthLabel } from "@/lib/session-utils";
 import type { EndOfYearRow, EndOfYearSheet } from "@/lib/types";
 
 import { INK, OFFICIAL_FONT } from "./official-doc";
+import { CIArmoiriesWatermark } from "@/components/ci-decor";
 
 // === Couleurs du drapeau de la Côte d'Ivoire (bandes verticales) ===
 // Orange #F77F00 · Blanc #FFFFFF · Vert #009E60 — variantes pastel pour
@@ -288,8 +295,12 @@ function BulletinCopy({
         color: INK,
         fontSize: "12px",
         lineHeight: 1.35,
+        position: "relative", // filigrane armoiries DANS LE FOND
+        overflow: "hidden",
       }}
     >
+      {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond du bulletin) --- */}
+      <CIArmoiriesWatermark opacity={0.06} width="62%" />
       {/* --- Ruban tricolore (haut) --- */}
       <FlagRibbon />
 
@@ -623,15 +634,33 @@ export function EndOfYearBulletin({
   classId,
   year,
   onClose,
+  matricule,
 }: {
-  schoolId: string;
-  classId: string;
+  schoolId?: string;
+  classId?: string;
   year: number;
   onClose: () => void;
+  /** v2 — PORTAIL PARENT : si présent, mode « bulletin individuel de
+   *  l'enfant » — données chargées par MATRICULE via /api/parent/… et la
+   *  page n'affiche que le bulletin de CET élève (2 exemplaires). */
+  matricule?: string;
 }) {
+  const role = usePrintRole();
+  // Impression : admin + inspector (documents internes) OU parent en mode
+  // portail parent (bulletin individuel de son enfant uniquement).
+  const canPrint = canPrintDocument(role, !!matricule);
+  const parentMode = !!matricule;
   const { data, isLoading, error } = useQuery({
-    queryKey: ["end-of-year", schoolId, classId, year],
-    queryFn: () => reportsApi.endOfYearSheet(schoolId, classId, year),
+    queryKey: [
+      "end-of-year",
+      parentMode ? `parent:${matricule}` : schoolId,
+      classId,
+      year,
+    ],
+    queryFn: () =>
+      parentMode
+        ? parentPortalApi.endOfYear(matricule!, year)
+        : reportsApi.endOfYearSheet(schoolId!, classId!, year),
   });
 
   if (isLoading) {
@@ -666,15 +695,32 @@ export function EndOfYearBulletin({
     );
   }
 
-  const rows = data.rows;
+  // v2 — mode parent : isoler le bulletin de l'enfant (student_id renvoyé
+  // par l'API) ; le rang et l'effectif restent ceux de la classe complète.
+  const rows = parentMode
+    ? data.rows.filter((r) => r.student_id === data.student_id)
+    : data.rows;
   const effectif = data.summary?.effectif?.total ?? data.count;
+  // RANG RÉEL de l'enfant dans l'ordre de mérite de la classe (1-based) —
+  // les copies du mode parent affichent ce rang (pas la position sur la
+  // feuille).
+  const childRang =
+    data.rows.findIndex((r) => r.student_id === data.student_id) + 1;
 
   // Appariement des élèves (ordre de mérite — les rows arrivent triés) :
   // 1er + 2e sur la première feuille, 3e + 4e sur la suivante, etc.
   // (nombre impair → le dernier bulletin est seul sur sa feuille).
-  const pairs: EndOfYearRow[][] = [];
-  for (let i = 0; i < rows.length; i += 2) {
-    pairs.push(rows.slice(i, i + 2));
+  // Mode parent : DEUX EXEMPLAIRES du bulletin de l'enfant (un pour la
+  // famille, un pour l'école) — même feuille A4, à découper.
+  const pairs: EndOfYearRow[][] = parentMode
+    ? rows.length === 1
+      ? [[rows[0], rows[0]]]
+      : [rows]
+    : [];
+  if (!parentMode) {
+    for (let i = 0; i < rows.length; i += 2) {
+      pairs.push(rows.slice(i, i + 2));
+    }
   }
 
   return (
@@ -690,13 +736,17 @@ export function EndOfYearBulletin({
             Format : A4 paysage — 2 bulletins par feuille (2 élèves
             différents, à découper)
           </span>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimer / PDF
-          </button>
+          {canPrint ? (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimer / PDF
+            </button>
+          ) : (
+            <PrintLockBadge />
+          )}
           <button
             onClick={onClose}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-md text-sm"
@@ -707,9 +757,12 @@ export function EndOfYearBulletin({
         </div>
       </div>
 
+      {/* Message imprimé à la place du document si impression verrouillée */}
+      {!canPrint && <PrintLockDocumentMessage />}
       {/* === BULLETINS (isolement impression #bulletins-fin-annee-doc) === */}
       <div
         id="bulletins-fin-annee-doc"
+        className={canPrint ? undefined : "print-locked"}
         style={{
           fontFamily: OFFICIAL_FONT,
           color: INK,
@@ -739,7 +792,7 @@ export function EndOfYearBulletin({
                 <BulletinCopy
                   data={data}
                   row={pair[0]}
-                  rang={pageIdx * 2 + 1}
+                  rang={parentMode ? childRang : pageIdx * 2 + 1}
                   effectif={effectif}
                 />
               )}
@@ -748,7 +801,7 @@ export function EndOfYearBulletin({
                 <BulletinCopy
                   data={data}
                   row={pair[1]}
-                  rang={pageIdx * 2 + 2}
+                  rang={parentMode ? childRang : pageIdx * 2 + 2}
                   effectif={effectif}
                 />
               ) : (

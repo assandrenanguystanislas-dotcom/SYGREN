@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Printer, FileSpreadsheet, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
+import { canPrintDocument, PrintLockBadge, usePrintRole } from "@/lib/print-guard";
 
 // === Types ===
 interface ClassInfo {
@@ -64,6 +65,9 @@ export default function ReleveBatchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
+  // v2 — VERROU D'IMPRESSION : réservé à l'Admin IEP + Super Admin.
+  const role = usePrintRole();
+  const canPrint = canPrintDocument(role, false);
 
   // 1. Fetch de la liste des classes au montage
   useEffect(() => {
@@ -272,9 +276,12 @@ export default function ReleveBatchPage() {
 
         {/* Bouton d'impression */}
         <div className="flex items-center gap-3 mb-4 print:hidden">
+          {canPrint ? null : (
+            <PrintLockBadge />
+          )}
           <button
             onClick={printSelected}
-            disabled={progress !== null || selected.size === 0}
+            disabled={progress !== null || selected.size === 0 || !canPrint}
             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {progress ? (

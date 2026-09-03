@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Printer, X, Loader2, User, Users, CheckCircle2, Award, TrendingUp } from "lucide-react";
+import { CIArmoiriesWatermark, CIFlagRibbon } from "@/components/ci-decor";
+import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
 
 // === Types ===
 interface ReleveSubjectGrade {
@@ -230,6 +232,11 @@ function fmt(v: number, hasGrade: boolean): string {
 }
 
 export default function RelevePage() {
+  // v2 — VERROU D'IMPRESSION : réservé à l'Admin IEP + Super Admin
+  // (consultation écran pour le directeur) — hook AVANT tout early return.
+  storeUrlTokenIfPresent();
+  const role = usePrintRole();
+  const canPrint = canPrintDocument(role, false);
   const [data, setData] = useState<ReleveData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -340,13 +347,17 @@ export default function RelevePage() {
           Relevé de Notes — {data.class_name} · Aperçu
         </h3>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimer / PDF
-          </button>
+          {canPrint ? (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimer / PDF
+            </button>
+          ) : (
+            <PrintLockBadge />
+          )}
           <button
             onClick={() => window.close()}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-md text-sm"
@@ -357,8 +368,9 @@ export default function RelevePage() {
         </div>
       </div>
 
+      {!canPrint && <PrintLockDocumentMessage />}
       {/* === DOCUMENT MULTI-PAGES === */}
-      <div id="releve-doc">
+      <div id="releve-doc" className={canPrint ? undefined : "print-locked"}>
         {pages.map((pageData, pageIndex) => {
           const isFirstPage = pageIndex === 0;
           const isLastPage = pageIndex === pages.length - 1;
@@ -366,9 +378,19 @@ export default function RelevePage() {
           return (
             <div
               key={pageIndex}
-              className={`w-[210mm] min-h-[297mm] print:min-h-0 p-6 bg-white mx-auto mb-8 print:mb-0 shadow-md print:shadow-none print:m-0 print:p-0 print:w-full font-sans text-xs text-black ${!isLastPage ? 'break-after-page' : ''}`}
+              className={`w-[210mm] min-h-[297mm] print:min-h-0 p-6 bg-white mx-auto mb-8 print:mb-0 shadow-md print:shadow-none print:m-0 print:p-0 print:w-full font-sans text-xs text-black relative overflow-hidden ${!isLastPage ? 'break-after-page' : ''}`}
               style={{ pageBreakAfter: isLastPage ? 'auto' : 'always' }}
             >
+              {/* v2 — décor drapeau CI : armoiries en FILIGRANE
+                  (fond) + rubans tricolores haut/bas en absolu
+                  (zéro impact sur la mise en page) */}
+              <CIArmoiriesWatermark opacity={0.06} width="52%" />
+              <div className="absolute top-0 left-0 right-0">
+                <CIFlagRibbon height="2.2mm" bordered={false} />
+              </div>
+              <div className="absolute bottom-0 left-0 right-0">
+                <CIFlagRibbon height="2.2mm" bordered={false} />
+              </div>
               <div>
                 {/* === 1. EN-TÊTE DU DOCUMENT (Page 1 uniquement) === */}
                 {isFirstPage ? (

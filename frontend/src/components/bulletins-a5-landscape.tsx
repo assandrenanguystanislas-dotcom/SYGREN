@@ -2,6 +2,16 @@
 
 import React from "react";
 
+// v2 — embellissement aux couleurs du drapeau de la Côte d'Ivoire
+// (rubans tricolores + ARMOIRIES en filigrane dans le fond de chaque
+// bulletin) + bordures/libellés verts drapeau (ex-bleu du modèle).
+import {
+  CIArmoiriesWatermark,
+  CIFlagRibbon,
+  CI_GREEN,
+  CI_GREEN_TEXT,
+} from "./ci-decor";
+
 // === Bulletins A5 paysage — 2 bulletins par page A4 ===
 //
 // Modèle officiel CI avec entête institutionnel IDENTIQUE aux autres
@@ -107,8 +117,10 @@ export interface BulletinEleve {
 }
 
 // Bordures bleues du modèle officiel.
-const BORDER = "rgb(40,100,200)";
-const LABEL = "rgb(20,50,140)";
+// v2 — couleurs du DRAPEAU ivoirien : bordures vertes + libellés verts
+// assombris (contraste impression), à la place du bleu d'origine.
+const BORDER = CI_GREEN;
+const LABEL = CI_GREEN_TEXT;
 // Rouge d'alerte pour les appréciations négatives (impression nette).
 const NEGATIVE = "rgb(200,20,20)";
 // Vert progression (harmonisé avec le vert notes du PDF backend).
@@ -162,7 +174,11 @@ export default function BulletinsA5Landscape({
               return (
                 <React.Fragment key={eleve.id}>
                   {/* Moitié A5 */}
-                  <div className="w-1/2 h-full px-3 py-1 flex flex-col justify-between text-black font-sans text-[11px]">
+                  <div className="w-1/2 h-full px-3 py-1 flex flex-col justify-between text-black font-sans text-[11px] relative overflow-hidden">
+                    {/* ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond) */}
+                    <CIArmoiriesWatermark opacity={0.06} width="64%" />
+                    {/* Ruban tricolore ivoirien (haut du bulletin) */}
+                    <CIFlagRibbon height="1.8mm" />
 
                     {/* En-tête officiel — dynamique (données IEP), comme le relevé */}
                     <div>
@@ -597,6 +613,9 @@ export default function BulletinsA5Landscape({
                         )}
                       </div>
                     </div>
+
+                    {/* Ruban tricolore ivoirien (bas du bulletin) */}
+                    <CIFlagRibbon height="1.8mm" />
                   </div>
 
                   {/* Ligne pointillée centrale de séparation (découpe) */}

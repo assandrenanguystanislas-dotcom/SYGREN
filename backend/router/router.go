@@ -174,6 +174,17 @@ func New(cfg *config.Config) http.Handler {
 			r.Delete("/api/inspectors/{id}", handlers.DeleteInspector)
 		})
 
+		// v2 — Parents (Portail Parent : consultation + impression du
+		// bulletin individuel par matricule). Lecture/écriture admin +
+		// inspector (module "users.parents").
+		r.Get("/api/parents", handlers.ListParents)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleUsersParents, "write"))
+			r.Post("/api/parents", handlers.CreateParent)
+			r.Put("/api/parents/{id}", handlers.UpdateParent)
+			r.Delete("/api/parents/{id}", handlers.DeleteParent)
+		})
+
 		// Matières — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/subjects", handlers.ListSubjects)
 		r.Group(func(r chi.Router) {
@@ -320,6 +331,18 @@ func New(cfg *config.Config) http.Handler {
 			r.Use(middleware.RequireModule(models.ModuleUsersAdmin, "write"))
 			r.Post("/api/users/{id}/suspend", handlers.SuspendUser)
 			r.Post("/api/users/{id}/reactivate", handlers.ReactivateUser)
+		})
+
+		// === v2 — Portail Parent ===
+		// Le parent consulte (et imprime) le bulletin individuel de son
+		// enfant par matricule : fin d'année (module Résultats) et
+		// périodes (module Bulletins). Accès : parent + admin + inspector
+		// (module "parent-portal").
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleParentPortal, "read"))
+			r.Get("/api/parent/student", handlers.GetParentStudent)
+			r.Get("/api/parent/end-of-year", handlers.GetParentEndOfYear)
+			r.Get("/api/parent/period-bulletin", handlers.GetParentPeriodBulletin)
 		})
 	})
 

@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Printer, X, Loader2 } from "lucide-react";
 import { reportsApi } from "@/lib/api";
 import { monthLabel } from "@/lib/session-utils";
+import { CIArmoiriesWatermark, CIFlagRibbon } from "@/components/ci-decor";
+import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, usePrintRole } from "@/lib/print-guard";
 
 interface LevelData {
   class_name: string;
@@ -62,6 +64,10 @@ export function SyntheseDocument({
   levelGroup?: "primary" | "cm2" | "all";
   onClose: () => void;
 }) {
+  // v2 — VERROU D'IMPRESSION : Admin IEP + Super Admin uniquement
+  // (le directeur consulte l'aperçu à l'écran, sans impression).
+  const role = usePrintRole();
+  const canPrint = canPrintDocument(role, false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["synthese-data", sessionId, levelGroup],
     queryFn: () => reportsApi.getSyntheseData(sessionId, levelGroup),
@@ -169,13 +175,17 @@ export function SyntheseDocument({
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden">
         <h3 className="font-semibold text-sm">Document de Synthèse — Aperçu</h3>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900 text-white rounded-md text-sm hover:bg-blue-800"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimer / PDF
-          </button>
+          {canPrint ? (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900 text-white rounded-md text-sm hover:bg-blue-800"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimer / PDF
+            </button>
+          ) : (
+            <PrintLockBadge />
+          )}
           <button
             onClick={onClose}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-md text-sm"
@@ -187,9 +197,10 @@ export function SyntheseDocument({
       </div>
 
       {/* === DOCUMENT === */}
+      {!canPrint && <PrintLockDocumentMessage />}
       <div
         id="synthese-doc"
-        className="bg-white mx-auto shadow-lg print:shadow-none print:p-0"
+        className={`bg-white mx-auto shadow-lg print:shadow-none print:p-0 ${canPrint ? "" : "print-locked"}`}
         style={{
           width: "100%",
           maxWidth: "297mm",
@@ -198,8 +209,19 @@ export function SyntheseDocument({
           fontFamily: "Helvetica, Arial, sans-serif",
           color: NAVY,
           overflowX: "auto",
+          position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
+        {/* v2 — décor drapeau CI : armoiries en filigrane (répétées
+            sur chaque page imprimée) + rubans tricolores haut/bas */}
+        <CIArmoiriesWatermark fixed />
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0 }}>
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0 }}>
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* En-tête */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
           <div style={{ fontSize: "10px", fontWeight: "bold", lineHeight: "1.5", textAlign: "left" }}>
@@ -339,6 +361,7 @@ export function SyntheseDocument({
               {data.inspector_name || "................................"}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

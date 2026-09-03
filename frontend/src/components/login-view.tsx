@@ -57,7 +57,7 @@ export function LoginView() {
 
   // === Reset password modal ===
   const [resetOpen, setResetOpen] = useState(false);
-  const [resetRole, setResetRole] = useState<"admin" | "inspector" | "director" | "teacher">("director");
+  const [resetRole, setResetRole] = useState<"admin" | "inspector" | "director" | "teacher" | "parent">("director");
   const [resetId, setResetId] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetDone, setResetDone] = useState(false);
@@ -93,7 +93,9 @@ export function LoginView() {
               ? "Directeur"
               : user.role === "inspector"
                 ? "Admin IEP"
-                : "Instituteur"
+                : user.role === "parent"
+                  ? "Parent"
+                  : "Instituteur"
         }`,
       });
     } catch (e) {
@@ -277,6 +279,7 @@ export function LoginView() {
                           { v: "admin" as const, l: "Admin" },
                           { v: "director" as const, l: "Directeur" },
                           { v: "teacher" as const, l: "Enseignant" },
+                          { v: "parent" as const, l: "Parent" },
                         ]).map(({ v, l }) => (
                           <button key={v} type="button" onClick={() => setResetRole(v)}
                             className={`px-2 py-2 rounded text-xs border ${resetRole === v ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
@@ -287,7 +290,7 @@ export function LoginView() {
                     </div>
                     <div>
                       <label className="text-xs font-medium mb-1.5 block">
-                        {resetRole === "admin" || resetRole === "inspector" ? "Email" : resetRole === "director" ? "Code école" : "Téléphone"}
+                        {resetRole === "admin" || resetRole === "inspector" ? "Email" : resetRole === "director" ? "Code école" : resetRole === "parent" ? "Téléphone ou email" : "Téléphone"}
                       </label>
                       <Input value={resetId} onChange={(e) => setResetId(e.target.value)}
                         placeholder={resetRole === "director" ? "ex: EPPCP001" : resetRole === "teacher" ? "ex: 0700000000" : "ex: email@sygren.ci"}

@@ -138,6 +138,11 @@ func GetSyntheseData(w http.ResponseWriter, r *http.Request) {
 
 	// RBAC
 	role := ctxRole(r)
+	if role == models.RoleParent {
+		// v2 : le parent passe par le portail dédié
+		middleware.JSONError(w, "accès refusé", http.StatusForbidden)
+		return
+	}
 	if role == "director" && school.ID != ctxSchoolID(r) {
 		middleware.JSONError(w, "accès refusé : vous ne pouvez générer la synthèse que pour votre école", http.StatusForbidden)
 		return

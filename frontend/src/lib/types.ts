@@ -1,20 +1,23 @@
 // Types TypeScript correspondant aux modèles GORM du backend Go (models/models.go)
 // Ces types garantissent le typage statique entre le frontend et l'API.
 
-export type Role = "teacher" | "director" | "inspector" | "admin";
+export type Role = "teacher" | "director" | "inspector" | "admin" | "parent";
 
 export const ROLE_LABELS: Record<Role, string> = {
   teacher: "Instituteur",
   director: "Directeur d'École",
   inspector: "Admin IEP",
   admin: "Super-Administrateur",
+  parent: "Parent",
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  teacher: "Saisie des notes mensuelles de votre classe",
-  director: "Gestion de l'établissement et validation des bulletins",
-  inspector: "Administration multi-écoles (sauf paramètres généraux)",
+  teacher: "Module Élèves + saisie des notes (documents non imprimables)",
+  director:
+    "Élèves + saisie des notes + consultation des documents (impression verrouillée)",
+  inspector: "Administration multi-écoles — impression des documents autorisée",
   admin: "Administration globale du système SYGREN",
+  parent: "Consultation + impression du bulletin individuel de l'enfant (par matricule)",
 };
 
 // === Dossier personnel (module Utilisateurs — ÉTAT NOMINATIF DU PERSONNEL) ===
@@ -72,6 +75,8 @@ export interface User extends PersonnelDossier {
   active: boolean;
   must_change_password?: boolean;
   service?: string;
+  // v2 — Portail Parent : matricule de l'enfant (pré-remplit la recherche)
+  child_matricule?: string | null;
   // Architecture D — Suspension
   suspended_at?: string | null;
   suspended_by_id?: string | null;
@@ -1087,4 +1092,6 @@ export interface EndOfYearSheet {
   rows: EndOfYearRow[];
   summary: EndOfYearSummary;
   count: number;
+  // v2 — Portail Parent : ID de l'élève recherché (isole son bulletin)
+  student_id?: string | null;
 }

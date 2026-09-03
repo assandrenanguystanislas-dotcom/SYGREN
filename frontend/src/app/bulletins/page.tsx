@@ -33,7 +33,13 @@
 import { useEffect, useState } from "react";
 import { Loader2, Printer, X, AlertCircle, RefreshCw } from "lucide-react";
 
-import { reportsApi, computationApi } from "@/lib/api";
+import { parentPortalApi, reportsApi, computationApi } from "@/lib/api";
+import {
+  canPrintDocument,
+  PrintLockBadge,
+  PrintLockDocumentMessage,
+  usePrintRole,
+} from "@/lib/print-guard";
 import { monthLabel } from "@/lib/session-utils";
 import { fetchPreviousAverages, computeEvolution } from "@/lib/evolution";
 import BulletinsA5Landscape, {
@@ -316,6 +322,17 @@ export default function BulletinsPage() {
   const [error, setError] = useState<string | null>(null);
   const [eleves, setEleves] = useState<BulletinEleve[]>([]);
   const [iepInfo, setIepInfo] = useState<IEPInfo | undefined>(undefined);
+  // v2 — VERROU D'IMPRESSION : admin + inspector (mode normal) ou PARENT
+  // en mode portail (bulletin individuel de l'enfant par matricule).
+  const role = usePrintRole();
+  // Mode portail parent : dérivé de l'URL (lazy init — pas de setState
+  // dans l'effet). Le matricule de l'enfant dans l'URL active ce mode.
+  const [parentMode] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("matricule"),
+  );
+  const canPrint = canPrintDocument(role, parentMode);
   const [meta, setMeta] = useState<{
     schoolName: string;
     sessionLabel: string;
@@ -329,6 +346,9 @@ export default function BulletinsPage() {
     // class_id (optionnel) : restreint l'impression à UNE classe.
     // Absent = toutes les classes (comportement historique).
     const classIdParam = params.get("class_id");
+    // v2 — mode PORTAIL PARENT : matricule de l'enfant présent dans l'URL
+    // → un seul bulletin (2 exemplaires), données via /api/parent/…
+    const matriculeParam = params.get("matricule");
 
     // Si pas de session_id → erreur immédiate.
     if (!sessionId) {
@@ -374,6 +394,87 @@ export default function BulletinsPage() {
           );
         } catch {}
       }
+    }
+
+    // === v2 — MODE PORTAIL PARENT ===
+    // Un seul bulletin (2 exemplaires) : celui de l'enfant identifié par
+    // son matricule, pour la session demandée. Données via le portail
+    // parent (rangs inclus — les endpoints génériques lui sont fermés).
+    if (matriculeParam) {
+      Promise.all([
+        parentPortalApi.periodBulletin(matriculeParam, sessionId),
+        parentPortalApi.student(matriculeParam),
+      ])
+        .then(async ([pb, info]) => {
+          const { releve, student_id, ranks } = pb;
+          const rankLookup = new Map<string, number>();
+          for (const r of ranks ?? []) {
+            const key = (r.matricule || "").trim().toUpperCase();
+            if (key && key !== "N/A") rankLookup.set(key, r.rank);
+          }
+          const child =
+            releve.students.find(
+              (s) =>
+                (s.matricule || "").trim().toUpperCase() ===
+                matriculeParam.trim().toUpperCase(),
+            ) ??
+            releve.students.find(
+              (s) =>
+                `${s.last_name} ${s.first_name}`.toLowerCase() ===
+                (info.student.full_name || "").toLowerCase(),
+            );
+          if (!child) {
+            throw new Error(
+              "Aucun bulletin disponible pour cet élève dans cette session.",
+            );
+          }
+          const classStat = computeClassStats(releve.students);
+          const anneeScolaire =
+            releve.month >= 9
+              ? `${releve.year}-${releve.year + 1}`
+              : `${releve.year - 1}-${releve.year}`;
+          const mois = `${monthLabel(releve.month)} ${releve.year}`;
+          const eleve = buildBulletinEleve(
+            child,
+            releve.class_name,
+            releve.class_level,
+            releve.total_t,
+            releve.type_examen,
+            mois,
+            anneeScolaire,
+            rankLookup,
+            releve.teacher_name,
+            classStat,
+            new Map(),
+          );
+          // DEUX EXEMPLAIRES (famille + école) — même feuille A4, à découper.
+          setEleves([eleve, eleve]);
+          setIepInfo({
+            name: releve.iep_name,
+            region: releve.iep_region,
+            bp: releve.iep_bp,
+            inspector_name: releve.inspector_name,
+            inspector_email: releve.inspector_email,
+            inspector_phone: releve.inspector_phone,
+            school_name: releve.school_name,
+            director_name: releve.director_name,
+          });
+          const sessionLabel = `${releve.type_examen} — ${monthLabel(releve.month)} ${releve.year}`;
+          setMeta({ schoolName: releve.school_name, sessionLabel });
+          document.title = `Bulletin — ${child.last_name} ${child.first_name} — ${sessionLabel}`;
+          setLoading(false);
+        })
+        .catch((e: unknown) => {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : typeof e === "string"
+                ? e
+                : "Erreur inconnue";
+          setError(msg);
+          setLoading(false);
+        });
+      return;
     }
 
     // Fetch parallèle :
@@ -603,13 +704,17 @@ export default function BulletinsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 text-white rounded-md text-sm font-semibold hover:bg-blue-800 shadow-sm"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimer / PDF
-            </button>
+            {canPrint ? (
+              <button
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 text-white rounded-md text-sm font-semibold hover:bg-blue-800 shadow-sm"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimer / PDF
+              </button>
+            ) : (
+              <PrintLockBadge />
+            )}
             <button
               onClick={() => window.close()}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-md text-sm hover:bg-gray-300"
@@ -620,8 +725,13 @@ export default function BulletinsPage() {
           </div>
         </div>
 
+        {/* Message imprimé si impression verrouillée */}
+        {!canPrint && <PrintLockDocumentMessage />}
         {/* === DOCUMENT === */}
-        <div id="bulletins-doc" className="py-4 print:p-0 print:py-0">
+        <div
+          id="bulletins-doc"
+          className={`py-4 print:p-0 print:py-0 ${canPrint ? "" : "print-locked"}`}
+        >
           <BulletinsA5Landscape eleves={eleves} iepInfo={iepInfo} />
         </div>
       </div>

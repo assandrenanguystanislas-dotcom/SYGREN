@@ -38,6 +38,19 @@ import { reportsApi } from "@/lib/api";
 import type { EndOfYearRow, EndOfYearSummaryRow } from "@/lib/types";
 
 import { INK, OFFICIAL_FONT, THIN } from "./official-doc";
+import {
+  CIArmoiriesWatermark,
+  CIFlagRibbon,
+  CI_GREEN,
+  CI_GREEN_BG,
+  CI_ORANGE_BG,
+} from "@/components/ci-decor";
+import {
+  canPrintDocument,
+  PrintLockBadge,
+  PrintLockDocumentMessage,
+  usePrintRole,
+} from "@/lib/print-guard";
 
 /** Compteur du tableau récapitulatif : 07, 11, 1238 — « 00 » pour un zéro
  *  calculé/saisi, case vide si non renseigné (comme le modèle reçu). */
@@ -118,6 +131,10 @@ export function EndOfYearDocument({
   year: number;
   onClose: () => void;
 }) {
+  // v2 — VERROU D'IMPRESSION : seuls l'Admin IEP et le Super Admin
+  // impriment ; le directeur consulte à l'écran, l'enseignant n'accède pas.
+  const role = usePrintRole();
+  const canPrint = canPrintDocument(role, false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["end-of-year", schoolId, classId, year],
     queryFn: () => reportsApi.endOfYearSheet(schoolId, classId, year),
@@ -179,13 +196,17 @@ export function EndOfYearDocument({
           <span className="hidden sm:inline text-xs text-muted-foreground mr-1">
             Format : A4 portrait
           </span>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimer / PDF
-          </button>
+          {canPrint ? (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimer / PDF
+            </button>
+          ) : (
+            <PrintLockBadge />
+          )}
           <button
             onClick={onClose}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-md text-sm"
@@ -197,9 +218,10 @@ export function EndOfYearDocument({
       </div>
 
       {/* === DOCUMENT OFFICIEL (isolement impression #resultats-fin-annee-doc) === */}
+      {!canPrint && <PrintLockDocumentMessage />}
       <div
         id="resultats-fin-annee-doc"
-        className="bg-white mx-auto shadow-lg print:shadow-none mt-3"
+        className={`bg-white mx-auto shadow-lg print:shadow-none mt-3 ${canPrint ? "" : "print-locked"}`}
         style={{
           width: "100%",
           maxWidth: "210mm", // A4 portrait
@@ -207,8 +229,15 @@ export function EndOfYearDocument({
           fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
+          position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
+        {/* --- Ruban tricolore ivoirien (haut du document) --- */}
+        <CIFlagRibbon />
+        {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond, répété
+                sur chaque page imprimée) --- */}
+        <CIArmoiriesWatermark fixed />
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* --- En-tête institutionnel (modèle reçu) --- */}
         <div
           style={{
@@ -260,7 +289,8 @@ export function EndOfYearDocument({
           <span
             style={{
               display: "inline-block",
-              border: "2.2px solid #000000",
+              border: `2.2px solid ${CI_GREEN}`,
+              background: CI_ORANGE_BG,
               borderRadius: "14px",
               padding: "6px 34px 7px",
               fontFamily:
@@ -442,6 +472,10 @@ export function EndOfYearDocument({
             ) : null}
           </div>
         </div>
+        </div>
+
+        {/* --- Ruban tricolore ivoirien (bas du document) --- */}
+        <CIFlagRibbon />
       </div>
     </div>
   );

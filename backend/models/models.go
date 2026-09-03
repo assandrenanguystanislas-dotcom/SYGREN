@@ -13,11 +13,14 @@ const (
 	RoleDirector  = "director"
 	RoleInspector = "inspector"
 	RoleAdmin     = "admin"
+	// v2 — Portail Parent : consultation + impression du bulletin
+	// individuel de l'enfant (recherche par matricule).
+	RoleParent = "parent"
 )
 
 // AllRoles returns the list of valid roles (used by RBAC middleware)
 func AllRoles() []string {
-	return []string{RoleTeacher, RoleDirector, RoleInspector, RoleAdmin}
+	return []string{RoleTeacher, RoleDirector, RoleInspector, RoleAdmin, RoleParent}
 }
 
 // === User ===
@@ -34,6 +37,10 @@ type User struct {
 	Active             bool    `gorm:"default:true" json:"active"`
 	MustChangePassword bool    `gorm:"default:false" json:"must_change_password"` // temp password → user must change on first login
 	Service            string  `gorm:"type:text" json:"service,omitempty"`        // service au sein de l'IEP (ex: "Examen & Concours", "Statistique") — pour les Admins IEP
+	// v2 — Portail Parent : matricule de l'enfant (pré-remplit la
+	// recherche du portail ; le parent peut toujours saisir un autre
+	// matricule — convention « le parent avec le matricule de son enfant »).
+	ChildMatricule *string `gorm:"type:text" json:"child_matricule,omitempty"`
 	// === Dossier personnel (module Utilisateurs) ===
 	// Champs administratifs du document officiel « ÉTAT NOMINATIF DU
 	// PERSONNEL » (une ligne = un agent : directeur ou enseignant).

@@ -11,8 +11,11 @@ import { useSearchParams } from "next/navigation";
 
 import { Providers } from "@/components/providers";
 import { EndOfYearDocument } from "@/components/views/end-of-year-document";
+import { storeUrlTokenIfPresent } from "@/lib/print-guard";
 
 function ResultatsFinAnneeDocPageInner() {
+  // Token de l'URL → localStorage (AVANT les requêtes des composants)
+  storeUrlTokenIfPresent();
   const params = useSearchParams();
   const school = params.get("school") ?? "";
   const klass = params.get("class") ?? "";

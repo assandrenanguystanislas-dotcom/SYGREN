@@ -132,18 +132,34 @@ func GetReleveData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Charger la session + vérifier RBAC
+	// 1. Charger la session + vérifier RBAC (v2 : default-deny dans
+	// getSessionForUser — le rôle PARENT utilise le portail dédié).
 	session, err := getSessionForUser(r, sessionID)
 	if err != nil {
 		middleware.JSONError(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
+	// 2..11 — construction partagée (portail parent : GetParentPeriodBulletin)
+	data, err := buildReleveData(*session, classID)
+	if err != nil {
+		middleware.JSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, http.StatusOK, data)
+}
+
+// buildReleveData construit le ReleveData complet d'une classe pour une
+// session (notes par matière, moyennes, mérite, statistiques, signatures).
+// Partagé entre le handler générique (GetReleveData) et le PORTAIL PARENT
+// (GetParentPeriodBulletin — v2, recherche par matricule).
+func buildReleveData(session models.EvaluationSession, classID string) (ReleveData, error) {
+	var zero ReleveData
+
 	// 2. Charger l'école + l'IEP
 	var school models.School
 	if err := database.DB.First(&school, "id = ?", session.SchoolID).Error; err != nil {
-		middleware.JSONError(w, "école introuvable", http.StatusNotFound)
-		return
+		return zero, fmt.Errorf("école introuvable")
 	}
 	var iep models.IEP
 	_ = database.DB.First(&iep, "id = ?", school.IEPID).Error
@@ -151,20 +167,17 @@ func GetReleveData(w http.ResponseWriter, r *http.Request) {
 	// 3. Charger la classe (vérifier qu'elle appartient à l'école de la session)
 	var class models.Class
 	if err := database.DB.First(&class, "id = ?", classID).Error; err != nil {
-		middleware.JSONError(w, "classe introuvable", http.StatusNotFound)
-		return
+		return zero, fmt.Errorf("classe introuvable")
 	}
 	if class.SchoolID != school.ID {
-		middleware.JSONError(w, "la classe n'appartient pas à l'école de la session", http.StatusBadRequest)
-		return
+		return zero, fmt.Errorf("la classe n'appartient pas à l'école de la session")
 	}
 
 	// 4. Calculer les résultats complets de la session (couvre toute l'école),
 	// puis filtrer par class_id.
 	results, err := computeSessionResults(session.ID)
 	if err != nil {
-		middleware.JSONError(w, "erreur calcul des résultats : "+err.Error(), http.StatusInternalServerError)
-		return
+		return zero, fmt.Errorf("erreur calcul des résultats : %s", err.Error())
 	}
 
 	// Filtrer par class_id et trier par rang (déjà trié par classe+average DESC
@@ -181,8 +194,7 @@ func GetReleveData(w http.ResponseWriter, r *http.Request) {
 	var students []models.Student
 	if err := database.DB.Where("class_id = ?", classID).
 		Order("last_name ASC, first_name ASC").Find(&students).Error; err != nil {
-		middleware.JSONError(w, "erreur récupération élèves", http.StatusInternalServerError)
-		return
+		return zero, fmt.Errorf("erreur récupération élèves")
 	}
 
 	// Indexer les résultats par student_id pour lookup rapide.
@@ -384,7 +396,7 @@ func GetReleveData(w http.ResponseWriter, r *http.Request) {
 		Stats:          stats,
 	}
 
-	jsonResponse(w, http.StatusOK, data)
+	return data, nil
 }
 
 // ListReleveClasses returns the list of classes for the session's school.

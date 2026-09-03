@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { sessionsApi, computationApi, schoolsApi, reportsApi } from "@/lib/api";
+import { canPrintDocument, PrintLockBadge } from "@/lib/print-guard";
 import { useAuthStore } from "@/lib/auth-store";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import {
@@ -66,7 +67,10 @@ interface MergedStudent {
 
 export function BulletinsView() {
   const user = useAuthStore((s) => s.user);
-  const canPrint = user?.role === "admin" || user?.role === "director";
+  // v2 — IMPRESSION VERROUILLÉE : seuls l'Admin IEP et le Super Admin
+  // impriment les bulletins (le directeur consulte, l'enseignant n'accède
+  // pas au module).
+  const canPrint = canPrintDocument(user?.role, false);
   // Cascade stricte (même logique que students-view et results-view)
   // - admin/inspector : doivent choisir une école → puis une session
   // - director/teacher : école figée (RBAC backend) → choisissent une session
@@ -181,6 +185,9 @@ export function BulletinsView() {
                 </p>
               </div>
             </div>
+            {selectedSession && !canPrint && (
+              <PrintLockBadge />
+            )}
             {canPrint && selectedSession && (
               <Button
                 className="shadow-sm"

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Printer, X, Loader2 } from "lucide-react";
+import { CIArmoiriesWatermark, CIFlagRibbon } from "@/components/ci-decor";
+import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
 import { monthLabel } from "@/lib/session-utils";
 
 interface LevelData {
@@ -53,6 +55,11 @@ interface SyntheseData {
 const ALL_CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
 
 export default function SynthesePage() {
+  // v2 — VERROU D'IMPRESSION : réservé à l'Admin IEP + Super Admin
+  // (consultation écran pour le directeur) — hook AVANT tout early return.
+  storeUrlTokenIfPresent();
+  const role = usePrintRole();
+  const canPrint = canPrintDocument(role, false);
   const [data, setData] = useState<SyntheseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -184,13 +191,17 @@ export default function SynthesePage() {
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden">
         <h3 className="font-semibold text-sm">Document de Synthèse — Aperçu</h3>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimer / PDF
-          </button>
+          {canPrint ? (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimer / PDF
+            </button>
+          ) : (
+            <PrintLockBadge />
+          )}
           <button
             onClick={() => window.close()}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-md text-sm"
@@ -201,11 +212,21 @@ export default function SynthesePage() {
         </div>
       </div>
 
+      {!canPrint && <PrintLockDocumentMessage />}
       {/* === DOCUMENT (modèle exact avec données dynamiques) === */}
       <div
         id="synthese-doc"
-        className="w-[297mm] h-[210mm] p-8 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none flex flex-col justify-between"
+        className={`${canPrint ? "" : "print-locked"} w-[297mm] h-[210mm] p-8 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none flex flex-col justify-between relative overflow-hidden`}
       >
+        {/* v2 — décor drapeau CI : armoiries en FILIGRANE (fond) +
+            rubans tricolores haut/bas en absolu (zone de padding) */}
+        <CIArmoiriesWatermark opacity={0.06} width="50%" />
+        <div className="absolute top-0 left-0 right-0">
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
+        <div className="absolute bottom-0 left-0 right-0">
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
         {/* Partie supérieure */}
         <div>
           {/* En-tête supérieur */}

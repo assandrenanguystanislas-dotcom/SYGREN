@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Sparkles,
   BarChart3,
+  Home,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -243,6 +244,12 @@ function buildStats(role: Role, d: StatsData): StatCard[] {
         { label: "Saisie en cours", value: "Aucune", hint: "session fermée", icon: <Clock className="w-5 h-5" />, tone: "neutral" },
         { label: "Bulletins", value: "0", hint: "à venir (Phase 5)", icon: <FileText className="w-5 h-5" />, tone: "green" },
       ];
+    case "parent":
+      // v2 — le parent n'a pas de statistiques d'établissement : son espace
+      // est le Portail Parent (bulletin individuel de l'enfant).
+      return [
+        { label: "Portail Parent", value: "→", hint: "bulletin individuel de l'enfant", icon: <Home className="w-5 h-5" />, tone: "orange" },
+      ];
   }
 }
 
@@ -269,5 +276,8 @@ const QUICK_ACTIONS: Record<
     { label: "Saisir les notes", hint: "Grille mensuelle", view: "grades", icon: <ClipboardList className="w-4 h-4" /> },
     { label: "Mes élèves", hint: "Ma classe", view: "students", icon: <Users className="w-4 h-4" /> },
     { label: "Matières", hint: "Disciplines", view: "subjects", icon: <BookOpen className="w-4 h-4" /> },
+  ],
+  parent: [
+    { label: "Consulter le bulletin", hint: "Matricule de l'enfant", view: "parent-portal", icon: <Home className="w-4 h-4" /> },
   ],
 };

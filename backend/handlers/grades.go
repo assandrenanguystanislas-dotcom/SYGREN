@@ -96,8 +96,9 @@ func getSessionForUser(r *http.Request, sessionID string) (*models.EvaluationSes
 	}
 
 	switch role {
-	case "admin":
-		// accès total
+	case "admin", "inspector":
+		// accès total (inspector : écoles de son IEP — la session porte
+		// school_id, le périmètre IEP est déjà appliqué en amont)
 	case "director":
 		if session.SchoolID != ctxSchoolID(r) {
 			return nil, fmt.Errorf("accès refusé")
@@ -119,6 +120,9 @@ func getSessionForUser(r *http.Request, sessionID string) (*models.EvaluationSes
 		if count == 0 {
 			return nil, fmt.Errorf("accès refusé : vous n'êtes pas enseignant dans cette école")
 		}
+	default:
+		// v2 : default-deny (le rôle PARENT passe par le portail dédié)
+		return nil, fmt.Errorf("accès refusé")
 	}
 	return &session, nil
 }

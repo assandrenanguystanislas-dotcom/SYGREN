@@ -149,9 +149,13 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// RBAC par périmètre (même modèle que /api/reports/personnel)
+	// RBAC par périmètre (même modèle que /api/reports/personnel).
+	// v2 : default-deny — le rôle PARENT passe par le portail dédié
+	// (GetParentEndOfYear) et n'accède PAS à cet endpoint générique.
 	role := ctxRole(r)
 	switch role {
+	case "admin":
+		// accès total
 	case "director":
 		if ctxSchoolID(r) != school.ID {
 			middleware.JSONError(w, "accès refusé : document limité à votre école", http.StatusForbidden)
@@ -167,6 +171,9 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 			middleware.JSONError(w, "accès refusé : document limité à votre classe", http.StatusForbidden)
 			return
 		}
+	default:
+		middleware.JSONError(w, "accès refusé", http.StatusForbidden)
+		return
 	}
 
 	// Année de référence (défaut = paramètre système, ex: 2026)
@@ -179,6 +186,21 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		year = schoolYear
 	}
 
+	payload, err := buildEndOfYearSheet(school, cls, year)
+	if err != nil {
+		middleware.JSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, http.StatusOK, payload)
+}
+
+// buildEndOfYearSheet construit le payload complet du document « RESULTATS
+// DE FIN D'ANNEE » pour une classe : moyennes (compositions / passage /
+// annuelle), âge, récapitulatif (Effectif/Admis/Redoublants calculés,
+// Exclus/Abandons manuels) et tri PAR ORDRE DE MÉRITE.
+// Partagé entre le handler générique (GetEndOfYearSheet) et le PORTAIL
+// PARENT (GetParentEndOfYear — v2, recherche par matricule).
+func buildEndOfYearSheet(school models.School, cls models.Class, year int) (map[string]interface{}, error) {
 	var iep models.IEP
 	database.DB.First(&iep, "id = ?", school.IEPID)
 
@@ -215,8 +237,7 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 	var students []models.Student
 	if err := database.DB.Where("class_id = ?", cls.ID).
 		Order("last_name ASC, first_name ASC").Find(&students).Error; err != nil {
-		middleware.JSONError(w, "erreur récupération des élèves", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("erreur récupération des élèves")
 	}
 
 	// Sessions de l'école pour l'année : compositions mensuelles +
@@ -227,8 +248,7 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 			school.ID, year, "cancelled",
 			[]string{"composition", "composition_passage"}).
 		Order("month ASC").Find(&sessions).Error; err != nil {
-		middleware.JSONError(w, "erreur récupération des sessions", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("erreur récupération des sessions")
 	}
 
 	// Moyennes par élève : une seule passe par session (computeSessionResults
@@ -410,7 +430,7 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
+	return map[string]interface{}{
 		"school": map[string]interface{}{
 			"id":   school.ID,
 			"name": school.Name,
@@ -437,7 +457,7 @@ func GetEndOfYearSheet(w http.ResponseWriter, r *http.Request) {
 		"rows":            rows,
 		"summary":         summary,
 		"count":           len(rows),
-	})
+	}, nil
 }
 
 // studentFullName assemble « NOM Prénoms » comme sur le document

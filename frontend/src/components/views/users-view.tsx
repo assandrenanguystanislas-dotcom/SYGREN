@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Building2, ShieldCheck, UserCog, Pause, Play, Loader2 } from "lucide-react";
+import { Users, Building2, ShieldCheck, UserCog, UserRound, Pause, Play, Loader2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -46,6 +46,7 @@ import { ROLE_LABELS, type Role, type UserAdminRow } from "@/lib/types";
 import { TeachersView } from "./teachers-view";
 import { DirectorsView } from "./directors-view";
 import { InspectorsView } from "./inspectors-view";
+import { ParentsView } from "./parents-view";
 
 /**
  * Vue unifiée "Utilisateurs" — fusionne Enseignants + Directeurs + Admins IEP
@@ -55,6 +56,7 @@ import { InspectorsView } from "./inspectors-view";
  *   - "users.teachers"    → onglet Enseignants
  *   - "users.directors"   → onglet Directeurs
  *   - "users.inspectors"  → onglet Admin IEP
+ *   - "users.parents"     → onglet Parents (v2 — Portail Parent)
  *   - "users-admin"        → onglet "Tous les comptes" (super admin seul)
  */
 export function UsersView() {
@@ -73,12 +75,15 @@ export function UsersView() {
   const canSeeDirectors =
     hasModule("users.directors") || hasLegacyRole(["admin", "inspector"]);
   const canSeeInspectors = hasModule("users.inspectors") || hasLegacyRole(["admin"]);
+  // v2 — Onglet Parents (Portail Parent) : admin + inspector
+  const canSeeParents = hasModule("users.parents") || hasLegacyRole(["admin", "inspector"]);
   const canSeeAllAccounts = hasModule("users-admin") || hasLegacyRole(["admin"]);
 
   const visibleTabs = [
     canSeeTeachers && "teachers",
     canSeeDirectors && "directors",
     canSeeInspectors && "inspectors",
+    canSeeParents && "parents",
     canSeeAllAccounts && "all-accounts",
   ].filter(Boolean) as string[];
 
@@ -90,6 +95,7 @@ export function UsersView() {
     if (visibleTabs[0] === "teachers") return <TeachersView />;
     if (visibleTabs[0] === "directors") return <DirectorsView />;
     if (visibleTabs[0] === "inspectors") return <InspectorsView />;
+    if (visibleTabs[0] === "parents") return <ParentsView />;
     if (visibleTabs[0] === "all-accounts") return <AllAccountsTab />;
     return <TeachersView />;
   }
@@ -115,6 +121,12 @@ export function UsersView() {
             Admin IEP
           </TabsTrigger>
         )}
+        {canSeeParents && (
+          <TabsTrigger value="parents">
+            <UserRound className="w-4 h-4 mr-1.5" />
+            Parents
+          </TabsTrigger>
+        )}
         {canSeeAllAccounts && (
           <TabsTrigger value="all-accounts">
             <UserCog className="w-4 h-4 mr-1.5" />
@@ -130,6 +142,9 @@ export function UsersView() {
       </TabsContent>
       <TabsContent value="inspectors">
         <InspectorsView />
+      </TabsContent>
+      <TabsContent value="parents">
+        <ParentsView />
       </TabsContent>
       <TabsContent value="all-accounts">
         <AllAccountsTab />

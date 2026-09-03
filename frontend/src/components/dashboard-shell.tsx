@@ -31,6 +31,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Home } from "lucide-react";
 
 export interface NavItem {
   id: string;
@@ -67,7 +68,9 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Écoles",
     icon: <School className="w-4 h-4" />,
     roles: ["admin", "inspector", "director"],
-    moduleKeys: ["schools", "classes"],
+    // v2 : module "schools" uniquement — l'enseignant (classes en lecture
+    // seule pour le contexte de saisie) ne voit plus l'entrée Écoles.
+    moduleKeys: ["schools"],
   },
   {
     id: "students",
@@ -110,6 +113,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: <FileText className="w-4 h-4" />,
     roles: ["admin", "director", "inspector"],
     moduleKeys: ["report-cards"],
+  },
+  // === v2 — Portail Parent (rôle parent : bulletin individuel de l'enfant) ===
+  {
+    id: "parent-portal",
+    label: "Portail Parent",
+    icon: <Home className="w-4 h-4" />,
+    roles: ["parent"],
+    moduleKeys: ["parent-portal"],
   },
   {
     id: "settings",

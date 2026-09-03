@@ -1,9 +1,11 @@
 package database
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"sygren-api/config"
 	"sygren-api/models"
@@ -189,63 +191,143 @@ func seedDefaults(db *gorm.DB) error {
 	return nil
 }
 
-// seedRBAC peuple les 4 rôles système et la matrice role × module si vides.
-// Idempotent : ne rien écrase si déjà présent (sauf si forceRBACSeed=true en
-// dev local via env). La matrice est conçue pour refléter exactement le
-// comportement RequireRole(...) actuel — aucun changement comportemental au
-// premier déploiement.
+// seedRBAC peuple les rôles système et la matrice role × module.
+//
+// Idempotent + VERSIONNÉ : la matrice par défaut est (ré)appliquée quand le
+// setting "rbac.matrix_version" est antérieur à models.RbacMatrixVersion.
+// Cela permet :
+//   - premier déploiement : création des rôles + de toutes les cellules ;
+//   - base EXISTANTE (ex. Neon en production) : ajout du rôle parent (v2),
+//     des nouveaux modules et synchronisation des cellules avec la
+//     politique d'accès v2 (élèves pour l'enseignant, documents
+//     consultables non imprimables pour le directeur, portail parent) ;
+//   - personnalisations ultérieures du Super Admin (via /api/permissions)
+//     préservées : tant que la version ne change pas, rien n'est écrasé.
 func seedRBAC(db *gorm.DB) error {
-	// 5a. Rôles
-	var roleCount int64
-	db.Model(&models.Role{}).Count(&roleCount)
-	if roleCount == 0 {
-		for _, r := range models.DefaultRoles() {
-			role := models.Role{
-				Name:        r.Name,
-				Label:       r.Label,
-				Description: r.Description,
-				IsSystem:    r.IsSystem,
-				SortOrder:   r.SortOrder,
-			}
-			if err := db.Create(&role).Error; err != nil {
-				log.Println("[DB] seed role:", r.Name, err)
-			}
+	// 5a. Rôles — créer les rôles manquants (v2 ajoute "parent" aux bases
+	// existantes sans toucher aux 4 rôles historiques).
+	var roles []models.Role
+	if err := db.Find(&roles).Error; err != nil {
+		return err
+	}
+	roleByName := make(map[string]string, len(roles))
+	for _, r := range roles {
+		roleByName[r.Name] = r.ID
+	}
+	createdRoles := 0
+	for _, r := range models.DefaultRoles() {
+		if _, ok := roleByName[r.Name]; ok {
+			continue
 		}
-		log.Printf("[DB] %d rôles système créés (admin, inspector, director, teacher)", len(models.DefaultRoles()))
+		role := models.Role{
+			Name:        r.Name,
+			Label:       r.Label,
+			Description: r.Description,
+			IsSystem:    r.IsSystem,
+			SortOrder:   r.SortOrder,
+		}
+		if err := db.Create(&role).Error; err != nil {
+			log.Println("[DB] seed role:", r.Name, err)
+			continue
+		}
+		roleByName[r.Name] = role.ID
+		createdRoles++
+	}
+	if createdRoles > 0 {
+		log.Printf("[DB] %d rôle(s) système créé(s)", createdRoles)
 	}
 
-	// 5b. Matrice role × module (uniquement si vide)
-	var rmCount int64
-	db.Model(&models.RoleModule{}).Count(&rmCount)
-	if rmCount == 0 {
-		// Index roles by name for quick lookup
-		var roles []models.Role
-		if err := db.Find(&roles).Error; err != nil {
+	// 5b. Matrice role × module — versionnée.
+	applied := 0
+	var marker models.Setting
+	hasMarker := db.Where(models.Setting{Key: models.RbacMatrixVersionKey}).First(&marker).Error == nil
+	if hasMarker {
+		fmt.Sscanf(marker.Value, "%d", &applied)
+	}
+
+	if applied >= models.RbacMatrixVersion {
+		// Base à jour : créer uniquement les cellules MANQUANTES (nouveaux
+		// modules ajoutés sans changement de politique).
+		var rmCount int64
+		db.Model(&models.RoleModule{}).Count(&rmCount)
+		if rmCount == 0 {
+			return seedRBACCells(db, roleByName, false)
+		}
+		// Cellules manquantes pour les nouveaux modules/rôles (idempotent).
+		return seedRBACCells(db, roleByName, true)
+	}
+
+	// Migration : appliquer la matrice COMPLÈTE (créer les cellules
+	// manquantes + mettre à jour les existantes aux valeurs par défaut v2).
+	if err := seedRBACCells(db, roleByName, false); err != nil {
+		return err
+	}
+	value := fmt.Sprintf("%d", models.RbacMatrixVersion)
+	if hasMarker {
+		if err := db.Model(&models.Setting{}).Where(models.Setting{Key: models.RbacMatrixVersionKey}).
+			Updates(map[string]interface{}{"value": value, "updated_at": time.Now()}).Error; err != nil {
 			return err
 		}
-		roleByName := make(map[string]string, len(roles))
-		for _, r := range roles {
-			roleByName[r.Name] = r.ID
+	} else {
+		if err := db.Create(&models.Setting{
+			Key:      models.RbacMatrixVersionKey,
+			Value:    value,
+			Category: "system",
+			Label:    "Version de la matrice RBAC appliquée au démarrage",
+		}).Error; err != nil {
+			return err
 		}
-		for _, cell := range models.DefaultRoleModules() {
-			roleID, ok := roleByName[cell.RoleName]
-			if !ok {
-				// Role missing — skip and warn
-				log.Printf("[DB] seed role_module: role %q introuvable, skip", cell.RoleName)
+	}
+	log.Printf("[DB] matrice RBAC v%d appliquée (rôles × modules)", models.RbacMatrixVersion)
+	return nil
+}
+
+// seedRBACCells crée/met à jour les cellules (role × module) depuis la
+// matrice par défaut. force=true → écrase les valeurs existantes ;
+// force=false → crée uniquement les cellules absentes.
+func seedRBACCells(db *gorm.DB, roleByName map[string]string, onlyMissing bool) error {
+	count := 0
+	for _, cell := range models.DefaultRoleModules() {
+		roleID, ok := roleByName[cell.RoleName]
+		if !ok {
+			log.Printf("[DB] seed role_module: rôle %q introuvable, skip", cell.RoleName)
+			continue
+		}
+		var rm models.RoleModule
+		exists := db.Where("role_id = ? AND module_key = ?", roleID, cell.Module).First(&rm).Error == nil
+		if exists && onlyMissing {
+			continue
+		}
+		if exists {
+			if rm.CanRead == cell.CanRead && rm.CanWrite == cell.CanWrite {
 				continue
 			}
-			rm := models.RoleModule{
-				RoleID:    roleID,
-				ModuleKey: cell.Module,
-				CanRead:   cell.CanRead,
-				CanWrite:  cell.CanWrite,
+			if err := db.Model(&models.RoleModule{}).Where("id = ?", rm.ID).
+				Updates(map[string]interface{}{
+					"can_read":   cell.CanRead,
+					"can_write":  cell.CanWrite,
+					"updated_at": time.Now(),
+				}).Error; err != nil {
+				log.Printf("[DB] update role_module (%s, %s): %v", cell.RoleName, cell.Module, err)
+				continue
 			}
-			if err := db.Create(&rm).Error; err != nil {
-				log.Printf("[DB] seed role_module (%s, %s): %v", cell.RoleName, cell.Module, err)
-			}
+			count++
+			continue
 		}
-		log.Printf("[DB] %d cellules role_module créées (matrice RBAC)", len(models.DefaultRoleModules()))
+		rm = models.RoleModule{
+			RoleID:    roleID,
+			ModuleKey: cell.Module,
+			CanRead:   cell.CanRead,
+			CanWrite:  cell.CanWrite,
+		}
+		if err := db.Create(&rm).Error; err != nil {
+			log.Printf("[DB] seed role_module (%s, %s): %v", cell.RoleName, cell.Module, err)
+			continue
+		}
+		count++
 	}
-
+	if count > 0 {
+		log.Printf("[DB] %d cellules role_module créées/mises à jour", count)
+	}
 	return nil
 }

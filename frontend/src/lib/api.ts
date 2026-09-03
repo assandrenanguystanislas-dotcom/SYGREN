@@ -111,6 +111,13 @@ function getToken(): string | null {
   }
 }
 
+/** Token JWT brut du localStorage (format zustand-persist) — exposé pour
+ *  le verrou d'impression (pages ouvertes en nouvel onglet où le store
+ *  Zustand n'a pas le token, seul localStorage l'a). */
+export function getStoredToken(): string | null {
+  return getToken();
+}
+
 /**
  * Effectue une requête vers le backend Go avec gestion automatique du
  * routing gateway (XTransformPort) et de l'authentification JWT.
@@ -622,6 +629,104 @@ export const inspectorsApi = {
     apiFetch<{ status: string }>(`/api/inspectors/${id}`, {
       method: "DELETE",
     }),
+};
+
+// === v2 — Parents (module Utilisateurs → onglet Parents) ===
+// Comptes du rôle "parent" — Portail Parent : consultation + impression
+// du bulletin individuel de l'enfant (par matricule).
+
+export const parentsApi = {
+  list: (q?: string) =>
+    apiFetch<{ parents: User[]; count: number }>(
+      `/api/parents${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+    ),
+  create: (data: {
+    full_name: string;
+    phone?: string;
+    email?: string;
+    password: string;
+    child_matricule?: string;
+  }) =>
+    apiFetch<User>("/api/parents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: Partial<{
+      full_name: string;
+      phone: string | null;
+      email: string | null;
+      password: string;
+      active: boolean;
+      child_matricule: string | null;
+    }>,
+  ) =>
+    apiFetch<User>(`/api/parents/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/parents/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === v2 — Portail Parent (module "parent-portal") ===
+// Consultation par MATRICULE de l'enfant : bulletin individuel de fin
+// d'année (module Résultats) + bulletins individuels de période
+// (module Bulletins).
+
+export interface ParentStudentInfo {
+  student: {
+    id: string;
+    matricule: string;
+    last_name: string;
+    first_name: string;
+    full_name: string;
+    gender: string;
+    birth_year?: number | null;
+  };
+  class: { id: string; name: string; level: string };
+  school: { id: string; name: string; code?: string };
+  iep?: { name?: string; region?: string } | null;
+  sessions: Array<{
+    id: string;
+    month: number;
+    year: number;
+    status: string;
+    eval_type: string;
+    eval_number: number;
+  }>;
+  years: number[];
+  system_year: number;
+  student_id: string;
+}
+
+export const parentPortalApi = {
+  /** Élève (par matricule) + classe + école + sessions disponibles. */
+  student: (matricule: string) =>
+    apiFetch<ParentStudentInfo>(
+      `/api/parent/student?matricule=${encodeURIComponent(matricule)}`,
+    ),
+
+  /** Bulletin individuel « RESULTATS DE FIN D'ANNEE » (payload de classe
+   *  + student_id pour isoler l'enfant). */
+  endOfYear: (matricule: string, year?: number) =>
+    apiFetch<EndOfYearSheet>(
+      `/api/parent/end-of-year?matricule=${encodeURIComponent(matricule)}${year ? `&year=${year}` : ""}`,
+    ),
+
+  /** Bulletin individuel de période (relevé de classe + student_id +
+   *  rangs de la classe pour le rang réel de l'enfant). */
+  periodBulletin: (matricule: string, sessionId: string) =>
+    apiFetch<{
+      releve: Awaited<ReturnType<typeof reportsApi.getReleveData>>;
+      student_id: string;
+      ranks: Array<{ matricule: string; rank: number }>;
+    }>(
+      `/api/parent/period-bulletin?matricule=${encodeURIComponent(matricule)}&session_id=${encodeURIComponent(sessionId)}`,
+    ),
 };
 
 // === Sessions de saisie mensuelle (Module 2 — cahier des charges §3) ===
@@ -1255,4 +1360,7 @@ export const api = {
   usersAdmin: usersAdminApi,
   pda: pdaApi,
   examCenters: examCentersApi,
+  // v2
+  parents: parentsApi,
+  parentPortal: parentPortalApi,
 };

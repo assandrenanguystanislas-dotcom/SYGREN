@@ -575,3 +575,29 @@
     page-break-inside: avoid;
   }
 }
+
+/* === VERROU D'IMPRESSION DES DOCUMENTS OFFICIELS (v2) ===
+ * Politique : les documents imprimables des modules « Résultats » et
+ * « Bulletins » ne peuvent être imprimés que par l'Admin IEP et le Super
+ * Admin (enseignants et directeurs : impression verrouillée). Les pages
+ * d'impression posent la classe .print-locked sur le document quand le
+ * rôle n'est pas autorisé → le document est remplacé, à l'impression, par
+ * le message .print-lock-message (même Ctrl+P n'extrait aucune donnée).
+ * Spécificité : :is(#id…).print-locked (0,1,1,0) surclasse les contre-règles
+ * #id (0,1,0,0) définies plus haut dans ce fichier. */
+@media print {
+  :is(#resultats-fin-annee-doc, #bulletins-fin-annee-doc, #releve-doc,
+      #synthese-doc, #bulletins-doc).print-locked,
+  :is(#resultats-fin-annee-doc, #bulletins-fin-annee-doc, #releve-doc,
+      #synthese-doc, #bulletins-doc).print-locked * {
+    visibility: hidden !important;
+  }
+  .print-lock-message,
+  .print-lock-message * {
+    visibility: visible !important;
+  }
+  .print-lock-message {
+    display: flex !important;
+    position: static !important;
+  }
+}

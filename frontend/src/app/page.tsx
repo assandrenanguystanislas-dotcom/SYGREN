@@ -21,6 +21,7 @@ import { SubjectsView } from "@/components/views/subjects-view";
 import { EvaluationsView } from "@/components/views/evaluations-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
+import { ParentPortalView } from "@/components/views/parent-portal-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
 import { SettingsView, type SettingsTab } from "@/components/views/settings-view";
 import { AuditView } from "@/components/views/audit-view";
@@ -178,7 +179,12 @@ function AppContent() {
   const allowed = navItem ? isViewAllowed(navItem, user, modules) : false;
 
   // Vue par défaut si la vue active n'est pas autorisée pour ce rôle
-  const view = allowed ? activeView : "dashboard";
+  // (v2 : le PARENT atterrit sur son Portail Parent — pas de dashboard).
+  const view = allowed
+    ? activeView
+    : user.role === "parent"
+      ? "parent-portal"
+      : "dashboard";
 
   // Architecture D-Phase4 : si on est sur la vue « settings », détermine
   // quel sous-onglet ouvrir initialement à partir du hash URL originel
@@ -210,6 +216,7 @@ function AppContent() {
       {view === "evaluations" && <EvaluationsView />}
       {view === "results" && <ResultsView />}
       {view === "bulletins" && <BulletinsView />}
+      {view === "parent-portal" && <ParentPortalView />}
       {/* Architecture D-Phase4 — Refonte Settings : les anciennes vues
           « baremes », « permissions » et « reset-requests » deviennent des
           sous-onglets de la page Paramètres (routing top-level résolu via
