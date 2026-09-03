@@ -50,6 +50,7 @@ import {
 import { useAuthStore } from "@/lib/auth-store";
 import { usersAdminApi } from "@/lib/api";
 import { ROLE_LABELS, type Role, type UserAdminRow } from "@/lib/types";
+import { ChangePasswordButton } from "@/components/change-password-dialog";
 import { TeachersView } from "./teachers-view";
 import { DirectorsView } from "./directors-view";
 import { InspectorsView } from "./inspectors-view";
@@ -193,6 +194,12 @@ export function UsersView({ onNavigate }: UsersViewProps) {
             ))}
           </SelectContent>
         </Select>
+        {/* Task 25 — action « Modifier votre mot de passe » directement dans
+            le module d'atterrissage (mot de passe standard = téléphone). */}
+        <ChangePasswordButton
+          variant="outline"
+          className="sm:ml-auto shrink-0"
+        />
       </CardContent>
     </Card>
   ) : null;

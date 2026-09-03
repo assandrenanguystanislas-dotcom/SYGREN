@@ -44,7 +44,9 @@ func Login(cfg *config.Config) http.HandlerFunc {
 			"phone = ? OR email = ?", req.Identifier, req.Identifier,
 		).First(&user)
 
-		// 2. Si pas trouvé, essayer le code école (login director par code établissement)
+		// 2. Si pas trouvé, essayer le code école (login directeur OU
+		//    enseignant par code établissement — Task 25 : chacun via
+		//    le code école dédié à SON école).
 		if result.Error != nil {
 			var school models.School
 			if err := database.DB.Where("code = ?", req.Identifier).First(&school).Error; err != nil {
@@ -52,12 +54,43 @@ func Login(cfg *config.Config) http.HandlerFunc {
 				middleware.JSONError(w, "identifiants invalides", http.StatusUnauthorized)
 				return
 			}
-			// École trouvée → chercher le directeur de cette école
-			if err := database.DB.Where("school_id = ? AND role = ?", school.ID, models.RoleDirector).First(&user).Error; err != nil {
-				middleware.JSONError(w, "aucun directeur rattaché à cette école", http.StatusUnauthorized)
+			// École trouvée → candidats = directeur + enseignants de
+			// CETTE école. Le mot de passe (standard = numéro de
+			// téléphone, unique par utilisateur) désigne le compte.
+			var candidates []models.User
+			if err := database.DB.Where(
+				"school_id = ? AND role IN ?",
+				school.ID,
+				[]string{models.RoleDirector, models.RoleTeacher},
+			).Find(&candidates).Error; err != nil || len(candidates) == 0 {
+				middleware.JSONError(w, "aucun utilisateur rattaché à cette école", http.StatusUnauthorized)
 				return
 			}
-			// Directeur trouvé → continuer le flow (password check ci-dessous)
+			// Priorité au directeur (comportement historique), puis
+			// aux enseignants : le premier dont le mot de passe
+			// correspond est authentifié.
+			matched := -1
+			for pass := 0; pass < 2 && matched < 0; pass++ {
+				wantRole := models.RoleTeacher
+				if pass == 0 {
+					wantRole = models.RoleDirector
+				}
+				for _, u := range candidates {
+					if u.Role != wantRole {
+						continue
+					}
+					if err := utils.CheckPassword(req.Password, u.Password); err == nil {
+						matched = 1
+						user = u
+						break
+					}
+				}
+			}
+			if matched < 0 {
+				middleware.JSONError(w, "identifiants invalides", http.StatusUnauthorized)
+				return
+			}
+			// Utilisateur trouvé → continuer le flow (active check ci-dessous)
 		}
 		if !user.Active {
 			middleware.JSONError(w, "compte désactivé", http.StatusForbidden)

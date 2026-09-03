@@ -42,12 +42,18 @@ export function LoginView() {
   const [submitting, setSubmitting] = useState(false);
   const [loginRole, setLoginRole] = useState<"admin" | "director" | "teacher">("director");
 
-  // Config adaptative selon le rôle sélectionné
+  // Config adaptative selon le rôle sélectionné.
+  // Task 25 — Directeur ET Enseignant se connectent avec le CODE ÉCOLE
+  // dédié à leur école ; le mot de passe standard est le numéro de
+  // téléphone du compte (modifiable à tout moment).
   const roleConfig = {
     admin: { label: "Email", placeholder: "admin@sygren.ci" },
     director: { label: "Code école", placeholder: "ex: EPPCP001" },
-    teacher: { label: "Téléphone", placeholder: "ex: 0700000000" },
+    teacher: { label: "Code école", placeholder: "ex: EPPCP001" },
   }[loginRole];
+
+  // Task 25 — indice mot de passe standard (directeur + enseignant)
+  const showStandardPwdHint = loginRole === "director" || loginRole === "teacher";
 
   const roles = [
     { v: "admin" as const, l: "Admin" },
@@ -208,13 +214,20 @@ export function LoginView() {
                             {...field}
                             type="password"
                             autoComplete="current-password"
-                            placeholder="••••••••"
+                            placeholder={showStandardPwdHint ? "Votre numéro de téléphone" : "••••••••"}
                             className="pl-9"
                             disabled={submitting}
                           />
                         </div>
                       </FormControl>
                       <FormMessage />
+                      {showStandardPwdHint && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Mot de passe standard : votre numéro de téléphone. À
+                          modifier à tout moment via «&nbsp;Modifier votre mot
+                          de passe&nbsp;» après connexion.
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />

@@ -296,6 +296,13 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user.MustChangePassword = false
 	database.DB.Save(&user)
 
+	// Task 25 — audit : changement de mot de passe volontaire
+	// (action « Modifier votre mot de passe ») ou première connexion.
+	uid := user.ID
+	LogAction(r, "auth.password_changed", "user", &uid, map[string]string{
+		"method": "self_change",
+	})
+
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "changed"})
 }
 

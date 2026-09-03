@@ -83,14 +83,27 @@ func CreateDirector(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
 		return
 	}
-	if req.FullName == "" || req.Password == "" {
-		middleware.JSONError(w, "full_name et password requis", http.StatusBadRequest)
+	if req.FullName == "" {
+		middleware.JSONError(w, "full_name requis", http.StatusBadRequest)
 		return
 	}
 	// Au moins un identifiant de connexion (téléphone OU email — cahier des charges §4.1)
 	if (req.Phone == nil || *req.Phone == "") && (req.Email == nil || *req.Email == "") {
 		middleware.JSONError(w, "au moins un email ou téléphone est requis", http.StatusBadRequest)
 		return
+	}
+	// Task 25 — mot de passe STANDARD = numéro de téléphone : si aucun
+	// mot de passe n'est fourni à la création, on utilise le téléphone.
+	// Le directeur pourra le modifier à tout moment via « Modifier votre
+	// mot de passe ».
+	if req.Password == "" {
+		if req.Phone == nil || *req.Phone == "" {
+			middleware.JSONError(w,
+				"mot de passe requis (ou renseignez un téléphone : le mot de passe standard est le numéro de téléphone)",
+				http.StatusBadRequest)
+			return
+		}
+		req.Password = *req.Phone
 	}
 
 	// Vérifier l'unicité du téléphone/email

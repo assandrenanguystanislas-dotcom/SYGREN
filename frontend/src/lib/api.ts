@@ -519,7 +519,9 @@ export const teachersApi = {
     full_name: string;
     phone?: string;
     email?: string;
-    password: string;
+    /** Task 25 — optionnel : si vide, le backend applique le mot de passe
+     *  STANDARD = numéro de téléphone (modifiable par l'enseignant). */
+    password?: string;
     school_id?: string;
     personnel?: PersonnelDossierInput; // dossier « état nominatif »
   }) =>
@@ -560,7 +562,9 @@ export const directorsApi = {
     full_name: string;
     phone?: string;
     email?: string;
-    password: string;
+    /** Task 25 — optionnel : si vide, le backend applique le mot de passe
+     *  STANDARD = numéro de téléphone (modifiable par le directeur). */
+    password?: string;
     school_id?: string;
     personnel?: PersonnelDossierInput; // dossier « état nominatif »
   }) =>

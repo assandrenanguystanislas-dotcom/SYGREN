@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ChangePasswordButton } from "@/components/change-password-dialog";
 import {
   Sheet,
   SheetContent,
@@ -293,6 +294,11 @@ function SidebarContent({
             </p>
           </div>
         </div>
+        {/* Task 25 — action « Modifier votre mot de passe » : disponible à
+            tout moment pour tout utilisateur connecté (en particulier le
+            Directeur et l'Enseignant dont le mot de passe standard est le
+            numéro de téléphone). */}
+        <ChangePasswordButton className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
         <Button
           variant="ghost"
           size="sm"

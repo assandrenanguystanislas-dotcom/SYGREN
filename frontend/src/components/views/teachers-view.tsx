@@ -157,13 +157,14 @@ export function TeachersView() {
       if (editing) {
         await updateMut.mutateAsync([editing.id, form]);
       } else {
-        if (!form.password) return;
+        // Task 25 — mot de passe optionnel : s'il est vide, le backend
+        // applique le mot de passe STANDARD = numéro de téléphone.
         await createMut.mutateAsync([
           {
             full_name: form.full_name,
             email: form.email || undefined,
             phone: form.phone || undefined,
-            password: form.password,
+            password: form.password || undefined,
             school_id: form.school_id || undefined,
             personnel: form.personnel,
           },
@@ -520,16 +521,22 @@ export function TeachersView() {
             </p>
             <div className="space-y-1.5">
               <Label htmlFor="teacher-password">
-                {editing ? "Nouveau mot de passe (optionnel)" : "Mot de passe"}
+                {editing ? "Nouveau mot de passe (optionnel)" : "Mot de passe (optionnel)"}
               </Label>
               <Input
                 id="teacher-password"
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder={editing ? "Laisser vide pour ne pas changer" : "••••••••"}
-                required={!editing}
+                placeholder={editing ? "Laisser vide pour ne pas changer" : "Laisser vide → téléphone"}
               />
+              {!editing && (
+                <p className="text-[11px] text-muted-foreground">
+                  Mot de passe standard = numéro de téléphone. L&apos;enseignant
+                  pourra le modifier à tout moment via «&nbsp;Modifier votre
+                  mot de passe&nbsp;».
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="teacher-school">École</Label>
@@ -563,7 +570,7 @@ export function TeachersView() {
               </Button>
               <Button
                 type="submit"
-                disabled={!editing && (!form.full_name || !form.password || (!form.email && !form.phone))}
+                disabled={!editing && (!form.full_name || (!form.email && !form.phone))}
               >
                 {editing ? "Enregistrer" : "Créer l'enseignant"}
               </Button>
