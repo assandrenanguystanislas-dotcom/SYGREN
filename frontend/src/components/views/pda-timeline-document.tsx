@@ -11,6 +11,12 @@
 // document ne recalcule rien). Impression A4 paysage 100 % navigateur
 // (isolement #pda-tl-doc, page nommée pda-timeline) : les lignes ne sont
 // JAMAIS fractionnées entre deux pages (break-inside: avoid, globals.css).
+//
+// v3 — EMBELLISSEMENT DRAPEAU CI (inspiré des bulletins individuels) :
+// bandeau du titre en VERT DRAPEAU (texte blanc), entêtes de la matrice
+// sur fond vert drapeau, bordures vertes, totaux sur fond pastel vert,
+// ARMOIRIES en filigrane (répétées à chaque page imprimée) + rubans
+// tricolores haut/bas de chaque page.
 
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -23,11 +29,21 @@ import {
   INK,
   OFFICIAL_FONT,
   OfficialDocHeader,
-  THIN,
-  TOTAL_BG,
 } from "./official-doc";
+import {
+  CIArmoiriesWatermark,
+  CIFlagRibbon,
+  CI_GREEN,
+  CI_GREEN_BG,
+  CI_GREEN_TEXT,
+  PRINT_COLOR_STYLE,
+} from "@/components/ci-decor";
 
-const BORDER = THIN;
+// v3 — bordures de la matrice en VERT DRAPEAU ; ligne des TOTAUX sur
+// fond pastel vert drapeau (texte vert foncé, gras).
+const BORDER = `1px solid ${CI_GREEN}`;
+/** Fond des lignes TOTAUX (ancien gris du modèle). */
+const TOTAL_BG = CI_GREEN_BG;
 
 /** Effectif CALCULÉ au format du modèle reçu : 07, 12 — « 00 » pour un
  *  zéro calculé (l'évaluation a eu lieu, aucun admis), case vide si
@@ -43,7 +59,9 @@ const thStyle: CSSProperties = {
   fontSize: "9px",
   fontWeight: 700,
   textAlign: "center",
-  color: INK,
+  color: "#ffffff",
+  background: CI_GREEN,
+  ...PRINT_COLOR_STYLE,
 };
 
 const tdStyle: CSSProperties = {
@@ -141,6 +159,7 @@ export function PdaTimelineDocument({
     ...tdStyle,
     fontWeight: 700,
     background: TOTAL_BG,
+    color: CI_GREEN_TEXT,
   };
   const summaryLabel: CSSProperties = {
     ...summaryRow,
@@ -183,21 +202,36 @@ export function PdaTimelineDocument({
           fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
+          position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
+        {/* v3 — ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (répétées sur
+            chaque page imprimée) + rubans tricolores haut/bas de chaque
+            page (position fixed — zéro impact sur la mise en page) */}
+        <CIArmoiriesWatermark fixed />
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0 }}>
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0 }}>
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* --- En-tête institutionnel (identique aux documents officiels reçus) --- */}
         <OfficialDocHeader iep={iep} variant="plan" size="sm" />
 
-        {/* --- Titre encadré + sous-titre souligné (patron de la fiche reçue) --- */}
+        {/* --- Bandeau du titre VERT DRAPEAU (texte blanc — inspiration
+            bulletins individuels) + sous-titre souligné --- */}
         <div style={{ textAlign: "center", margin: "4px 0 10px" }}>
           <div
             style={{
               display: "inline-block",
-              border: `1px solid ${INK}`,
+              background: CI_GREEN,
+              color: "#ffffff",
               padding: "6px 24px",
               fontSize: "13.5px",
               fontWeight: 700,
               lineHeight: 1.45,
+              ...PRINT_COLOR_STYLE,
             }}
           >
             SUIVI DU PLAN D&apos;ACTION PLURIANNUEL DE L&apos;IEPP
@@ -208,6 +242,7 @@ export function PdaTimelineDocument({
               fontWeight: 700,
               textDecoration: "underline",
               marginTop: "8px",
+              color: CI_GREEN_TEXT,
             }}
           >
             SUIVI PLURIANNUEL DES NIVEAUX — CLASSE {tl.class.name.toUpperCase()} —
@@ -367,7 +402,7 @@ export function PdaTimelineDocument({
         >
           <span style={{ textDecoration: "underline" }}>Le Directeur</span>
           <div style={{ textAlign: "center" }}>
-            <span style={{ textDecoration: "underline" }}>L&apos;Inspecteur</span>
+            <span style={{ textDecoration: "underline", color: CI_GREEN_TEXT }}>L&apos;Inspecteur</span>
             {iep?.inspector_name ? (
               <div
                 style={{
@@ -379,6 +414,7 @@ export function PdaTimelineDocument({
               </div>
             ) : null}
           </div>
+        </div>
         </div>
       </div>
 

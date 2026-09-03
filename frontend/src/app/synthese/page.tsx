@@ -262,13 +262,17 @@ export default function SynthesePage() {
             </div>
           </div>
 
-          {/* Titre central encadré avec lignes d'union */}
+          {/* Titre central encadré — bordure VERT DRAPEAU sur fond pastel
+              orange (inspiration bulletins individuels), lignes d'union */}
           <div className="flex items-center my-4">
-            <div className="flex-1 border-t border-black"></div>
-            <div className="border-2 border-black rounded-xl px-8 py-1.5 mx-4">
+            <div className="flex-1 border-t border-[#009E60]"></div>
+            <div
+              className="border-2 border-[#009E60] rounded-xl px-8 py-1.5 mx-4"
+              style={{ background: "#FDEBDA", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+            >
               <h1 className="text-base font-bold tracking-wider uppercase">SYNTHÈSE DES RÉSULTATS</h1>
             </div>
-            <div className="flex-1 border-t border-black"></div>
+            <div className="flex-1 border-t border-[#009E60]"></div>
           </div>
 
           {/* Sous-titre : inclut le périmètre du document (CP1 au CM1 / CM2 / etc.)
@@ -280,70 +284,77 @@ export default function SynthesePage() {
             {data.document_label}
           </div>
 
-          {/* Tableau des résultats */}
-          <table className="w-full border-collapse border border-black text-center font-bold">
+          {/* Tableau des résultats — bordures et entêtes aux COULEURS DU
+              DRAPEAU (entêtes sur fond vert, texte blanc) */}
+          <table className="w-full border-collapse border border-[#009E60] text-center font-bold">
             <thead>
               {/* Ligne 1 : Niveaux */}
-              <tr>
-                <th className="border border-black p-1 w-1/6"></th>
+              <tr
+                className="text-white"
+                style={{ background: "#009E60", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+              >
+                <th className="border border-[#009E60] p-1 w-1/6"></th>
                 {CLASS_NAMES.map((cn) => (
-                  <th key={cn} colSpan={3} className="border border-black p-1">{cn}</th>
+                  <th key={cn} colSpan={3} className="border border-[#009E60] p-1">{cn}</th>
                 ))}
               </tr>
               {/* Ligne 2 : Genre (G, F, T) */}
-              <tr className="bg-gray-50">
-                <th className="border border-black p-1"></th>
+              <tr
+                className="text-white"
+                style={{ background: "#009E60", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+              >
+                <th className="border border-[#009E60] p-1"></th>
                 {/* FIX BUG : remplacé le Fragment <>...</> par flatMap pour éviter
                     le bug de réordonnancement des cellules (les Fragments dans <tr>
                     causaient un brouillage G/F/T colonne par colonne). */}
                 {CLASS_NAMES.flatMap((cn) => [
-                  <th key={`${cn}-g`} className="border border-black p-1">G</th>,
-                  <th key={`${cn}-f`} className="border border-black p-1">F</th>,
-                  <th key={`${cn}-t`} className="border border-black p-1">T</th>,
+                  <th key={`${cn}-g`} className="border border-[#009E60] p-1">G</th>,
+                  <th key={`${cn}-f`} className="border border-[#009E60] p-1">F</th>,
+                  <th key={`${cn}-t`} className="border border-[#009E60] p-1">T</th>,
                 ])}
               </tr>
             </thead>
             <tbody>
               {/* INSCRITS — FIX BUG : flatMap pour grouper G/F/T par classe */}
               <tr>
-                <td className="border border-black p-2 text-left uppercase">Inscrits</td>
+                <td className="border border-[#009E60] p-2 text-left uppercase">Inscrits</td>
                 {levelsData.flatMap((lvl) => [
-                  <td key={`${lvl.class_name}-ins-g`} className="border border-black p-1">{fmt(lvl.inscrits[0])}</td>,
-                  <td key={`${lvl.class_name}-ins-f`} className="border border-black p-1">{fmt(lvl.inscrits[1])}</td>,
-                  <td key={`${lvl.class_name}-ins-t`} className="border border-black p-1">{fmt(lvl.inscrits[2])}</td>,
+                  <td key={`${lvl.class_name}-ins-g`} className="border border-[#009E60] p-1">{fmt(lvl.inscrits[0])}</td>,
+                  <td key={`${lvl.class_name}-ins-f`} className="border border-[#009E60] p-1">{fmt(lvl.inscrits[1])}</td>,
+                  <td key={`${lvl.class_name}-ins-t`} className="border border-[#009E60] p-1">{fmt(lvl.inscrits[2])}</td>,
                 ])}
               </tr>
               {/* PRÉSENTS — flatMap pour grouper G/F/T par classe */}
               <tr>
-                <td className="border border-black p-2 text-left uppercase">Présents</td>
+                <td className="border border-[#009E60] p-2 text-left uppercase">Présents</td>
                 {levelsData.flatMap((lvl) => [
-                  <td key={`${lvl.class_name}-pre-g`} className="border border-black p-1">{fmt(lvl.presents[0])}</td>,
-                  <td key={`${lvl.class_name}-pre-f`} className="border border-black p-1">{fmt(lvl.presents[1])}</td>,
-                  <td key={`${lvl.class_name}-pre-t`} className="border border-black p-1">{fmt(lvl.presents[2])}</td>,
+                  <td key={`${lvl.class_name}-pre-g`} className="border border-[#009E60] p-1">{fmt(lvl.presents[0])}</td>,
+                  <td key={`${lvl.class_name}-pre-f`} className="border border-[#009E60] p-1">{fmt(lvl.presents[1])}</td>,
+                  <td key={`${lvl.class_name}-pre-t`} className="border border-[#009E60] p-1">{fmt(lvl.presents[2])}</td>,
                 ])}
               </tr>
               {/* ADMIS — flatMap pour grouper G/F/T par classe */}
               <tr>
-                <td className="border border-black p-2 text-left uppercase">Admis</td>
+                <td className="border border-[#009E60] p-2 text-left uppercase">Admis</td>
                 {levelsData.flatMap((lvl) => [
-                  <td key={`${lvl.class_name}-adm-g`} className="border border-black p-1">{fmt(lvl.admis[0])}</td>,
-                  <td key={`${lvl.class_name}-adm-f`} className="border border-black p-1">{fmt(lvl.admis[1])}</td>,
-                  <td key={`${lvl.class_name}-adm-t`} className="border border-black p-1">{fmt(lvl.admis[2])}</td>,
+                  <td key={`${lvl.class_name}-adm-g`} className="border border-[#009E60] p-1">{fmt(lvl.admis[0])}</td>,
+                  <td key={`${lvl.class_name}-adm-f`} className="border border-[#009E60] p-1">{fmt(lvl.admis[1])}</td>,
+                  <td key={`${lvl.class_name}-adm-t`} className="border border-[#009E60] p-1">{fmt(lvl.admis[2])}</td>,
                 ])}
               </tr>
               {/* % ADMIS — flatMap pour grouper G/F/T par classe */}
               <tr>
-                <td className="border border-black p-2 text-left uppercase">% Admis</td>
+                <td className="border border-[#009E60] p-2 text-left uppercase">% Admis</td>
                 {levelsData.flatMap((lvl) => [
-                  <td key={`${lvl.class_name}-pct-g`} className="border border-black p-1">{fmtPct(lvl.pct_admis[0])}</td>,
-                  <td key={`${lvl.class_name}-pct-f`} className="border border-black p-1">{fmtPct(lvl.pct_admis[1])}</td>,
-                  <td key={`${lvl.class_name}-pct-t`} className="border border-black p-1">{fmtPct(lvl.pct_admis[2])}</td>,
+                  <td key={`${lvl.class_name}-pct-g`} className="border border-[#009E60] p-1">{fmtPct(lvl.pct_admis[0])}</td>,
+                  <td key={`${lvl.class_name}-pct-f`} className="border border-[#009E60] p-1">{fmtPct(lvl.pct_admis[1])}</td>,
+                  <td key={`${lvl.class_name}-pct-t`} className="border border-[#009E60] p-1">{fmtPct(lvl.pct_admis[2])}</td>,
                 ])}
               </tr>
               {/* Ligne % Total d'Admis par Genre — colSpan dynamique (TOTAL_COLS-1=18) */}
               <tr>
-                <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
-                <td colSpan={TOTAL_COLS - 1} className="border border-black p-2">
+                <td className="border border-[#009E60] p-2 text-left font-normal">% total d&apos;ADMIS</td>
+                <td colSpan={TOTAL_COLS - 1} className="border border-[#009E60] p-2">
                   <div className="flex justify-around items-center font-bold">
                     <span>FILLES : {fmtPct(data.totals.pct_f)} %</span>
                     <span>GARÇONS : {fmtPct(data.totals.pct_g)} %</span>
@@ -352,8 +363,8 @@ export default function SynthesePage() {
               </tr>
               {/* Ligne % Total Global */}
               <tr>
-                <td className="border border-black p-2 text-left font-normal">% total d&apos;ADMIS</td>
-                <td colSpan={TOTAL_COLS - 1} className="border border-black p-2 text-center text-base font-bold">
+                <td className="border border-[#009E60] p-2 text-left font-normal">% total d&apos;ADMIS</td>
+                <td colSpan={TOTAL_COLS - 1} className="border border-[#009E60] p-2 text-center text-base font-bold">
                   {fmtPct(data.totals.pct_t)} %
                 </td>
               </tr>

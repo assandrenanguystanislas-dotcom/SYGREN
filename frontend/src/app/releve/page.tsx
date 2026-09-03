@@ -1,5 +1,11 @@
 "use client";
 
+// v3 — EMBELLISSEMENT DRAPEAU CI (inspiré des bulletins individuels) :
+// entêtes du tableau sur FOND VERT DRAPEAU (texte blanc), bordures
+// vertes, boîte du titre sur fond pastel orange bordé de vert,
+// bandeau ORANGE DRAPEAU pour le type d'examen, blocs statistiques et
+// signatures bordés de vert ; armoiries en filigrane + rubans
+// tricolores haut/bas de chaque page (conservés).
 import { useState, useEffect } from "react";
 import { Printer, X, Loader2, User, Users, CheckCircle2, Award, TrendingUp } from "lucide-react";
 import { CIArmoiriesWatermark, CIFlagRibbon } from "@/components/ci-decor";
@@ -407,12 +413,22 @@ export default function RelevePage() {
                         <p>Courriel : <span className="text-blue-700 underline">{data.inspector_email || "............"}</span></p>
                       </div>
 
-                      {/* Titre Centre */}
+                      {/* Titre Centre — boîte bordée de VERT DRAPEAU sur
+                          fond pastel orange (inspiration bulletins) */}
                       <div className="flex flex-col items-center mt-2">
-                        <div className="border-2 border-black rounded-[2rem] px-8 py-2 font-bold text-sm tracking-wide">
+                        <div
+                          className="border-2 border-[#009E60] rounded-[2rem] px-8 py-2 font-bold text-sm tracking-wide"
+                          style={{ background: "#FDEBDA", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+                        >
                           {data.title}
                         </div>
-                        <div className="border border-red-500 text-red-600 font-bold text-base px-8 py-1.5 mt-4 tracking-widest uppercase">
+                        {/* Bandeau ORANGE DRAPEAU (texte blanc) — comme le
+                            bandeau « DÉCISION DU CONSEIL DES MAÎTRES » du
+                            bulletin individuel */}
+                        <div
+                          className="text-white font-bold text-base px-8 py-1.5 mt-4 tracking-widest uppercase"
+                          style={{ background: "#F77F00", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+                        >
                           {data.type_examen}
                         </div>
                       </div>
@@ -447,21 +463,24 @@ export default function RelevePage() {
                   </div>
                 ) : (
                   /* Rappel de titre discret sur les pages suivantes */
-                  <div className="flex justify-between items-center border-b border-black pb-1 mb-3 text-[11px] font-bold">
+                  <div className="flex justify-between items-center border-b border-[#009E60] pb-1 mb-3 text-[11px] font-bold">
                     <span>{data.school_name} — {data.title}</span>
                     <span>Page {pageIndex + 1} / {pages.length}</span>
                   </div>
                 )}
 
                 {/* === 3. TABLEAU DES NOTES (Colonnes dynamiques, sans barème) === */}
-                <table className="w-full border-collapse border border-black text-center text-[11px]">
+                <table className="w-full border-collapse border border-[#009E60] text-center text-[11px]">
                   <thead>
-                    <tr className="bg-gray-50 font-bold">
-                      <th className="border border-black p-0 text-[11px]" style={{ minWidth: "18px", maxWidth: "24px" }}>N°</th>
-                      <th className="border border-black p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "65px", maxWidth: "75px" }}>Matricule</th>
-                      <th className="border border-black p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "48px", maxWidth: "65px" }}>Nom</th>
+                    <tr
+                      className="font-bold text-white"
+                      style={{ background: "#009E60", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
+                    >
+                      <th className="border border-[#009E60] p-0 text-[11px]" style={{ minWidth: "18px", maxWidth: "24px" }}>N°</th>
+                      <th className="border border-[#009E60] p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "65px", maxWidth: "75px" }}>Matricule</th>
+                      <th className="border border-[#009E60] p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "48px", maxWidth: "65px" }}>Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
-                      <th className="border border-black p-0.5 text-[11px]">Prénoms</th>
+                      <th className="border border-[#009E60] p-0.5 text-[11px]">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
                           Quand il y a beaucoup de matières (CP = 9), on utilise
                           une écriture verticale (writing-mode) qui est plus
@@ -474,7 +493,7 @@ export default function RelevePage() {
                         return (
                           <th
                             key={idx}
-                            className={`border border-black p-0.5 text-center ${isEPS(s.name) ? "bg-yellow-300" : ""}`}
+                            className={`border border-[#009E60] p-0.5 text-center ${isEPS(s.name) ? "bg-yellow-300" : ""}`}
                             style={{
                               minWidth: isCompact ? "22px" : "40px",
                               maxWidth: isCompact ? "26px" : "50px",
@@ -519,7 +538,7 @@ export default function RelevePage() {
                       {[{ label: "Total", short: "Total" }, { label: "Moy.", short: "Moy." }, { label: "Obs.", short: "Obs." }].map(({ label, short }) => (
                         <th
                           key={label}
-                          className={`border border-black p-0.5 text-center`}
+                          className={`border border-[#009E60] p-0.5 text-center`}
                           style={{
                             minWidth: subjects.length > 6 ? "22px" : "auto",
                             maxWidth: subjects.length > 6 ? "26px" : "auto",
@@ -566,12 +585,12 @@ export default function RelevePage() {
                       const isFille = e.gender === "F";
                       return (
                         <tr key={num} className="h-4">
-                          <td className="border border-black p-0 font-semibold text-[11px]">{num}</td>
-                          <td className="border border-black p-0 font-bold text-[11px] font-mono">{e.matricule}</td>
-                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
+                          <td className="border border-[#009E60] p-0 font-semibold text-[11px]">{num}</td>
+                          <td className="border border-[#009E60] p-0 font-bold text-[11px] font-mono">{e.matricule}</td>
+                          <td className={`border border-[#009E60] p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
                             {e.last_name.toUpperCase()}
                           </td>
-                          <td className={`border border-black p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
+                          <td className={`border border-[#009E60] p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
                             {smartAbbreviate(e.first_name, prenomWidth).toUpperCase()}
                           </td>
                           {subjects.map((subj, idx) => {
@@ -580,19 +599,19 @@ export default function RelevePage() {
                             return (
                               <td
                                 key={idx}
-                                className={`border border-black p-0 text-[11px] ${isEPS(subj.name) ? "bg-yellow-200 font-bold" : ""}`}
+                                className={`border border-[#009E60] p-0 text-[11px] ${isEPS(subj.name) ? "bg-yellow-200 font-bold" : ""}`}
                               >
                                 {val}
                               </td>
                             );
                           })}
-                          <td className="border border-black p-0 font-bold text-[11px]">
+                          <td className="border border-[#009E60] p-0 font-bold text-[11px]">
                             {e.has_average ? fmt(e.total, true) : "—"}
                           </td>
-                          <td className="border border-black p-0 font-bold text-[11px]">
+                          <td className="border border-[#009E60] p-0 font-bold text-[11px]">
                             {e.has_average ? fmt(e.average, true) : "—"}
                           </td>
-                          <td className="border border-black p-0 font-bold text-[11px]">{e.observation}</td>
+                          <td className="border border-[#009E60] p-0 font-bold text-[11px]">{e.observation}</td>
                         </tr>
                       );
                     })}
@@ -606,9 +625,9 @@ export default function RelevePage() {
               {isLastPage && (
                 <div className="mt-3 grid grid-cols-3 gap-3 text-center font-bold text-xs break-inside-avoid">
                   {/* === Bloc Statistiques compact === */}
-                  <div className="border-2 border-black rounded-lg overflow-hidden">
+                  <div className="border-2 border-[#009E60] rounded-lg overflow-hidden">
                     {/* En-tête avec images garçon/fille */}
-                    <div className="grid grid-cols-4 bg-white text-[11px] font-bold border-b-2 border-black">
+                    <div className="grid grid-cols-4 bg-white text-[11px] font-bold border-b-2 border-[#009E60]">
                       <div className="px-1 py-0.5 text-left"></div>
                       <div className="px-1 py-0.5 flex items-center justify-center gap-0.5">
                         <img src="/homme.webp" alt="G" className="w-3 h-3 object-contain" />
@@ -696,7 +715,7 @@ export default function RelevePage() {
                   </div>
 
                   {/* Bloc Directeur compact */}
-                  <div className="border-2 border-black rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
+                  <div className="border-2 border-[#009E60] rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
                     <span className="underline uppercase text-[11px]">Le Directeur</span>
                     <div className="flex-grow"></div>
                     <span className="uppercase text-[11px] tracking-wide">
@@ -705,7 +724,7 @@ export default function RelevePage() {
                   </div>
 
                   {/* Bloc Inspecteur compact */}
-                  <div className="border-2 border-black rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
+                  <div className="border-2 border-[#009E60] rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
                     <span className="underline uppercase text-[11px]">L&apos;Inspecteur</span>
                     <div className="flex-grow"></div>
                     <span className="uppercase text-[11px] tracking-wide">

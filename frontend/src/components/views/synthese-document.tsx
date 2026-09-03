@@ -1,10 +1,16 @@
 "use client";
 
+// v3 — EMBELLISSEMENT DRAPEAU CI (inspiré des bulletins individuels) :
+// l'ancien BLEU MARINE cède la place aux couleurs du drapeau ivoirien —
+// entêtes du tableau sur FOND VERT DRAPEAU (texte blanc), bordures
+// vertes, labels en vert foncé, boîte du titre sur fond pastel orange
+// bordé de vert ; les armoiries (filigrane) et les rubans tricolores
+// haut/bas sont conservés.
 import { useQuery } from "@tanstack/react-query";
 import { Printer, X, Loader2 } from "lucide-react";
 import { reportsApi } from "@/lib/api";
 import { monthLabel } from "@/lib/session-utils";
-import { CIArmoiriesWatermark, CIFlagRibbon } from "@/components/ci-decor";
+import { CIArmoiriesWatermark, CIFlagRibbon, CI_GREEN, CI_GREEN_BG, CI_GREEN_TEXT, CI_ORANGE_BG, PRINT_COLOR_STYLE } from "@/components/ci-decor";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, usePrintRole } from "@/lib/print-guard";
 
 interface LevelData {
@@ -53,7 +59,10 @@ interface SyntheseData {
 // CLASS_NAMES est maintenant DYNAMIQUE : il se base sur la réponse du backend
 // (data.levels) plutôt que sur une constante codée en dur.
 const ALL_CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
-const NAVY = "#000080";
+/** Vert assombri pour les libellés (contraste à l'impression). */
+const LABEL_GREEN = CI_GREEN_TEXT;
+/** Encre des données (noir pur, lisible à l'impression). */
+const INK_DOC = "#000000";
 
 export function SyntheseDocument({
   sessionId,
@@ -114,20 +123,23 @@ export function SyntheseDocument({
   // Pré-calculer les données pour chaque classe (évite les lookups répétés)
   const classLevels = CLASS_NAMES.map(getLevel);
 
-  // Styles communs
+  // Styles communs — COULEURS DU DRAPEAU ivoirien (inspiration bulletins)
   const headerStyle: React.CSSProperties = {
-    border: `1px solid ${NAVY}`,
-    background: NAVY,
+    border: `1px solid ${CI_GREEN}`,
+    background: CI_GREEN,
     color: "white",
     padding: "4px",
     textAlign: "center",
     fontSize: "10px",
+    ...PRINT_COLOR_STYLE,
   };
   const labelCellStyle: React.CSSProperties = {
-    border: `1px solid ${NAVY}`,
+    border: `1px solid ${CI_GREEN}`,
     padding: "6px 8px",
-    background: "#e8e8f0",
+    background: CI_ORANGE_BG,
     fontWeight: "bold",
+    color: LABEL_GREEN,
+    ...PRINT_COLOR_STYLE,
   };
 
   // FIX BUG #2 : les valeurs G/F/T étaient brouillées dans le rendu.
@@ -145,19 +157,17 @@ export function SyntheseDocument({
     return CLASS_NAMES.flatMap((cn, ci) => {
       const lvl = classLevels[ci];
       const vals = lvl[rowType];
+      const cellStyle: React.CSSProperties = {
+        border: `1px solid ${CI_GREEN}`,
+        padding: "6px",
+        textAlign: "center",
+        background: ci % 2 === 0 ? CI_GREEN_BG : "transparent",
+        ...PRINT_COLOR_STYLE,
+      };
       return [
-        <td key={`${rowType}-${cn}-G`} style={{
-          border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center",
-          background: ci % 2 === 0 ? "#f5f5f8" : "transparent",
-        }}>{fmtFn(vals[0])}</td>,
-        <td key={`${rowType}-${cn}-F`} style={{
-          border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center",
-          background: ci % 2 === 0 ? "#f5f5f8" : "transparent",
-        }}>{fmtFn(vals[1])}</td>,
-        <td key={`${rowType}-${cn}-T`} style={{
-          border: `1px solid ${NAVY}`, padding: "6px", textAlign: "center",
-          background: ci % 2 === 0 ? "#f5f5f8" : "transparent",
-        }}>{fmtFn(vals[2])}</td>,
+        <td key={`${rowType}-${cn}-G`} style={cellStyle}>{fmtFn(vals[0])}</td>,
+        <td key={`${rowType}-${cn}-F`} style={cellStyle}>{fmtFn(vals[1])}</td>,
+        <td key={`${rowType}-${cn}-T`} style={cellStyle}>{fmtFn(vals[2])}</td>,
       ];
     });
   };
@@ -207,7 +217,7 @@ export function SyntheseDocument({
           minHeight: "210mm",
           padding: "20px",
           fontFamily: "Helvetica, Arial, sans-serif",
-          color: NAVY,
+          color: INK_DOC,
           overflowX: "auto",
           position: "relative", // filigrane armoiries DANS LE FOND
         }}
@@ -247,25 +257,29 @@ export function SyntheseDocument({
         </div>
 
         {/* Trait */}
-        <hr style={{ borderColor: NAVY, borderWidth: "1px", margin: "8px 0 12px 0" }} />
+        <hr style={{ borderColor: CI_GREEN, borderWidth: "1.5px", margin: "8px 0 12px 0" }} />
 
-        {/* Titre */}
+        {/* Titre — boîte bordée de VERT DRAPEAU sur fond pastel orange
+            (inspiration bulletins individuels) */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
           <div style={{
-            border: `2px solid ${NAVY}`,
-            borderRadius: "8px",
-            padding: "4px 48px",
+            border: `2.2px solid ${CI_GREEN}`,
+            borderRadius: "10px",
+            padding: "5px 48px 6px",
             textAlign: "center",
+            background: CI_ORANGE_BG,
+            boxShadow: `2.5px 2.5px 0 ${CI_GREEN_BG}`,
+            ...PRINT_COLOR_STYLE,
           }}>
-            <div style={{ fontSize: "16px", fontWeight: "bold", letterSpacing: "1px" }}>
+            <div style={{ fontSize: "16px", fontWeight: "bold", letterSpacing: "1px", color: INK_DOC }}>
               SYNTHÈSE DES RESULTATS
             </div>
-            <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>
+            <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "2px", color: LABEL_GREEN }}>
               {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
             </div>
             {/* Périmètre du document (CP1 au CM1 / CM2 / etc.) — permet de
                 différencier visuellement les 2 versions de synthèse. */}
-            <div style={{ fontSize: "10px", fontStyle: "italic", marginTop: "2px", opacity: 0.8 }}>
+            <div style={{ fontSize: "10px", fontStyle: "italic", marginTop: "2px", opacity: 0.85, color: INK_DOC }}>
               {data.document_label}
             </div>
           </div>
@@ -275,8 +289,8 @@ export function SyntheseDocument({
         <table style={{
           width: "100%",
           borderCollapse: "collapse",
-          border: `1px solid ${NAVY}`,
-          color: NAVY,
+          border: `2px solid ${CI_GREEN}`,
+          color: INK_DOC,
           fontSize: "10px",
           fontWeight: "bold",
         }}>
@@ -320,15 +334,15 @@ export function SyntheseDocument({
             {/* FIX BUG #3 : colSpan étaient codés en dur (8+8=16) pour 5 classes.
                 Avec 6 classes, le total est 19 colonnes. On utilise TOTAL_COLS. */}
             <tr>
-              <td colSpan={Math.floor(TOTAL_COLS / 2)} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "12px" }}>
+              <td colSpan={Math.floor(TOTAL_COLS / 2)} style={{ border: `1px solid ${CI_GREEN}`, padding: "8px", textAlign: "center", fontSize: "12px", background: CI_GREEN_BG, color: LABEL_GREEN, ...PRINT_COLOR_STYLE }}>
                 FILLES : {fmtPct(data.totals.pct_f)} %
               </td>
-              <td colSpan={TOTAL_COLS - Math.floor(TOTAL_COLS / 2)} style={{ border: `1px solid ${NAVY}`, padding: "8px", textAlign: "center", fontSize: "12px" }}>
+              <td colSpan={TOTAL_COLS - Math.floor(TOTAL_COLS / 2)} style={{ border: `1px solid ${CI_GREEN}`, padding: "8px", textAlign: "center", fontSize: "12px", background: CI_GREEN_BG, color: LABEL_GREEN, ...PRINT_COLOR_STYLE }}>
                 GARÇONS : {fmtPct(data.totals.pct_g)} %
               </td>
             </tr>
             <tr>
-              <td colSpan={TOTAL_COLS} style={{ border: `1px solid ${NAVY}`, padding: "10px", textAlign: "center", fontSize: "14px" }}>
+              <td colSpan={TOTAL_COLS} style={{ border: `1px solid ${CI_GREEN}`, padding: "10px", textAlign: "center", fontSize: "14px", background: CI_ORANGE_BG, fontWeight: "bold", color: INK_DOC, ...PRINT_COLOR_STYLE }}>
                 {fmtPct(data.totals.pct_t)} %
               </td>
             </tr>

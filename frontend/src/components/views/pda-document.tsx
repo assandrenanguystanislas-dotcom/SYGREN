@@ -17,6 +17,11 @@
 //     à droite (comme « DOSSO LACINE » sur le modèle reçu).
 // Tous les agrégats sont calculés côté serveur (/summary) — le document ne
 // recalcule rien. Impression 100 % navigateur (isolement #pda-doc).
+//
+// v3 — EMBELLISSEMENT DRAPEAU CI (inspiré des bulletins individuels) :
+// bandeau du titre en VERT DRAPEAU (texte blanc), entêtes de tableaux
+// sur fond vert drapeau, bordures vertes, rubans tricolores haut/bas
+// et ARMOIRIES en filigrane dans le fond du document.
 
 import { Fragment, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +33,13 @@ import { monthLabel } from "@/lib/session-utils";
 import type { PdaCountRow, PdaSummary } from "@/lib/types";
 
 import { INK, OFFICIAL_FONT, OfficialDocHeader, fmtDocNum } from "./official-doc";
+import {
+  CIArmoiriesWatermark,
+  CIFlagRibbon,
+  CI_GREEN,
+  CI_GREEN_TEXT,
+  PRINT_COLOR_STYLE,
+} from "@/components/ci-decor";
 
 /** Pourcentages à 2 décimales, virgule française (modèle reçu). */
 function fmtPct(n: number): string {
@@ -39,17 +51,21 @@ function ordinal(n: number): string {
   return n === 1 ? "1er" : `${n}e`;
 }
 
+// Bordures et entêtes aux COULEURS DU DRAPEAU ivoirien (inspiration
+// bulletins individuels) — entêtes sur FOND VERT DRAPEAU, texte blanc.
 const thStyle: CSSProperties = {
-  border: "1px solid #000000",
+  border: `1px solid ${CI_GREEN}`,
   padding: "4px 6px",
   fontSize: "12px",
   fontWeight: 400, // entêtes réguliers sur le modèle reçu
   textAlign: "center",
-  color: INK,
+  color: "#ffffff",
+  background: CI_GREEN,
+  ...PRINT_COLOR_STYLE,
 };
 
 const tdStyle: CSSProperties = {
-  border: "1px solid #000000",
+  border: `1px solid ${CI_GREEN}`,
   padding: "3px 6px",
   fontSize: "12px",
   textAlign: "center",
@@ -59,7 +75,8 @@ const tdStyle: CSSProperties = {
 const labelTdStyle: CSSProperties = {
   ...tdStyle,
   textAlign: "left",
-  fontWeight: 400,
+  fontWeight: 600,
+  color: CI_GREEN_TEXT,
 };
 
 /** Cellules d'effectifs dans l'ordre demandé (Total/Filles/Garçons etc.). */
@@ -232,22 +249,31 @@ export function PdaDocument({
           fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
+          position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
+        {/* --- Ruban tricolore ivoirien (haut du document) --- */}
+        <CIFlagRibbon />
+        {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond) --- */}
+        <CIArmoiriesWatermark />
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* --- En-tête institutionnel (modèle reçu : armoiries + devise) --- */}
         <OfficialDocHeader iep={s.iep} variant="fiche" size="lg" />
 
-        {/* --- Titre encadré + titre de l'évaluation souligné (modèle) --- */}
+        {/* --- Bandeau du titre VERT DRAPEAU (texte blanc — inspiration
+            bulletins individuels) + titre de l'évaluation souligné --- */}
         <div style={{ textAlign: "center", margin: "4px 0 10px" }}>
           <div
             style={{
               display: "inline-block",
-              border: "1px solid #000000",
+              background: CI_GREEN,
+              color: "#ffffff",
               padding: "8px 26px",
               fontSize: "15px",
               fontWeight: 700,
               lineHeight: 1.45,
               maxWidth: "150mm",
+              ...PRINT_COLOR_STYLE,
             }}
           >
             SUIVI DU PLAN D&apos;ACTION PLURIANNUEL DE L&apos;IEPP
@@ -258,6 +284,7 @@ export function PdaDocument({
               fontWeight: 700,
               textDecoration: "underline",
               marginTop: "10px",
+              color: CI_GREEN_TEXT,
             }}
           >
             {evalTitle}
@@ -452,7 +479,7 @@ export function PdaDocument({
         >
           <span style={{ textDecoration: "underline" }}>Le Directeur</span>
           <div style={{ textAlign: "center" }}>
-            <span style={{ textDecoration: "underline" }}>L&apos;Inspecteur</span>
+            <span style={{ textDecoration: "underline", color: CI_GREEN_TEXT }}>L&apos;Inspecteur</span>
             {s.iep?.inspector_name ? (
               <div
                 style={{
@@ -465,6 +492,10 @@ export function PdaDocument({
             ) : null}
           </div>
         </div>
+        </div>
+
+        {/* --- Ruban tricolore ivoirien (bas du document) --- */}
+        <CIFlagRibbon />
       </div>
 
       <p className="text-center text-[11px] text-muted-foreground py-4 print:hidden">

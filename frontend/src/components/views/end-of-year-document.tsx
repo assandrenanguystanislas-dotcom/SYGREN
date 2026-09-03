@@ -26,6 +26,12 @@
 //   - « Fait à …… Le ……/……/… » + signatures Le Directeur / Le tenant du
 //     cours / Visa de l'Inspecteur (nom de l'inspecteur de l'IEP).
 //
+// v3 — EMBELLISSEMENT DRAPEAU CI RENFORCÉ (inspiration bulletins
+// individuels) : entêtes du tableau sur FOND VERT DRAPEAU (texte blanc),
+// bordures vertes, tableau récapitulatif aux couleurs du drapeau
+// (labels sur fond pastel orange, entêtes vertes) — les rubans
+// tricolores et les armoiries en filigrane sont conservés.
+//
 // Données : /api/reports/end-of-year (source unique — le document ne
 // recalcule rien). Impression 100 % navigateur A4 portrait (route dédiée
 // /resultats-fin-annee-doc — zéro PDF serveur, discipline du projet).
@@ -37,13 +43,15 @@ import type { CSSProperties } from "react";
 import { reportsApi } from "@/lib/api";
 import type { EndOfYearRow, EndOfYearSummaryRow } from "@/lib/types";
 
-import { INK, OFFICIAL_FONT, THIN } from "./official-doc";
+import { INK, OFFICIAL_FONT } from "./official-doc";
 import {
   CIArmoiriesWatermark,
   CIFlagRibbon,
   CI_GREEN,
   CI_GREEN_BG,
+  CI_GREEN_TEXT,
   CI_ORANGE_BG,
+  PRINT_COLOR_STYLE,
 } from "@/components/ci-decor";
 import {
   canPrintDocument,
@@ -73,19 +81,23 @@ function todayFr(): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+// Bordures du tableau en VERT DRAPEAU et entêtes sur FOND VERT DRAPEAU
+// (texte blanc — sortent à l'impression via print-color-adjust: exact).
 const th: CSSProperties = {
-  border: THIN,
+  border: `1px solid ${CI_GREEN}`,
   padding: "2px 3px",
   fontSize: "9px",
   lineHeight: 1.2,
   fontWeight: 700, // entêtes en gras comme le modèle reçu
   textAlign: "center",
   verticalAlign: "middle",
-  color: INK,
+  color: "#ffffff",
+  background: CI_GREEN,
+  ...PRINT_COLOR_STYLE,
 };
 
 const td: CSSProperties = {
-  border: THIN,
+  border: `1px solid ${CI_GREEN}`,
   padding: "1px 3px",
   fontSize: "9px",
   lineHeight: 1.2,
@@ -320,14 +332,14 @@ export function EndOfYearDocument({
           }}
         >
           <span>
-            <b>ECOLE</b> : <b>{data.school.name}</b>
+            <b style={{ color: CI_GREEN_TEXT }}>ECOLE</b> : <b>{data.school.name}</b>
           </span>
           <span style={{ textAlign: "right", lineHeight: 1.5 }}>
             <div>
-              Cours: <b>{data.class.name}</b>
+              <span style={{ color: CI_GREEN_TEXT }}>Cours</span>: <b>{data.class.name}</b>
             </div>
             <div>
-              Date: <b>{todayFr()}</b>
+              <span style={{ color: CI_GREEN_TEXT }}>Date</span>: <b>{todayFr()}</b>
             </div>
           </span>
         </div>
@@ -407,7 +419,7 @@ export function EndOfYearDocument({
             </colgroup>
             <thead>
               <tr>
-                <th style={{ ...th, border: "none" }}>&nbsp;</th>
+                <th style={{ ...th, border: "none", background: "transparent", color: INK }}>&nbsp;</th>
                 <th style={th}>Garçons</th>
                 <th style={th}>Filles</th>
                 <th style={th}>Total</th>
@@ -528,11 +540,22 @@ function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) 
   );
 }
 
-/** Une ligne du tableau récapitulatif (G / F / T). */
+/** Une ligne du tableau récapitulatif (G / F / T) — label sur fond
+ *  pastel orange drapeau (inspiration bulletins individuels). */
 function SummaryRow({ label, row }: { label: string; row: EndOfYearSummaryRow }) {
   return (
     <tr>
-      <td style={{ ...td, fontWeight: 700 }}>{label}</td>
+      <td
+        style={{
+          ...td,
+          fontWeight: 700,
+          background: CI_ORANGE_BG,
+          color: CI_GREEN_TEXT,
+          ...PRINT_COLOR_STYLE,
+        }}
+      >
+        {label}
+      </td>
       <td style={td}>{fmtNum(row.garcons)}</td>
       <td style={td}>{fmtNum(row.filles)}</td>
       <td style={{ ...td, fontWeight: 700 }}>{fmtNum(row.total)}</td>

@@ -21,6 +21,13 @@
 //   - Signature « Le Directeur », N.B (RPL / MAC / MSC) et mention
 //     « (A RETOURNER EN 03 EXEMPLAIRES) ».
 //
+// v3 — EMBELLISSEMENT DRAPEAU CI (inspiré des bulletins individuels) :
+//   - Rubans tricolores orange-blanc-vert haut/bas du document ;
+//   - ARMOIRIES DE LA RÉPUBLIQUE en filigrane dans le fond (chaque page) ;
+//   - Bandeau/bandeaux d'entête du tableau en VERT DRAPEAU (texte blanc) ;
+//   - Bordures du tableau en vert drapeau ; boîte du titre sur fond
+//     pastel orange bordé de vert ; ligne TOTAL sur fond pastel vert.
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -40,8 +47,16 @@ import {
   INK,
   OFFICIAL_FONT,
   OfficialDocHeader,
-  THIN,
 } from "./official-doc";
+import {
+  CIArmoiriesWatermark,
+  CIFlagRibbon,
+  CI_GREEN,
+  CI_GREEN_BG,
+  CI_GREEN_TEXT,
+  CI_ORANGE_BG,
+  PRINT_COLOR_STYLE,
+} from "@/components/ci-decor";
 
 /** Effectif/redoublant au format du document reçu : 07, 11, 147 —
  *  « 00 » pour un zéro SAISI, case vide si non renseigné (les « # »). */
@@ -57,19 +72,24 @@ function sumCol(values: Array<number | null | undefined>): number | null {
   return vals.reduce((a, b) => a + b, 0);
 }
 
+// Bordures du tableau en VERT DRAPEAU (inspiration bulletins individuels)
+// et entêtes sur FOND VERT DRAPEAU (texte blanc, sortent à l'impression
+// grâce à print-color-adjust: exact).
 const th: CSSProperties = {
-  border: THIN,
+  border: `1px solid ${CI_GREEN}`,
   padding: "2px 3px",
   fontSize: "9px",
   lineHeight: 1.2,
   fontWeight: 700, // entêtes en gras comme le modèle reçu
   textAlign: "center",
   verticalAlign: "middle",
-  color: INK,
+  color: "#ffffff",
+  background: CI_GREEN,
+  ...PRINT_COLOR_STYLE,
 };
 
 const td: CSSProperties = {
-  border: THIN,
+  border: `1px solid ${CI_GREEN}`,
   padding: "1px 3px",
   fontSize: "9px",
   lineHeight: 1.25,
@@ -170,17 +190,25 @@ export function PersonnelDocument({
           fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
+          position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
+        {/* --- Ruban tricolore ivoirien (haut du document) --- */}
+        <CIFlagRibbon />
+        {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond, répétées
+            sur chaque page imprimée) --- */}
+        <CIArmoiriesWatermark fixed />
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* --- En-tête institutionnel (bloc ministériel + République + armoiries) --- */}
         <OfficialDocHeader iep={data.iep} variant="plan" size="sm" />
 
-        {/* --- Boîte du titre (bord arrondi, police à empattements — modèle) --- */}
+        {/* --- Boîte du titre (bord arrondi VERT DRAPEAU, fond pastel
+            orange — inspiration bulletins individuels) --- */}
         <div style={{ textAlign: "center", margin: "2px 0 6px" }}>
           <span
             style={{
               display: "inline-block",
-              border: "2.2px solid #000000",
+              border: `2.2px solid ${CI_GREEN}`,
               borderRadius: "14px",
               padding: "6px 30px 7px",
               fontFamily:
@@ -190,8 +218,10 @@ export function PersonnelDocument({
               letterSpacing: "1.5px",
               lineHeight: 1.25,
               color: INK,
-              boxShadow: "2.5px 2.5px 0 #bfbfbf",
+              background: CI_ORANGE_BG,
+              boxShadow: `2.5px 2.5px 0 ${CI_GREEN_BG}`,
               textAlign: "center",
+              ...PRINT_COLOR_STYLE,
             }}
           >
             ETAT NOMINATIF DU
@@ -211,9 +241,11 @@ export function PersonnelDocument({
             color: INK,
           }}
         >
-          <span>Ecole: {data.school.name}</span>
           <span>
-            Année scolaire: {data.annee_scolaire.split(" ")[0]}&nbsp;&nbsp;
+            <span style={{ color: CI_GREEN_TEXT }}>Ecole</span>: {data.school.name}
+          </span>
+          <span>
+            <span style={{ color: CI_GREEN_TEXT }}>Année scolaire</span>: {data.annee_scolaire.split(" ")[0]}&nbsp;&nbsp;
             {data.annee_scolaire.split(" ")[1] ?? ""}
           </span>
         </div>
@@ -340,29 +372,30 @@ export function PersonnelDocument({
                 colSpan={2}
                 style={{
                   ...th,
-                  background: "#d9d9d9",
+                  background: CI_GREEN_BG,
+                  color: CI_GREEN_TEXT,
                   fontSize: "10px",
                 }}
               >
                 TOTAL
               </td>
               <td style={{ border: "none", padding: 0 }} />
-              <td style={{ ...td, background: "#d9d9d9", fontWeight: 700 }}>
+              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalEffF)}
               </td>
-              <td style={{ ...td, background: "#d9d9d9", fontWeight: 700 }}>
+              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalEffG)}
               </td>
-              <td style={{ ...td, background: "#d9d9d9", fontWeight: 700 }}>
+              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalEffT)}
               </td>
-              <td style={{ ...td, background: "#d9d9d9", fontWeight: 700 }}>
+              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalRedF)}
               </td>
-              <td style={{ ...td, background: "#d9d9d9", fontWeight: 700 }}>
+              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalRedG)}
               </td>
-              <td style={{ ...td, background: "#d9d9d9", fontWeight: 700 }}>
+              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalRedT)}
               </td>
             </tr>
@@ -404,11 +437,16 @@ export function PersonnelDocument({
               fontWeight: 700,
               margin: "8px 0 0 18%",
               letterSpacing: "0.4px",
+              color: CI_GREEN_TEXT,
             }}
           >
             (A RETOURNER EN <u>03 EXEMPLAIRES</u>&nbsp;)
           </div>
         </div>
+        </div>
+
+        {/* --- Ruban tricolore ivoirien (bas du document) --- */}
+        <CIFlagRibbon />
       </div>
     </div>
   );

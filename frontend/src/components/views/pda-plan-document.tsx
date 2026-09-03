@@ -46,6 +46,14 @@
 //   - saut de page AVANT la section B (pages 1-2 = section A, pages 3-4
 //     = section B, comme le document reçu).
 //
+// v3 — EMBELLISSEMENT DRAPEAU CI (inspiré des bulletins individuels) :
+// les anciens JAUNES deviennent ORANGE/VERT DRAPEAU (bandeau du titre en
+// vert drapeau texte blanc, boîte de l'évaluation en orange drapeau),
+// toutes les bordures passent au VERT DRAPEAU, entêtes sur fond vert
+// (texte blanc), lignes TOTAL sur fond pastel vert ; ARMOIRIES en
+// filigrane (répétées à chaque page imprimée) + rubans tricolores
+// haut/bas de chaque page.
+//
 // Toutes les données viennent de /api/pda/plan-action (source unique de
 // vérité — le document ne recalcule rien). Impression 100 % navigateur
 // A4 paysage (isolement #pda-plan-doc, page nommée pda-plan).
@@ -66,12 +74,25 @@ import {
   INK,
   OFFICIAL_FONT,
   OfficialDocHeader,
-  THICK,
-  THIN,
-  TOTAL_BG,
   fmtDocNum,
   fmtDocPct,
 } from "./official-doc";
+import {
+  CIArmoiriesWatermark,
+  CIFlagRibbon,
+  CI_GREEN,
+  CI_GREEN_BG,
+  CI_GREEN_TEXT,
+  CI_ORANGE,
+  PRINT_COLOR_STYLE,
+} from "@/components/ci-decor";
+
+// v3 — bordures « Excel » du modèle, en VERT DRAPEAU (au lieu du noir) :
+// cadre épais, séparations de groupes épaisses, filets intérieurs fins.
+const THICK = `2px solid ${CI_GREEN}`;
+const THIN = `1px solid ${CI_GREEN}`;
+/** Fond des lignes TOTAL / bande d'entête — pastel vert drapeau. */
+const TOTAL_BG = CI_GREEN_BG;
 
 /** Effectif avec zéro CALCULÉ affiché « 00 » (zéros saisis du modèle
  *  reçu) — les cases sans donnée restent vides (fmtDocNum). */
@@ -95,7 +116,9 @@ const thBase: CSSProperties = {
   fontWeight: 400, // le modèle reçu : entêtes de colonnes en régulier
   textAlign: "center",
   verticalAlign: "middle",
-  color: INK,
+  color: "#ffffff",
+  background: CI_GREEN,
+  ...PRINT_COLOR_STYLE,
 };
 
 const tdBase: CSSProperties = {
@@ -164,7 +187,7 @@ function DisciplineCells({
  *  « Présents (admis) » = admis calculés, % = formules du modèle,
  *  cases vides si la discipline n'a été évaluée nulle part. */
 function TotalRowCells({ row }: { row: PdaPlanSchoolRow }) {
-  const bold: CSSProperties = { ...tdBase, fontWeight: 700, background: TOTAL_BG };
+  const bold: CSSProperties = { ...tdBase, fontWeight: 700, background: TOTAL_BG, color: CI_GREEN_TEXT };
   const boldMath: CSSProperties = { ...bold, borderLeft: THICK };
   const pct = (disc: "exploitation" | "math", byFilles: boolean) => {
     const d = row.disciplines?.[disc];
@@ -318,37 +341,53 @@ export function PdaPlanDocument({
           fontFamily: OFFICIAL_FONT,
           color: INK,
           overflowX: "auto",
+          position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
+        {/* v3 — ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (répétées sur
+            chaque page imprimée) + rubans tricolores haut/bas de chaque
+            page (position fixed — zéro impact sur la mise en page) */}
+        <CIArmoiriesWatermark fixed />
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0 }}>
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0 }}>
+          <CIFlagRibbon height="2.4mm" bordered={false} />
+        </div>
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* --- En-tête institutionnel compact (modèle reçu) --- */}
         <OfficialDocHeader iep={iep} variant="plan" size="xs" />
 
-        {/* --- Boîte jaune de l'évaluation --- */}
+        {/* --- Boîte de l'évaluation — ORANGE DRAPEAU (texte blanc) --- */}
         <div style={{ textAlign: "center", margin: "1px 0 5px" }}>
           <span
             style={{
               display: "inline-block",
-              background: "#ffff00",
+              background: CI_ORANGE,
+              color: "#ffffff",
               padding: "3px 22px",
               fontSize: "12.5px",
               fontWeight: 700,
-              color: INK,
+              ...PRINT_COLOR_STYLE,
             }}
           >
             {evalTitle}
           </span>
         </div>
 
-        {/* --- Bandeau jaune du titre (modèle reçu) --- */}
+        {/* --- Bandeau du titre — VERT DRAPEAU (texte blanc — inspiration
+            bulletins individuels) --- */}
         <div
           style={{
-            background: "#ffff00",
+            background: CI_GREEN,
+            color: "#ffffff",
             textAlign: "center",
             padding: "4px 8px",
             fontSize: "15px",
-            color: INK,
+            fontWeight: 700,
             width: "82%",
             margin: "0 auto 6px",
+            ...PRINT_COLOR_STYLE,
           }}
         >
           PLAN D&apos;ACTION PLURIANNUEL DE L&apos;IEPP{" "}
@@ -356,7 +395,7 @@ export function PdaPlanDocument({
         </div>
 
         {/* ================= SECTION A (pages 1-2) ================= */}
-        <p style={{ fontSize: "9.5px", margin: "4px 0 3px" }}>
+        <p style={{ fontSize: "9.5px", margin: "4px 0 3px", fontWeight: 700, color: CI_GREEN_TEXT }}>
           A) NOMBRE D&apos;ELEVES DU CM2 AYANT ATTEINT LE SEUIL SUFFISANT DE
           MAÎTRISE EN LECTURE (EXPLOITATION DE TEXTE), MATHEMATIQUES.
         </p>
@@ -442,7 +481,7 @@ export function PdaPlanDocument({
 
         {/* ============ SECTION B (pages 3-4 — NOUVELLE PAGE) ============ */}
         <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
-          <p style={{ fontSize: "9.5px", margin: "4px 0 3px" }}>
+          <p style={{ fontSize: "9.5px", margin: "4px 0 3px", fontWeight: 700, color: CI_GREEN_TEXT }}>
             B) ACCROÎTRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX EXAMENS
             DES ELEVES DE TOUS LES NIVEAUX.
           </p>
@@ -569,6 +608,7 @@ export function PdaPlanDocument({
             </tbody>
           </table>
           {/* Le document reçu s'achève sur la ligne TOTAL — aucune signature. */}
+        </div>
         </div>
       </div>
 
