@@ -63,6 +63,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Printer, X } from "lucide-react";
 
 import { pdaApi } from "@/lib/api";
+import {
+  canPrintDocument,
+  PrintLockBadge,
+  PrintLockDocumentMessage,
+  usePrintRole,
+} from "@/lib/print-guard";
 import { monthLabel } from "@/lib/session-utils";
 import type {
   PdaPlanCenterGroup,
@@ -238,6 +244,12 @@ export function PdaPlanDocument({
     queryFn: () => pdaApi.getPlanAction({ year, number, kind }),
   });
 
+  // Task 23 — verrou d'impression : consultation à l'écran ouverte aux
+  // rôles autorisés par le backend, mais la zone « Imprimer / PDF » est
+  // GRISÉE (l'impression reste réservée à l'Admin IEP et au Super Admin).
+  const printRole = usePrintRole();
+  const canPrint = canPrintDocument(printRole, false);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -297,13 +309,17 @@ export function PdaPlanDocument({
           avec centre d&apos;examen
         </h3>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimer / PDF
-          </button>
+          {canPrint ? (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimer / PDF
+            </button>
+          ) : (
+            <PrintLockBadge />
+          )}
           <button
             onClick={onClose}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-md text-sm"
@@ -331,9 +347,10 @@ export function PdaPlanDocument({
       )}
 
       {/* === DOCUMENT OFFICIEL (isolement impression #pda-plan-doc) === */}
+      {!canPrint && <PrintLockDocumentMessage />}
       <div
         id="pda-plan-doc"
-        className="bg-white mx-auto shadow-lg print:shadow-none mt-3"
+        className={`bg-white mx-auto shadow-lg print:shadow-none mt-3 ${canPrint ? "" : "print-locked"}`}
         style={{
           width: "100%",
           maxWidth: "297mm", // A4 paysage — le tableau réseau est large

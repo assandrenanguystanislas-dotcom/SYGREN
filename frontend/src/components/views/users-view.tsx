@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Users, Building2, ShieldCheck, UserCog, UserRound, Pause, Play, Loader2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Users, Building2, ShieldCheck, UserCog, UserRound, Pause, Play, Loader2, Navigation } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -39,6 +39,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { useAuthStore } from "@/lib/auth-store";
 import { usersAdminApi } from "@/lib/api";
@@ -47,6 +54,13 @@ import { TeachersView } from "./teachers-view";
 import { DirectorsView } from "./directors-view";
 import { InspectorsView } from "./inspectors-view";
 import { ParentsView } from "./parents-view";
+
+interface UsersViewProps {
+  /** Task 23 — bande déroulante « Accès direct aux modules du Directeur » :
+   *  navigue vers la vue cible (et vers l'onglet du module Résultats le cas
+   *  échéant). Absent pour les autres rôles (bande déroulante masquée). */
+  onNavigate?: (view: string, resultsTab?: "classement" | "pda") => void;
+}
 
 /**
  * Vue unifiée "Utilisateurs" — fusionne Enseignants + Directeurs + Admins IEP
@@ -58,8 +72,13 @@ import { ParentsView } from "./parents-view";
  *   - "users.inspectors"  → onglet Admin IEP
  *   - "users.parents"     → onglet Parents (v2 — Portail Parent)
  *   - "users-admin"        → onglet "Tous les comptes" (super admin seul)
+ *
+ * Task 23 — le DIRECTEUR atterrit directement sur ce module : une bande
+ * déroulante y liste SES modules (Résultats/plan IEPP centres + document
+ * officiel, Élèves, Évaluations/saisie des notes, Résultats/synthèses PDF
+ * + relevés PDF, Bulletins) et y navigue en un clic.
  */
-export function UsersView() {
+export function UsersView({ onNavigate }: UsersViewProps) {
   const user = useAuthStore((s) => s.user);
   const modules = useAuthStore((s) => s.modules);
   const [tab, setTab] = useState("teachers");
@@ -90,18 +109,104 @@ export function UsersView() {
   // Si l'onglet courant n'est plus accessible, utiliser le 1er disponible
   const activeTab = visibleTabs.includes(tab) ? tab : visibleTabs[0] ?? "teachers";
 
+  // === Task 23 — bande déroulante « Accès direct aux modules du Directeur » ===
+  // Le directeur atterrit sur Utilisateurs ; cette bande déroulante liste SES
+  // modules (demande utilisateur, dans cet ordre) et y navigue en un clic :
+  //   1. Résultats — Plan IEPP (centres) & document officiel (onglet « pda »)
+  //   2. Élèves
+  //   3. Évaluations — Saisie des notes
+  //   4. Résultats — Synthèses PDF & Relevés PDF (onglet « classement »)
+  //   5. Bulletins — Imprimer les bulletins
+  // (Les documents s'ouvrent en consultation ; l'impression reste verrouillée.)
+  const isDirector = user?.role === "director";
+  const [goTo, setGoTo] = useState("");
+  const directorShortcuts: Array<{
+    value: string;
+    label: string;
+    view: string;
+    resultsTab?: "classement" | "pda";
+  }> = [
+    {
+      value: "results-pda",
+      label: "Résultats — Plan IEPP (centres) & document officiel",
+      view: "results",
+      resultsTab: "pda",
+    },
+    { value: "students", label: "Élèves", view: "students" },
+    {
+      value: "evaluations",
+      label: "Évaluations — Saisie des notes",
+      view: "evaluations",
+    },
+    {
+      value: "results-classement",
+      label: "Résultats — Synthèses PDF & Relevés PDF",
+      view: "results",
+      resultsTab: "classement",
+    },
+    {
+      value: "bulletins",
+      label: "Bulletins — Imprimer les bulletins",
+      view: "bulletins",
+    },
+  ];
+
+  const directorGo = isDirector ? (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          <Navigation className="w-4 h-4 text-primary" aria-hidden />
+          <span className="text-sm font-medium">
+            Accès direct à vos modules :
+          </span>
+        </div>
+        <Select
+          value={goTo}
+          onValueChange={(v) => {
+            setGoTo("");
+            const target = directorShortcuts.find((s) => s.value === v);
+            if (target) onNavigate?.(target.view, target.resultsTab);
+          }}
+        >
+          <SelectTrigger
+            className="w-full sm:max-w-md"
+            aria-label="Aller à un module"
+          >
+            <SelectValue placeholder="Aller au module…" />
+          </SelectTrigger>
+          <SelectContent>
+            {directorShortcuts.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CardContent>
+    </Card>
+  ) : null;
+
   // Si un seul onglet visible → rendu direct (pas de barre d'onglets)
   if (visibleTabs.length <= 1) {
-    if (visibleTabs[0] === "teachers") return <TeachersView />;
-    if (visibleTabs[0] === "directors") return <DirectorsView />;
-    if (visibleTabs[0] === "inspectors") return <InspectorsView />;
-    if (visibleTabs[0] === "parents") return <ParentsView />;
-    if (visibleTabs[0] === "all-accounts") return <AllAccountsTab />;
-    return <TeachersView />;
+    let inner: ReactNode;
+    if (visibleTabs[0] === "teachers") inner = <TeachersView />;
+    else if (visibleTabs[0] === "directors") inner = <DirectorsView />;
+    else if (visibleTabs[0] === "inspectors") inner = <InspectorsView />;
+    else if (visibleTabs[0] === "parents") inner = <ParentsView />;
+    else if (visibleTabs[0] === "all-accounts") inner = <AllAccountsTab />;
+    else inner = <TeachersView />;
+    return (
+      <div className="space-y-4">
+        {directorGo}
+        {inner}
+      </div>
+    );
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={setTab} className="space-y-4">
+    <div className="space-y-4">
+      {directorGo}
+      <Tabs value={activeTab} onValueChange={setTab} className="space-y-4">
       <TabsList>
         {canSeeTeachers && (
           <TabsTrigger value="teachers">
@@ -150,6 +255,7 @@ export function UsersView() {
         <AllAccountsTab />
       </TabsContent>
     </Tabs>
+    </div>
   );
 }
 

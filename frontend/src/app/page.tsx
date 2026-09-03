@@ -11,7 +11,7 @@ import { authApi } from "@/lib/api";
 import { Providers } from "@/components/providers";
 import { useAuthStore } from "@/lib/auth-store";
 import { LoginView } from "@/components/login-view";
-import { DashboardShell, NAV_ITEMS } from "@/components/dashboard-shell";
+import { DashboardShell, NAV_ITEMS, DIRECTOR_ALLOWED_VIEWS } from "@/components/dashboard-shell";
 import { WelcomeDashboard } from "@/components/dashboards/welcome-dashboard";
 import { IepView } from "@/components/views/iep-view";
 import { SchoolsView } from "@/components/views/schools-view";
@@ -56,6 +56,12 @@ function resolveView(view: string): string {
  */
 function isViewAllowed(item: NavItem, user: User | null, modules: string[]): boolean {
   if (!user) return false;
+  // Task 23 — Directeur : périmètre UI restreint. Les modules hors de ce
+  // périmètre sont grisés dans la navigation ; une vue atteinte par hash
+  // direct est refusée (redirigée vers le module Utilisateurs). La matrice
+  // RBAC backend reste inchangée (consultation des documents autorisée,
+  // impression verrouillée côté frontend).
+  if (user.role === "director") return DIRECTOR_ALLOWED_VIEWS.has(item.id);
   if (modules.length === 0) {
     return item.roles.includes(user.role);
   }
@@ -106,6 +112,14 @@ function AppContent() {
   // Ref pour skip le 1er mount (le hash est déjà dans l'URL — pas de pushState).
   const skipPush = useRef(true);
 
+  // Task 23 — bande déroulante du module Utilisateurs (rôle Directeur) :
+  // cible d'onglet du module Résultats à ouvrir lors de la navigation
+  // (« classement » = synthèses PDF + relevés PDF ; « pda » = plan IEPP
+  // centres + document officiel). Purge à chaque autre navigation.
+  const [pendingResultsTab, setPendingResultsTab] = useState<
+    "classement" | "pda" | null
+  >(null);
+
   // Marque le store comme hydraté après le premier render client.
   useEffect(() => {
     setHydrated(true);
@@ -137,6 +151,9 @@ function AppContent() {
       const hash = window.location.hash.slice(1);
       const resolved = resolveView(hash);
       const navItem = NAV_ITEMS.find((n) => n.id === resolved);
+      // Task 23 — navigation navigateur : purge la cible d'onglet Résultats
+      // éventuelle de la bande déroulante du module Utilisateurs.
+      setPendingResultsTab(null);
       setActiveView(navItem ? resolved : "dashboard");
     };
     window.addEventListener("popstate", onNav);
@@ -155,6 +172,12 @@ function AppContent() {
       refreshUser();
     }
   }, [hydrated, token, user, refreshUser]);
+
+  // Task 23 — le Directeur atterrit directement sur le module Utilisateurs :
+  // pas d'effet de redirection nécessaire — la vue rendue est DÉRIVÉE plus
+  // bas (isViewAllowed limite le directeur à DIRECTOR_ALLOWED_VIEWS, et la
+  // vue de repli du directeur est « users »). Le dashboard par défaut ou un
+  // hash direct vers un module grisé affichent donc toujours « Utilisateurs ».
 
   // L'auth est "prête" quand : hydratée ET (pas de token OU token + user).
   // Tant que refreshUser est en cours (token sans user), on affiche le loader.
@@ -179,12 +202,32 @@ function AppContent() {
   const allowed = navItem ? isViewAllowed(navItem, user, modules) : false;
 
   // Vue par défaut si la vue active n'est pas autorisée pour ce rôle
-  // (v2 : le PARENT atterrit sur son Portail Parent — pas de dashboard).
+  // (v2 : le PARENT atterrit sur son Portail Parent — pas de dashboard ;
+  // Task 23 : le DIRECTEUR atterrit sur le module Utilisateurs).
   const view = allowed
     ? activeView
     : user.role === "parent"
       ? "parent-portal"
-      : "dashboard";
+      : user.role === "director"
+        ? "users"
+        : "dashboard";
+
+  // Task 23 — navigation depuis la bande déroulante du module Utilisateurs
+  // (rôle Directeur) : définit la vue cible et, le cas échéant, l'onglet du
+  // module Résultats à ouvrir (« classement » ou « pda »).
+  const navigateFromUsers = (
+    targetView: string,
+    resultsTab?: "classement" | "pda",
+  ) => {
+    setPendingResultsTab(resultsTab ?? null);
+    setActiveView(targetView);
+  };
+
+  // Navigation sidebar : purge la cible d'onglet Résultats éventuelle.
+  const handleViewChange = (view: string) => {
+    setPendingResultsTab(null);
+    setActiveView(view);
+  };
 
   // Architecture D-Phase4 : si on est sur la vue « settings », détermine
   // quel sous-onglet ouvrir initialement à partir du hash URL originel
@@ -201,20 +244,22 @@ function AppContent() {
   })();
 
   return (
-    <DashboardShell activeView={view} onViewChange={setActiveView}>
+    <DashboardShell activeView={view} onViewChange={handleViewChange}>
       {view === "dashboard" &&
         (user.role === "teacher" ? (
-          <WelcomeDashboard onNavigate={setActiveView} />
+          <WelcomeDashboard onNavigate={handleViewChange} />
         ) : (
           <AnalyticsDashboard />
         ))}
       {view === "iep" && <IepView />}
       {view === "schools" && <SchoolsView />}
       {view === "students" && <StudentsView />}
-      {view === "users" && <UsersView />}
+      {view === "users" && <UsersView onNavigate={navigateFromUsers} />}
       {view === "subjects" && <SubjectsView />}
       {view === "evaluations" && <EvaluationsView />}
-      {view === "results" && <ResultsView />}
+      {view === "results" && (
+        <ResultsView initialTab={pendingResultsTab ?? undefined} />
+      )}
       {view === "bulletins" && <BulletinsView />}
       {view === "parent-portal" && <ParentPortalView />}
       {/* Architecture D-Phase4 — Refonte Settings : les anciennes vues

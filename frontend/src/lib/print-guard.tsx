@@ -19,6 +19,7 @@
 //      message « impression verrouillée » (même Ctrl+P n'extrait rien).
 
 import { useEffect, useState } from "react";
+import { Lock } from "lucide-react";
 
 import { authApi, getStoredToken } from "./api";
 import { useAuthStore } from "./auth-store";
@@ -109,11 +110,20 @@ export function storeUrlTokenIfPresent() {
   }
 }
 
-/** Bannière de verrou affichée à la place du bouton d'impression. */
+/** Zone « Imprimer / PDF » GRISÉE (Task 23) affichée à la place du bouton
+ *  d'impression pour les rôles verrouillés (directeur : consultation seule
+ *  des documents ; enseignant : aucun accès documents). La zone reste
+ *  visible mais INACTIVE : l'impression est réservée à l'Admin IEP et au
+ *  Super Admin. Le blocage réel est assuré par .print-locked (globals.css)
+ *  + PrintLockDocumentMessage (même Ctrl+P n'extrait rien). */
 export function PrintLockBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 border border-amber-300">
-      🔒 Impression verrouillée — réservée à l&apos;Admin IEP
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground border border-border select-none cursor-not-allowed"
+      title="Impression verrouillée — réservée à l'Admin IEP"
+    >
+      <Lock className="w-3.5 h-3.5" aria-hidden />
+      Zone Imprimer / PDF verrouillée — réservée à l&apos;Admin IEP
     </span>
   );
 }

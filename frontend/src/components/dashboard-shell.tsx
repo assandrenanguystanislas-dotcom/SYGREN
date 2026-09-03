@@ -17,6 +17,7 @@ import {
   ChevronRight,
   UserCog,
   History,
+  Lock,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -144,6 +145,25 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+// === Task 23 — Périmètre UI du rôle Directeur ===
+// Le directeur se connecte via son interface dédiée (onglet « Directeur » de
+// l'écran de connexion — code école) et ATTERGIT directement sur le module
+// Utilisateurs. Il travaille ensuite dans SES modules uniquement :
+//   - Résultats (plan IEPP centres, document officiel, synthèses PDF,
+//     relevés PDF), Élèves, Évaluations (saisie des notes), Bulletins ;
+//   - il ouvre les documents en CONSULTATION mais l'impression reste
+//     verrouillée (zone Imprimer / PDF grisée — cf. print-guard.tsx).
+// Dans la navigation, TOUS les modules restent visibles : ceux hors de ce
+// périmètre sont automatiquement GRISÉS (non cliquables). La matrice RBAC
+// backend est inchangée (le directeur garde la lecture des documents).
+export const DIRECTOR_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
+  "users", // module Utilisateurs (page d'atterrissage)
+  "students", // module Élèves
+  "evaluations", // module Évaluations (saisie des notes)
+  "results", // module Résultats (plan IEPP centres, document officiel, synthèses/relevés PDF)
+  "bulletins", // module Bulletins (imprimer les bulletins)
+]);
+
 interface DashboardShellProps {
   activeView: string;
   onViewChange: (view: string) => void;
@@ -171,7 +191,13 @@ function SidebarContent({
   const logout = useAuthStore((s) => s.logout);
   if (!user) return null;
 
-  const items = NAV_ITEMS.filter((i) => isItemVisible(i, modules, user.role));
+  // Task 23 — Directeur : TOUS les modules restent affichés, ceux hors de
+  // son périmètre sont grisés (voir DIRECTOR_ALLOWED_VIEWS). Les autres
+  // rôles conservent le filtrage existant (modules masqués).
+  const isDirector = user.role === "director";
+  const items = isDirector
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((i) => isItemVisible(i, modules, user.role));
 
   return (
     <div className="flex h-full flex-col text-sidebar-foreground">
@@ -192,15 +218,27 @@ function SidebarContent({
       <nav className="flex-1 overflow-y-auto scroll-sygren px-3 py-4 space-y-0.5">
         {items.map((item) => {
           const active = item.id === activeView;
+          // Task 23 — module GRISÉ : hors du périmètre du Directeur
+          // (visible mais non cliquable, curseur interdit, cadenassé).
+          const grayed = isDirector && !DIRECTOR_ALLOWED_VIEWS.has(item.id);
           return (
             <button
               key={item.id}
-              onClick={() => onViewChange(item.id)}
+              onClick={() => !grayed && onViewChange(item.id)}
+              disabled={grayed}
+              aria-disabled={grayed}
+              title={
+                grayed
+                  ? "Module réservé — accès non autorisé pour le Directeur"
+                  : undefined
+              }
               className={cn(
                 "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group",
                 active
                   ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                  : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  : grayed
+                    ? "opacity-40 cursor-not-allowed"
+                    : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               )}
             >
               <span className="shrink-0">{item.icon}</span>
@@ -209,6 +247,9 @@ function SidebarContent({
                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-sidebar-accent/60">
                   {item.badge}
                 </span>
+              )}
+              {grayed && (
+                <Lock className="w-3 h-3 shrink-0 opacity-70" aria-hidden />
               )}
               {active && <ChevronRight className="w-3.5 h-3.5" />}
             </button>

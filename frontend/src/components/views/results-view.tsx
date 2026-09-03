@@ -711,18 +711,35 @@ function ErrorState({ message }: { message: string }) {
 }
 
 // === Onglets du module Résultats ===
-// « Classement » : moyennes pondérées et rangs par session (existant).
+// « Classement » : moyennes pondérées et rangs par session (existant) —
+//   boutons « Synthèses PDF » et « Relevés PDF » (documents officiels).
 // « Plan d'action IEPP » : compositions mensuelles + examens blancs CE/CM —
 //   suivi du document officiel du ministère (niveau de maîtrise par élève
-//   et par matière ; compositions dérivées du module Notes).
+//   et par matière ; compositions dérivées du module Notes) — boutons
+//   « Plan IEPP (centres) » et « Document officiel ».
 // « Suivi pluriannuel » : matrice élève × évaluations — niveau d'étude de
 //   chaque élève dans les 3 matières désignées, évaluation après évaluation.
 // « Fin d'année » : document officiel « RESULTATS DE FIN D'ANNEE » — âge,
 //   scolarités, moyennes (compositions / composition de passage / annuelle),
 //   décision du conseil des maîtres + tableau récapitulatif G/F/T.
-export function ResultsView() {
+type ResultsTab = "classement" | "pda" | "timeline" | "fin-annee";
+
+export function ResultsView({
+  initialTab,
+}: {
+  /** Task 23 — onglet à ouvrir initialement (bande déroulante du module
+   *  Utilisateurs du directeur : « pda » = plan IEPP centres + document
+   *  officiel ; « classement » = synthèses PDF + relevés PDF).
+   *  Défaut : « classement ». */
+  initialTab?: Extract<ResultsTab, "classement" | "pda">;
+} = {}) {
+  const [tab, setTab] = useState<ResultsTab>(initialTab ?? "classement");
   return (
-    <Tabs defaultValue="classement" className="space-y-4">
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setTab(v as ResultsTab)}
+      className="space-y-4"
+    >
       <TabsList className="flex-wrap h-auto">
         <TabsTrigger value="classement" className="gap-1.5">
           <Trophy className="w-3.5 h-3.5" />

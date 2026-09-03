@@ -584,12 +584,16 @@
  * rôle n'est pas autorisé → le document est remplacé, à l'impression, par
  * le message .print-lock-message (même Ctrl+P n'extrait aucune donnée).
  * Spécificité : :is(#id…).print-locked (0,1,1,0) surclasse les contre-règles
- * #id (0,1,0,0) définies plus haut dans ce fichier. */
+ * #id (0,1,0,0) définies plus haut dans ce fichier.
+ * Task 23 : les documents officiels PDA (plan réseau, fiche école, suivi
+ * pluriannuel) et l'état nominatif du personnel sont également couverts. */
 @media print {
   :is(#resultats-fin-annee-doc, #bulletins-fin-annee-doc, #releve-doc,
-      #synthese-doc, #bulletins-doc).print-locked,
+      #synthese-doc, #bulletins-doc, #pda-plan-doc, #pda-doc, #pda-tl-doc,
+      #personnel-doc).print-locked,
   :is(#resultats-fin-annee-doc, #bulletins-fin-annee-doc, #releve-doc,
-      #synthese-doc, #bulletins-doc).print-locked * {
+      #synthese-doc, #bulletins-doc, #pda-plan-doc, #pda-doc, #pda-tl-doc,
+      #personnel-doc).print-locked * {
     visibility: hidden !important;
   }
   .print-lock-message,
