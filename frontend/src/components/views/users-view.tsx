@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Users, Building2, ShieldCheck, UserCog, UserRound, Pause, Play, Loader2, Navigation } from "lucide-react";
+import { Users, Building2, ShieldCheck, UserCog, UserRound, Pause, Play, Loader2, Navigation, Lock } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -56,9 +56,10 @@ import { InspectorsView } from "./inspectors-view";
 import { ParentsView } from "./parents-view";
 
 interface UsersViewProps {
-  /** Task 23 — bande déroulante « Accès direct aux modules du Directeur » :
-   *  navigue vers la vue cible (et vers l'onglet du module Résultats le cas
-   *  échéant). Absent pour les autres rôles (bande déroulante masquée). */
+  /** Task 23 + 24 — bande déroulante « Accès direct à vos modules »
+   *  (rôles Directeur et Enseignant) : navigue vers la vue cible (et vers
+   *  l'onglet du module Résultats le cas échéant). Absent pour les autres
+   *  rôles (bande déroulante masquée). */
   onNavigate?: (view: string, resultsTab?: "classement" | "pda") => void;
 }
 
@@ -73,10 +74,18 @@ interface UsersViewProps {
  *   - "users.parents"     → onglet Parents (v2 — Portail Parent)
  *   - "users-admin"        → onglet "Tous les comptes" (super admin seul)
  *
- * Task 23 — le DIRECTEUR atterrit directement sur ce module : une bande
- * déroulante y liste SES modules (Résultats/plan IEPP centres + document
- * officiel, Élèves, Évaluations/saisie des notes, Résultats/synthèses PDF
- * + relevés PDF, Bulletins) et y navigue en un clic.
+ * Task 23 + 24 — le DIRECTEUR et l'ENSEIGNANT atterrissent directement sur
+ * ce module : une bande déroulante y liste LEURS modules (demande
+ * utilisateur, dans cet ordre) et y navigue en un clic :
+ *   1. Résultats — Plan IEPP (centres) & document officiel (onglet « pda »)
+ *   2. Élèves
+ *   3. Évaluations — Saisie des notes
+ *   4. Résultats — Synthèses PDF & Relevés PDF (onglet « classement »)
+ *   5. Bulletins — Imprimer les bulletins
+ * (Les documents s'ouvrent en consultation ; l'impression reste verrouillée.)
+ * L'enseignant ne disposant d'aucun module users.* (les onglets de gestion
+ * des comptes restent réservés), une carte d'accueil l'accompagne sous la
+ * bande déroulante.
  */
 export function UsersView({ onNavigate }: UsersViewProps) {
   const user = useAuthStore((s) => s.user);
@@ -109,18 +118,20 @@ export function UsersView({ onNavigate }: UsersViewProps) {
   // Si l'onglet courant n'est plus accessible, utiliser le 1er disponible
   const activeTab = visibleTabs.includes(tab) ? tab : visibleTabs[0] ?? "teachers";
 
-  // === Task 23 — bande déroulante « Accès direct aux modules du Directeur » ===
-  // Le directeur atterrit sur Utilisateurs ; cette bande déroulante liste SES
-  // modules (demande utilisateur, dans cet ordre) et y navigue en un clic :
+  // === Task 23 + 24 — bande déroulante « Accès direct à vos modules » ===
+  // Le directeur et l'enseignant atterrissent sur Utilisateurs ; cette bande
+  // déroulante liste LEURS modules (demande utilisateur, dans cet ordre) et
+  // y navigue en un clic :
   //   1. Résultats — Plan IEPP (centres) & document officiel (onglet « pda »)
   //   2. Élèves
   //   3. Évaluations — Saisie des notes
   //   4. Résultats — Synthèses PDF & Relevés PDF (onglet « classement »)
   //   5. Bulletins — Imprimer les bulletins
   // (Les documents s'ouvrent en consultation ; l'impression reste verrouillée.)
-  const isDirector = user?.role === "director";
+  const isWorkspaceUser =
+    user?.role === "director" || user?.role === "teacher";
   const [goTo, setGoTo] = useState("");
-  const directorShortcuts: Array<{
+  const workspaceShortcuts: Array<{
     value: string;
     label: string;
     view: string;
@@ -151,7 +162,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
     },
   ];
 
-  const directorGo = isDirector ? (
+  const workspaceGo = isWorkspaceUser ? (
     <Card className="border-primary/30 bg-primary/5">
       <CardContent className="py-3 flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="flex items-center gap-2 shrink-0">
@@ -164,7 +175,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
           value={goTo}
           onValueChange={(v) => {
             setGoTo("");
-            const target = directorShortcuts.find((s) => s.value === v);
+            const target = workspaceShortcuts.find((s) => s.value === v);
             if (target) onNavigate?.(target.view, target.resultsTab);
           }}
         >
@@ -175,7 +186,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
             <SelectValue placeholder="Aller au module…" />
           </SelectTrigger>
           <SelectContent>
-            {directorShortcuts.map((s) => (
+            {workspaceShortcuts.map((s) => (
               <SelectItem key={s.value} value={s.value}>
                 {s.label}
               </SelectItem>
@@ -185,6 +196,19 @@ export function UsersView({ onNavigate }: UsersViewProps) {
       </CardContent>
     </Card>
   ) : null;
+
+  // Task 24 — Aucun onglet de gestion des comptes accessible (cas de
+  // l'ENSEIGNANT : il ne dispose d'aucun module users.*) → on affiche la
+  // bande déroulante + une carte d'accueil, JAMAIS la liste des enseignants
+  // (évite des appels API 403 et du contenu hors périmètre).
+  if (visibleTabs.length === 0) {
+    return (
+      <div className="space-y-4">
+        {workspaceGo}
+        <WorkspaceWelcomeCard roleLabel={user ? ROLE_LABELS[user.role] : ""} />
+      </div>
+    );
+  }
 
   // Si un seul onglet visible → rendu direct (pas de barre d'onglets)
   if (visibleTabs.length <= 1) {
@@ -197,7 +221,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
     else inner = <TeachersView />;
     return (
       <div className="space-y-4">
-        {directorGo}
+        {workspaceGo}
         {inner}
       </div>
     );
@@ -205,7 +229,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
 
   return (
     <div className="space-y-4">
-      {directorGo}
+      {workspaceGo}
       <Tabs value={activeTab} onValueChange={setTab} className="space-y-4">
       <TabsList>
         {canSeeTeachers && (
@@ -256,6 +280,55 @@ export function UsersView({ onNavigate }: UsersViewProps) {
       </TabsContent>
     </Tabs>
     </div>
+  );
+}
+
+/**
+ * Task 24 — Carte d'accueil de l'espace de travail (module Utilisateurs)
+ * affichée aux rôles qui ne disposent d'aucun onglet de gestion des comptes
+ * (cas de l'enseignant). Rappelle ses modules (bande déroulante ci-dessus)
+ * et la politique d'impression (consultation oui, impression non).
+ */
+function WorkspaceWelcomeCard({ roleLabel }: { roleLabel: string }) {
+  const workspaceModules = [
+    "Résultats — Plan IEPP (centres) & document officiel",
+    "Élèves",
+    "Évaluations — Saisie des notes",
+    "Résultats — Synthèses PDF & Relevés PDF",
+    "Bulletins",
+  ];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UserRound className="w-5 h-5 text-primary" aria-hidden />
+          Bienvenue dans votre espace{roleLabel ? ` — ${roleLabel}` : ""}
+        </CardTitle>
+        <CardDescription>
+          Ce module centralise l&apos;accès à vos outils de travail. Utilisez
+          la bande déroulante ci-dessus pour rejoindre vos modules :
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ul className="space-y-1.5">
+          {workspaceModules.map((m) => (
+            <li key={m} className="flex items-center gap-2 text-sm">
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-primary shrink-0"
+                aria-hidden
+              />
+              {m}
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted-foreground flex items-start gap-1.5 border-t border-border pt-3">
+          <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden />
+          Vos documents s&apos;ouvrent en consultation ; la zone « Imprimer /
+          PDF » reste grisée — l&apos;impression est réservée à l&apos;Admin
+          IEP et au Super Admin.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

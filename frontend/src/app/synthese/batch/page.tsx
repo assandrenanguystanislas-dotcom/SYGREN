@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Printer, FileText, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
+import { canPrintDocument, PrintLockBadge, usePrintRole } from "@/lib/print-guard";
 
 // === Types ===
 // Les 2 documents Synthèse sont FIXES (pas d'endpoint backend à appeler,
@@ -68,6 +69,11 @@ export default function SyntheseBatchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
+  // Task 24 — VERROU D'IMPRESSION : réservé à l'Admin IEP + Super Admin
+  // (le directeur et l'enseignant CONSULTENT les documents via « Aperçu »
+  // mais ne peuvent pas lancer l'impression en série — zone grisée).
+  const role = usePrintRole();
+  const canPrint = canPrintDocument(role, false);
 
   // 1. Vérification session_id au montage (pas de state pour les params —
   // getParams() lu à la demande dans le render, APRÈS le guard loading
@@ -109,6 +115,8 @@ export default function SyntheseBatchPage() {
   const printSelected = useCallback(async () => {
     const { sid, tok } = getParams();
     if (!sid || selected.size === 0) return;
+    // Task 24 — double barrière : garde impérative côté client
+    if (!canPrintDocument(role, false)) return;
 
     const toPrint = DOCUMENTS.filter((d) => selected.has(d.id));
     setProgress({ current: 0, total: toPrint.length, currentName: "", status: "loading" });
@@ -178,7 +186,7 @@ export default function SyntheseBatchPage() {
     }
 
     setProgress(null);
-  }, [selected]);
+  }, [selected, role]);
 
   // === Rendu ===
   // Guard loading AVANT getParams() — sinon "window is not defined" en SSR.
@@ -251,9 +259,10 @@ export default function SyntheseBatchPage() {
 
         {/* Bouton d'impression */}
         <div className="flex items-center gap-3 mb-4 print:hidden">
+          {canPrint ? null : <PrintLockBadge />}
           <button
             onClick={printSelected}
-            disabled={progress !== null || selected.size === 0}
+            disabled={progress !== null || selected.size === 0 || !canPrint}
             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {progress ? (

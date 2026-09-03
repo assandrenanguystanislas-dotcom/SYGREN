@@ -145,24 +145,35 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-// === Task 23 — Périmètre UI du rôle Directeur ===
-// Le directeur se connecte via son interface dédiée (onglet « Directeur » de
-// l'écran de connexion — code école) et ATTERGIT directement sur le module
-// Utilisateurs. Il travaille ensuite dans SES modules uniquement :
+// === Task 23 + 24 — Périmètre UI des rôles Directeur et Enseignant ===
+// Le directeur (Task 23) et l'enseignant (Task 24) se connectent via leur
+// interface dédiée (onglets « Directeur » / « Enseignant » de l'écran de
+// connexion) et ATTERGISSENT directement sur le module Utilisateurs. Ils
+// travaillent ensuite dans LEURS modules uniquement :
 //   - Résultats (plan IEPP centres, document officiel, synthèses PDF,
 //     relevés PDF), Élèves, Évaluations (saisie des notes), Bulletins ;
-//   - il ouvre les documents en CONSULTATION mais l'impression reste
+//   - ils ouvrent les documents en CONSULTATION mais l'impression reste
 //     verrouillée (zone Imprimer / PDF grisée — cf. print-guard.tsx).
 // Dans la navigation, TOUS les modules restent visibles : ceux hors de ce
 // périmètre sont automatiquement GRISÉS (non cliquables). La matrice RBAC
-// backend est inchangée (le directeur garde la lecture des documents).
-export const DIRECTOR_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
-  "users", // module Utilisateurs (page d'atterrissage)
+// backend est inchangée (les deux rôles gardent la lecture des documents
+// via les endpoints /api/reports/* et /api/pda/* — scope vérifié dans les
+// handlers).
+const WORKSPACE_VIEWS: ReadonlySet<string> = new Set([
+  "users", // module Utilisateurs (page d'atterrissage + bande déroulante)
   "students", // module Élèves
   "evaluations", // module Évaluations (saisie des notes)
   "results", // module Résultats (plan IEPP centres, document officiel, synthèses/relevés PDF)
   "bulletins", // module Bulletins (imprimer les bulletins)
 ]);
+
+/** Task 23 — périmètre UI du Directeur (atterrissage Utilisateurs). */
+export const DIRECTOR_ALLOWED_VIEWS: ReadonlySet<string> = WORKSPACE_VIEWS;
+
+/** Task 24 — périmètre UI de l'Enseignant (même espace de travail que le
+ *  Directeur : atterrissage Utilisateurs, modules grisés, bande déroulante,
+ *  zone Imprimer / PDF grisée). */
+export const TEACHER_ALLOWED_VIEWS: ReadonlySet<string> = WORKSPACE_VIEWS;
 
 interface DashboardShellProps {
   activeView: string;
@@ -191,11 +202,13 @@ function SidebarContent({
   const logout = useAuthStore((s) => s.logout);
   if (!user) return null;
 
-  // Task 23 — Directeur : TOUS les modules restent affichés, ceux hors de
-  // son périmètre sont grisés (voir DIRECTOR_ALLOWED_VIEWS). Les autres
-  // rôles conservent le filtrage existant (modules masqués).
-  const isDirector = user.role === "director";
-  const items = isDirector
+  // Task 23 + 24 — Directeur et Enseignant : TOUS les modules restent
+  // affichés, ceux hors de leur périmètre commun sont grisés (voir
+  // TEACHER_ALLOWED_VIEWS / DIRECTOR_ALLOWED_VIEWS — même ensemble). Les
+  // autres rôles conservent le filtrage existant (modules masqués).
+  const isWorkspaceRole =
+    user.role === "director" || user.role === "teacher";
+  const items = isWorkspaceRole
     ? NAV_ITEMS
     : NAV_ITEMS.filter((i) => isItemVisible(i, modules, user.role));
 
@@ -218,9 +231,11 @@ function SidebarContent({
       <nav className="flex-1 overflow-y-auto scroll-sygren px-3 py-4 space-y-0.5">
         {items.map((item) => {
           const active = item.id === activeView;
-          // Task 23 — module GRISÉ : hors du périmètre du Directeur
-          // (visible mais non cliquable, curseur interdit, cadenassé).
-          const grayed = isDirector && !DIRECTOR_ALLOWED_VIEWS.has(item.id);
+          // Task 23 + 24 — module GRISÉ : hors du périmètre du rôle espace
+          // de travail (Directeur / Enseignant) — visible mais non cliquable,
+          // curseur interdit, cadenassé.
+          const grayed =
+            isWorkspaceRole && !WORKSPACE_VIEWS.has(item.id);
           return (
             <button
               key={item.id}
@@ -229,7 +244,7 @@ function SidebarContent({
               aria-disabled={grayed}
               title={
                 grayed
-                  ? "Module réservé — accès non autorisé pour le Directeur"
+                  ? "Module réservé — accès non autorisé pour votre fonction"
                   : undefined
               }
               className={cn(

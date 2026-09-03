@@ -1,12 +1,12 @@
 "use client";
 
-// === Verrou d'impression des documents officiels (v2) ===
+// === Verrou d'impression des documents officiels (v2, étendu Task 24) ===
 //
 // POLITIQUE D'ACCÈS (demande utilisateur) :
 //   - Les documents imprimables des modules « Résultats » et « Bulletins »
 //     sont VERROUILLÉS À L'IMPRESSION pour les enseignants et les
-//     directeurs (le directeur peut les CONSULTER à l'écran, l'enseignant
-//     n'y accède pas du tout) ;
+//     directeurs (depuis la Task 24, l'enseignant CONSULTE les documents
+//       comme le directeur — seule la zone « Imprimer / PDF » reste grisée) ;
 //   - Seuls l'ADMIN IEP (inspector) et le SUPER ADMIN (admin) impriment ;
 //   - Le PARENT imprime UNIQUEMENT le bulletin individuel de son enfant
 //     depuis le Portail Parent (pages ouvertes en mode parent — les URLs
@@ -110,9 +110,9 @@ export function storeUrlTokenIfPresent() {
   }
 }
 
-/** Zone « Imprimer / PDF » GRISÉE (Task 23) affichée à la place du bouton
- *  d'impression pour les rôles verrouillés (directeur : consultation seule
- *  des documents ; enseignant : aucun accès documents). La zone reste
+/** Zone « Imprimer / PDF » GRISÉE (Task 23 + 24) affichée à la place du
+ *  bouton d'impression pour les rôles verrouillés (directeur et enseignant :
+ *  consultation seule des documents). La zone reste
  *  visible mais INACTIVE : l'impression est réservée à l'Admin IEP et au
  *  Super Admin. Le blocage réel est assuré par .print-locked (globals.css)
  *  + PrintLockDocumentMessage (même Ctrl+P n'extrait rien). */

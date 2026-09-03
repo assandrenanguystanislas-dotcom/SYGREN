@@ -11,7 +11,12 @@ import { authApi } from "@/lib/api";
 import { Providers } from "@/components/providers";
 import { useAuthStore } from "@/lib/auth-store";
 import { LoginView } from "@/components/login-view";
-import { DashboardShell, NAV_ITEMS, DIRECTOR_ALLOWED_VIEWS } from "@/components/dashboard-shell";
+import {
+  DashboardShell,
+  NAV_ITEMS,
+  DIRECTOR_ALLOWED_VIEWS,
+  TEACHER_ALLOWED_VIEWS,
+} from "@/components/dashboard-shell";
 import { WelcomeDashboard } from "@/components/dashboards/welcome-dashboard";
 import { IepView } from "@/components/views/iep-view";
 import { SchoolsView } from "@/components/views/schools-view";
@@ -56,12 +61,13 @@ function resolveView(view: string): string {
  */
 function isViewAllowed(item: NavItem, user: User | null, modules: string[]): boolean {
   if (!user) return false;
-  // Task 23 — Directeur : périmètre UI restreint. Les modules hors de ce
-  // périmètre sont grisés dans la navigation ; une vue atteinte par hash
-  // direct est refusée (redirigée vers le module Utilisateurs). La matrice
-  // RBAC backend reste inchangée (consultation des documents autorisée,
-  // impression verrouillée côté frontend).
+  // Task 23 + 24 — Directeur et Enseignant : périmètre UI restreint. Les
+  // modules hors de ce périmètre sont grisés dans la navigation ; une vue
+  // atteinte par hash direct est refusée (redirigée vers le module
+  // Utilisateurs). La matrice RBAC backend reste inchangée (consultation
+  // des documents autorisée, impression verrouillée côté frontend).
   if (user.role === "director") return DIRECTOR_ALLOWED_VIEWS.has(item.id);
+  if (user.role === "teacher") return TEACHER_ALLOWED_VIEWS.has(item.id);
   if (modules.length === 0) {
     return item.roles.includes(user.role);
   }
@@ -178,6 +184,9 @@ function AppContent() {
   // bas (isViewAllowed limite le directeur à DIRECTOR_ALLOWED_VIEWS, et la
   // vue de repli du directeur est « users »). Le dashboard par défaut ou un
   // hash direct vers un module grisé affichent donc toujours « Utilisateurs ».
+  // Task 24 — même mécanique pour l'ENSEIGNANT : isViewAllowed limite le
+  // teacher à TEACHER_ALLOWED_VIEWS (même ensemble que le directeur) et sa
+  // vue de repli est « users ».
 
   // L'auth est "prête" quand : hydratée ET (pas de token OU token + user).
   // Tant que refreshUser est en cours (token sans user), on affiche le loader.
@@ -203,18 +212,20 @@ function AppContent() {
 
   // Vue par défaut si la vue active n'est pas autorisée pour ce rôle
   // (v2 : le PARENT atterrit sur son Portail Parent — pas de dashboard ;
-  // Task 23 : le DIRECTEUR atterrit sur le module Utilisateurs).
+  // Task 23 + 24 : le DIRECTEUR et l'ENSEIGNANT atterrissent sur le module
+  // Utilisateurs).
   const view = allowed
     ? activeView
     : user.role === "parent"
       ? "parent-portal"
-      : user.role === "director"
+      : user.role === "director" || user.role === "teacher"
         ? "users"
         : "dashboard";
 
-  // Task 23 — navigation depuis la bande déroulante du module Utilisateurs
-  // (rôle Directeur) : définit la vue cible et, le cas échéant, l'onglet du
-  // module Résultats à ouvrir (« classement » ou « pda »).
+  // Task 23 + 24 — navigation depuis la bande déroulante du module
+  // Utilisateurs (rôles Directeur et Enseignant) : définit la vue cible et,
+  // le cas échéant, l'onglet du module Résultats à ouvrir (« classement »
+  // ou « pda »).
   const navigateFromUsers = (
     targetView: string,
     resultsTab?: "classement" | "pda",
