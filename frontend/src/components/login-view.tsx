@@ -136,8 +136,8 @@ export function LoginView() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-orange-50/40 to-green-50/30 p-4">
-      {/* Bande tricolore décorative en haut */}
-      <div className="absolute inset-x-0 top-0 h-1.5 ci-flag-stripe" />
+      {/* La bande tricolore fixe en haut de page est posée GLOBALEMENT par
+          layout.tsx (z-60, visible sur toutes les pages) — pas de doublon. */}
 
       {/* Motif décoratif subtil */}
       <div
@@ -158,7 +158,6 @@ export function LoginView() {
         className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none select-none"
         aria-hidden="true"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/ci-coat-of-arms.png"
           alt=""
@@ -179,13 +178,53 @@ export function LoginView() {
           <p className="text-sm text-muted-foreground mt-1">
             Système de Gestion de Relevé Électronique de Note
           </p>
+          {/* Filet tricolore — rappel du drapeau sous le nom du système */}
+          <div className="mx-auto mt-2.5 h-1 w-24 rounded-full ci-flag-stripe" aria-hidden="true" />
         </div>
 
-        <Card className="shadow-xl border-border/60 glass">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-xl">Connexion</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* === LE PETIT CADRE DE CONNEXION — DRAPEAU IVOIRIEN EN PLEINE LUMIÈRE ===
+            Demande utilisateur : utiliser la carte de connexion pour mieux
+            faire ressortir le drapeau ivoirien. La carte porte donc :
+              1. un LISÉRÉ TRICOLORE intégral (orange · blanc · vert, ordre
+                 officiel du drapeau — l'orange côté mât, à gauche) ;
+              2. un RUBAN TRICOLORE épaissi en tête et en pied de carte ;
+              3. un MINI DRAPEAU ivoirien (mât + tissu tricolore) ;
+              4. l'ARMOIRIE DE LA RÉPUBLIQUE en filigrane derrière le
+                 formulaire (opacité 5 %, non interactive). */}
+        <div className="relative rounded-2xl p-1 shadow-xl shadow-black/15 ring-1 ring-black/10 ci-flag-stripe">
+          {/* NB : carte OPAQUE (bg-card, pas .glass) — sinon le fond
+              tricolore du cadre transparaît à travers la carte et teinte
+              tout le formulaire. Seul le liseré de 4px reste tricolore. */}
+          <Card className="relative overflow-hidden rounded-xl border-0 shadow-none gap-0 py-0">
+            {/* Armoiries de la République EN FILIGRANE DANS LA CARTE */}
+            <div
+              className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none select-none"
+              aria-hidden="true"
+            >
+              <img
+                src="/ci-coat-of-arms.png"
+                alt=""
+                draggable={false}
+                className="w-[68%] max-w-[320px] opacity-[0.05]"
+              />
+            </div>
+
+            {/* Ruban tricolore — tête de la carte */}
+            <div className="relative h-2.5 ci-flag-stripe" aria-hidden="true" />
+
+            <CardHeader className="relative justify-items-center gap-1 pt-4 pb-1 text-center">
+              {/* Mini drapeau ivoirien — mât + tissu tricolore (orange côté mât) */}
+              <div className="relative w-fit mb-1" aria-hidden="true">
+                <div className="absolute left-[-3px] top-[-3px] bottom-[-3px] w-[3px] rounded-full bg-gradient-to-b from-stone-300 via-stone-400 to-stone-500 shadow-sm" />
+                <div className="ci-flag-stripe h-8 w-[72px] rounded-[2px] shadow-md ring-1 ring-black/15" />
+              </div>
+              <CardTitle className="text-xl">Connexion</CardTitle>
+              <CardDescription className="text-xs">
+                Espace officiel — République de Côte d&apos;Ivoire
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="relative pb-5">
             {/* Sélecteur de fonction (pills animées — 4 onglets depuis la Task 26) */}
             <div className="relative flex p-1 bg-muted rounded-full mb-5">
               {/* Fond coulissant animé — position calculée par index (générique) */}
@@ -410,8 +449,12 @@ export function LoginView() {
                 admin123
               </div>
             </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+
+            {/* Ruban tricolore — pied de la carte */}
+            <div className="relative h-2.5 ci-flag-stripe" aria-hidden="true" />
+          </Card>
+        </div>
 
         <p className="text-center text-xs text-muted-foreground mt-4">
           © {new Date().getFullYear()} SYGREN — Direction de l'Enseignement
