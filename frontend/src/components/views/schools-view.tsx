@@ -569,12 +569,13 @@ export function SchoolsView() {
                   id="school-code"
                   value={form.code}
                   onChange={(e) => setForm({ ...form, code: e.target.value })}
-                  placeholder="Ex : IEP-ABJ-001"
+                  placeholder="Ex : E001103"
                   required
                   className="font-mono"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Code unique identifiant l&apos;école dans le système IEP.
+                  Code unique : la lettre E suivie de chiffres (ex :
+                  E001103).
                 </p>
               </div>
               <div className="space-y-1.5">

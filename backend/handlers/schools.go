@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"sygren-api/database"
 	"sygren-api/middleware"
@@ -229,6 +230,10 @@ func CreateSchool(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "code, nom et iep_id requis", http.StatusBadRequest)
 		return
 	}
+	// Normalisation du code école : format officiel = lettre E + chiffres
+	// (ex : E001103) — stockage systématique en MAJUSCULES, la saisie en
+	// minuscules est acceptée.
+	req.Code = strings.ToUpper(strings.TrimSpace(req.Code))
 	// Valider le statut (défaut: public)
 	if req.Status == "" {
 		req.Status = "public"
@@ -297,6 +302,8 @@ func UpdateSchool(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
 		return
 	}
+	// Normalisation du code école en majuscules (cf. CreateSchool).
+	req.Code = strings.ToUpper(strings.TrimSpace(req.Code))
 	var school models.School
 	if err := database.DB.First(&school, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "école introuvable", http.StatusNotFound)

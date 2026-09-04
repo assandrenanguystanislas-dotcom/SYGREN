@@ -53,7 +53,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.SchoolCode = strings.TrimSpace(req.SchoolCode)
+	req.SchoolCode = strings.ToUpper(strings.TrimSpace(req.SchoolCode))
 	req.FullName = strings.TrimSpace(req.FullName)
 	req.Phone = strings.TrimSpace(req.Phone)
 
@@ -78,7 +78,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	var school models.School
 	if err := database.DB.Where("code = ?", req.SchoolCode).First(&school).Error; err != nil {
 		middleware.JSONError(w,
-			"aucun établissement ne correspond au code école saisi — vérifiez la saisie (ex : EPPCP001)",
+			"aucun établissement ne correspond au code école saisi — vérifiez la saisie (format : lettre E + chiffres, ex : E001103)",
 			http.StatusNotFound)
 		return
 	}

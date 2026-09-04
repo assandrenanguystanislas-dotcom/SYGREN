@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"sygren-api/config"
 	"sygren-api/database"
@@ -49,7 +50,10 @@ func Login(cfg *config.Config) http.HandlerFunc {
 		//    le code école dédié à SON école).
 		if result.Error != nil {
 			var school models.School
-			if err := database.DB.Where("code = ?", req.Identifier).First(&school).Error; err != nil {
+			// Normalisation : les codes écoles sont stockés en MAJUSCULES
+			// (format officiel : lettre E + chiffres, ex : E001103) — la
+			// saisie en minuscules est acceptée.
+			if err := database.DB.Where("code = ?", strings.ToUpper(req.Identifier)).First(&school).Error; err != nil {
 				// Ni email, ni téléphone, ni code école → identifiants invalides
 				middleware.JSONError(w, "identifiants invalides", http.StatusUnauthorized)
 				return

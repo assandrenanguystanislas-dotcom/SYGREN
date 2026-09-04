@@ -138,11 +138,15 @@ export function RegisterAccessDialog({
               id="reg-school"
               value={form.school_code}
               onChange={(e) => set("school_code", e.target.value)}
-              placeholder="ex : EPPCP001"
+              placeholder="ex : E001103"
               className="font-mono"
               disabled={loading}
               autoComplete="off"
             />
+            <p className="text-[11px] text-muted-foreground">
+              Format : la lettre E suivie de chiffres (figurant sur les
+              documents officiels de votre école).
+            </p>
           </div>
 
           <div className="space-y-1.5">

@@ -63,7 +63,8 @@ func resolveUserByIdentifier(identifier string) (*models.User, error) {
 	if result.Error != nil {
 		// Essayer code école → director
 		var school models.School
-		if err := database.DB.Where("code = ?", identifier).First(&school).Error; err == nil {
+		// Normalisation code école en majuscules (cf. Login).
+		if err := database.DB.Where("code = ?", strings.ToUpper(identifier)).First(&school).Error; err == nil {
 			if err := database.DB.Where("school_id = ? AND role = ?", school.ID, models.RoleDirector).First(&user).Error; err == nil {
 				return &user, nil
 			}

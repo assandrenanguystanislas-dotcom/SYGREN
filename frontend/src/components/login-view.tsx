@@ -56,8 +56,9 @@ export function LoginView() {
   // de passe.
   const roleConfig = {
     admin: { label: "Email", placeholder: "admin@sygren.ci" },
-    director: { label: "Code école", placeholder: "ex: EPPCP001" },
-    teacher: { label: "Code école", placeholder: "ex: EPPCP001" },
+    // Format réel des codes écoles (base officielle) : lettre E + chiffres
+    director: { label: "Code école", placeholder: "ex: E001103" },
+    teacher: { label: "Code école", placeholder: "ex: E001103" },
     parent: { label: "Code (numéro de téléphone)", placeholder: "ex: 0701020304" },
   }[loginRole];
 
@@ -365,7 +366,7 @@ export function LoginView() {
                         {resetRole === "admin" || resetRole === "inspector" ? "Email" : resetRole === "director" ? "Code école" : resetRole === "parent" ? "Téléphone ou email" : "Téléphone"}
                       </label>
                       <Input value={resetId} onChange={(e) => setResetId(e.target.value)}
-                        placeholder={resetRole === "director" ? "ex: EPPCP001" : resetRole === "teacher" ? "ex: 0700000000" : "ex: email@sygren.ci"}
+                        placeholder={resetRole === "director" ? "ex: E001103" : resetRole === "teacher" ? "ex: 0700000000" : "ex: email@sygren.ci"}
                         disabled={resetLoading} />
                     </div>
                     <Button onClick={handleReset} disabled={resetLoading || !resetId.trim()} className="w-full">
