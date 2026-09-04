@@ -32,9 +32,9 @@ interface StudentAnnualCardProps {
 }
 
 const COLORS = {
-  primary: "oklch(0.646 0.222 41.116)", // orange
+  primary: "#f77f00", // orange
   secondary: "oklch(0.7 0.15 200)", // bleu
-  success: "oklch(0.548 0.154 150)", // vert
+  success: "#009e60", // vert
   danger: "oklch(0.577 0.245 27.325)", // rouge
 };
 

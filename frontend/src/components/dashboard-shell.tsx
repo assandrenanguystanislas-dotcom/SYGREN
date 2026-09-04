@@ -495,6 +495,13 @@ export function DashboardShell({
               {ROLE_LABELS[user.role]}
             </Badge>
           </div>
+
+          {/* Liseré tricolore ivoirien sous l'en-tête (orange · blanc ·
+              vert) — identité de la République sur toutes les pages. */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-[3px] ci-flag-stripe"
+            aria-hidden="true"
+          />
         </header>
 
         {/* Zone de contenu */}

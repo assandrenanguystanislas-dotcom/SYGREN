@@ -65,8 +65,8 @@ import { cn } from "@/lib/utils";
 
 // Couleurs pour les graphiques (charte Côte d'Ivoire : orange + vert + neutres)
 const COLORS = {
-  primary: "oklch(0.646 0.222 41.116)", // orange
-  success: "oklch(0.548 0.154 150)", // vert
+  primary: "#f77f00", // orange
+  success: "#009e60", // vert
   warning: "oklch(0.828 0.189 84.429)", // ambre
   danger: "oklch(0.577 0.245 27.325)", // rouge
   blue: "oklch(0.7 0.15 200)",

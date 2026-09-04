@@ -144,10 +144,28 @@ export function LoginView() {
         className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{
           backgroundImage:
-            "radial-gradient(oklch(0.646 0.222 41.116) 1px, transparent 1px)",
+            "radial-gradient(#f77f00 1px, transparent 1px)",
           backgroundSize: "24px 24px",
         }}
       />
+
+      {/* ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (demande utilisateur) :
+          posée au-dessus du dégradé de fond, DERRIÈRE la carte de connexion
+          (non interactive, très faible opacité — l'armoirie reste lisible
+          sans gêner la saisie). À l'impression : masqué (les documents ont
+          leur propre filigrane). */}
+      <div
+        className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none select-none"
+        aria-hidden="true"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/ci-coat-of-arms.png"
+          alt=""
+          draggable={false}
+          className="w-[min(62vmin,540px)] max-w-[80vw] opacity-[0.07] saturate-[0.9]"
+        />
+      </div>
 
       <div className="relative w-full max-w-md animate-in-up">
         {/* En-tête de marque */}
