@@ -142,6 +142,25 @@ func CreateDirector(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Restauration (correctif accès) : si un directeur SUPPRIMÉ
+	// (soft-delete) porte déjà ce téléphone/email, on le restaure
+	// au lieu d'insérer (la contrainte unique DB le refuserait).
+	if restored, ok := restoreSoftDeletedUser(models.RoleDirector, req.FullName, req.Phone, req.Email, req.SchoolID, req.Password, nil); ok {
+		if req.Personnel != nil {
+			if err := req.Personnel.applyTo(restored); err != nil {
+				middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := database.DB.Unscoped().Save(restored).Error; err != nil {
+				middleware.JSONError(w, "erreur mise à jour directeur restauré", http.StatusInternalServerError)
+				return
+			}
+		}
+		restored.Password = ""
+		jsonResponse(w, http.StatusCreated, restored)
+		return
+	}
+
 	hashed, err := utils.HashPassword(req.Password)
 	if err != nil {
 		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
@@ -249,5 +268,9 @@ func DeleteDirector(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
 		return
 	}
+	// Audit (Architecture D) — les suppressions n'étaient pas tracées.
+	LogAction(r, "user.deleted", "user", &id, map[string]interface{}{
+		"role": models.RoleDirector,
+	})
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

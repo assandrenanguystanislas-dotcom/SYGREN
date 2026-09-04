@@ -172,6 +172,24 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Restauration (correctif accès) : si un enseignant SUPPRIMÉ
+	// (soft-delete) porte déjà ce téléphone/email, on le restaure.
+	if restored, ok := restoreSoftDeletedUser(models.RoleTeacher, req.FullName, req.Phone, req.Email, req.SchoolID, req.Password, nil); ok {
+		if req.Personnel != nil {
+			if err := req.Personnel.applyTo(restored); err != nil {
+				middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := database.DB.Unscoped().Save(restored).Error; err != nil {
+				middleware.JSONError(w, "erreur mise à jour enseignant restauré", http.StatusInternalServerError)
+				return
+			}
+		}
+		restored.Password = ""
+		jsonResponse(w, http.StatusCreated, restored)
+		return
+	}
+
 	hashed, err := utils.HashPassword(req.Password)
 	if err != nil {
 		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
@@ -282,5 +300,9 @@ func DeleteTeacher(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
 		return
 	}
+	// Audit (Architecture D) — les suppressions n'étaient pas tracées.
+	LogAction(r, "user.deleted", "user", &id, map[string]interface{}{
+		"role": models.RoleTeacher, "classes_unlinked": true,
+	})
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

@@ -135,6 +135,35 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 7-bis. Restauration (correctif accès) : si un compte SUPPRIMÉ
+	// (soft-delete) porte déjà ce téléphone, la réinscription ravive
+	// l'accès au lieu de se heurter à la contrainte unique DB.
+	if restored, ok := restoreSoftDeletedUser(req.Role, req.FullName, &req.Phone, req.Email, &school.ID, password, nil); ok {
+		rid := restored.ID
+		_ = database.DB.Create(&models.AuditLog{
+			ActorID:    &rid,
+			ActorRole:  req.Role,
+			Action:     "auth.register",
+			EntityType: "user",
+			EntityID:   &rid,
+			Details:    fmt.Sprintf(`{"role":%q,"school_code":%q,"method":"self_registration","restored":true}`, req.Role, req.SchoolCode),
+			IP:         getClientIP(r),
+			UserAgent:  r.UserAgent(),
+		}).Error
+		restored.Password = ""
+		jsonResponse(w, http.StatusCreated, map[string]interface{}{
+			"status":  "created",
+			"message": "Vos accès sont créés. Connectez-vous avec le code école " + school.Code + " et votre mot de passe (standard : votre numéro de téléphone).",
+			"user":    restored,
+			"school": map[string]string{
+				"id":   school.ID,
+				"code": school.Code,
+				"name": school.Name,
+			},
+		})
+		return
+	}
+
 	// 7. Création du compte (actif immédiatement — « les accès établis,
 	//    ils pourront se connecter à travers le module Utilisateurs »)
 	hashed, err := utils.HashPassword(password)

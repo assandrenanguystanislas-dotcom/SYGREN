@@ -117,6 +117,16 @@ func CreateParent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Restauration (correctif accès) : si un parent SUPPRIMÉ
+	// (soft-delete) porte déjà ce téléphone/email, on le restaure.
+	if restored, ok := restoreSoftDeletedUser(models.RoleParent, req.FullName, req.Phone, req.Email, nil, req.Password, func(u *models.User) {
+		u.ChildMatricule = req.ChildMatricule
+	}); ok {
+		restored.Password = ""
+		jsonResponse(w, http.StatusCreated, restored)
+		return
+	}
+
 	hashed, err := utils.HashPassword(req.Password)
 	if err != nil {
 		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
@@ -207,5 +217,9 @@ func DeleteParent(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "parent introuvable", http.StatusNotFound)
 		return
 	}
+	// Audit (Architecture D) — les suppressions n'étaient pas tracées.
+	LogAction(r, "user.deleted", "user", &id, map[string]interface{}{
+		"role": models.RoleParent,
+	})
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
