@@ -15,9 +15,11 @@ import {
   Menu,
   Trophy,
   ChevronRight,
+  ChevronDown,
   UserCog,
   History,
   Lock,
+  KeyRound,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -26,7 +28,15 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChangePasswordButton } from "@/components/change-password-dialog";
+import { ChangePasswordButton, ChangePasswordDialog } from "@/components/change-password-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -192,6 +202,78 @@ function allowedViewsForRole(role: Role): ReadonlySet<string> | null {
   if (role === "director" || role === "teacher") return WORKSPACE_VIEWS;
   if (role === "parent") return PARENT_ALLOWED_VIEWS;
   return null;
+}
+
+/** Task 30 — Menu déroulant « code école » EN HAUT ET À DROITE des pages
+ *  Directeur / Enseignant (demande utilisateur). Le déclencheur affiche le
+ *  CODE ÉCOLE de l'établissement auquel le compte est fiché (résolu par le
+ *  backend — school_code du profil) ; le menu déroulant contient les deux
+ *  actions demandées : « Modifier votre mot de passe » et « Déconnexion ».
+ *  Pour les rôles non rattachés à une école (admin, inspecteur, parent) le
+ *  menu ne rend rien — l'en-tête garde le badge de rôle existant. */
+function SchoolAccountMenu() {
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const [pwdOpen, setPwdOpen] = useState(false);
+  if (!user?.school_code) return null;
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`Compte — code école ${user.school_code}. Menu : modifier votre mot de passe, déconnexion`}
+            title={
+              user.school_name
+                ? `${user.school_name} (${user.school_code})`
+                : user.school_code
+            }
+            className="h-9 gap-1.5 border-primary/40 bg-primary/5 hover:bg-primary/10"
+          >
+            <School className="w-4 h-4 text-primary" aria-hidden />
+            <span className="font-mono font-bold tracking-wide">
+              {user.school_code}
+            </span>
+            <ChevronDown
+              className="w-3.5 h-3.5 opacity-60"
+              aria-hidden
+            />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel className="flex flex-col gap-0.5">
+            <span className="truncate font-semibold">{user.full_name}</span>
+            <span className="text-xs font-normal text-muted-foreground truncate">
+              {ROLE_LABELS[user.role]}
+              {user.school_name ? ` · ${user.school_name}` : ""}
+            </span>
+            <span className="text-xs font-normal text-muted-foreground">
+              Code école :{" "}
+              <span className="font-mono font-semibold text-foreground">
+                {user.school_code}
+              </span>
+            </span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setPwdOpen(true)}>
+            <KeyRound className="w-4 h-4 mr-2" aria-hidden />
+            Modifier votre mot de passe
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={logout}
+            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+          >
+            <LogOut className="w-4 h-4 mr-2" aria-hidden />
+            Déconnexion
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ChangePasswordDialog open={pwdOpen} onOpenChange={setPwdOpen} />
+    </>
+  );
 }
 
 interface DashboardShellProps {
@@ -400,12 +482,19 @@ export function DashboardShell({
             </h1>
           </div>
 
-          <Badge
-            variant="secondary"
-            className="hidden sm:inline-flex capitalize"
-          >
-            {ROLE_LABELS[user.role]}
-          </Badge>
+          {/* Task 30 — en haut et à droite : menu déroulant CODE ÉCOLE
+              (Directeur / Enseignant — actions « Modifier votre mot de
+              passe » et « Déconnexion ») ; les autres rôles gardent le
+              badge de fonction. */}
+          <div className="flex items-center gap-2 shrink-0">
+            <SchoolAccountMenu />
+            <Badge
+              variant="secondary"
+              className="hidden sm:inline-flex capitalize"
+            >
+              {ROLE_LABELS[user.role]}
+            </Badge>
+          </div>
         </header>
 
         {/* Zone de contenu */}

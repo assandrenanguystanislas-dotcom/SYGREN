@@ -41,6 +41,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SchoolIdentityBanner } from "@/components/school-identity-banner";
 import {
   PersonnelDossierFields,
   personnelOf,
@@ -221,6 +222,9 @@ export function TeachersView() {
 
   return (
     <div className="space-y-4">
+      {/* Task 30 — identification à l'établissement (directeur connecté) :
+          le code école de SON école est affiché en tête de l'onglet. */}
+      <SchoolIdentityBanner />
       <Card className="border-border/60">
         <CardContent className="py-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">

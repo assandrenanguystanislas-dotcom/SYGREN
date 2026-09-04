@@ -51,6 +51,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { usersAdminApi } from "@/lib/api";
 import { ROLE_LABELS, type Role, type UserAdminRow } from "@/lib/types";
 import { ChangePasswordButton } from "@/components/change-password-dialog";
+import { SchoolIdentityBanner } from "@/components/school-identity-banner";
 import { TeachersView } from "./teachers-view";
 import { DirectorsView } from "./directors-view";
 import { InspectorsView } from "./inspectors-view";
@@ -211,6 +212,9 @@ export function UsersView({ onNavigate }: UsersViewProps) {
   if (visibleTabs.length === 0) {
     return (
       <div className="space-y-4">
+        {/* Task 30 — identification à l'établissement : le code école de
+            SON école est affiché en tête du module Utilisateurs. */}
+        <SchoolIdentityBanner />
         {workspaceGo}
         <WorkspaceWelcomeCard roleLabel={user ? ROLE_LABELS[user.role] : ""} />
       </div>

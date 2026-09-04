@@ -72,6 +72,12 @@ export interface User extends PersonnelDossier {
   role: Role;
   iep_id?: string | null;
   school_id?: string | null;
+  // Task 30 — établissement rattaché (résolu par le backend sur
+  // /api/auth/login et /api/me) : le CODE ÉCOLE est affiché en haut et à
+  // droite des pages Directeur / Enseignant (menu déroulant « Modifier
+  // votre mot de passe / Déconnexion »). Absent pour les autres rôles.
+  school_code?: string | null;
+  school_name?: string | null;
   active: boolean;
   must_change_password?: boolean;
   service?: string;

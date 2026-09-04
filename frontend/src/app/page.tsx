@@ -177,8 +177,19 @@ function AppContent() {
   // Si on a un token mais pas d'utilisateur (après rafraîchissement de page),
   // on recharge le profil depuis l'API. Effet légitime : synchronisation avec
   // un système externe (le backend Go).
+  // Task 30 — si la session locale date d'avant l'enrichissement du profil
+  // (school_code absent pour un Directeur/Enseignant), on recharge le profil
+  // UNE FOIS (ref anti-boucle : un compte sans école ne définira jamais
+  // school_code — on ne doit pas rappeler /api/me à l'infini).
+  const profileRefreshedRef = useRef(false);
   useEffect(() => {
-    if (hydrated && token && !user) {
+    if (!hydrated || !token || profileRefreshedRef.current) return;
+    const needsProfileRefresh =
+      !user ||
+      ((user.role === "director" || user.role === "teacher") &&
+        user.school_code === undefined);
+    if (needsProfileRefresh) {
+      profileRefreshedRef.current = true;
       refreshUser();
     }
   }, [hydrated, token, user, refreshUser]);
