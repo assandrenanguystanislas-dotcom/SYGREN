@@ -192,6 +192,55 @@
     );
   }
 
+  /* === PETIT DRAPEAU IVOIRIEN FLOTTANT (écran de connexion) ===
+   * Demande utilisateur : « je veux que le petit drapeau sur l'interface
+   * flotte ». Deux animations combinées, discrètes et permanentes :
+   *  - .ci-flag-float : l'ensemble (mât + tissu) lévite doucement (va-et-vient
+   *    vertical de 4 px, cycle de 4 s) ;
+   *  - .ci-flag-float-fabric : le TISSU seul ondule autour du mât — point de
+   *    pivot à GAUCHE (côté mât), légère rotation + cisaillement + respiration
+   *    de largeur, comme sous une brise légère.
+   * Désactivé si l'utilisateur préfère réduire les animations (accessibilité). */
+  .ci-flag-float {
+    animation: ci-flag-bob 4s ease-in-out infinite;
+    will-change: transform;
+  }
+  @keyframes ci-flag-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+  .ci-flag-float-fabric {
+    transform-origin: left center;
+    animation: ci-flag-wave 3.2s ease-in-out infinite;
+    will-change: transform;
+  }
+  @keyframes ci-flag-wave {
+    0%,
+    100% {
+      transform: rotate(0deg) skewY(0deg) scaleX(1);
+    }
+    25% {
+      transform: rotate(-1.4deg) skewY(-1deg) scaleX(1.02);
+    }
+    50% {
+      transform: rotate(0.4deg) skewY(0.5deg) scaleX(0.99);
+    }
+    75% {
+      transform: rotate(1.4deg) skewY(1deg) scaleX(1.015);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ci-flag-float,
+    .ci-flag-float-fabric {
+      animation: none;
+    }
+  }
+
   /* === ARMOIRIES DE LA RÉPUBLIQUE DE CÔTE D'IVOIRE EN FILIGRANE (interface) ===
    * Demande utilisateur : l'interface porte les couleurs du drapeau ivoirien
    * avec l'armoirie de la Côte d'Ivoire EN FILIGRANE. Le filigrane est FIXE

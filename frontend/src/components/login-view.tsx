@@ -213,10 +213,13 @@ export function LoginView() {
             <div className="relative h-2.5 ci-flag-stripe" aria-hidden="true" />
 
             <CardHeader className="relative justify-items-center gap-1 pt-4 pb-1 text-center">
-              {/* Mini drapeau ivoirien — mât + tissu tricolore (orange côté mât) */}
-              <div className="relative w-fit mb-1" aria-hidden="true">
+              {/* Mini drapeau ivoirien — mât + tissu tricolore (orange côté
+                  mât) — FLOTTANT (demande utilisateur) : l'ensemble lévite
+                  doucement et le tissu ondule autour du mât comme sous une
+                  brise légère (cf. .ci-flag-float / .ci-flag-float-fabric). */}
+              <div className="relative w-fit mb-1 ci-flag-float" aria-hidden="true">
                 <div className="absolute left-[-3px] top-[-3px] bottom-[-3px] w-[3px] rounded-full bg-gradient-to-b from-stone-300 via-stone-400 to-stone-500 shadow-sm" />
-                <div className="ci-flag-stripe h-8 w-[72px] rounded-[2px] shadow-md ring-1 ring-black/15" />
+                <div className="ci-flag-stripe ci-flag-float-fabric h-8 w-[72px] rounded-[2px] shadow-md ring-1 ring-black/15" />
               </div>
               <CardTitle className="text-xl">Connexion</CardTitle>
               <CardDescription className="text-xs">
