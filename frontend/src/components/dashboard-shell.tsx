@@ -496,8 +496,19 @@ export function DashboardShell({
             </Badge>
           </div>
 
+          {/* Bande tricolore ivoirien — TÊTE de l'en-tête (orange · blanc ·
+              vert). L'en-tête vit dans la colonne de contenu, À DROITE de
+              la barre latérale VERTE : la bande commence donc exactement
+              au bord de la zone verte — elle ne la recouvre pas et ne la
+              dépasse pas (demande utilisateur : « bandes au même niveau
+              que la partie en vert »). */}
+          <div
+            className="absolute inset-x-0 top-0 h-1.5 ci-flag-stripe"
+            aria-hidden="true"
+          />
+
           {/* Liseré tricolore ivoirien sous l'en-tête (orange · blanc ·
-              vert) — identité de la République sur toutes les pages. */}
+              vert) — identité de la République, zone de contenu seule. */}
           <div
             className="absolute inset-x-0 bottom-0 h-[3px] ci-flag-stripe"
             aria-hidden="true"

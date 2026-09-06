@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { GraduationCap, Loader2, Lock, User as UserIcon, ShieldCheck, KeyRound, UserPlus } from "lucide-react";
+import { GraduationCap, Loader2, Lock, User as UserIcon, KeyRound, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -62,13 +62,9 @@ export function LoginView() {
     parent: { label: "Code (numéro de téléphone)", placeholder: "ex: 0701020304" },
   }[loginRole];
 
-  // Task 25/26 — indice sous le champ mot de passe, adapté au rôle
-  const passwordHint =
-    loginRole === "director" || loginRole === "teacher"
-      ? "Mot de passe standard : votre numéro de téléphone. À modifier à tout moment via « Modifier votre mot de passe » après connexion."
-      : loginRole === "parent"
-        ? "Votre code et votre mot de passe correspondent à votre numéro de téléphone."
-        : null;
+  // Task 25/26 — (ancien indice « Mot de passe standard : votre numéro de
+  // téléphone… » SUPPRIMÉ — demande utilisateur : plus aucun texte
+  // d'aide/demo sur l'écran de connexion).
 
   // Task 26 — auto-inscription (fin de la phase pilote) : les directeurs
   // et enseignants créent leurs accès depuis cette interface.
@@ -136,8 +132,12 @@ export function LoginView() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-orange-50/40 to-green-50/30 p-4">
-      {/* La bande tricolore fixe en haut de page est posée GLOBALEMENT par
-          layout.tsx (z-60, visible sur toutes les pages) — pas de doublon. */}
+      {/* Bande tricolore fixe en haut de page — PLEINE LARGEUR : l'écran de
+          connexion n'a pas de barre latérale verte, la bande peut couvrir
+          tout le viewport (elle n'est plus posée globalement par layout.tsx
+          — cf. demande utilisateur : sur les modules elle doit s'aligner
+          sur le bord de la zone verte, pas la recouvrir). */}
+      <div className="fixed inset-x-0 top-0 z-[60] h-1.5 ci-flag-stripe" aria-hidden="true" />
 
       {/* Motif décoratif subtil */}
       <div
@@ -313,11 +313,6 @@ export function LoginView() {
                         </div>
                       </FormControl>
                       <FormMessage />
-                      {passwordHint && (
-                        <p className="text-[11px] text-muted-foreground">
-                          {passwordHint}
-                        </p>
-                      )}
                     </FormItem>
                   )}
                 />
@@ -435,20 +430,6 @@ export function LoginView() {
               </DialogContent>
             </Dialog>
 
-            {/* Identifiants de démonstration */}
-            <div className="mt-5 rounded-lg border border-border/60 bg-muted/40 p-3 text-xs space-y-1.5">
-              <div className="flex items-center gap-1.5 font-medium text-foreground">
-                <ShieldCheck className="w-3.5 h-3.5 text-[var(--success)]" />
-                Compte de démonstration
-              </div>
-              <div className="text-muted-foreground font-mono">
-                <span className="text-foreground">Email :</span>{" "}
-                admin@sygren.ci
-                <br />
-                <span className="text-foreground">Mot de passe :</span>{" "}
-                admin123
-              </div>
-            </div>
             </CardContent>
 
             {/* Ruban tricolore — pied de la carte */}
