@@ -497,22 +497,28 @@ export function DashboardShell({
           </div>
 
           {/* Bande tricolore ivoirien — TÊTE de l'en-tête (orange · blanc ·
-              vert). L'en-tête vit dans la colonne de contenu, À DROITE de
-              la barre latérale VERTE : la bande commence donc exactement
-              au bord de la zone verte — elle ne la recouvre pas et ne la
-              dépasse pas (demande utilisateur : « bandes au même niveau
-              que la partie en vert »). */}
+              vert). Elle est calée sur la largeur EXACTE du contenu des
+              modules (marges p-4/lg:p-6 + max-w-7xl centré, comme <main>) :
+              un cran MOINS LARGE que la colonne de contenu — elle ne touche
+              ni la barre latérale verte ni le bord droit de l'écran et ne
+              peut donc plus dépasser le cadre des modules (demande
+              utilisateur : « une dimension moins que celle en vert »). */}
           <div
-            className="absolute inset-x-0 top-0 h-1.5 ci-flag-stripe"
+            className="absolute inset-x-4 top-0 flex justify-center lg:inset-x-6"
             aria-hidden="true"
-          />
+          >
+            <div className="h-1.5 w-full max-w-7xl ci-flag-stripe" />
+          </div>
 
           {/* Liseré tricolore ivoirien sous l'en-tête (orange · blanc ·
-              vert) — identité de la République, zone de contenu seule. */}
+              vert) — identité de la République, même retrait que la bande
+              supérieure : largeur du contenu des modules uniquement. */}
           <div
-            className="absolute inset-x-0 bottom-0 h-[3px] ci-flag-stripe"
+            className="absolute inset-x-4 bottom-0 flex justify-center lg:inset-x-6"
             aria-hidden="true"
-          />
+          >
+            <div className="h-[3px] w-full max-w-7xl ci-flag-stripe" />
+          </div>
         </header>
 
         {/* Zone de contenu */}
