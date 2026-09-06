@@ -3,11 +3,11 @@
 import React from "react";
 
 // v2 — embellissement aux couleurs du drapeau de la Côte d'Ivoire
-// (rubans tricolores + ARMOIRIES en filigrane dans le fond de chaque
-// bulletin) + bordures/libellés verts drapeau (ex-bleu du modèle).
+// (ARMOIRIES en filigrane dans le fond de chaque bulletin + bordures/
+// libellés verts drapeau, ex-bleu du modèle). Rubans tricolores haut/bas
+// RETIRÉS : aucune bordure drapeau sur les feuilles imprimables.
 import {
   CIArmoiriesWatermark,
-  CIFlagRibbon,
   CI_GREEN,
   CI_GREEN_TEXT,
 } from "./ci-decor";
@@ -186,8 +186,6 @@ export default function BulletinsA5Landscape({
                   <div className={`${singleB5 ? "w-full" : "w-1/2"} h-full px-3 py-1 flex flex-col justify-between text-black font-sans text-[11px] relative overflow-hidden`}>
                     {/* ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond) */}
                     <CIArmoiriesWatermark opacity={0.06} width="64%" />
-                    {/* Ruban tricolore ivoirien (haut du bulletin) */}
-                    <CIFlagRibbon height="1.8mm" />
 
                     {/* En-tête officiel — dynamique (données IEP), comme le relevé */}
                     <div>
@@ -623,8 +621,8 @@ export default function BulletinsA5Landscape({
                       </div>
                     </div>
 
-                    {/* Ruban tricolore ivoirien (bas du bulletin) */}
-                    <CIFlagRibbon height="1.8mm" />
+                    {/* (Ruban tricolore du bas RETIRÉ : aucune bordure
+                        drapeau sur les feuilles imprimables.) */}
                   </div>
 
                   {/* Ligne pointillée centrale de séparation (découpe) */}

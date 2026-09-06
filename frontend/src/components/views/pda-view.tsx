@@ -717,7 +717,9 @@ export function PdaView() {
                               {idx + 1}
                             </TableCell>
                             <TableCell>
-                              <div className="text-sm font-medium">
+                              {/* Nom de l'élève EN CARACTÈRE D'IMPRIMERIE
+                                  (majuscules — convention des listes) */}
+                              <div className="text-sm font-medium uppercase">
                                 {s.last_name} {s.first_name}
                               </div>
                               <div className="text-[11px] text-muted-foreground">
@@ -790,7 +792,9 @@ export function PdaView() {
                             {idx + 1}
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm font-medium">
+                            {/* Nom de l'élève EN CARACTÈRE D'IMPRIMERIE
+                                (majuscules — convention des listes) */}
+                            <div className="text-sm font-medium uppercase">
                               {s.last_name} {s.first_name}
                             </div>
                             <div className="text-[11px] text-muted-foreground">

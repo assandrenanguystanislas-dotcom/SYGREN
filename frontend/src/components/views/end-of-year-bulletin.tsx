@@ -7,7 +7,8 @@
 // mérite : 1er+2e, 3e+4e, …), séparés par un TRAIT DISCONTINU (zone de
 // découpe avec ciseaux) qui partage la feuille en deux parties égales.
 // La page est EMBELLIE AUX COULEURS DU DRAPEAU DE LA CÔTE D'IVOIRE
-// (bandes orange-blanc-vert : rubans, bandeaux de titres, bordures).
+// (bandeaux de titres, bordures) — SANS rubans tricolores haut/bas :
+// les drapeaux des bordures des feuilles imprimables sont supprimés.
 //
 // Chaque bulletin est rempli depuis la MÊME source que le tableau de
 // classe (/api/reports/end-of-year — le document ne recalcule rien) :
@@ -26,8 +27,9 @@
 //   - « Fait à DABOU, le … » = DATE DU JOUR au format jj/mm/aaaa (le lieu
 //     est celui de la Direction Régionale de l'IEP — DABOU) ;
 //   - Signatures : noms du Maître chargé du cours (tenant de la classe) et
-//     du Directeur de l'école écrits au-dessus de la ligne de signature —
-//     place réservée à la signature et au cachet.
+//     du Directeur de l'école écrits EN CARACTÈRE D'IMPRIMERIE (majuscules
+//     gras) — AUCUN trait discontinu dans les cases (espace laissé libre
+//     pour la signature et le cachet).
 // En-tête institutionnel identique au tableau de classe (IEP : Direction
 // Régionale, Inspection, BP/Tél, Courriel, armoiries). Noms des FILLES en
 // rouge (même convention que le tableau). Session de passage en fin
@@ -60,7 +62,6 @@ const CI_ORANGE = "#F77F00";
 const CI_GREEN = "#009E60";
 /** Vert assombri pour le TEXTE (contraste impression sur fond blanc). */
 const GREEN_TEXT = "#00734A";
-const ORANGE_BG = "#FDEBDA";
 const GREEN_BG = "#E4F4ED";
 /** Gris du trait discontinu de découpe. */
 const CUT_DASH = "#9aa2ad";
@@ -141,26 +142,6 @@ function OuiNon({ choice, circled }: { choice: "OUI" | "NON"; circled: boolean }
     >
       {choice}
     </span>
-  );
-}
-
-/** Ruban tricolore ivoirien (trois bandes VERTICALES orange-blanc-vert,
- *  comme le drapeau) — filet décoratif haut et bas de chaque bulletin. */
-function FlagRibbon({ height = "2.6mm" }: { height?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        display: "flex",
-        height,
-        boxSizing: "border-box",
-        border: "0.5px solid #d1d5db",
-      }}
-    >
-      <div style={{ flex: 1, background: CI_ORANGE }} />
-      <div style={{ flex: 1, background: "#FFFFFF" }} />
-      <div style={{ flex: 1, background: CI_GREEN }} />
-    </div>
   );
 }
 
@@ -305,10 +286,10 @@ function BulletinCopy({
         overflow: "hidden",
       }}
     >
-      {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond du bulletin) --- */}
+      {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond du bulletin).
+           Ruban tricolore du haut SUPPRIMÉ : aucune bordure drapeau sur
+           les feuilles imprimables. --- */}
       <CIArmoiriesWatermark opacity={0.06} width="62%" />
-      {/* --- Ruban tricolore (haut) --- */}
-      <FlagRibbon />
 
       {/* --- En-tête institutionnel (identique au tableau de classe) --- */}
       <div
@@ -564,17 +545,20 @@ function BulletinCopy({
                   Le Maître chargé du cours
                 </div>
                 {data.class.teacher_name ? (
-                  <div style={{ fontSize: "11.5px", fontWeight: 600, marginTop: "1.2mm" }}>
+                  /* Nom du titulaire EN CARACTÈRE D'IMPRIMERIE (majuscules
+                     gras) — AUCUN trait discontinu dans la case */
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      marginTop: "1.2mm",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.3px",
+                    }}
+                  >
                     {data.class.teacher_name}
                   </div>
                 ) : null}
-                <div
-                  style={{
-                    marginTop: "8mm",
-                    marginInline: "6mm",
-                    borderBottom: `1px dotted ${CUT_DASH}`,
-                  }}
-                />
               </td>
               <td
                 style={{
@@ -597,27 +581,26 @@ function BulletinCopy({
                   Le Directeur
                 </div>
                 {data.directeur ? (
-                  <div style={{ fontSize: "11.5px", fontWeight: 600, marginTop: "1.2mm" }}>
+                  /* Nom du directeur EN CARACTÈRE D'IMPRIMERIE (majuscules
+                     gras) — AUCUN trait discontinu dans la case */
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      marginTop: "1.2mm",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.3px",
+                    }}
+                  >
                     {data.directeur}
                   </div>
                 ) : null}
-                <div
-                  style={{
-                    marginTop: "8mm",
-                    marginInline: "6mm",
-                    borderBottom: `1px dotted ${CUT_DASH}`,
-                  }}
-                />
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* --- Ruban tricolore (bas) --- */}
-      <div style={{ paddingTop: "2mm" }}>
-        <FlagRibbon height="2mm" />
-      </div>
     </div>
   );
 }

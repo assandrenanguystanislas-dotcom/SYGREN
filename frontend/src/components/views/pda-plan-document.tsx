@@ -51,8 +51,9 @@
 // vert drapeau texte blanc, boîte de l'évaluation en orange drapeau),
 // toutes les bordures passent au VERT DRAPEAU, entêtes sur fond vert
 // (texte blanc), lignes TOTAL sur fond pastel vert ; ARMOIRIES en
-// filigrane (répétées à chaque page imprimée) + rubans tricolores
-// haut/bas de chaque page.
+// filigrane (répétées à chaque page imprimée). Les rubans tricolores
+// haut/bas sont RETIRÉS des feuilles imprimables (documents sans
+// drapeaux sur les bordures).
 //
 // Toutes les données viennent de /api/pda/plan-action (source unique de
 // vérité — le document ne recalcule rien). Impression 100 % navigateur
@@ -85,7 +86,6 @@ import {
 } from "./official-doc";
 import {
   CIArmoiriesWatermark,
-  CIFlagRibbon,
   CI_GREEN,
   CI_GREEN_BG,
   CI_GREEN_TEXT,
@@ -330,22 +330,6 @@ export function PdaPlanDocument({
         </div>
       </div>
 
-      {/* Avertissements (écran uniquement) : écoles exclues (sans centre
-          d'examen), sans évaluation suivie, sans classe CM2, notes
-          manquantes… */}
-      {(plan.warnings ?? []).length > 0 && (
-        <div className="mx-auto max-w-[297mm] mt-3 px-2 print:hidden">
-          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 text-xs p-3 space-y-1 max-h-48 overflow-y-auto">
-            <p className="font-semibold">Données incomplètes ou écoles exclues :</p>
-            <ul className="list-disc pl-4 space-y-0.5">
-              {plan.warnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-
       {/* === DOCUMENT OFFICIEL (isolement impression #pda-plan-doc) === */}
       {!canPrint && <PrintLockDocumentMessage />}
       <div
@@ -362,15 +346,9 @@ export function PdaPlanDocument({
         }}
       >
         {/* v3 — ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (répétées sur
-            chaque page imprimée) + rubans tricolores haut/bas de chaque
-            page (position fixed — zéro impact sur la mise en page) */}
+            chaque page imprimée). Rubans tricolores haut/bas RETIRÉS :
+            aucune bordure drapeau sur les feuilles imprimables. */}
         <CIArmoiriesWatermark fixed />
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0 }}>
-          <CIFlagRibbon height="2.4mm" bordered={false} />
-        </div>
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0 }}>
-          <CIFlagRibbon height="2.4mm" bordered={false} />
-        </div>
         <div style={{ position: "relative", zIndex: 1 }}>
         {/* --- En-tête institutionnel compact (modèle reçu) --- */}
         <OfficialDocHeader iep={iep} variant="plan" size="xs" />

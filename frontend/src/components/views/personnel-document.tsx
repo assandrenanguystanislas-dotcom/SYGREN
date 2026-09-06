@@ -56,7 +56,6 @@ import {
 } from "./official-doc";
 import {
   CIArmoiriesWatermark,
-  CIFlagRibbon,
   CI_GREEN,
   CI_GREEN_BG,
   CI_GREEN_TEXT,
@@ -210,8 +209,8 @@ export function PersonnelDocument({
           position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
-        {/* --- Ruban tricolore ivoirien (haut du document) --- */}
-        <CIFlagRibbon />
+        {/* (Ruban tricolore du haut RETIRÉ : aucune bordure drapeau sur
+            les feuilles imprimables.) */}
         {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond, répétées
             sur chaque page imprimée) --- */}
         <CIArmoiriesWatermark fixed />
@@ -461,9 +460,8 @@ export function PersonnelDocument({
           </div>
         </div>
         </div>
-
-        {/* --- Ruban tricolore ivoirien (bas du document) --- */}
-        <CIFlagRibbon />
+        {/* (Ruban tricolore du bas RETIRÉ : aucune bordure drapeau sur les
+            feuilles imprimables.) */}
       </div>
     </div>
   );

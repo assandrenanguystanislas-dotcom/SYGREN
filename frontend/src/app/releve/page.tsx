@@ -4,11 +4,11 @@
 // entêtes du tableau sur FOND VERT DRAPEAU (texte blanc), bordures
 // vertes, boîte du titre sur fond pastel orange bordé de vert,
 // bandeau ORANGE DRAPEAU pour le type d'examen, blocs statistiques et
-// signatures bordés de vert ; armoiries en filigrane + rubans
-// tricolores haut/bas de chaque page (conservés).
+// signatures bordés de vert ; armoiries en filigrane (rubans tricolores
+// haut/bas RETIRÉS — aucune bordure drapeau sur les feuilles imprimables).
 import { useState, useEffect } from "react";
 import { Printer, X, Loader2, User, Users, CheckCircle2, Award, TrendingUp } from "lucide-react";
-import { CIArmoiriesWatermark, CIFlagRibbon } from "@/components/ci-decor";
+import { CIArmoiriesWatermark } from "@/components/ci-decor";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
 
 // === Types ===
@@ -387,16 +387,10 @@ export default function RelevePage() {
               className={`w-[210mm] min-h-[297mm] print:min-h-0 p-6 bg-white mx-auto mb-8 print:mb-0 shadow-md print:shadow-none print:m-0 print:p-0 print:w-full font-sans text-xs text-black relative overflow-hidden ${!isLastPage ? 'break-after-page' : ''}`}
               style={{ pageBreakAfter: isLastPage ? 'auto' : 'always' }}
             >
-              {/* v2 — décor drapeau CI : armoiries en FILIGRANE
-                  (fond) + rubans tricolores haut/bas en absolu
-                  (zéro impact sur la mise en page) */}
+              {/* Armoiries de la Côte d'Ivoire en FILIGRANE (fond) —
+                  rubans tricolores haut/bas RETIRÉS (feuilles imprimables
+                  sans drapeaux sur les bordures) */}
               <CIArmoiriesWatermark opacity={0.06} width="52%" />
-              <div className="absolute top-0 left-0 right-0">
-                <CIFlagRibbon height="2.2mm" bordered={false} />
-              </div>
-              <div className="absolute bottom-0 left-0 right-0">
-                <CIFlagRibbon height="2.2mm" bordered={false} />
-              </div>
               <div>
                 {/* === 1. EN-TÊTE DU DOCUMENT (Page 1 uniquement) === */}
                 {isFirstPage ? (

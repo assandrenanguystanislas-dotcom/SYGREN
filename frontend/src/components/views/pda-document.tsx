@@ -41,7 +41,6 @@ import type { PdaCountRow, PdaSummary } from "@/lib/types";
 import { INK, OFFICIAL_FONT, OfficialDocHeader, fmtDocNum } from "./official-doc";
 import {
   CIArmoiriesWatermark,
-  CIFlagRibbon,
   CI_GREEN,
   CI_GREEN_TEXT,
   PRINT_COLOR_STYLE,
@@ -269,8 +268,8 @@ export function PdaDocument({
           position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
-        {/* --- Ruban tricolore ivoirien (haut du document) --- */}
-        <CIFlagRibbon />
+        {/* (Ruban tricolore du haut RETIRÉ : aucune bordure drapeau sur
+            les feuilles imprimables.) */}
         {/* --- ARMOIRIES DE LA CÔTE D'IVOIRE en filigrane (fond) --- */}
         <CIArmoiriesWatermark />
         <div style={{ position: "relative", zIndex: 1 }}>
@@ -510,9 +509,8 @@ export function PdaDocument({
           </div>
         </div>
         </div>
-
-        {/* --- Ruban tricolore ivoirien (bas du document) --- */}
-        <CIFlagRibbon />
+        {/* (Ruban tricolore du bas RETIRÉ : aucune bordure drapeau sur les
+            feuilles imprimables.) */}
       </div>
 
       <p className="text-center text-[11px] text-muted-foreground py-4 print:hidden">
