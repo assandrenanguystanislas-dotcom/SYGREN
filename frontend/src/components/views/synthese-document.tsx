@@ -4,13 +4,15 @@
 // l'ancien BLEU MARINE cède la place aux couleurs du drapeau ivoirien —
 // entêtes du tableau sur FOND VERT DRAPEAU (texte blanc), bordures
 // vertes, labels en vert foncé, boîte du titre sur fond pastel orange
-// bordé de vert ; les armoiries (filigrane) et les rubans tricolores
-// haut/bas sont conservés.
+// bordé de vert, armoiries en filigrane conservées.
+// v4 (demande utilisateur) : rubans tricolores haut/bas SUPPRIMÉS ;
+// mention de périmètre (« CP1 au CM1 » / « CM2 fin de cycle ») retirée
+// du document ; « Fait à …, le … » = DATE DU JOUR automatique.
 import { useQuery } from "@tanstack/react-query";
 import { Printer, X, Loader2 } from "lucide-react";
 import { reportsApi } from "@/lib/api";
 import { monthLabel } from "@/lib/session-utils";
-import { CIArmoiriesWatermark, CIFlagRibbon, CI_GREEN, CI_GREEN_BG, CI_GREEN_TEXT, CI_ORANGE_BG, PRINT_COLOR_STYLE } from "@/components/ci-decor";
+import { CIArmoiriesWatermark, CI_GREEN, CI_GREEN_BG, CI_GREEN_TEXT, CI_ORANGE_BG, PRINT_COLOR_STYLE } from "@/components/ci-decor";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, usePrintRole } from "@/lib/print-guard";
 
 interface LevelData {
@@ -40,6 +42,8 @@ interface SyntheseData {
   totals: Totals;
   // Transmis par le backend pour adapter le titre + le rendu.
   level_group: "primary" | "cm2" | "all";
+  // Toujours transmis par le backend mais PLUS AFFICHÉ dans le document
+  // (demande utilisateur : retirer « CP1 au CM1 » / « CM2 fin de cycle »).
   document_label: string;
   // === Infos pour les signatures et l'en-tête ===
   director_name: string;
@@ -63,6 +67,15 @@ const ALL_CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
 const LABEL_GREEN = CI_GREEN_TEXT;
 /** Encre des données (noir pur, lisible à l'impression). */
 const INK_DOC = "#000000";
+
+/** DATE DU JOUR au format jj/mm/aaaa — « Fait à …, le … » du document
+ *  (demande utilisateur : la date s'écrit AUTOMATIQUEMENT). Même
+ *  convention que le bulletin de fin d'année (end-of-year-bulletin.tsx). */
+function todayFr(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
 
 export function SyntheseDocument({
   sessionId,
@@ -222,15 +235,10 @@ export function SyntheseDocument({
           position: "relative", // filigrane armoiries DANS LE FOND
         }}
       >
-        {/* v2 — décor drapeau CI : armoiries en filigrane (répétées
-            sur chaque page imprimée) + rubans tricolores haut/bas */}
+        {/* Décor drapeau CI : armoiries en filigrane (répétées sur chaque
+            page imprimée). NB (demande utilisateur) : les rubans tricolores
+            des bordures haut/bas sont SUPPRIMÉS sur ce document. */}
         <CIArmoiriesWatermark fixed />
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0 }}>
-          <CIFlagRibbon height="2.4mm" bordered={false} />
-        </div>
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0 }}>
-          <CIFlagRibbon height="2.4mm" bordered={false} />
-        </div>
         <div style={{ position: "relative", zIndex: 1 }}>
         {/* En-tête */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
@@ -277,11 +285,9 @@ export function SyntheseDocument({
             <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "2px", color: LABEL_GREEN }}>
               {data.eval_label.toUpperCase()} N°{data.eval_number} DU MOIS DE {monthLabel(data.month).toUpperCase()} {data.year}
             </div>
-            {/* Périmètre du document (CP1 au CM1 / CM2 / etc.) — permet de
-                différencier visuellement les 2 versions de synthèse. */}
-            <div style={{ fontSize: "10px", fontStyle: "italic", marginTop: "2px", opacity: 0.85, color: INK_DOC }}>
-              {data.document_label}
-            </div>
+            {/* NB (demande utilisateur) : la mention de périmètre
+                (« CP1 au CM1 » / « CM2 fin de cycle » — document_label)
+                n'est PLUS affichée dans le document. */}
           </div>
         </div>
 
@@ -363,7 +369,7 @@ export function SyntheseDocument({
           </div>
           <div style={{ textAlign: "right", width: "40%" }}>
             <div style={{ fontSize: "11px", marginBottom: "20px" }}>
-              Fait à {data.iep_region}, le ...../...../.....
+              Fait à {data.iep_region}, le {todayFr()}
             </div>
             <div style={{ fontSize: "12px", fontWeight: "bold", textDecoration: "underline" }}>
               L&apos;Inspecteur

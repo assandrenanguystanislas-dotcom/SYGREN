@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Printer, X, Loader2 } from "lucide-react";
-import { CIArmoiriesWatermark, CIFlagRibbon } from "@/components/ci-decor";
+import { CIArmoiriesWatermark } from "@/components/ci-decor";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
 import { monthLabel } from "@/lib/session-utils";
 
@@ -33,6 +33,8 @@ interface SyntheseData {
   totals: Totals;
   // Transmis par le backend pour adapter le titre + le rendu côté frontend.
   level_group: "primary" | "cm2" | "all";
+  // Toujours transmis par le backend mais PLUS AFFICHÉ dans le document
+  // (demande utilisateur : retirer « CP1 au CM1 » / « CM2 fin de cycle »).
   document_label: string;
   // === Infos pour les signatures et l'en-tête ===
   director_name: string;    // Nom du directeur de l'école (affiché sous "Le Directeur")
@@ -53,6 +55,16 @@ interface SyntheseData {
 // (data.levels) plutôt que sur une constante codée en dur, pour s'adapter
 // automatiquement au périmètre choisi.
 const ALL_CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
+
+/** DATE DU JOUR au format jj/mm/aaaa — « Fait à …, le … » du document
+ *  (demande utilisateur : la date s'écrit AUTOMATIQUEMENT, plus de
+ *  pointillés à compléter à la main). Même convention que le bulletin
+ *  de fin d'année (end-of-year-bulletin.tsx). */
+function todayFr(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
 
 export default function SynthesePage() {
   // v2 — VERROU D'IMPRESSION : réservé à l'Admin IEP + Super Admin
@@ -218,15 +230,10 @@ export default function SynthesePage() {
         id="synthese-doc"
         className={`${canPrint ? "" : "print-locked"} w-[297mm] h-[210mm] p-8 bg-white text-black font-sans text-xs border border-gray-300 mx-auto print:p-0 print:border-none flex flex-col justify-between relative overflow-hidden`}
       >
-        {/* v2 — décor drapeau CI : armoiries en FILIGRANE (fond) +
-            rubans tricolores haut/bas en absolu (zone de padding) */}
+        {/* Décor drapeau CI : ARMOIRIES EN FILIGRANE (fond).
+            NB (demande utilisateur) : les rubans tricolores des bordures
+            haut/bas de la feuille sont SUPPRIMÉS sur ce document. */}
         <CIArmoiriesWatermark opacity={0.06} width="50%" />
-        <div className="absolute top-0 left-0 right-0">
-          <CIFlagRibbon height="2.4mm" bordered={false} />
-        </div>
-        <div className="absolute bottom-0 left-0 right-0">
-          <CIFlagRibbon height="2.4mm" bordered={false} />
-        </div>
         {/* Partie supérieure */}
         <div>
           {/* En-tête supérieur */}
@@ -275,13 +282,11 @@ export default function SynthesePage() {
             <div className="flex-1 border-t border-[#009E60]"></div>
           </div>
 
-          {/* Sous-titre : inclut le périmètre du document (CP1 au CM1 / CM2 / etc.)
-              pour éviter toute confusion entre les 2 versions de synthèse. */}
-          <div className="text-center font-bold text-sm mb-1">
+          {/* Sous-titre. NB (demande utilisateur) : la mention de périmètre
+              (« CP1 au CM1 » / « CM2 fin de cycle » — document_label) n'est
+              PLUS affichée dans le document. */}
+          <div className="text-center font-bold text-sm mb-3">
             {data.eval_label.toUpperCase()} N°{data.eval_number} {data.month > 0 ? `DU MOIS DE ${monthLabel(data.month).toUpperCase()} ` : ""}{data.year}
-          </div>
-          <div className="text-center font-bold text-xs mb-3 text-gray-700 italic">
-            {data.document_label}
           </div>
 
           {/* Tableau des résultats — bordures et entêtes aux COULEURS DU
@@ -376,7 +381,7 @@ export default function SynthesePage() {
         <div className="mt-4">
           {/* Date/lieu alignée à droite */}
           <p className="text-right font-bold mb-6">
-            Fait à {data.iep_region}, le ......................... {data.year}
+            Fait à {data.iep_region}, le {todayFr()}
           </p>
 
           {/* Signatures sur la même ligne.
