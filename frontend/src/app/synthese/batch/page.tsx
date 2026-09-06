@@ -14,8 +14,11 @@ interface SyntheseDoc {
 }
 
 const DOCUMENTS: SyntheseDoc[] = [
-  { id: "primary", label: "Synthèse CP1-CM1", description: "Document principal (CP1 au CM1)" },
-  { id: "cm2", label: "Synthèse CM2", description: "Fin de cycle primaire (CM2 seul)" },
+  // NB (demande utilisateur) : plus AUCUNE mention « CP1 au CM1 » ni
+  // « fin de cycle » dans l'interface ni dans les documents imprimés —
+  // les libellés désignent simplement les 2 documents.
+  { id: "primary", label: "Synthèse — Document principal", description: "Document principal" },
+  { id: "cm2", label: "Synthèse CM2", description: "Document CM2" },
 ];
 
 interface Progress {
@@ -253,7 +256,7 @@ export default function SyntheseBatchPage() {
             sur « Imprimer les Synthèses sélectionnées » : le navigateur ouvrira
             successivement une boîte de dialogue d&apos;impression pour chaque
             document. Choisissez « Enregistrer au format PDF » à chaque fois.
-            <strong> Ordre :</strong> CP1-CM1 (document principal) → CM2 (fin de cycle).
+            <strong> Ordre :</strong> Document principal → Document CM2.
           </p>
         </div>
 
@@ -365,7 +368,7 @@ export default function SyntheseBatchPage() {
         <p className="mt-4 text-xs text-gray-400 print:hidden">
           <FileText className="w-3 h-3 inline mr-1" />
           La Synthèse est un document A4 paysage (1 page par niveau). Chaque document
-          couvre un périmètre différent : CP1-CM1 (principal) et CM2 (fin de cycle primaire).
+          couvre un périmètre différent : document principal et document CM2.
         </p>
       </div>
     </div>
