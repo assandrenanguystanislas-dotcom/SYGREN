@@ -11,6 +11,7 @@ import {
   CI_GREEN,
   CI_GREEN_TEXT,
 } from "./ci-decor";
+import { fmtNoteFr } from "@/lib/notes-format";
 
 // === Bulletins A5 paysage — 2 bulletins par page A4 ===
 //
@@ -126,9 +127,10 @@ const NEGATIVE = "rgb(200,20,20)";
 // Vert progression (harmonisé avec le vert notes du PDF backend).
 const POSITIVE = "rgb(0,120,50)";
 
-// Formatage compact (8.5 → "8.5", 9.0123 → "9.01").
+// Formatage compact → Task 37 : VIRGULE française, 2 décimales si
+// décimal (8,5 → "8,50" · 9,0123 → "9,01") — entier inchangé (10).
 function fmt(v: number): string {
-  return String(Math.round(v * 100) / 100);
+  return fmtNoteFr(v);
 }
 
 export default function BulletinsA5Landscape({

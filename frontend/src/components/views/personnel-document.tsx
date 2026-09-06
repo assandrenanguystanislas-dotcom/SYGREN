@@ -483,6 +483,10 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
         style={{
           ...tdLeft,
           fontWeight: 600,
+          // Task 37 — noms et prénoms EN CARACTÈRE D'IMPRIMERIE
+          // (majuscules) et police portée à 12.
+          fontSize: "12px",
+          textTransform: "uppercase",
           color: isWoman ? "#e00000" : INK, // « écrire le nom des femmes en rouge »
         }}
       >

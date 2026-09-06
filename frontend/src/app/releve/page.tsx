@@ -234,7 +234,9 @@ function smartAbbreviate(fullName: string, availableWidthMm: number): string {
 function fmt(v: number, hasGrade: boolean): string {
   if (!hasGrade) return "—";
   const r = Math.round(v * 100) / 100;
-  return r.toFixed(2).replace(/\.?0+$/, "");
+  // Task 37 — décimaux à la FRANÇAISE : virgule au lieu du point
+  // (13,5 · 7,25) — les zéros décimaux restent trimés (10 → "10").
+  return r.toFixed(2).replace(/\.?0+$/, "").replace(".", ",");
 }
 
 export default function RelevePage() {
@@ -271,8 +273,11 @@ export default function RelevePage() {
     }
 
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-    const separator = apiBase ? "" : "?XTransformPort=8080";
-    const url = `${apiBase}/api/reports/releve-data?session_id=${encodeURIComponent(sessionId)}&class_id=${encodeURIComponent(classId)}${apiBase ? "" : separator}`;
+    // Sandbox : la query contient déjà « ?session_id=… » → séparateur « & »
+    // (aligné sur buildUrl de lib/api.ts ; avant : double « ? » → le
+    // paramètre XTransformPort était avalé par class_id → 404 en dev local).
+    const separator = apiBase ? "" : "&XTransformPort=8080";
+    const url = `${apiBase}/api/reports/releve-data?session_id=${encodeURIComponent(sessionId)}&class_id=${encodeURIComponent(classId)}${separator}`;
 
     fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},

@@ -1,0 +1,22 @@
+/* === Synthèse des Résultats — @page PAR DÉFAUT A4 PAYSAGE ===
+ * Task 37 — demande utilisateur : « syntheses PDF mettre le document à
+ * imprimer en mode paysage ».
+ *
+ * POURQUOI CE FICHIER : la synthèse était verrouillée paysage via une
+ * PAGE NOMMÉE (@page synthese + #synthese-doc { page: synthese }) — or
+ * les pages nommées ne sont pas supportées par tous les moteurs ; sans
+ * support, la règle @page PAR DÉFAUT gagne la cascade… et elle est
+ * A4 PORTRAIT (posée plus bas dans globals.css pour le relevé). Les
+ * impressions sortaient donc en portrait, écrasant le document 297mm.
+ *
+ * FIX (leçon Task 16 — « @page top-level explicite ») : poser le
+ * @page PAR DÉFAUT de la route en A4 PAYSAGE. Importé par layout.tsx
+ * APRÈS globals.css, ce fichier gagne la cascade SUR LA ROUTE /synthese
+ * UNIQUEMENT (le relevé et les autres routes gardent leur portrait).
+ * La page nommée reste en place (supportée = même résultat). */
+@media print {
+  @page {
+    size: 297mm 210mm; /* A4 PAYSAGE — dimensions explicites */
+    margin: 0;
+  }
+}

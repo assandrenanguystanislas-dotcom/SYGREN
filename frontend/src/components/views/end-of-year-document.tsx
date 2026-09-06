@@ -85,7 +85,7 @@ function todayFr(): string {
 const th: CSSProperties = {
   border: `1px solid ${CI_GREEN}`,
   padding: "2px 3px",
-  fontSize: "9px",
+  fontSize: "12px", // Task 37 — police d'écriture portée à 12
   lineHeight: 1.2,
   fontWeight: 700, // entêtes en gras comme le modèle reçu
   textAlign: "center",
@@ -98,7 +98,7 @@ const th: CSSProperties = {
 const td: CSSProperties = {
   border: `1px solid ${CI_GREEN}`,
   padding: "1px 3px",
-  fontSize: "9px",
+  fontSize: "12px", // Task 37 — police d'écriture portée à 12
   lineHeight: 1.2,
   textAlign: "center",
   verticalAlign: "middle",
@@ -258,7 +258,7 @@ export function EndOfYearDocument({
             marginBottom: "8px",
           }}
         >
-          <div style={{ fontSize: "11.5px", color: INK, lineHeight: 1.35 }}>
+          <div style={{ fontSize: "12px", color: INK, lineHeight: 1.35 }}>
             <div>Ministère de l&apos;Education Nationale</div>
             <div>de l&apos;Alphabétisation et de l&apos;Enseignement Technique</div>
             <div style={{ fontWeight: 600, marginTop: "2px" }}>
@@ -284,7 +284,7 @@ export function EndOfYearDocument({
             <div style={{ fontSize: "12.5px", color: INK }}>
               République de Côte d&apos;Ivoire
             </div>
-            <div style={{ fontSize: "11.5px", color: INK, padding: "1px 0" }}>
+            <div style={{ fontSize: "12px", color: INK, padding: "1px 0" }}>
               Union-Discipline-Travail
             </div>
             <img
@@ -325,7 +325,7 @@ export function EndOfYearDocument({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-end",
-            fontSize: "11.5px",
+            fontSize: "12px",
             margin: "0 2px 4px",
             color: INK,
           }}
@@ -446,7 +446,9 @@ export function EndOfYearDocument({
           Fait à ……………………. Le ……..…/…….……/{data.year}
         </div>
 
-        {/* --- Signatures (modèle) --- */}
+        {/* --- Signatures (modèle) — Task 37 : NOMS du directeur,
+                du tenant du cours et de l'inspecteur insérés AU MÊME
+                NIVEAU, en caractère d'imprimerie (majuscules grasses). --- */}
         <div
           style={{
             display: "flex",
@@ -458,16 +460,32 @@ export function EndOfYearDocument({
             color: INK,
           }}
         >
-          <div>Le Directeur</div>
+          <div style={{ textAlign: "left" }}>
+            <div>Le Directeur</div>
+            {data.directeur ? (
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  marginTop: "14px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.3px",
+                }}
+              >
+                {data.directeur}
+              </div>
+            ) : null}
+          </div>
           <div style={{ textAlign: "center" }}>
             <div>Le tenant du cours</div>
             {data.class.teacher_name ? (
               <div
                 style={{
-                  fontSize: "11px",
-                  fontWeight: 400,
-                  fontStyle: "italic",
+                  fontSize: "12px",
+                  fontWeight: 700,
                   marginTop: "14px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.3px",
                 }}
               >
                 {data.class.teacher_name}
@@ -477,7 +495,15 @@ export function EndOfYearDocument({
           <div style={{ textAlign: "right" }}>
             <div>Visa de l&apos;Inspecteur</div>
             {data.inspecteur ? (
-              <div style={{ fontSize: "11px", fontWeight: 400, marginTop: "14px" }}>
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  marginTop: "14px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.3px",
+                }}
+              >
                 {data.inspecteur}
               </div>
             ) : null}
@@ -516,6 +542,9 @@ function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) 
         style={{
           ...tdLeft,
           fontWeight: 600,
+          // Task 37 — noms et prénoms des élèves EN CARACTÈRE
+          // D'IMPRIMERIE (majuscules).
+          textTransform: "uppercase",
           // Noms des FILLES en rouge (demande utilisateur — les garçons
           // restent en encre noire).
           color: row.gender === "F" ? FILLE_RED : undefined,

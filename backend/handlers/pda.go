@@ -1189,6 +1189,18 @@ func GetPDASummary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Nom du directeur de l'école (document officiel du plan d'action :
+	// signature « Le Directeur » au même niveau que l'inspecteur —
+	// premier directeur actif de l'école, même convention que le relevé
+	// de fin d'année).
+	directeurName := ""
+	var dir models.User
+	if err := database.DB.Select("full_name").
+		Where("school_id = ? AND role = ? AND active = ?", school.ID, models.RoleDirector, true).
+		Order("created_at ASC").First(&dir).Error; err == nil {
+		directeurName = dir.FullName
+	}
+
 	// class.max_score / class.seuil = barème PDA uniforme (blancs) ;
 	// composition → 0 (barèmes PAR MATIÈRE dans subjects[]).
 	var maxScore, seuil float64
@@ -1218,6 +1230,7 @@ func GetPDASummary(w http.ResponseWriter, r *http.Request) {
 		"subjects":  subjects,
 		"school":    map[string]interface{}{"id": school.ID, "name": school.Name, "code": school.Code},
 		"iep":       iep,
+		"directeur": directeurName,
 		"class": map[string]interface{}{
 			"id": cls.ID, "name": cls.Name, "level": cls.Level,
 			"max_score": maxScore, "seuil": seuil,

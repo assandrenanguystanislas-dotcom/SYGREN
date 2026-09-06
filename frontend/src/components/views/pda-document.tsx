@@ -483,7 +483,10 @@ export function PdaDocument({
           </tbody>
         </table>
 
-        {/* --- Signatures + nom de l'inspecteur (modèle reçu) --- */}
+        {/* --- Signatures + nom de l'inspecteur (modèle reçu) — Task 37 :
+                le NOM du directeur est inséré sous « Le Directeur », AU
+                MÊME NIVEAU que le nom de l'inspecteur, en caractère
+                d'imprimerie (majuscules). --- */}
         <div
           style={{
             display: "flex",
@@ -493,14 +496,32 @@ export function PdaDocument({
             marginTop: "24px",
           }}
         >
-          <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+          <div style={{ textAlign: "left" }}>
+            <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+            {s.directeur ? (
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  marginTop: "28px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.3px",
+                }}
+              >
+                {s.directeur}
+              </div>
+            ) : null}
+          </div>
           <div style={{ textAlign: "center" }}>
             <span style={{ textDecoration: "underline", color: CI_GREEN_TEXT }}>L&apos;Inspecteur</span>
             {s.iep?.inspector_name ? (
               <div
                 style={{
                   fontSize: "12px",
+                  fontWeight: 700,
                   marginTop: "28px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.3px",
                 }}
               >
                 {s.iep.inspector_name.toUpperCase()}

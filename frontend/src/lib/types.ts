@@ -847,6 +847,9 @@ export interface PdaIepInfo {
 export interface PdaSummary {
   exam: PdaExam;
   read_only: boolean;
+  // Nom du directeur de l'école (signature « Le Directeur » du document
+  // officiel, au même niveau que l'inspecteur — Task 37).
+  directeur?: string | null;
   // Barème + seuil par matière (ordre : exploitation, math, dictée)
   subjects: PdaSubjectInfo[];
   school: { id: string; name: string; code: string };

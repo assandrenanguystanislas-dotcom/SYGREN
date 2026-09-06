@@ -114,12 +114,15 @@ export default function SynthesePage() {
     const levelGroup = params.get("level_group") || "primary";
 
     let url: string;
+    // Sandbox (dev) : la query contient déjà « ?… » → on AJOUTE « &XTransformPort=8080 »
+    // (aligné sur buildUrl de lib/api.ts ; sans lui, l'appel frappe Next.js → 404).
+    const gatewaySuffix = apiBase ? "" : "&XTransformPort=8080";
     if (schoolCode) {
-      url = `${apiBase}/api/reports/synthese-data?school_code=${encodeURIComponent(schoolCode)}&eval_type=${evalType}&eval_number=${evalNumber}&year=${year}&level_group=${levelGroup}`;
+      url = `${apiBase}/api/reports/synthese-data?school_code=${encodeURIComponent(schoolCode)}&eval_type=${evalType}&eval_number=${evalNumber}&year=${year}&level_group=${levelGroup}${gatewaySuffix}`;
     } else {
       // Rétrocompatibilité : session_id
       const sessionId = params.get("session_id") || "";
-      url = `${apiBase}/api/reports/synthese-data?session_id=${sessionId}&level_group=${levelGroup}`;
+      url = `${apiBase}/api/reports/synthese-data?session_id=${sessionId}&level_group=${levelGroup}${gatewaySuffix}`;
     }
 
     fetch(url, {

@@ -117,7 +117,7 @@ function fmtPct0(n: number | undefined | null): string {
 const thBase: CSSProperties = {
   border: THIN,
   padding: "1px 3px",
-  fontSize: "9px",
+  fontSize: "12px", // Task 37 — police d'écriture portée à 12
   lineHeight: 1.15,
   fontWeight: 400, // le modèle reçu : entêtes de colonnes en régulier
   textAlign: "center",
@@ -130,7 +130,7 @@ const thBase: CSSProperties = {
 const tdBase: CSSProperties = {
   border: THIN,
   padding: "0.5px 3px",
-  fontSize: "9px",
+  fontSize: "12px", // Task 37 — police d'écriture portée à 12
   lineHeight: 1.15,
   textAlign: "center",
   color: INK,
@@ -151,14 +151,14 @@ const schoolTd: CSSProperties = {
   borderRight: THICK,
 };
 
-/** Les 12 cellules de données de la section A pour une ligne école.
- *  Ordre du modèle par discipline : Total | Filles (inscrits) |
- *  Présents (admis) | % Admis | Admis (Filles) | % Admis (Filles).
- *  « Présents (admis) » porte les ADMIS (présents ayant atteint le seuil)
- *  et les % suivent les formules du modèle (Admis/Inscrits) : tout est
- *  recalculable depuis les colonnes imprimées. Une discipline non
- *  évaluée (aucune note) laisse ses 4 cases vides (#DIV/0! du modèle).
- *  Première colonne des MATHÉMATIQUES = séparation épaisse (modèle). */
+/** Les 14 cellules de données de la section A pour une ligne école.
+ *  Ordre par discipline (Task 37) : Total | Filles (inscrits) |
+ *  PRÉSENTS | ADMIS | % Admis | Admis (Filles) | % Admis (Filles).
+ *  « Présents » = élèves évalués (au moins une note) ; « Admis » =
+ *  présents ayant atteint le seuil ; les % suivent les formules du
+ *  modèle (Admis/Inscrits). Une discipline non évaluée (aucune note)
+ *  laisse ses 5 cases vides (#DIV/0! du modèle). Première colonne des
+ *  MATHÉMATIQUES = séparation épaisse (modèle). */
 function DisciplineCells({
   row,
   discipline,
@@ -178,6 +178,7 @@ function DisciplineCells({
     <>
       <td style={tdFirst}>{fmtDocNum(inscrits)}</td>
       <td style={tdBase}>{fmtDocNum(filles)}</td>
+      <td style={tdBase}>{assessed ? fmtNum0(d?.presents?.total) : ""}</td>
       <td style={tdBase}>{assessed ? fmtNum0(d?.admis?.total) : ""}</td>
       <td style={tdBase}>{assessed && inscrits > 0 ? fmtPct0(d?.pct_admis) : ""}</td>
       <td style={tdBase}>{assessed ? fmtNum0(d?.admis?.filles) : ""}</td>
@@ -188,10 +189,10 @@ function DisciplineCells({
   );
 }
 
-/** Les 12 cellules de données de la section A pour la ligne TOTAL
+/** Les 14 cellules de données de la section A pour la ligne TOTAL
  *  (fond gris, gras — modèle reçu). Mêmes règles que les lignes écoles :
- *  « Présents (admis) » = admis calculés, % = formules du modèle,
- *  cases vides si la discipline n'a été évaluée nulle part. */
+ *  Présents / Admis distincts, % = formules du modèle, cases vides si la
+ *  discipline n'a été évaluée nulle part. */
 function TotalRowCells({ row }: { row: PdaPlanSchoolRow }) {
   const bold: CSSProperties = { ...tdBase, fontWeight: 700, background: TOTAL_BG, color: CI_GREEN_TEXT };
   const boldMath: CSSProperties = { ...bold, borderLeft: THICK };
@@ -210,16 +211,23 @@ function TotalRowCells({ row }: { row: PdaPlanSchoolRow }) {
     const assessed = (d?.presents?.total ?? 0) > 0;
     return assessed ? fmtNum0(byFilles ? d?.admis?.filles : d?.admis?.total) : "";
   };
+  const presents = (disc: "exploitation" | "math") => {
+    const d = row.disciplines?.[disc];
+    const assessed = (d?.presents?.total ?? 0) > 0;
+    return assessed ? fmtNum0(d?.presents?.total) : "";
+  };
   return (
     <>
       <td style={bold}>{fmtDocNum(row.inscrits?.total)}</td>
       <td style={bold}>{fmtDocNum(row.inscrits?.filles)}</td>
+      <td style={bold}>{presents("exploitation")}</td>
       <td style={bold}>{admis("exploitation", false)}</td>
       <td style={bold}>{pct("exploitation", false)}</td>
       <td style={bold}>{admis("exploitation", true)}</td>
       <td style={bold}>{pct("exploitation", true)}</td>
       <td style={boldMath}>{fmtDocNum(row.inscrits?.total)}</td>
       <td style={bold}>{fmtDocNum(row.inscrits?.filles)}</td>
+      <td style={boldMath}>{presents("math")}</td>
       <td style={boldMath}>{admis("math", false)}</td>
       <td style={bold}>{pct("math", false)}</td>
       <td style={bold}>{admis("math", true)}</td>
@@ -390,7 +398,7 @@ export function PdaPlanDocument({
         </div>
 
         {/* ================= SECTION A (pages 1-2) ================= */}
-        <p style={{ fontSize: "9.5px", margin: "4px 0 3px", fontWeight: 700, color: CI_GREEN_TEXT }}>
+        <p style={{ fontSize: "12px", margin: "4px 0 3px", fontWeight: 700, color: CI_GREEN_TEXT }}>
           A) NOMBRE D&apos;ELEVES DU CM2 AYANT ATTEINT LE SEUIL SUFFISANT DE
           MAÎTRISE EN LECTURE (EXPLOITATION DE TEXTE), MATHEMATIQUES.
         </p>
@@ -408,31 +416,29 @@ export function PdaPlanDocument({
               <th style={{ ...thBase, fontWeight: 700, borderRight: THICK, width: "120px" }} rowSpan={3}>
                 ECOLES
               </th>
-              <th colSpan={12} style={{ ...thBase, borderBottom: THICK }}>
+              <th colSpan={14} style={{ ...thBase, borderBottom: THICK }}>
                 DISCIPLINES
               </th>
             </tr>
             <tr>
-              <th colSpan={6} style={{ ...thBase, borderBottom: THIN }}>
+              <th colSpan={7} style={{ ...thBase, borderBottom: THIN }}>
                 EXPLOITATION DE TEXTE
               </th>
-              <th colSpan={6} style={{ ...thBase, borderBottom: THIN, borderLeft: THICK }}>
+              <th colSpan={7} style={{ ...thBase, borderBottom: THIN, borderLeft: THICK }}>
                 MATHEMATIQUES
               </th>
             </tr>
-            {/* Ligne 3 : sous-entêtes — Total | Filles | Présents (admis) |
+            {/* Ligne 3 : sous-entêtes — Total | Filles | Présents | Admis |
                 % Admis | Admis (Filles) | % Admis (Filles), par discipline
-                (Total/Filles = effectifs INSCRITS, comme le modèle reçu). */}
+                (Total/Filles = effectifs INSCRITS ; Présents/Admis distincts
+                — Task 37). */}
             <tr>
               {["exploitation", "math"].map((d, di) => (
                 <Fragment key={d}>
                   <th style={di === 1 ? { ...thBase, borderLeft: THICK } : thBase}>Total</th>
                   <th style={thBase}>Filles</th>
-                  <th style={thBase}>
-                    Présents
-                    <br />
-                    (admis)
-                  </th>
+                  <th style={thBase}>Présents</th>
+                  <th style={thBase}>Admis</th>
                   <th style={thBase}>% Admis</th>
                   <th style={thBase}>
                     Admis
@@ -476,7 +482,7 @@ export function PdaPlanDocument({
 
         {/* ============ SECTION B (pages 3-4 — NOUVELLE PAGE) ============ */}
         <div style={{ breakBefore: "page", pageBreakBefore: "always" }}>
-          <p style={{ fontSize: "9.5px", margin: "4px 0 3px", fontWeight: 700, color: CI_GREEN_TEXT }}>
+          <p style={{ fontSize: "12px", margin: "4px 0 3px", fontWeight: 700, color: CI_GREEN_TEXT }}>
             B) ACCROÎTRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX EXAMENS
             DES ELEVES DE TOUS LES NIVEAUX.
           </p>

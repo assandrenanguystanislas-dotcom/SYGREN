@@ -41,6 +41,7 @@ import {
   usePrintRole,
 } from "@/lib/print-guard";
 import { monthLabel } from "@/lib/session-utils";
+import { fmtNoteFr } from "@/lib/notes-format";
 import { fetchPreviousAverages, computeEvolution } from "@/lib/evolution";
 import BulletinsA5Landscape, {
   type BulletinEleve,
@@ -114,9 +115,11 @@ function mapSubjectName(name: string): BulletinNoteKey | null {
   return null; // sujet non mappé — slot reste vide
 }
 
-// Formatage numérique sans zéros parasites (8.5 → "8.5", 10 → "10").
+// Formatage numérique SANS ZÉROS PARASITES → Task 37 : les nombres
+// décimaux s'écrivent avec une VIRGULE et deux chiffres après la
+// virgule (exemple : 7,37) — un entier reste entier (cf. fmtNoteFr).
 function fmtNum(v: number): string {
-  return String(Math.round(v * 100) / 100);
+  return fmtNoteFr(v);
 }
 
 // === Appréciation générale automatique ===
@@ -232,7 +235,9 @@ function buildBulletinEleve(
     const slot = mapSubjectName(g.subject_name);
     if (!slot) continue; // sujet non mappé → on ignore
     if (notes[slot] !== undefined) continue; // 1ère occurrence gagne (doublon)
-    notes[slot] = g.has_grade ? g.value : "";
+    // Task 37 — note affichée au format français : virgule + 2 décimales
+    // si décimal (7,37 · 8,50) — entier inchangé (10).
+    notes[slot] = g.has_grade ? fmtNoteFr(g.value) : "";
     if (g.has_grade) {
       totalSur += g.max_score;
       anyGrade = true;

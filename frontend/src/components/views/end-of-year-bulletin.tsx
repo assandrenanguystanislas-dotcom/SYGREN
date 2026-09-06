@@ -532,6 +532,9 @@ function BulletinCopy({
                   verticalAlign: "top",
                   padding: "1.8mm 2.6mm",
                   height: "30mm",
+                  // Task 37 — nom + libellé CENTRÉS dans la case (comme la
+                  // case « Le Directeur » en face).
+                  textAlign: "center",
                 }}
               >
                 <div
