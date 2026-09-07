@@ -17,6 +17,10 @@
 //     via CLASSE_GRADE_LABELS.
 //   - Date d'entrée à la F.P — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Fonction — liste déroulante DIRECTEUR | ADJOINT(E)
+//   - COURS — liste déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2
+//     (plage « COURS » demandée — cours tenu par l'agent ; prime sur
+//     la classe affectée du module Classes dans la colonne COURS de
+//     l'État nominatif)
 //   - Date d'entrée DREN — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Entrée à l'IEP — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Effectif — F | G | T (saisies numériques, comme les colonnes du document)
@@ -30,6 +34,7 @@ import { useState } from "react";
 import { type LucideIcon, IdCard } from "lucide-react";
 
 import type { PersonnelDossier } from "@/lib/types";
+import type { CoursCode } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -69,6 +74,12 @@ export const CLASSE_GRADE_LABELS: Record<number, string> = {
   3: "E",
   4: "P",
 };
+
+/** Les 6 items de la plage « COURS » (bande déroulante demandée —
+ *  dans l'ordre pédagogique). Clé = valeur stockée en base. */
+export const COURS_OPTIONS: CoursCode[] = [
+  "CP1", "CP2", "CE1", "CE2", "CM1", "CM2",
+];
 
 /** Bornes d'années des listes :
  *  - naissance : 1940 → l'année courante ;
@@ -442,6 +453,37 @@ export function PersonnelDossierFields({
         />
       </div>
 
+      {/* COURS — plage demandée : bande déroulante des 6 cours tenus
+          (même position que la colonne COURS du document : après les
+          dates, avant les effectifs). */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className={field}>
+          <Label className="text-[11px]">Cours</Label>
+          <Select
+            value={value.cours ?? UNSET}
+            onValueChange={(v) =>
+              onChange({ ...value, cours: v === UNSET ? null : (v as CoursCode) })
+            }
+          >
+            <SelectTrigger className={small} aria-label="Cours tenu">
+              <SelectValue placeholder="Choisir…" />
+            </SelectTrigger>
+            <SelectContent className="min-w-[8.5rem]">
+              <SelectGroup>
+                <SelectLabel>Cours (CP1 → CM2)</SelectLabel>
+                <SelectItem value={UNSET}>—</SelectItem>
+                {COURS_OPTIONS.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="hidden sm:block" />
+      </div>
+
       {/* Effectif + Redoublants (F / G / T du document) */}
       <div className="grid grid-cols-2 gap-2.5">
         <FGTInputs
@@ -487,6 +529,7 @@ export function personnelOf(u: {
   echelon?: number | null;
   date_entree_fp?: string | null;
   fonction?: "DIRECTEUR" | "ADJOINT(E)" | null;
+  cours?: "CP1" | "CP2" | "CE1" | "CE2" | "CM1" | "CM2" | null;
   date_entree_dren?: string | null;
   date_entree_iep?: string | null;
   effectif_f?: number | null;
@@ -506,6 +549,7 @@ export function personnelOf(u: {
     echelon: u.echelon ?? null,
     date_entree_fp: u.date_entree_fp ?? null,
     fonction: u.fonction ?? null,
+    cours: u.cours ?? null,
     date_entree_dren: u.date_entree_dren ?? null,
     date_entree_iep: u.date_entree_iep ?? null,
     effectif_f: u.effectif_f ?? null,

@@ -448,7 +448,7 @@ export function TeachersView() {
                     Classe : {t.class_name}
                   </Badge>
                 )}
-                {(t.fonction || t.categorie || t.echelon != null) && (
+                {(t.fonction || t.categorie || t.echelon != null || t.cours) && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {t.fonction && (
                       <Badge variant="outline" className="text-[10px]">
@@ -463,6 +463,11 @@ export function TeachersView() {
                     {t.echelon != null && (
                       <Badge variant="outline" className="text-[10px]">
                         Éch. {t.echelon}
+                      </Badge>
+                    )}
+                    {t.cours && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Cours : {t.cours}
                       </Badge>
                     )}
                   </div>

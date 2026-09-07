@@ -55,6 +55,9 @@ func ListTeachers(w http.ResponseWriter, r *http.Request) {
 		query = database.DB.Model(&models.User{}).Where("role = ?", models.RoleTeacher)
 	}
 
+	// Isolation des données (demande utilisateur) : l'enseignant ne voit
+	// que SON PROPRE compte, le directeur les agents de SON école, l'admin
+	// IEP ceux de SON IEP ; le parent n'a aucun accès au personnel.
 	switch role {
 	case "director":
 		schoolID := ctxSchoolID(r)
@@ -63,6 +66,21 @@ func ListTeachers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		query = query.Where("school_id = ?", schoolID)
+	case "teacher":
+		// Isolation : l'enseignant ne voit que sa propre fiche.
+		query = query.Where("id = ?", ctxUserID(r))
+	case "inspector":
+		iepID := ctxIEPID(r)
+		if iepID == "" {
+			jsonResponse(w, http.StatusOK, map[string]interface{}{"teachers": []interface{}{}, "count": 0})
+			return
+		}
+		query = query.
+			Joins("JOIN schools ON schools.id = users.school_id").
+			Where("schools.iep_id = ?", iepID)
+	case models.RoleParent:
+		middleware.JSONError(w, "accès refusé : le personnel n'est pas accessible depuis ce compte", http.StatusForbidden)
+		return
 	}
 
 	var teachers []models.User

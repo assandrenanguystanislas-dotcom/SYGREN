@@ -52,6 +52,7 @@ import { usersAdminApi } from "@/lib/api";
 import { ROLE_LABELS, type Role, type UserAdminRow } from "@/lib/types";
 import { ChangePasswordButton } from "@/components/change-password-dialog";
 import { SchoolIdentityBanner } from "@/components/school-identity-banner";
+import { MyProfileCard } from "@/components/my-profile-card";
 import { TeachersView } from "./teachers-view";
 import { DirectorsView } from "./directors-view";
 import { InspectorsView } from "./inspectors-view";
@@ -216,6 +217,9 @@ export function UsersView({ onNavigate }: UsersViewProps) {
             SON école est affiché en tête du module Utilisateurs. */}
         <SchoolIdentityBanner />
         {workspaceGo}
+        {/* Isolation des données : l'enseignant ne voit ici QUE SES
+            propres informations (aucun onglet de gestion des comptes). */}
+        <MyProfileCard />
         <WorkspaceWelcomeCard roleLabel={user ? ROLE_LABELS[user.role] : ""} />
       </div>
     );
@@ -233,6 +237,9 @@ export function UsersView({ onNavigate }: UsersViewProps) {
     return (
       <div className="space-y-4">
         {workspaceGo}
+        {/* Isolation des données (directeur) : SES informations + les
+            enseignants de SON école (onglet ci-dessous). */}
+        {isWorkspaceUser && <MyProfileCard />}
         {inner}
       </div>
     );
@@ -241,6 +248,9 @@ export function UsersView({ onNavigate }: UsersViewProps) {
   return (
     <div className="space-y-4">
       {workspaceGo}
+      {/* Isolation des données (directeur) : SES informations + les
+          enseignants de SON école (onglets ci-dessous). */}
+      {isWorkspaceUser && <MyProfileCard />}
       <Tabs value={activeTab} onValueChange={setTab} className="space-y-4">
       <TabsList>
         {canSeeTeachers && (

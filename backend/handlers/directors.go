@@ -32,7 +32,27 @@ func ListDirectors(w http.ResponseWriter, r *http.Request) {
 	role := ctxRole(r)
 	query := database.DB.Model(&models.User{}).Where("role = ?", models.RoleDirector)
 
+	// Isolation des données (demande utilisateur) :
+	//   - director  : ne voit que SON PROPRE compte (l'onglet Directeurs
+	//     ne lui expose plus les directeurs des autres écoles) ;
+	//   - inspector : directeurs des écoles de SON IEP ;
+	//   - admin     : tous les directeurs ;
+	//   - teacher / parent : accès refusé (aucun périmètre).
 	switch role {
+	case "director":
+		query = query.Where("id = ?", ctxUserID(r))
+	case "inspector":
+		iepID := ctxIEPID(r)
+		if iepID == "" {
+			jsonResponse(w, http.StatusOK, map[string]interface{}{"directors": []interface{}{}, "count": 0})
+			return
+		}
+		query = query.
+			Joins("JOIN schools ON schools.id = users.school_id").
+			Where("schools.iep_id = ?", iepID)
+	case models.RoleTeacher, models.RoleParent:
+		middleware.JSONError(w, "accès refusé : les directeurs d'école ne sont pas accessibles depuis ce compte", http.StatusForbidden)
+		return
 	}
 
 	var directors []models.User

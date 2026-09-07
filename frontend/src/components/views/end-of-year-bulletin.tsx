@@ -374,7 +374,15 @@ function BulletinCopy({
         <div style={{ display: "flex", justifyContent: "space-between", gap: "2mm" }}>
           <span style={LABEL}>
             Élève :{" "}
-            <span style={{ color: isFille ? FILLE_RED : undefined, fontWeight: 600 }}>
+            <span
+              style={{
+                color: isFille ? FILLE_RED : undefined,
+                fontWeight: 600,
+                // Prénoms et noms de l'élève EN CARACTÈRE D'IMPRIMERIE
+                // (majuscules), comme le document officiel de la classe.
+                textTransform: "uppercase",
+              }}
+            >
               {row.full_name}
             </span>
           </span>

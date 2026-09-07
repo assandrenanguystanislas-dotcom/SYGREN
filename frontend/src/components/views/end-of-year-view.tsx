@@ -439,6 +439,10 @@ export function EndOfYearView() {
                         <TableCell
                           className={cn(
                             "font-medium",
+                            // Prénoms et noms EN CARACTÈRE D'IMPRIMERIE
+                            // (majuscules — cohérence avec le document
+                            // officiel et les bulletins individuels).
+                            "uppercase",
                             // Noms des FILLES en rouge (comme le document).
                             r.gender === "F" && "text-red-600 dark:text-red-400",
                           )}

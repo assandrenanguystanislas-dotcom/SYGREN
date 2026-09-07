@@ -40,6 +40,7 @@ type PersonnelDossierInput struct {
 	Echelon        *int    `json:"echelon"`
 	DateEntreeFP   *string `json:"date_entree_fp"`
 	Fonction       *string `json:"fonction"`
+	Cours          *string `json:"cours"` // cours tenu — bande déroulante CP1..CM2
 	DateEntreeDREN *string `json:"date_entree_dren"`
 	DateEntreeIEP  *string `json:"date_entree_iep"`
 	EffectifF      *int    `json:"effectif_f"`
@@ -54,6 +55,12 @@ var (
 	validSexe      = map[string]bool{"F": true, "G": true}
 	validCategorie = map[string]bool{"IO": true, "IA": true, "IS": true, "IAS": true}
 	validFonction  = map[string]bool{"DIRECTEUR": true, "ADJOINT(E)": true}
+	// Cours tenus de l'école primaire (bande déroulante du dossier
+	// personnel — items EXACTS de la liste demandée).
+	validCours = map[string]bool{
+		"CP1": true, "CP2": true, "CE1": true,
+		"CE2": true, "CM1": true, "CM2": true,
+	}
 )
 
 // classRank retourne l'ordre pédagogique d'un cours (CP1=1 … CM2=6),
@@ -134,6 +141,16 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 		}
 	}
 
+	// Cours tenu : normalisé en majuscules puis validé contre la bande
+	// déroulante (CP1 | CP2 | CE1 | CE2 | CM1 | CM2).
+	cours := cleanDossierStr(in.Cours)
+	if cours != nil {
+		*cours = strings.ToUpper(*cours)
+		if !validCours[*cours] {
+			return fmt.Errorf("cours invalide — CP1, CP2, CE1, CE2, CM1 ou CM2 attendu")
+		}
+	}
+
 	classeGrade, err := cleanDossierInt(in.ClasseGrade, 1, 4, "la classe administrative")
 	if err != nil {
 		return err
@@ -192,6 +209,7 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 	u.Echelon = echelon
 	u.DateEntreeFP = dFP
 	u.Fonction = fonction
+	u.Cours = cours
 	u.DateEntreeDREN = dDREN
 	u.DateEntreeIEP = dIEP
 	u.EffectifF = effectifs[0]
@@ -281,16 +299,26 @@ func GetPersonnelSheet(w http.ResponseWriter, r *http.Request) {
 	rows := make([]PersonnelStaffRow, 0, len(staff))
 	for _, u := range staff {
 		row := PersonnelStaffRow{User: u}
+		// Cours affiché dans la colonne COURS : le champ EXPLICITE du
+		// dossier personnel (bande déroulante CP1..CM2) prime sur la
+		// classe affectée (modules Classes) — utile notamment pour les
+		// agents sans classe rattachée (directeur tenant un cours, RPL…).
+		coursTenu := ""
+		if row.Cours != nil && *row.Cours != "" {
+			coursTenu = *row.Cours
+		} else if n, ok := classNameByTeacher[u.ID]; ok {
+			coursTenu = n
+		}
 		if u.Role == models.RoleDirector {
 			row.SortKey = 0 // directeur toujours en tête
-		} else if rank := classRank(classNameByTeacher[u.ID]); rank > 0 {
+		} else if rank := classRank(coursTenu); rank > 0 {
 			row.SortKey = 100 + rank // enseignants dans l'ordre des cours
 		} else {
 			row.SortKey = 200 // agents sans cours (RPL, adjoints…)
 		}
-		if n, ok := classNameByTeacher[u.ID]; ok {
-			nn := n
-			row.ClassName = &nn
+		if coursTenu != "" {
+			n := coursTenu
+			row.ClassName = &n
 		}
 		rows = append(rows, row)
 	}

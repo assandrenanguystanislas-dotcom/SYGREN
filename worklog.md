@@ -3889,3 +3889,23 @@ Stage Summary:
 - Les documents imprimables de Résultats et Bulletins sont embellis aux couleurs du drapeau ivoirien (rubans tricolores, bordures vertes) avec les ARMOIRIES en filigrane dans le fond de chaque page imprimée
 - L'impression est VERROUILLÉE pour les enseignants et les directeurs (consultation écran pour le directeur, message imprimé à la place du document) ; seuls l'Admin IEP et le Super Admin impriment
 - Nouveau compte PARENT (module Utilisateurs → onglet Parents) + Portail Parent : consultation et impression du bulletin individuel de l'enfant par MATRICULE (fin d'année + périodes, 2 exemplaires) ; migration RBAC v2 automatique validée sur Neon ; commits 3ef08b5 déployés et vérifiés en production
+
+---
+Task ID: 20
+Agent: Z.ai Code (session 20 — plage COURS, isolation des données, prénoms en caractère d'imprimerie)
+Task: 1) dossier personnel : plage « COURS » (bande déroulante CP1-CP2-CE1-CE2-CM1-CM2) ; 2) le directeur/enseignant n'accède qu'à SES données (le directeur voit les enseignants de son école) ; 3) module Résultats, Fin d'année : prénoms en caractère d'imprimerie
+
+Work Log:
+- T1 — models.go : champ User.Cours (*string, json cours) ; personnel.go : PersonnelDossierInput.Cours + validation (CP1|CP2|CE1|CE2|CM1|CM2, normalisation majuscules, refus sinon) + applyTo ; GET /api/reports/personnel : la colonne COURS prend le champ EXPLICITE du dossier en priorité sur la classe affectée (utile RPL/adjoint/directeur tenant un cours) et le tri CP1→CM2 l'utilise aussi
+- T1 — frontend : types.ts (CoursCode + cours dans PersonnelDossier) ; personnel-dossier-fields.tsx : bande déroulante COURS (COURS_OPTIONS, position du document : après les dates, avant les effectifs) + personnelOf ; personnel-document.tsx : cellule COURS = dossier ?? classe ; teachers-view.tsx : badge « Cours : … » sur la carte
+- T2 — teachers.go ListTeachers : teacher → lui SEUL (id=ctx user), inspector → JOIN schools de son IEP (documenté mais jamais implémenté), parent → 403 (lecture « ouverte » précédemment !), director/admin inchangés ; directors.go ListDirectors : le switch VIDE est comblé — director → lui seul, inspector → IEP, teacher/parent → 403 (un directeur voyait TOUS les directeurs de toutes les écoles)
+- T2 — frontend : nouveau composant my-profile-card.tsx « Mon profil » (GET /api/me — identité, établissement code+nom, contacts + dossier personnel complet en lecture seule, champs vides masqués) affiché dans le module Utilisateurs pour Directeur ET Enseignant (l'enseignant n'a aucun onglet : la carte est SON accès à SES informations)
+- T3 — le tableau du document officiel était DÉJÀ en majuscules (Task 37, déployé la veille) ; ajout du caractère d'imprimerie aux deux endroits restants du même onglet : bulletin individuel (ligne « Élève : … ») et tableau à l'écran (end-of-year-view)
+- Pièges : fichiers Go mixtes tabs/espaces (personnel.go en espaces, teachers/directors en tabs → patch python + gofmt ciblé) ; assertion E2E corrigée (2 enseignants dans une base vierge, pas 3)
+- Tests locaux : go build + go vet propres ; tsc + eslint 0 erreur ; E2E API SQLite 26/26 PASS (dossier cours stocké/refus CP3/effacement, colonne COURS document + tri, enseignante = elle seule 200, directeur = son école + lui seul en Directeurs, parent 403 sur les deux listes, admin complet)
+- Déploiement : migration Neon appliquée AVANT le push (ALTER TABLE users ADD COLUMN cours TEXT — idempotent, 28 agents concernés) ; commit unique code+worklog, auteur assandrenanguystanislas ; Render LIVE + Vercel READY vérifiés après push
+
+Stage Summary:
+- La plage « COURS » (bande déroulante CP1 → CM2) est dans le dossier du personnel, validée côté API, stockée sur Neon (users.cours) et affichée dans la colonne COURS de l'état nominatif (prioritaire sur la classe affectée) + badge carte enseignant
+- Isolation des données : l'enseignant ne voit que SA fiche ( carte Mon profil), le directeur SES informations + les enseignants de SON école, l'admin IEP son IEP ; le parent est refusé (403) sur les listes du personnel ; les fuites GET /api/teachers et /api/directors (lecture ouverte) sont fermées
+- Les prénoms et noms des élèves sont en caractère d'imprimerie sur le document officiel (déjà Task 37), le bulletin individuel et le tableau à l'écran de l'onglet Fin d'année

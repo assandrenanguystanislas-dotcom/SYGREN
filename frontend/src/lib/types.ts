@@ -25,6 +25,8 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
 export type SexeCode = "F" | "G";
 export type CategorieCode = "IO" | "IA" | "IS" | "IAS";
 export type FonctionCode = "DIRECTEUR" | "ADJOINT(E)";
+/** Cours tenus de l'école primaire (bande déroulante du dossier personnel). */
+export type CoursCode = "CP1" | "CP2" | "CE1" | "CE2" | "CM1" | "CM2";
 
 /** Dossier administratif d'un agent (directeur ou enseignant).
  *  Les dates sérialisées par l'API sont RFC3339 ("1980-05-12T00:00:00Z") ;
@@ -39,6 +41,10 @@ export interface PersonnelDossier {
   echelon?: number | null; // échelon 1..4
   date_entree_fp?: string | null; // entrée à la Fonction Publique
   fonction?: FonctionCode | null;
+  // Cours tenu — bande déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2 du
+  // dossier personnel (plage « COURS »). Prime sur la classe affectée
+  // dans la colonne COURS de l'état nominatif.
+  cours?: CoursCode | null;
   date_entree_dren?: string | null;
   date_entree_iep?: string | null;
   effectif_f?: number | null; // effectif du cours tenu — Filles

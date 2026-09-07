@@ -508,7 +508,9 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
       <td style={td}>{s.fonction ?? ""}</td>
       <td style={td}>{formatDossierDate(s.date_entree_dren)}</td>
       <td style={td}>{formatDossierDate(s.date_entree_iep)}</td>
-      <td style={td}>{s.class_name ?? ""}</td>
+      {/* COURS : le champ explicite du dossier personnel (bande déroulante
+          CP1..CM2) prime sur la classe affectée (module Classes). */}
+      <td style={td}>{s.cours ?? s.class_name ?? ""}</td>
       <td style={td}>{fmtNum(s.effectif_f)}</td>
       <td style={td}>{fmtNum(s.effectif_g)}</td>
       <td style={td}>{fmtNum(s.effectif_t)}</td>

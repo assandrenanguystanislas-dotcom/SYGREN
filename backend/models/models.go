@@ -45,23 +45,29 @@ type User struct {
 	// Champs administratifs du document officiel « ÉTAT NOMINATIF DU
 	// PERSONNEL » (une ligne = un agent : directeur ou enseignant).
 	// Tous optionnels (les comptes créés avant ce dossier restent valides).
-	Matricule      *string    `gorm:"type:text" json:"matricule,omitempty"`
-	Sexe           *string    `gorm:"type:text" json:"sexe,omitempty"` // F | G (« N.B : écrire le nom des femmes en rouge »)
-	DateNaissance  *time.Time `json:"date_naissance,omitempty"`        // « Date et lieu de naissance »
-	LieuNaissance  *string    `gorm:"type:text" json:"lieu_naissance,omitempty"`
-	Categorie      *string    `gorm:"type:text" json:"categorie,omitempty"` // IO | IA | IS | IAS
-	ClasseGrade    *int       `json:"classe_grade,omitempty"`               // classe administrative 1..4
-	Echelon        *int       `json:"echelon,omitempty"`                    // échelon 1..4
-	DateEntreeFP   *time.Time `json:"date_entree_fp,omitempty"`             // date d'entrée à la Fonction Publique
-	Fonction       *string    `gorm:"type:text" json:"fonction,omitempty"`  // DIRECTEUR | ADJOINT(E)
-	DateEntreeDREN *time.Time `json:"date_entree_dren,omitempty"`           // entrée DREN
-	DateEntreeIEP  *time.Time `json:"date_entree_iep,omitempty"`            // entrée IEP
-	EffectifF      *int       `json:"effectif_f,omitempty"`                 // effectif du cours tenu — Filles
-	EffectifG      *int       `json:"effectif_g,omitempty"`                 // effectif du cours tenu — Garçons
-	EffectifT      *int       `json:"effectif_t,omitempty"`                 // effectif du cours tenu — Total
-	RedoublantF    *int       `json:"redoublant_f,omitempty"`               // redoublants — Filles
-	RedoublantG    *int       `json:"redoublant_g,omitempty"`               // redoublants — Garçons
-	RedoublantT    *int       `json:"redoublant_t,omitempty"`               // redoublants — Total
+	Matricule     *string    `gorm:"type:text" json:"matricule,omitempty"`
+	Sexe          *string    `gorm:"type:text" json:"sexe,omitempty"` // F | G (« N.B : écrire le nom des femmes en rouge »)
+	DateNaissance *time.Time `json:"date_naissance,omitempty"`        // « Date et lieu de naissance »
+	LieuNaissance *string    `gorm:"type:text" json:"lieu_naissance,omitempty"`
+	Categorie     *string    `gorm:"type:text" json:"categorie,omitempty"` // IO | IA | IS | IAS
+	ClasseGrade   *int       `json:"classe_grade,omitempty"`               // classe administrative 1..4
+	Echelon       *int       `json:"echelon,omitempty"`                    // échelon 1..4
+	DateEntreeFP  *time.Time `json:"date_entree_fp,omitempty"`             // date d'entrée à la Fonction Publique
+	Fonction      *string    `gorm:"type:text" json:"fonction,omitempty"`  // DIRECTEUR | ADJOINT(E)
+	// Cours tenu — plage « COURS » du dossier personnel (bande
+	// déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2). Optionnel : un
+	// agent sans cours (RPL, adjoint, directeur non titulaire) reste
+	// NULL ; alimente la colonne COURS de l'état nominatif en
+	// PRIORITÉ sur la classe affectée (voir handlers/personnel.go).
+	Cours          *string    `gorm:"type:text" json:"cours,omitempty"`
+	DateEntreeDREN *time.Time `json:"date_entree_dren,omitempty"` // entrée DREN
+	DateEntreeIEP  *time.Time `json:"date_entree_iep,omitempty"`  // entrée IEP
+	EffectifF      *int       `json:"effectif_f,omitempty"`       // effectif du cours tenu — Filles
+	EffectifG      *int       `json:"effectif_g,omitempty"`       // effectif du cours tenu — Garçons
+	EffectifT      *int       `json:"effectif_t,omitempty"`       // effectif du cours tenu — Total
+	RedoublantF    *int       `json:"redoublant_f,omitempty"`     // redoublants — Filles
+	RedoublantG    *int       `json:"redoublant_g,omitempty"`     // redoublants — Garçons
+	RedoublantT    *int       `json:"redoublant_t,omitempty"`     // redoublants — Total
 	// Architecture D — Suspension (Palier 1)
 	SuspendedAt     *time.Time     `gorm:"index" json:"suspended_at,omitempty"`
 	SuspendedByID   *string        `gorm:"type:text;index" json:"suspended_by_id,omitempty"`
