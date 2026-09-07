@@ -11,6 +11,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Printer, X, Loader2 } from "lucide-react";
 import { reportsApi } from "@/lib/api";
+import { SchoolStamp } from "@/components/school-stamp";
 import { monthLabel } from "@/lib/session-utils";
 import { CIArmoiriesWatermark, CI_GREEN, CI_GREEN_BG, CI_GREEN_TEXT, CI_ORANGE_BG, PRINT_COLOR_STYLE } from "@/components/ci-decor";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, usePrintRole } from "@/lib/print-guard";
@@ -362,8 +363,31 @@ export function SyntheseDocument({
             <div style={{ fontSize: "12px", fontWeight: "bold", textDecoration: "underline" }}>Le Directeur</div>
             <div style={{ height: "60px" }}></div>
             {/* Nom du directeur de l'école (User role=director, school_id).
-                Placeholder si aucun directeur affecté. */}
-            <div style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase" }}>
+                Placeholder si aucun directeur affecté. Tampon de l'école :
+                ancré juste au-dessus du nom, aligné à droite (demande). */}
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: "bold",
+                textTransform: "uppercase",
+                display: "inline-block",
+                position: "relative",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  bottom: "calc(100% - 4px)",
+                  pointerEvents: "none",
+                }}
+              >
+                <SchoolStamp
+                  school={data.school_name}
+                  iep={data.iep_name}
+                  size={92}
+                />
+              </span>
               {data.director_name || "................................"}
             </div>
           </div>

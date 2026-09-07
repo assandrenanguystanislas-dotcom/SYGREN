@@ -12,6 +12,7 @@ import {
   CI_GREEN_TEXT,
 } from "./ci-decor";
 import { fmtNoteFr } from "@/lib/notes-format";
+import { SchoolStamp } from "@/components/school-stamp";
 
 // === Bulletins A5 paysage — 2 bulletins par page A4 ===
 //
@@ -428,8 +429,17 @@ export default function BulletinsA5Landscape({
                         <div className="col-span-5 flex flex-col text-center">
                           {/* Signature du Directeur — cellule sous l'en-tête
                               « Visa du Directeur » (96px ≈ 25mm) : nom
-                              imprimé en bas, place pour signer au-dessus. */}
-                          <div className="h-[96px] flex flex-col justify-end pb-1 px-1">
+                              imprimé en bas, place pour signer au-dessus.
+                              Tampon de l'école ancré au coin haut droit,
+                              juste au-dessus du nom (demande utilisateur). */}
+                          <div className="h-[96px] flex flex-col justify-end pb-1 px-1 relative">
+                            <span className="absolute right-0.5 top-0.5 pointer-events-none">
+                              <SchoolStamp
+                                school={iepInfo?.school_name ?? ""}
+                                iep={iepInfo?.name}
+                                size={46}
+                              />
+                            </span>
                             {iepInfo?.director_name && (
                               <p className="text-center text-[9px] font-semibold leading-tight">
                                 {iepInfo.director_name}

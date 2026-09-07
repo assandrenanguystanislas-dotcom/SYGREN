@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { Printer, X, Loader2, User, Users, CheckCircle2, Award, TrendingUp } from "lucide-react";
 import { CIArmoiriesWatermark } from "@/components/ci-decor";
+import { SchoolStamp } from "@/components/school-stamp";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
 
 // === Types ===
@@ -713,8 +714,16 @@ export default function RelevePage() {
                     </div>
                   </div>
 
-                  {/* Bloc Directeur compact */}
-                  <div className="border-2 border-[#009E60] rounded-lg p-1.5 flex flex-col justify-between min-h-[90px]">
+                  {/* Bloc Directeur compact — tampon de l'école ancré au
+                      coin haut droit, juste au-dessus du nom (demande). */}
+                  <div className="border-2 border-[#009E60] rounded-lg p-1.5 flex flex-col justify-between min-h-[90px] relative">
+                    <span className="absolute right-1 top-1 pointer-events-none">
+                      <SchoolStamp
+                        school={data.school_name}
+                        iep={data.iep_name}
+                        size={52}
+                      />
+                    </span>
                     <span className="underline uppercase text-[11px]">Le Directeur</span>
                     <div className="flex-grow"></div>
                     <span className="uppercase text-[11px] tracking-wide">

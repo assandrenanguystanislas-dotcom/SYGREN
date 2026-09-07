@@ -35,6 +35,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Printer, X } from "lucide-react";
+
+import { SchoolStamp } from "@/components/school-stamp";
 import type { CSSProperties } from "react";
 
 import { reportsApi } from "@/lib/api";
@@ -428,7 +430,25 @@ export function PersonnelDocument({
               margin: "0 0 6px 12px",
             }}
           >
-            Le Directeur
+            {/* Tampon de l'école : ancré juste au-dessus de la mention
+                « Le Directeur », aligné à droite (demande utilisateur). */}
+            <span style={{ position: "relative", display: "inline-block" }}>
+              <span
+                style={{
+                  position: "absolute",
+                  right: -6,
+                  bottom: "calc(100% - 2px)",
+                  pointerEvents: "none",
+                }}
+              >
+                <SchoolStamp
+                  school={data.school?.name ?? ""}
+                  iep={data.iep?.name}
+                  size={88}
+                />
+              </span>
+              Le Directeur
+            </span>
           </div>
           <div
             style={{

@@ -29,6 +29,7 @@ import { Loader2, Printer, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { pdaApi } from "@/lib/api";
+import { SchoolStamp } from "@/components/school-stamp";
 import {
   canPrintDocument,
   PrintLockBadge,
@@ -506,8 +507,23 @@ export function PdaDocument({
                   marginTop: "28px",
                   textTransform: "uppercase",
                   letterSpacing: "0.3px",
+                  // Tampon de l'école : juste au-dessus du nom du directeur,
+                  // aligné à droite (demande utilisateur) — inline-block
+                  // pour ancrer le tampon au nom lui-même.
+                  display: "inline-block",
+                  position: "relative",
                 }}
               >
+                <span
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    bottom: "calc(100% - 6px)",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <SchoolStamp school={s.school?.name ?? ""} iep={s.iep?.name} size={94} />
+                </span>
                 {s.directeur}
               </div>
             ) : null}

@@ -23,6 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Printer, X } from "lucide-react";
 
 import { pdaApi } from "@/lib/api";
+import { SchoolStamp } from "@/components/school-stamp";
 import {
   canPrintDocument,
   PrintLockBadge,
@@ -410,7 +411,21 @@ export function PdaTimelineDocument({
             marginTop: "20px",
           }}
         >
-          <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+          {/* Tampon de l'école : ancré juste au-dessus de la mention
+              « Le Directeur », aligné à droite (demande utilisateur). */}
+          <span style={{ position: "relative", display: "inline-block" }}>
+            <span
+              style={{
+                position: "absolute",
+                right: -6,
+                bottom: "calc(100% - 2px)",
+                pointerEvents: "none",
+              }}
+            >
+              <SchoolStamp school={schoolName} iep={iep?.name} size={90} />
+            </span>
+            <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+          </span>
           <div style={{ textAlign: "center" }}>
             <span style={{ textDecoration: "underline", color: CI_GREEN_TEXT }}>L&apos;Inspecteur</span>
             {iep?.inspector_name ? (

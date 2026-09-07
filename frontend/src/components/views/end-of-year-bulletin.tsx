@@ -43,6 +43,7 @@ import { Loader2, Printer, Scissors, X } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import { parentPortalApi, reportsApi } from "@/lib/api";
+import { SchoolStamp } from "@/components/school-stamp";
 import {
   canPrintDocument,
   PrintLockBadge,
@@ -579,8 +580,26 @@ function BulletinCopy({
                   padding: "1.8mm 2.6mm",
                   height: "30mm",
                   textAlign: "center",
+                  // Tampon de l'école — ancré au coin haut droit de la
+                  // case, juste au-dessus du nom du directeur (demande
+                  // utilisateur), sans impact sur le flux.
+                  position: "relative",
                 }}
               >
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "0.5mm",
+                    right: "1mm",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <SchoolStamp
+                    school={data.school?.name ?? ""}
+                    iep={iep?.name}
+                    size={58}
+                  />
+                </div>
                 <div
                   style={{
                     fontSize: "12px",

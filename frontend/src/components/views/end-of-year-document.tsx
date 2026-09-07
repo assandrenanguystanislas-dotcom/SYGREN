@@ -38,6 +38,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Printer, X } from "lucide-react";
+
+import { SchoolStamp } from "@/components/school-stamp";
 import type { CSSProperties } from "react";
 
 import { reportsApi } from "@/lib/api";
@@ -470,8 +472,26 @@ export function EndOfYearDocument({
                   marginTop: "14px",
                   textTransform: "uppercase",
                   letterSpacing: "0.3px",
+                  // Tampon de l'école : ancré JUSTE AU-DESSUS du nom du
+                  // directeur, aligné à droite (demande utilisateur) —
+                  // position absolue, flux inchangé.
+                  position: "relative",
                 }}
               >
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    bottom: "calc(100% - 2px)",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <SchoolStamp
+                    school={data.school?.name ?? ""}
+                    iep={iep?.name}
+                    size={98}
+                  />
+                </div>
                 {data.directeur}
               </div>
             ) : null}
