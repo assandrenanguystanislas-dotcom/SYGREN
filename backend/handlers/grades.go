@@ -118,7 +118,7 @@ func getSessionForUser(r *http.Request, sessionID string) (*models.EvaluationSes
 			Where("teacher_id = ? AND school_id = ?", ctxUserID(r), session.SchoolID).
 			Count(&count)
 		if count == 0 {
-			return nil, fmt.Errorf("accès refusé : vous n'êtes pas enseignant dans cette école")
+			return nil, fmt.Errorf("accès refusé : vous n'êtes pas adjoint(e) au directeur dans cette école")
 		}
 	default:
 		// v2 : default-deny (le rôle PARENT passe par le portail dédié)

@@ -85,7 +85,7 @@ func ListTeachers(w http.ResponseWriter, r *http.Request) {
 
 	var teachers []models.User
 	if err := query.Order("full_name ASC").Find(&teachers).Error; err != nil {
-		middleware.JSONError(w, "erreur récupération enseignants", http.StatusInternalServerError)
+		middleware.JSONError(w, "erreur récupération adjoints au directeur", http.StatusInternalServerError)
 		return
 	}
 
@@ -183,7 +183,7 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 			Count(&directorCount)
 		if directorCount == 0 {
 			middleware.JSONError(w,
-				"impossible de créer un enseignant : cette école n'a pas de directeur rattaché. "+
+				"impossible de créer un adjoint au directeur : cette école n'a pas de directeur rattaché. "+
 					"Veuillez d'abord créer le compte directeur de cette école.",
 				http.StatusConflict)
 			return
@@ -199,7 +199,7 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := database.DB.Unscoped().Save(restored).Error; err != nil {
-				middleware.JSONError(w, "erreur mise à jour enseignant restauré", http.StatusInternalServerError)
+				middleware.JSONError(w, "erreur mise à jour adjoint au directeur restauré", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -230,7 +230,7 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := database.DB.Create(&teacher).Error; err != nil {
-		middleware.JSONError(w, "erreur création enseignant", http.StatusInternalServerError)
+		middleware.JSONError(w, "erreur création adjoint au directeur", http.StatusInternalServerError)
 		return
 	}
 	// Ne pas renvoyer le hash
@@ -258,7 +258,7 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 	}
 	var teacher models.User
 	if err := database.DB.First(&teacher, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "enseignant introuvable", http.StatusNotFound)
+		middleware.JSONError(w, "adjoint(e) au directeur introuvable", http.StatusNotFound)
 		return
 	}
 	if req.Personnel != nil {
@@ -292,7 +292,7 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 			Count(&directorCount)
 		if directorCount == 0 {
 			middleware.JSONError(w,
-				"impossible d'affecter cet enseignant : cette école n'a pas de directeur rattaché.",
+				"impossible d'affecter cet adjoint au directeur : cette école n'a pas de directeur rattaché.",
 				http.StatusConflict)
 			return
 		}

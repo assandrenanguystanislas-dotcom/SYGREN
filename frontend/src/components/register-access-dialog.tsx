@@ -57,7 +57,7 @@ export function RegisterAccessDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
 
-  const roleLabel = role === "director" ? "Directeur" : "Enseignant";
+  const roleLabel = role === "director" ? "Directeur" : "Adjoint(e) au directeur";
 
   function set<K extends keyof typeof EMPTY_FORM>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));

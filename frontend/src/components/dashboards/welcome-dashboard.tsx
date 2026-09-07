@@ -195,7 +195,7 @@ export function WelcomeDashboard({ onNavigate }: { onNavigate: (view: string) =>
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
               La gestion administrative est complète : IEP, écoles, classes,
-              élèves (matricule unique), enseignants et matières. Les statistiques
+              élèves (matricule unique), adjoints au directeur et matières. Les statistiques
               ci-dessus sont calculées en temps réel depuis le backend Go.
             </p>
           </div>
@@ -221,19 +221,19 @@ function buildStats(role: Role, d: StatsData): StatCard[] {
         { label: "Inspections (IEP)", value: String(d.iepCount), hint: "circonscriptions", icon: <BarChart3 className="w-5 h-5" />, tone: "orange" },
         { label: "Écoles enregistrées", value: String(d.schoolCount), hint: "toutes IEP confondues", icon: <School className="w-5 h-5" />, tone: "green" },
         { label: "Élèves inscrits", value: String(d.studentCount), hint: "matricules uniques", icon: <Users className="w-5 h-5" />, tone: "neutral" },
-        { label: "Enseignants", value: String(d.teacherCount), hint: "comptes actifs", icon: <Users className="w-5 h-5" />, tone: "orange" },
+        { label: "Adjoints au directeur", value: String(d.teacherCount), hint: "comptes actifs", icon: <Users className="w-5 h-5" />, tone: "orange" },
       ];
     case "director":
       return [
         { label: "Classes de l'école", value: "—", hint: "voir l'onglet Classes", icon: <BookOpen className="w-5 h-5" />, tone: "green" },
         { label: "Élèves inscrits", value: String(d.studentCount), hint: "dans mon école", icon: <Users className="w-5 h-5" />, tone: "orange" },
-        { label: "Enseignants", value: String(d.teacherCount), hint: "comptes actifs", icon: <Users className="w-5 h-5" />, tone: "neutral" },
+        { label: "Adjoints au directeur", value: String(d.teacherCount), hint: "comptes actifs", icon: <Users className="w-5 h-5" />, tone: "neutral" },
         { label: "Matières", value: String(d.subjectCount), hint: "disciplines", icon: <BookOpen className="w-5 h-5" />, tone: "green" },
       ];
     case "inspector":
       return [
         { label: "Écoles supervisées", value: String(d.schoolCount), hint: "ma circonscription", icon: <School className="w-5 h-5" />, tone: "orange" },
-        { label: "Enseignants", value: String(d.teacherCount), hint: "dans mon IEP", icon: <Users className="w-5 h-5" />, tone: "green" },
+        { label: "Adjoints au directeur", value: String(d.teacherCount), hint: "dans mon IEP", icon: <Users className="w-5 h-5" />, tone: "green" },
         { label: "Matières configurées", value: String(d.subjectCount), hint: "disciplines", icon: <BookOpen className="w-5 h-5" />, tone: "neutral" },
         { label: "Tableaux de bord", value: "—", hint: "à venir (Phase 6)", icon: <TrendingUp className="w-5 h-5" />, tone: "orange" },
       ];
@@ -265,7 +265,7 @@ const QUICK_ACTIONS: Record<
   director: [
     { label: "Mes classes", hint: "CP1 → CM2", view: "classes", icon: <BookOpen className="w-4 h-4" /> },
     { label: "Inscrire un élève", hint: "Matricule unique", view: "students", icon: <Users className="w-4 h-4" /> },
-    { label: "Gérer les enseignants", hint: "Comptes", view: "teachers", icon: <Users className="w-4 h-4" /> },
+    { label: "Gérer les adjoints au directeur", hint: "Comptes", view: "teachers", icon: <Users className="w-4 h-4" /> },
   ],
   inspector: [
     { label: "Gérer les IEP", hint: "Circonscriptions scolaires", view: "iep", icon: <BarChart3 className="w-4 h-4" /> },

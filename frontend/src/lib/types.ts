@@ -4,7 +4,7 @@
 export type Role = "teacher" | "director" | "inspector" | "admin" | "parent";
 
 export const ROLE_LABELS: Record<Role, string> = {
-  teacher: "Instituteur",
+  teacher: "Adjoint(e) au directeur",
   director: "Directeur d'École",
   inspector: "Admin IEP",
   admin: "Super-Administrateur",

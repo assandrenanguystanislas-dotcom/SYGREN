@@ -251,7 +251,7 @@ func validateTeacherSameSchool(teacherID, schoolID string) error {
 			user.FullName, user.Role)
 	}
 	if *user.SchoolID != schoolID {
-		return fmt.Errorf("cet utilisateur appartient à une autre école — un enseignant/directeur ne peut être affecté qu'à une classe de son école")
+		return fmt.Errorf("cet utilisateur appartient à une autre école — un adjoint au directeur/un directeur ne peut être affecté qu'à une classe de son école")
 	}
 	return nil
 }

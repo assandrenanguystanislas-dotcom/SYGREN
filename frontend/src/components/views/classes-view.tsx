@@ -318,7 +318,7 @@ export function ClassesView() {
               </div>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="class-teacher">Enseignant affecté</Label>
+              <Label htmlFor="class-teacher">Adjoint(e) au directeur affecté(e)</Label>
               <Select
                 value={form.teacher_id ?? "none"}
                 onValueChange={(v) =>

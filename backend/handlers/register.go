@@ -61,7 +61,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	//    l'administration dans le module Utilisateurs ; l'admin/inspecteur
 	//    ne s'auto-inscrivent pas).
 	if req.Role != models.RoleDirector && req.Role != models.RoleTeacher {
-		middleware.JSONError(w, "rôle invalide — l'auto-inscription est réservée aux directeurs et aux enseignants", http.StatusBadRequest)
+		middleware.JSONError(w, "rôle invalide — l'auto-inscription est réservée aux directeurs et aux adjoints au directeur", http.StatusBadRequest)
 		return
 	}
 	// 2. Champs requis
@@ -128,7 +128,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			Count(&directorCount)
 		if directorCount == 0 {
 			middleware.JSONError(w,
-				"impossible de créer un accès enseignant : cette école n'a pas encore de directeur. "+
+				"impossible de créer un accès adjoint au directeur : cette école n'a pas encore de directeur. "+
 					"Le directeur doit d'abord créer ses accès (onglet « Directeur »).",
 				http.StatusConflict)
 			return

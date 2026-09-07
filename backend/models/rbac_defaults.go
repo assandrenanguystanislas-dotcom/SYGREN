@@ -93,7 +93,7 @@ func AllModuleMetas() []ModuleMeta {
 		{Key: ModuleSchools, Label: "Écoles", Description: "CRUD des établissements", IconHint: "School"},
 		{Key: ModuleClasses, Label: "Classes", Description: "CP1-CM2 par école (soft-delete)", IconHint: "Layers"},
 		{Key: ModuleStudents, Label: "Élèves", Description: "CRUD élèves + import Excel", IconHint: "Users"},
-		{Key: ModuleUsersTeachers, Label: "Utilisateurs · Enseignants", Description: "CRUD enseignants", IconHint: "GraduationCap"},
+		{Key: ModuleUsersTeachers, Label: "Utilisateurs · Adjoints au directeur", Description: "CRUD adjoints au directeur", IconHint: "GraduationCap"},
 		{Key: ModuleUsersDirectors, Label: "Utilisateurs · Directeurs", Description: "CRUD directeurs (1 actif/école)", IconHint: "UserCog"},
 		{Key: ModuleUsersInspectors, Label: "Utilisateurs · Admins IEP", Description: "CRUD admins IEP (super admin seul)", IconHint: "ShieldCheck"},
 		{Key: ModuleUsersParents, Label: "Utilisateurs · Parents", Description: "CRUD comptes parents (portail bulletin individuel)", IconHint: "UserRound"},
@@ -128,7 +128,7 @@ func DefaultRoles() []DefaultRoleSeed {
 		{Name: RoleAdmin, Label: "Super Admin", Description: "Contrôle total du système (irréductible)", IsSystem: true, SortOrder: 1},
 		{Name: RoleInspector, Label: "Admin IEP", Description: "Fonctionnaire de l'IEP — gestion multi-écoles (sauf paramètres généraux)", IsSystem: true, SortOrder: 2},
 		{Name: RoleDirector, Label: "Directeur", Description: "Directeur d'école — gestion de son établissement (documents consultables, impression verrouillée)", IsSystem: true, SortOrder: 3},
-		{Name: RoleTeacher, Label: "Enseignant", Description: "Enseignant — module Élèves et saisie des notes de sa classe", IsSystem: true, SortOrder: 4},
+		{Name: RoleTeacher, Label: "Adjoint(e) au directeur", Description: "Adjoint(e) au directeur — module Élèves et saisie des notes de sa classe", IsSystem: true, SortOrder: 4},
 		// v2 — Portail Parent
 		{Name: RoleParent, Label: "Parent", Description: "Parent — consultation et impression du bulletin individuel de son enfant (par matricule)", IsSystem: true, SortOrder: 5},
 	}

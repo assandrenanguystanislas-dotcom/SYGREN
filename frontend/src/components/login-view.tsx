@@ -74,7 +74,7 @@ export function LoginView() {
   const roles = [
     { v: "admin" as const, l: "Admin" },
     { v: "director" as const, l: "Directeur" },
-    { v: "teacher" as const, l: "Enseignant" },
+    { v: "teacher" as const, l: "Adjoint(e) au directeur" },
     { v: "parent" as const, l: "Parent" },
   ];
 
@@ -118,7 +118,7 @@ export function LoginView() {
                 ? "Admin IEP"
                 : user.role === "parent"
                   ? "Parent"
-                  : "Instituteur"
+                  : "Adjoint(e) au directeur"
         }`,
       });
     } catch (e) {
@@ -406,7 +406,7 @@ export function LoginView() {
                         {([
                           { v: "admin" as const, l: "Admin" },
                           { v: "director" as const, l: "Directeur" },
-                          { v: "teacher" as const, l: "Enseignant" },
+                          { v: "teacher" as const, l: "Adjoint(e) au directeur" },
                           { v: "parent" as const, l: "Parent" },
                         ]).map(({ v, l }) => (
                           <button key={v} type="button" onClick={() => setResetRole(v)}

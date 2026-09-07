@@ -887,7 +887,7 @@ function SchoolClassesPanel({
     try {
       const tid = teacherId === "__none__" ? null : teacherId;
       await classesApi.update(cls.id, { teacher_id: tid });
-      toast.success("Enseignant affecté", {
+      toast.success("Adjoint(e) au directeur affecté(e)", {
         description: `${cls.name} — ${cls.school_name ?? ""}`,
       });
       await queryClient.invalidateQueries({ queryKey: ["classes", schoolId] });
@@ -919,7 +919,7 @@ function SchoolClassesPanel({
     <div className="space-y-2">
       <div className="grid grid-cols-[auto_1fr_auto] gap-3 items-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1">
         <span>Active</span>
-        <span>Classe · Enseignant</span>
+        <span>Classe · Adjoint(e) au directeur</span>
         <span className="text-right">Élèves</span>
       </div>
       {sortedClasses.map((cls) => (
@@ -970,7 +970,7 @@ function SchoolClassesPanel({
                 onValueChange={(v) => updateTeacher(cls, v)}
               >
                 <SelectTrigger className="h-7 mt-1 text-xs">
-                  <SelectValue placeholder="Aucun enseignant" />
+                  <SelectValue placeholder="Aucun adjoint au directeur" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— Aucun —</SelectItem>

@@ -104,7 +104,7 @@ export function TeachersView() {
 
   const createMut = useCrudMutation(teachersApi.create, {
     invalidateKeys: [["teachers"], ["classes"]],
-    successMessage: "Enseignant créé avec succès",
+    successMessage: "Adjoint(e) au directeur créé(e) avec succès",
     actionLabel: "Création",
   });
   const updateMut = useCrudMutation(
@@ -119,13 +119,13 @@ export function TeachersView() {
       }),
     {
       invalidateKeys: [["teachers"], ["classes"]],
-      successMessage: "Enseignant modifié avec succès",
+      successMessage: "Adjoint(e) au directeur modifié(e) avec succès",
       actionLabel: "Modification",
     },
   );
   const deleteMut = useCrudMutation(teachersApi.delete, {
     invalidateKeys: [["teachers"], ["classes"]],
-    successMessage: "Enseignant supprimé",
+    successMessage: "Adjoint(e) au directeur supprimé(e)",
     actionLabel: "Suppression",
   });
 
@@ -233,9 +233,9 @@ export function TeachersView() {
                 <Users className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="font-semibold text-base">Enseignants</h2>
+                <h2 className="font-semibold text-base">Adjoints au directeur</h2>
                 <p className="text-xs text-muted-foreground">
-                  {filtered.length} enseignant(s) affiché(s)
+                  {filtered.length} adjoint(e)s au directeur affiché(e)s
                   {iepFilter !== "all" && ieps.find((i) => i.id === iepFilter)
                     ? ` · ${ieps.find((i) => i.id === iepFilter)?.name}`
                     : ""}
@@ -275,7 +275,7 @@ export function TeachersView() {
                 })()}
                 <Button onClick={openCreate} size="sm" className="shadow-sm">
                   <Plus className="w-4 h-4 mr-1.5" />
-                  Créer un enseignant
+                  Créer un adjoint au directeur
                 </Button>
               </div>
             )}
@@ -362,7 +362,7 @@ export function TeachersView() {
           <CardContent className="py-12 text-center">
             <Search className="w-6 h-6 mx-auto mb-2 opacity-50" />
             <p className="text-sm font-medium">
-              Aucun enseignant ne correspond à votre recherche
+              Aucun adjoint au directeur ne correspond à votre recherche
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Modifiez les filtres pour élargir la recherche.
@@ -482,11 +482,11 @@ export function TeachersView() {
         <EntityDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          title={editing ? "Modifier l'enseignant" : "Créer un enseignant"}
+          title={editing ? "Modifier l'adjoint(e) au directeur" : "Créer un adjoint au directeur"}
           description={
             editing
-              ? "Modifiez les informations du compte enseignant et son dossier personnel."
-              : "Créez un compte enseignant (login par email OU téléphone)."
+              ? "Modifiez les informations du compte adjoint(e) au directeur et son dossier personnel."
+              : "Créez un compte adjoint(e) au directeur (login par email OU téléphone)."
           }
           icon={Users}
           loading={createMut.isPending || updateMut.isPending}
@@ -541,7 +541,8 @@ export function TeachersView() {
               />
               {!editing && (
                 <p className="text-[11px] text-muted-foreground">
-                  Mot de passe standard = numéro de téléphone. L&apos;enseignant
+                  Mot de passe standard = numéro de téléphone. L&apos;adjoint(e)
+                  au directeur
                   pourra le modifier à tout moment via «&nbsp;Modifier votre
                   mot de passe&nbsp;».
                 </p>
@@ -581,7 +582,7 @@ export function TeachersView() {
                 type="submit"
                 disabled={!editing && (!form.full_name || (!form.email && !form.phone))}
               >
-                {editing ? "Enregistrer" : "Créer l'enseignant"}
+                {editing ? "Enregistrer" : "Créer l'adjoint(e) au directeur"}
               </Button>
             </div>
           </form>
@@ -591,7 +592,7 @@ export function TeachersView() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Supprimer l'enseignant ?"
+        title="Supprimer l'adjoint(e) au directeur ?"
         description={
           deleteTarget
             ? `Supprimer le compte de "${deleteTarget.full_name}" ? Sa classe sera désaffectée.`
@@ -612,7 +613,7 @@ function LoadingState() {
     <Card>
       <CardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        <p className="text-sm">Chargement des enseignants…</p>
+        <p className="text-sm">Chargement des adjoints au directeur…</p>
       </CardContent>
     </Card>
   );
@@ -623,7 +624,7 @@ function ErrorState({ message }: { message: string }) {
     <Card className="border-destructive/40">
       <CardContent className="py-10 text-center">
         <p className="text-sm text-destructive font-medium">
-          Impossible de charger les enseignants
+          Impossible de charger les adjoints au directeur
         </p>
         <p className="text-xs text-muted-foreground mt-1">{message}</p>
       </CardContent>
@@ -636,16 +637,16 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
     <Card className="border-dashed">
       <CardContent className="py-12 text-center">
         <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm font-medium">Aucun enseignant enregistré</p>
+        <p className="text-sm font-medium">Aucun adjoint au directeur enregistré</p>
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           {onCreate
-            ? "Créez des comptes enseignants pour qu'ils puissent saisir les notes."
-            : "Les enseignants apparaîtront ici."}
+            ? "Créez des comptes adjoints au directeur pour qu'ils puissent saisir les notes."
+            : "Les adjoints au directeur apparaîtront ici."}
         </p>
         {onCreate && (
           <Button onClick={onCreate} size="sm">
             <Plus className="w-4 h-4 mr-1.5" />
-            Créer un enseignant
+            Créer un adjoint au directeur
           </Button>
         )}
       </CardContent>

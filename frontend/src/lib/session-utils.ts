@@ -39,7 +39,7 @@ export const SESSION_STATUS_CONFIG = {
   open: {
     label: "Saisie ouverte",
     color: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    description: "Les enseignants peuvent saisir les notes",
+    description: "Les adjoints au directeur peuvent saisir les notes",
   },
   closed: {
     label: "Saisie fermée",

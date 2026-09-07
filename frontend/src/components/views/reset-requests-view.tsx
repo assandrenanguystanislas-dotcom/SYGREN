@@ -33,7 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Admin/IEP",
   inspector: "Admin IEP",
   director: "Directeur",
-  teacher: "Enseignant",
+  teacher: "Adjoint(e) au directeur",
   parent: "Parent",
 };
 
