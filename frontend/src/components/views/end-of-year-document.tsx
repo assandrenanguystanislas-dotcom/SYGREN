@@ -517,6 +517,29 @@ export function EndOfYearDocument({
   );
 }
 
+/** Prénoms « en minuscule » (écriture normale) : initiale en majuscule,
+ *  lettres suivantes en minuscules — à chaque segment séparé par une
+ *  espace, un tiret ou une apostrophe (« ali ibrahim » → « Ali Ibrahim »,
+ *  « marie-josé » → « Marie-José »). */
+function titleCasePrenoms(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/(^|[\s'\-])(\p{L})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
+}
+
+/** Nom de l'élève du document officiel : NOM en CARACTÈRE D'IMPRIMERIE
+ *  (majuscules) puis prénoms en minuscule (initiales en majuscule).
+ *  Utilise les parties séparées last_name / first_name de l'API (le
+ *  backend les expose exprès) — repli sur full_name si absentes. */
+function formatNomPrenoms(row: EndOfYearRow): string {
+  const last = (row.last_name ?? "").trim();
+  const first = (row.first_name ?? "").trim();
+  if (last && first) return `${last.toUpperCase()} ${titleCasePrenoms(first)}`;
+  if (last) return last.toUpperCase();
+  if (first) return titleCasePrenoms(first);
+  return row.full_name;
+}
+
 /** Une ligne élève (ou vierge) du tableau principal. La décision du conseil
  *  des maîtres marque une croix « X » dans UNE des sous-colonnes
  *  Admis / Red / Abd (comme sur le document papier). */
@@ -542,15 +565,16 @@ function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) 
         style={{
           ...tdLeft,
           fontWeight: 600,
-          // Task 37 — noms et prénoms des élèves EN CARACTÈRE
-          // D'IMPRIMERIE (majuscules).
-          textTransform: "uppercase",
-          // Noms des FILLES en rouge (demande utilisateur — les garçons
-          // restent en encre noire).
+          // Demande utilisateur — NOM en CARACTÈRE D'IMPRIMERIE
+          // (majuscules) puis prénoms en minuscule (voir
+          // formatNomPrenoms ; les parties last_name / first_name
+          // viennent de l'API). Le text-transform uppercase de la
+          // Task 37 est retiré : le formatage se fait sur la chaîne.
+          // Noms des FILLES en rouge (les garçons restent en encre noire).
           color: row.gender === "F" ? FILLE_RED : undefined,
         }}
       >
-        {row.full_name}
+        {formatNomPrenoms(row)}
       </td>
       <td style={td}>{row.age ?? ""}</td>
       <td style={td}>{row.scolarite_cours ?? ""}</td>

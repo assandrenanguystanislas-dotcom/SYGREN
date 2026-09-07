@@ -1058,6 +1058,10 @@ export interface EndOfYearRow {
   student_id: string;
   matricule: string;
   full_name: string; // NOM + prénoms
+  // Parties séparées du nom (formatage du document officiel :
+  // NOM en caractère d'imprimerie + prénoms en minuscule).
+  last_name?: string;
+  first_name?: string;
   gender: "M" | "F" | string;
   age?: number | null; // année de référence − année de naissance
   scolarite_cours?: number | null;

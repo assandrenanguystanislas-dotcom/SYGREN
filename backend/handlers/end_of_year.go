@@ -59,7 +59,12 @@ type EndOfYearRow struct {
 	StudentID string `json:"student_id"`
 	Matricule string `json:"matricule"`
 	FullName  string `json:"full_name"` // NOM (majuscules) + prénoms
-	Gender    string `json:"gender"`    // M | F
+	// Parties séparées du nom (demande utilisateur — document officiel :
+	// NOM en caractère d'imprimerie, prénoms en minuscule) — le document
+	// formate ainsi sans deviner où le nom s'arrête dans full_name.
+	LastName  string `json:"last_name,omitempty"`  // nom de famille
+	FirstName string `json:"first_name,omitempty"` // prénoms
+	Gender    string `json:"gender"`               // M | F
 
 	// Âge = année de référence − année de naissance (nil si non calculable).
 	Age *int `json:"age,omitempty"`
@@ -312,6 +317,8 @@ func buildEndOfYearSheet(school models.School, cls models.Class, year int) (map[
 			StudentID:       st.ID,
 			Matricule:       matriculeOrNA(st.Matricule),
 			FullName:        studentFullName(st.LastName, st.FirstName),
+			LastName:        st.LastName,
+			FirstName:       st.FirstName,
 			Gender:          st.Gender,
 			ScolariteCours:  st.ScolariteCours,
 			ScolariteTotale: st.ScolariteTotale,
