@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Printer, X, Loader2 } from "lucide-react";
 import { CIArmoiriesWatermark } from "@/components/ci-decor";
-import { SchoolStamp } from "@/components/school-stamp";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
 import { monthLabel } from "@/lib/session-utils";
 
@@ -398,21 +397,10 @@ export default function SynthesePage() {
               <p className="underline mb-1">Le Directeur</p>
               <div className="h-16"></div>
               {/* Nom du directeur (récupéré depuis l'User affecté à l'école).
-                  Si aucun directeur n'est affecté, on affiche un placeholder.
-                  Tampon de l'école : ancré juste au-dessus du nom, aligné à
-                  droite (demande utilisateur). */}
-              <div className="relative inline-block">
-                <div className="absolute right-0 bottom-full pointer-events-none">
-                  <SchoolStamp
-                    school={data.school_name}
-                    iep={data.iep_name}
-                    size={84}
-                  />
-                </div>
-                <p className="text-xs uppercase">
-                  {data.director_name || "................................"}
-                </p>
-              </div>
+                  Si aucun directeur n'est affecté, on affiche un placeholder. */}
+              <p className="text-xs uppercase">
+                {data.director_name || "................................"}
+              </p>
             </div>
 
             {/* Côté Inspecteur : nom de l'inspecteur titulaire de l'IEP */}
