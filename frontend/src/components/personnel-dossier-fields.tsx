@@ -17,10 +17,10 @@
 //     via CLASSE_GRADE_LABELS.
 //   - Date d'entrée à la F.P — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Fonction — liste déroulante DIRECTEUR | ADJOINT(E)
-//   - COURS — liste déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2
-//     (plage « COURS » demandée — cours tenu par l'agent ; prime sur
-//     la classe affectée du module Classes dans la colonne COURS de
-//     l'État nominatif)
+//   - COURS — liste déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2 |
+//     RPL | MAC (plage « COURS » à 8 items demandée — cours tenu par
+//     l'agent ; prime sur la classe affectée du module Classes dans la
+//     colonne COURS de l'État nominatif)
 //   - Date d'entrée DREN — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Entrée à l'IEP — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Effectif — F | G | T (saisies numériques, comme les colonnes du document)
@@ -75,10 +75,11 @@ export const CLASSE_GRADE_LABELS: Record<number, string> = {
   4: "P",
 };
 
-/** Les 6 items de la plage « COURS » (bande déroulante demandée —
- *  dans l'ordre pédagogique). Clé = valeur stockée en base. */
+/** Les 8 items de la plage « COURS » (bande déroulante demandée —
+ *  dans l'ordre pédagogique : classes CP1 → CM2 puis RPL et MAC).
+ *  Clé = valeur stockée en base. */
 export const COURS_OPTIONS: CoursCode[] = [
-  "CP1", "CP2", "CE1", "CE2", "CM1", "CM2",
+  "CP1", "CP2", "CE1", "CE2", "CM1", "CM2", "RPL", "MAC",
 ];
 
 /** Bornes d'années des listes :
@@ -453,9 +454,9 @@ export function PersonnelDossierFields({
         />
       </div>
 
-      {/* COURS — plage demandée : bande déroulante des 6 cours tenus
-          (même position que la colonne COURS du document : après les
-          dates, avant les effectifs). */}
+      {/* COURS — plage demandée : bande déroulante des 8 cours tenus
+          (CP1 → CM2 + RPL + MAC — même position que la colonne COURS du
+          document : après les dates, avant les effectifs). */}
       <div className="grid grid-cols-2 gap-2.5">
         <div className={field}>
           <Label className="text-[11px]">Cours</Label>
@@ -470,7 +471,7 @@ export function PersonnelDossierFields({
             </SelectTrigger>
             <SelectContent className="min-w-[8.5rem]">
               <SelectGroup>
-                <SelectLabel>Cours (CP1 → CM2)</SelectLabel>
+                <SelectLabel>Cours (CP1 → CM2 · RPL · MAC)</SelectLabel>
                 <SelectItem value={UNSET}>—</SelectItem>
                 {COURS_OPTIONS.map((c) => (
                   <SelectItem key={c} value={c}>
@@ -529,7 +530,7 @@ export function personnelOf(u: {
   echelon?: number | null;
   date_entree_fp?: string | null;
   fonction?: "DIRECTEUR" | "ADJOINT(E)" | null;
-  cours?: "CP1" | "CP2" | "CE1" | "CE2" | "CM1" | "CM2" | null;
+  cours?: CoursCode | null;
   date_entree_dren?: string | null;
   date_entree_iep?: string | null;
   effectif_f?: number | null;

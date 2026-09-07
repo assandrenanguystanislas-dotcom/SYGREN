@@ -55,10 +55,11 @@ type User struct {
 	DateEntreeFP  *time.Time `json:"date_entree_fp,omitempty"`             // date d'entrée à la Fonction Publique
 	Fonction      *string    `gorm:"type:text" json:"fonction,omitempty"`  // DIRECTEUR | ADJOINT(E)
 	// Cours tenu — plage « COURS » du dossier personnel (bande
-	// déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2). Optionnel : un
-	// agent sans cours (RPL, adjoint, directeur non titulaire) reste
-	// NULL ; alimente la colonne COURS de l'état nominatif en
-	// PRIORITÉ sur la classe affectée (voir handlers/personnel.go).
+	// déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2 | RPL | MAC).
+	// Optionnel : un agent sans affectation (adjoint, directeur non
+	// titulaire) reste NULL ; alimente la colonne COURS de l'état
+	// nominatif en PRIORITÉ sur la classe affectée (voir
+	// handlers/personnel.go).
 	Cours          *string    `gorm:"type:text" json:"cours,omitempty"`
 	DateEntreeDREN *time.Time `json:"date_entree_dren,omitempty"` // entrée DREN
 	DateEntreeIEP  *time.Time `json:"date_entree_iep,omitempty"`  // entrée IEP

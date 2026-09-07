@@ -40,7 +40,7 @@ type PersonnelDossierInput struct {
 	Echelon        *int    `json:"echelon"`
 	DateEntreeFP   *string `json:"date_entree_fp"`
 	Fonction       *string `json:"fonction"`
-	Cours          *string `json:"cours"` // cours tenu — bande déroulante CP1..CM2
+	Cours          *string `json:"cours"` // cours tenu — bande déroulante CP1..CM2 · RPL · MAC
 	DateEntreeDREN *string `json:"date_entree_dren"`
 	DateEntreeIEP  *string `json:"date_entree_iep"`
 	EffectifF      *int    `json:"effectif_f"`
@@ -56,17 +56,19 @@ var (
 	validCategorie = map[string]bool{"IO": true, "IA": true, "IS": true, "IAS": true}
 	validFonction  = map[string]bool{"DIRECTEUR": true, "ADJOINT(E)": true}
 	// Cours tenus de l'école primaire (bande déroulante du dossier
-	// personnel — items EXACTS de la liste demandée).
+	// personnel — items EXACTS de la liste demandée : les 6 classes
+	// CP1 → CM2 puis les deux affectations particulières RPL et MAC).
 	validCours = map[string]bool{
 		"CP1": true, "CP2": true, "CE1": true,
 		"CE2": true, "CM1": true, "CM2": true,
+		"RPL": true, "MAC": true,
 	}
 )
 
-// classRank retourne l'ordre pédagogique d'un cours (CP1=1 … CM2=6),
-// 0 si le nom est inconnu.
+// classRank retourne l'ordre pédagogique d'un cours (CP1=1 … CM2=6,
+// RPL=7, MAC=8 — plage COURS complète), 0 si le nom est inconnu.
 func classRank(name string) int {
-	order := []string{"CP1", "CP2", "CE1", "CE2", "CM1", "CM2"}
+	order := []string{"CP1", "CP2", "CE1", "CE2", "CM1", "CM2", "RPL", "MAC"}
 	for i, n := range order {
 		if strings.EqualFold(strings.TrimSpace(name), n) {
 			return i + 1
@@ -142,12 +144,12 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 	}
 
 	// Cours tenu : normalisé en majuscules puis validé contre la bande
-	// déroulante (CP1 | CP2 | CE1 | CE2 | CM1 | CM2).
+	// déroulante (CP1 | CP2 | CE1 | CE2 | CM1 | CM2 | RPL | MAC).
 	cours := cleanDossierStr(in.Cours)
 	if cours != nil {
 		*cours = strings.ToUpper(*cours)
 		if !validCours[*cours] {
-			return fmt.Errorf("cours invalide — CP1, CP2, CE1, CE2, CM1 ou CM2 attendu")
+			return fmt.Errorf("cours invalide — CP1, CP2, CE1, CE2, CM1, CM2, RPL ou MAC attendu")
 		}
 	}
 
@@ -300,9 +302,10 @@ func GetPersonnelSheet(w http.ResponseWriter, r *http.Request) {
 	for _, u := range staff {
 		row := PersonnelStaffRow{User: u}
 		// Cours affiché dans la colonne COURS : le champ EXPLICITE du
-		// dossier personnel (bande déroulante CP1..CM2) prime sur la
-		// classe affectée (modules Classes) — utile notamment pour les
-		// agents sans classe rattachée (directeur tenant un cours, RPL…).
+		// dossier personnel (bande déroulante CP1..CM2 · RPL · MAC)
+		// prime sur la classe affectée (modules Classes) — utile notamment
+		// pour les agents sans classe rattachée (directeur tenant un
+		// cours, RPL, MAC…).
 		coursTenu := ""
 		if row.Cours != nil && *row.Cours != "" {
 			coursTenu = *row.Cours
