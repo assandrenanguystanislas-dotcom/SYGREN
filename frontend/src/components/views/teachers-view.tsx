@@ -68,6 +68,13 @@ const EMPTY: FormData = {
 export function TeachersView() {
   const user = useAuthStore((s) => s.user);
   const canEdit = user?.role === "admin" || user?.role === "director";
+  // v3 — l'adjoint(e) au directeur modifie SA PROPRE fiche (liste
+  // auto-limitée par le backend) ; création de comptes et impression de
+  // l'état nominatif restent réservés au directeur et au Super Admin
+  // (canEdit). La suppression de son propre compte est bloquée côté
+  // backend ET masquée côté interface.
+  const isTeacher = user?.role === "teacher";
+  const canModify = canEdit || isTeacher;
   // Cascade : IEP (admin) → École → recherche
   // - admin : filtre IEP optionnel → filtre École (cascade) → recherche
   // - inspector : IEP figé (RBAC backend) → filtre École → recherche
@@ -419,7 +426,7 @@ export function TeachersView() {
                       )}
                     </div>
                   </div>
-                  {canEdit && (
+                  {canModify && (
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
@@ -429,14 +436,16 @@ export function TeachersView() {
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(t)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {!isTeacher && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(t)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -478,7 +487,7 @@ export function TeachersView() {
         </div>
       )}
 
-      {canEdit && (
+      {canModify && (
         <EntityDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
@@ -548,24 +557,26 @@ export function TeachersView() {
                 </p>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="teacher-school">École</Label>
-              <Select
-                value={form.school_id}
-                onValueChange={(v) => setForm({ ...form, school_id: v })}
-              >
-                <SelectTrigger id="teacher-school">
-                  <SelectValue placeholder="Choisir une école…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {schools.map((s: SchoolWithStats) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isTeacher && (
+              <div className="space-y-1.5">
+                <Label htmlFor="teacher-school">École</Label>
+                <Select
+                  value={form.school_id}
+                  onValueChange={(v) => setForm({ ...form, school_id: v })}
+                >
+                  <SelectTrigger id="teacher-school">
+                    <SelectValue placeholder="Choisir une école…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schools.map((s: SchoolWithStats) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <PersonnelDossierFields
               value={form.personnel}
               onChange={(p) => setForm({ ...form, personnel: p })}

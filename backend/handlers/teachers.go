@@ -261,6 +261,15 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "adjoint(e) au directeur introuvable", http.StatusNotFound)
 		return
 	}
+
+	// v3 — Périmètre de modification : l'adjoint(e) au directeur ne modifie
+	// que SA PROPRE fiche (la lecture est déjà limitée à sa fiche par
+	// ListTeachers) ; il ne peut ni se réaffecter à une autre école, ni se
+	// désactiver lui-même.
+	if ctxRole(r) == models.RoleTeacher && id != ctxUserID(r) {
+		middleware.JSONError(w, "accès refusé : un adjoint(e) au directeur ne peut modifier que sa propre fiche", http.StatusForbidden)
+		return
+	}
 	if req.Personnel != nil {
 		if err := req.Personnel.applyTo(&teacher); err != nil {
 			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
@@ -284,7 +293,7 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 		}
 		teacher.Password = hashed
 	}
-	if req.SchoolID != nil && *req.SchoolID != "" {
+	if req.SchoolID != nil && *req.SchoolID != "" && ctxRole(r) != models.RoleTeacher {
 		// Vérifier que l'école a un directeur rattaché (cahier des charges).
 		var directorCount int64
 		database.DB.Model(&models.User{}).
@@ -298,7 +307,7 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 		}
 		teacher.SchoolID = req.SchoolID
 	}
-	if req.Active != nil {
+	if req.Active != nil && ctxRole(r) != models.RoleTeacher {
 		teacher.Active = *req.Active
 	}
 	if err := database.DB.Save(&teacher).Error; err != nil {
@@ -312,6 +321,12 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 // DeleteTeacher removes a teacher account (and unlinks its class).
 func DeleteTeacher(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	// v3 — un adjoint(e) ne supprime pas son propre compte (réservé au
+	// directeur de l'école, à l'Admin IEP et au Super Admin).
+	if ctxRole(r) == models.RoleTeacher {
+		middleware.JSONError(w, "accès refusé : un adjoint(e) au directeur ne peut pas supprimer son propre compte — contactez votre directeur", http.StatusForbidden)
+		return
+	}
 	// Délier les classes affectées
 	database.DB.Model(&models.Class{}).Where("teacher_id = ?", id).Update("teacher_id", nil)
 	if err := database.DB.Delete(&models.User{}, "id = ?", id).Error; err != nil {

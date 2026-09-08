@@ -66,6 +66,12 @@ const EMPTY: FormData = {
 export function DirectorsView() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
+  // v3 — périmètres fins : suppression d'un directeur et réaffectation
+  // d'école restent réservées au Super Admin et à l'Admin IEP. Le directeur
+  // modifie SON PROPRE compte (sans réaffectation ni statut) ; l'adjoint(e)
+  // modifie LE directeur de SON école (sans mot de passe ni réaffectation).
+  const isStaffAdmin = user?.role === "admin" || user?.role === "inspector";
+  const isTeacher = user?.role === "teacher";
 
   // === Filtres en cascade : IEP → École → recherche ===
   // - admin : peut choisir un IEP puis une école (cascade)
@@ -386,14 +392,16 @@ export function DirectorsView() {
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteTarget(d)}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {isStaffAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(d)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -451,46 +459,50 @@ export function DirectorsView() {
           <p className="text-[11px] text-muted-foreground -mt-2">
             Au moins un email OU un téléphone est requis (cahier des charges §4.1)
           </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="director-password">
-              {editing ? "Nouveau mot de passe (optionnel)" : "Mot de passe (optionnel)"}
-            </Label>
-            <Input
-              id="director-password"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder={editing ? "Laisser vide pour ne pas changer" : "Laisser vide → téléphone"}
-            />
-            {!editing && (
+          {!isTeacher && (
+            <div className="space-y-1.5">
+              <Label htmlFor="director-password">
+                {editing ? "Nouveau mot de passe (optionnel)" : "Mot de passe (optionnel)"}
+              </Label>
+              <Input
+                id="director-password"
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder={editing ? "Laisser vide pour ne pas changer" : "Laisser vide → téléphone"}
+              />
+              {!editing && (
+                <p className="text-[11px] text-muted-foreground">
+                  Mot de passe standard = numéro de téléphone. Le directeur
+                  pourra le modifier à tout moment via «&nbsp;Modifier votre mot
+                  de passe&nbsp;».
+                </p>
+              )}
+            </div>
+          )}
+          {isStaffAdmin && (
+            <div className="space-y-1.5">
+              <Label htmlFor="director-school">École dirigée</Label>
+              <Select
+                value={form.school_id}
+                onValueChange={(v) => setForm({ ...form, school_id: v })}
+              >
+                <SelectTrigger id="director-school">
+                  <SelectValue placeholder="Choisir une école…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schools.map((s: SchoolWithStats) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-[11px] text-muted-foreground">
-                Mot de passe standard = numéro de téléphone. Le directeur
-                pourra le modifier à tout moment via «&nbsp;Modifier votre mot
-                de passe&nbsp;».
+                Un seul directeur actif par école.
               </p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="director-school">École dirigée</Label>
-            <Select
-              value={form.school_id}
-              onValueChange={(v) => setForm({ ...form, school_id: v })}
-            >
-              <SelectTrigger id="director-school">
-                <SelectValue placeholder="Choisir une école…" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools.map((s: SchoolWithStats) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-muted-foreground">
-              Un seul directeur actif par école.
-            </p>
-          </div>
+            </div>
+          )}
           <PersonnelDossierFields
             value={form.personnel}
             onChange={(p) => setForm({ ...form, personnel: p })}

@@ -35,12 +35,21 @@ func ListDirectors(w http.ResponseWriter, r *http.Request) {
 	// Isolation des données (demande utilisateur) :
 	//   - director  : ne voit que SON PROPRE compte (l'onglet Directeurs
 	//     ne lui expose plus les directeurs des autres écoles) ;
+	//   - teacher   : ne voit que LE directeur de SON école (v3 — pour
+	//     pouvoir le modifier) ; liste vide s'il n'est rattaché à aucune école ;
 	//   - inspector : directeurs des écoles de SON IEP ;
 	//   - admin     : tous les directeurs ;
-	//   - teacher / parent : accès refusé (aucun périmètre).
+	//   - parent : accès refusé (aucun périmètre).
 	switch role {
 	case "director":
 		query = query.Where("id = ?", ctxUserID(r))
+	case "teacher":
+		schoolID := ctxSchoolID(r)
+		if schoolID == "" {
+			jsonResponse(w, http.StatusOK, map[string]interface{}{"directors": []interface{}{}, "count": 0})
+			return
+		}
+		query = query.Where("school_id = ?", schoolID)
 	case "inspector":
 		iepID := ctxIEPID(r)
 		if iepID == "" {
@@ -50,7 +59,7 @@ func ListDirectors(w http.ResponseWriter, r *http.Request) {
 		query = query.
 			Joins("JOIN schools ON schools.id = users.school_id").
 			Where("schools.iep_id = ?", iepID)
-	case models.RoleTeacher, models.RoleParent:
+	case models.RoleParent:
 		middleware.JSONError(w, "accès refusé : les directeurs d'école ne sont pas accessibles depuis ce compte", http.StatusForbidden)
 		return
 	}
@@ -233,6 +242,32 @@ func UpdateDirector(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "directeur introuvable", http.StatusNotFound)
 		return
 	}
+
+	// v3 — Périmètre de modification selon le rôle (la matrice accorde
+	// l'écriture à director/teacher ; le handler borne le champ d'action) :
+	//   - director : modifie UNIQUEMENT son propre compte ; ni réaffectation
+	//     d'école, ni changement de statut (auto-désactivation impossible) ;
+	//   - teacher  : modifie LE directeur de SON école (identité, contacts,
+	//     dossier) — mot de passe du directeur, réaffectation d'école et
+	//     statut exclus.
+	role := ctxRole(r)
+	switch role {
+	case "director":
+		if id != ctxUserID(r) {
+			middleware.JSONError(w, "accès refusé : un directeur ne peut modifier que son propre compte", http.StatusForbidden)
+			return
+		}
+	case "teacher":
+		mySchool := ctxSchoolID(r)
+		if mySchool == "" || director.SchoolID == nil || *director.SchoolID != mySchool {
+			middleware.JSONError(w, "accès refusé : seul le directeur de votre école est modifiable depuis ce compte", http.StatusForbidden)
+			return
+		}
+		if req.Password != "" {
+			middleware.JSONError(w, "le mot de passe d'un directeur ne peut être réinitialisé que par l'Admin IEP ou le Super Admin", http.StatusForbidden)
+			return
+		}
+	}
 	if req.Personnel != nil {
 		if err := req.Personnel.applyTo(&director); err != nil {
 			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
@@ -256,7 +291,7 @@ func UpdateDirector(w http.ResponseWriter, r *http.Request) {
 		}
 		director.Password = hashed
 	}
-	if req.SchoolID != nil {
+	if req.SchoolID != nil && role != "director" && role != "teacher" {
 		// Vérifier qu'aucun autre directeur n'est déjà affecté à cette école
 		if *req.SchoolID != "" {
 			var existing int64
@@ -270,7 +305,7 @@ func UpdateDirector(w http.ResponseWriter, r *http.Request) {
 		}
 		director.SchoolID = req.SchoolID
 	}
-	if req.Active != nil {
+	if req.Active != nil && role != "director" && role != "teacher" {
 		director.Active = *req.Active
 	}
 	if err := database.DB.Save(&director).Error; err != nil {
@@ -284,6 +319,17 @@ func UpdateDirector(w http.ResponseWriter, r *http.Request) {
 // DeleteDirector removes a director account.
 func DeleteDirector(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	// v3 — la suppression n'est pas une « modification » : le directeur ne
+	// supprime pas son propre compte et l'adjoint(e) ne supprime pas un
+	// directeur (réservé à l'Admin IEP et au Super Admin).
+	switch ctxRole(r) {
+	case "director":
+		middleware.JSONError(w, "accès refusé : un directeur ne peut pas supprimer son propre compte — contactez l'Admin IEP", http.StatusForbidden)
+		return
+	case models.RoleTeacher:
+		middleware.JSONError(w, "accès refusé : la suppression d'un directeur est réservée à l'Admin IEP et au Super Admin", http.StatusForbidden)
+		return
+	}
 	if err := database.DB.Delete(&models.User{}, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
 		return
