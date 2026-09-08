@@ -66,10 +66,11 @@ const EMPTY: FormData = {
 export function DirectorsView() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
-  // v3 — périmètres fins : suppression d'un directeur et réaffectation
-  // d'école restent réservées au Super Admin et à l'Admin IEP. Le directeur
+  // v4 — périmètres fins : création, suppression d'un directeur et
+  // réaffectation d'école restent réservées au Super Admin et à l'Admin IEP
+  // (écriture users.directors accordée à l'Admin IEP — T7). Le directeur
   // modifie SON PROPRE compte (sans réaffectation ni statut) ; l'adjoint(e)
-  // modifie LE directeur de SON école (sans mot de passe ni réaffectation).
+  // n'accède PAS aux comptes directeurs (v4).
   const isStaffAdmin = user?.role === "admin" || user?.role === "inspector";
   const isTeacher = user?.role === "teacher";
 
@@ -232,7 +233,7 @@ export function DirectorsView() {
                 </p>
               </div>
             </div>
-            {isAdmin && (
+            {isStaffAdmin && (
               <Button onClick={openCreate} size="sm" className="shadow-sm">
                 <Plus className="w-4 h-4 mr-1.5" />
                 Créer un directeur
@@ -316,7 +317,7 @@ export function DirectorsView() {
       </Card>
 
       {directors.length === 0 ? (
-        <EmptyState onCreate={openCreate} />
+        <EmptyState onCreate={isStaffAdmin ? openCreate : undefined} />
       ) : filtered.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-12 text-center">
