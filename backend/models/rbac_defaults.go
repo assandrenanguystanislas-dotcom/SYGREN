@@ -37,6 +37,16 @@ package models
 // de son propre compte…) sont appliqués dans les HANDLERS (directors.go /
 // teachers.go) — la matrice, elle, reste binaire lecture/écriture.
 //
+// === v4 (correction — périmètre strictement personnel) ===
+//
+//   - Chacun ne gère que SON PROPRE compte : le directeur modifie son
+//     compte directeur (ListDirectors le limite déjà à sa seule fiche) et
+//     l'adjoint(e) sa fiche adjoint — JAMAIS le compte d'un autre.
+//   - L'adjoint(e) au directeur n'accède PLUS aux comptes directeurs
+//     (v3 retiré) : users.directors lui est fermé en lecture comme en
+//     écriture, et les handlers renvoient un 403 explicite par précaution
+//     (défense en profondeur, la matrice étant modifiable à chaud).
+//
 // La matrice MIRRORS the RequireModule(...) calls in router.go. After seed,
 // every dynamic permission check returns the intended result. The super
 // admin can then edit the matrix via the /api/permissions UI.
@@ -52,7 +62,7 @@ const (
 	ModuleClasses         = "classes"          // write: admin+inspector+director
 	ModuleStudents        = "students"         // v2 write: admin+inspector+director+TEACHER
 	ModuleUsersTeachers   = "users.teachers"   // write: admin+inspector+director+teacher(self, v3)
-	ModuleUsersDirectors  = "users.directors"  // write: admin+inspector+director(self)+teacher(son école) — v3
+	ModuleUsersDirectors  = "users.directors"  // write: admin+inspector+director(self) — v4 : l'adjoint n'y accède pas
 	ModuleUsersInspectors = "users.inspectors" // write+read: admin only
 	ModuleUsersParents    = "users.parents"    // v2 NEW — CRUD comptes parents: admin+inspector
 	ModuleSubjects        = "subjects"         // write: admin+inspector+director
@@ -74,7 +84,7 @@ const (
 // RbacMatrixVersion — version de la matrice par défaut (voir seedRBAC).
 // Incrémenter à chaque changement de politique pour que les bases existantes
 // soient re-synchronisées au démarrage.
-const RbacMatrixVersion = 3
+const RbacMatrixVersion = 4
 
 // RbacMatrixVersionKey — clé du setting stockant la version appliquée.
 const RbacMatrixVersionKey = "rbac.matrix_version"
@@ -220,14 +230,15 @@ func DefaultRoleModules() []DefaultRoleModuleSeed {
 	// ListTeachers limite déjà la lecture à sa propre fiche ; le handler
 	// UpdateTeacher borne l'écriture au même périmètre).
 	out = setDefault(out, RoleTeacher, ModuleUsersTeachers, true, true)
-	// Utilisateurs · Directeurs — v3 : écriture admin + inspector
-	// (gestion IEP) + director (SON PROPRE compte uniquement) + teacher
-	// (LE directeur de SON école uniquement) ; les handlers
-	// (UpdateDirector / DeleteDirector) appliquent les garde-fous.
+	// Utilisateurs · Directeurs — v4 : écriture admin + inspector
+	// (gestion IEP) + director (SON PROPRE compte uniquement, borne par
+	// UpdateDirector). L'adjoint(e) au directeur n'y accède PAS (ni
+	// lecture ni écriture — cellule false/false pré-allouée) ; les
+	// handlers ListDirectors/UpdateDirector/DeleteDirector renvoient un
+	// 403 explicite au rôle teacher (défense en profondeur).
 	out = setDefault(out, RoleAdmin, ModuleUsersDirectors, true, true)
 	out = setDefault(out, RoleInspector, ModuleUsersDirectors, true, true)
 	out = setDefault(out, RoleDirector, ModuleUsersDirectors, true, true)
-	out = setDefault(out, RoleTeacher, ModuleUsersDirectors, true, true)
 	// Utilisateurs · Admins IEP : Super Admin seul (irréductible).
 	out = setDefault(out, RoleAdmin, ModuleUsersInspectors, true, true)
 	// v2 — Utilisateurs · Parents : admin + inspector (les parents ne sont
