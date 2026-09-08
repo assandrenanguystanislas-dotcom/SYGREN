@@ -127,12 +127,43 @@ func RequireModule(module, mode string) func(http.Handler) http.Handler {
 				return
 			}
 			if !rbac.CheckPermission(role, module, mode) {
-				JSONError(w, "accès refusé : permission "+mode+" sur "+module+" requise", http.StatusForbidden)
+				JSONError(w, "accès refusé : "+permissionFR(module, mode), http.StatusForbidden)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(r.Context()))
 		})
 	}
+}
+
+// permissionFR reformule un refus de permission ENTIÈREMENT en français
+// (demande utilisateur : aucun terme anglais dans les messages affichés
+// aux agents) :
+//   - le mode technique (« read » / « write ») devient « lecture » /
+//     « écriture » avec la bonne élision (« de lecture », « d'écriture ») ;
+//   - la clé technique du module (« users.directors ») est remplacée par
+//     son libellé français de la matrice RBAC (« Utilisateurs · Directeurs ») ;
+//     la clé brute reste le repli si le module est inconnu.
+//
+// Exemple : (users.directors, write) →
+// « permission d'écriture sur « Utilisateurs · Directeurs » requise ».
+func permissionFR(module, mode string) string {
+	var lien, modeFR string
+	switch mode {
+	case "write":
+		lien, modeFR = "d'", "écriture"
+	case "read":
+		lien, modeFR = "de ", "lecture"
+	default:
+		lien, modeFR = "", mode
+	}
+	label := module
+	for _, m := range models.AllModuleMetas() {
+		if m.Key == module {
+			label = m.Label
+			break
+		}
+	}
+	return "permission " + lien + modeFR + " sur « " + label + " » requise"
 }
 
 // CORSMiddleware allows the Next.js frontend (port 3000) to call the Go API (port 8080).
