@@ -61,7 +61,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	//    l'administration dans le module Utilisateurs ; l'admin/inspecteur
 	//    ne s'auto-inscrivent pas).
 	if req.Role != models.RoleDirector && req.Role != models.RoleTeacher {
-		middleware.JSONError(w, "rôle invalide — l'auto-inscription est réservée aux directeurs et aux adjoints au directeur", http.StatusBadRequest)
+		middleware.JSONError(w, "rôle invalide — l'auto-inscription est réservée aux directeurs et aux adjoint(e)s au directeur", http.StatusBadRequest)
 		return
 	}
 	// 2. Champs requis

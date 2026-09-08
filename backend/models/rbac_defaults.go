@@ -120,7 +120,7 @@ func AllModuleMetas() []ModuleMeta {
 		{Key: ModuleSchools, Label: "Écoles", Description: "CRUD des établissements", IconHint: "School"},
 		{Key: ModuleClasses, Label: "Classes", Description: "CP1-CM2 par école (soft-delete)", IconHint: "Layers"},
 		{Key: ModuleStudents, Label: "Élèves", Description: "CRUD élèves + import Excel", IconHint: "Users"},
-		{Key: ModuleUsersTeachers, Label: "Utilisateurs · Adjoints au directeur", Description: "CRUD adjoints au directeur", IconHint: "GraduationCap"},
+		{Key: ModuleUsersTeachers, Label: "Utilisateurs · Adjoint(e)s au directeur", Description: "CRUD adjoint(e)s au directeur", IconHint: "GraduationCap"},
 		{Key: ModuleUsersDirectors, Label: "Utilisateurs · Directeurs", Description: "CRUD directeurs (1 actif/école)", IconHint: "UserCog"},
 		{Key: ModuleUsersInspectors, Label: "Utilisateurs · Admins IEP", Description: "CRUD admins IEP (super admin seul)", IconHint: "ShieldCheck"},
 		{Key: ModuleUsersParents, Label: "Utilisateurs · Parents", Description: "CRUD comptes parents (portail bulletin individuel)", IconHint: "UserRound"},

@@ -256,7 +256,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
         {canSeeTeachers && (
           <TabsTrigger value="teachers">
             <Users className="w-4 h-4 mr-1.5" />
-            Adjoints au directeur
+            Adjoint(e)s au directeur
           </TabsTrigger>
         )}
         {canSeeDirectors && (

@@ -240,7 +240,7 @@ export function TeachersView() {
                 <Users className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="font-semibold text-base">Adjoints au directeur</h2>
+                <h2 className="font-semibold text-base">Adjoint(e)s au directeur</h2>
                 <p className="text-xs text-muted-foreground">
                   {filtered.length} adjoint(e)s au directeur affiché(e)s
                   {iepFilter !== "all" && ieps.find((i) => i.id === iepFilter)
@@ -624,7 +624,7 @@ function LoadingState() {
     <Card>
       <CardContent className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        <p className="text-sm">Chargement des adjoints au directeur…</p>
+        <p className="text-sm">Chargement des adjoint(e)s au directeur…</p>
       </CardContent>
     </Card>
   );
@@ -635,7 +635,7 @@ function ErrorState({ message }: { message: string }) {
     <Card className="border-destructive/40">
       <CardContent className="py-10 text-center">
         <p className="text-sm text-destructive font-medium">
-          Impossible de charger les adjoints au directeur
+          Impossible de charger les adjoint(e)s au directeur
         </p>
         <p className="text-xs text-muted-foreground mt-1">{message}</p>
       </CardContent>
@@ -651,8 +651,8 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         <p className="text-sm font-medium">Aucun adjoint au directeur enregistré</p>
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           {onCreate
-            ? "Créez des comptes adjoints au directeur pour qu'ils puissent saisir les notes."
-            : "Les adjoints au directeur apparaîtront ici."}
+            ? "Créez des comptes adjoint(e)s au directeur pour qu'ils puissent saisir les notes."
+            : "Les adjoint(e)s au directeur apparaîtront ici."}
         </p>
         {onCreate && (
           <Button onClick={onCreate} size="sm">

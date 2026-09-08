@@ -85,7 +85,7 @@ func ListTeachers(w http.ResponseWriter, r *http.Request) {
 
 	var teachers []models.User
 	if err := query.Order("full_name ASC").Find(&teachers).Error; err != nil {
-		middleware.JSONError(w, "erreur récupération adjoints au directeur", http.StatusInternalServerError)
+		middleware.JSONError(w, "erreur récupération adjoint(e)s au directeur", http.StatusInternalServerError)
 		return
 	}
 

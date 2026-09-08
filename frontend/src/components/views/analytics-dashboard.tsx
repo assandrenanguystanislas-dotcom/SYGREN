@@ -246,7 +246,7 @@ export function AnalyticsDashboard() {
           tone="primary"
         />
         <KpiCard
-          label="Adjoints au directeur"
+          label="Adjoint(e)s au directeur"
           value={data.teacher_count}
           icon={<GraduationCap className="w-4 h-4" />}
           tone="success"
