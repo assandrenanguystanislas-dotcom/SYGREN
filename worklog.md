@@ -3909,3 +3909,22 @@ Stage Summary:
 - La plage « COURS » (bande déroulante CP1 → CM2) est dans le dossier du personnel, validée côté API, stockée sur Neon (users.cours) et affichée dans la colonne COURS de l'état nominatif (prioritaire sur la classe affectée) + badge carte enseignant
 - Isolation des données : l'enseignant ne voit que SA fiche ( carte Mon profil), le directeur SES informations + les enseignants de SON école, l'admin IEP son IEP ; le parent est refusé (403) sur les listes du personnel ; les fuites GET /api/teachers et /api/directors (lecture ouverte) sont fermées
 - Les prénoms et noms des élèves sont en caractère d'imprimerie sur le document officiel (déjà Task 37), le bulletin individuel et le tableau à l'écran de l'onglet Fin d'année
+
+---
+Task ID: 21
+Agent: Z.ai Code (session 21 — ÉTAT NOMINATIF DU PERSONNEL : Arial 12, noms et prénoms sur une même ligne)
+Task: « dans le module utilisateurs, etat nominatif utiliser la police arial taille 12. faire en sorte que les noms et prenoms du personnel soient sur la meme ligne »
+
+Work Log:
+- Cible : frontend/src/components/views/personnel-document.tsx (document « ETAT NOMINATIF DU PERSONNEL », route /personnel-doc, ouvert depuis le module Utilisateurs > Personnel) — aucun changement backend, aucune migration Neon
+- POLICE ARIAL 12 : DOC_FONT = "Arial", "Helvetica", "Liberation Sans" (même choix que la LISTE DES CANDIDATS AU CEPE — métriques identiques sous Linux) appliqué au conteneur du document (remplace OFFICIAL_FONT Calibri/Carlito) ; entêtes et cellules du tableau 9px → 12px ; ligne École/Année scolaire 11.5 → 12px ; bloc N.B et mention « (A RETOURNER EN 03 EXEMPLAIRES) » harmonisés à 12px ; boîte du titre passe en Arial hérité (serif Cambria retiré), taille 19px conservée
+- NOMS ET PRÉNOMS SUR UNE MÊME LIGNE : nouvelle constante tdNom (whiteSpace nowrap + overflow hidden) appliquée à la cellule Nom et prénoms de StaffRow (majuscules + rouge femmes conservés) ; colonne élargie 11.5% → 15.6%
+- LARGEURS des 20 colonnes rééquilibrées pour l'Arial 12 : N° 2.4 / Nom 15.6 / Matricule 5.4 / Date-lieu naissance 10 / IO IA IS IAS 2.7 / Classe 2.4 / Échelon 2.4 / Date entrée F.P 6.8 / Fonction 5.4 / Entrée DREN 6.8 / Entrée IEP 6.8 / Cours 3.1 / Effectif F-G-T 2.8×3 / Redoublants F-G-T 2.8×3 / Contact 6.4 / Emargement 7 (dates jj/mm/aaaa calibrées pour tenir sur une ligne, colonnes numériques réduites)
+- Pièges évités : commentaire JSX brut dans <colgroup> (nœuds texte entre <col> → erreur d'hydratation React, cf. commentaire historique du fichier) → commentaire enveloppé dans {/* */} ; tdNom référençait tdLeft avant sa déclaration (ReferenceError au chargement du module) → déclarations réordonnées ; import OFFICIAL_FONT devenu inutilisé → retiré
+- Tests : next build OK (17/17 pages, /personnel-doc incluse)
+- Déploiement : commit a53dde4 (auteur assandrenanguystanislas) → Vercel READY sur a53dde4 ; Render LIVE inchangé (déploiement 73b05ae toujours actif — commit front-only, aucun redéploiement backend attendu, health HTTP 200) ; NEON : AUCUN changement de schéma
+
+Stage Summary:
+- L'état nominatif du personnel est désormais en ARIAL 12 sur tout le document (tableau, école/année, N.B, signature) — cohérent avec la LISTE DES CANDIDATS AU CEPE
+- Les noms et prénoms du personnel ne se coupent plus : cellule insécable + colonne élargie, largeurs des 20 colonnes recalibrées
+- Commit a53dde4 déployé (Vercel READY) ; aucun impact base de données
