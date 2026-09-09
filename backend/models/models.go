@@ -219,6 +219,7 @@ type Student struct {
 	FatherName  *string `gorm:"type:text" json:"father_name,omitempty"`    // nom et prénoms du père
 	MotherName  *string `gorm:"type:text" json:"mother_name,omitempty"`    // nom et prénoms de la mère
 	ActeNumber  *string `gorm:"type:text" json:"acte_number,omitempty"`    // n° de l'acte de naissance
+	ActeDate    *string `gorm:"type:text" json:"acte_date,omitempty"`      // date de l'acte de naissance (jj/mm/aaaa)
 	ActePlace   *string `gorm:"type:text" json:"acte_place,omitempty"`     // lieu d'établissement de l'acte
 	// === Résultats de fin d'année (document officiel « RESULTATS DE FIN
 	// D'ANNEE ») ===

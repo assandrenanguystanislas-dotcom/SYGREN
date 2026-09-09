@@ -67,6 +67,7 @@ interface FormData {
   father_name: string; // nom et prénoms du père
   mother_name: string; // nom et prénoms de la mère
   acte_number: string; // n° de l'acte de naissance
+  acte_date: string; // date de l'acte de naissance (input date → ISO, affiché jj/mm/aaaa)
   acte_place: string; // lieu d'établissement de l'acte
   // === Résultats de fin d'année (listes déroulantes) ===
   scolarite_cours: string; // "1".."10" — "" = non renseignée
@@ -88,6 +89,7 @@ const EMPTY: FormData = {
   father_name: "",
   mother_name: "",
   acte_number: "",
+  acte_date: "",
   acte_place: "",
   scolarite_cours: "",
   scolarite_totale: "",
@@ -253,6 +255,7 @@ export function StudentsView() {
       father_name: s.father_name ?? "",
       mother_name: s.mother_name ?? "",
       acte_number: s.acte_number ?? "",
+      acte_date: s.acte_date ?? "",
       acte_place: s.acte_place ?? "",
       scolarite_cours: s.scolarite_cours != null ? String(s.scolarite_cours) : "",
       scolarite_totale: s.scolarite_totale != null ? String(s.scolarite_totale) : "",
@@ -911,7 +914,7 @@ export function StudentsView() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="student-acte-number">N° acte de naissance</Label>
                 <Input
@@ -921,6 +924,18 @@ export function StudentsView() {
                     setForm({ ...form, acte_number: e.target.value })
                   }
                   placeholder="Ex : 1234/2020"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="student-acte-date">Date de l&apos;acte</Label>
+                <Input
+                  id="student-acte-date"
+                  type="date"
+                  value={form.acte_date}
+                  onChange={(e) =>
+                    setForm({ ...form, acte_date: e.target.value })
+                  }
                   autoComplete="off"
                 />
               </div>

@@ -179,6 +179,7 @@ export interface Student {
   father_name?: string | null; // nom et prénoms du père
   mother_name?: string | null; // nom et prénoms de la mère
   acte_number?: string | null; // n° de l'acte de naissance
+  acte_date?: string | null; // date de l'acte de naissance
   acte_place?: string | null; // lieu d'établissement de l'acte
   // === Résultats de fin d'année (document officiel) ===
   scolarite_cours?: number | null; // scolarité dans le cours (années, 1..10)

@@ -20,9 +20,11 @@
 //     année de fin de l'année scolaire en cours (rentrée août/septembre) ;
 //   - ECOLE : {nom} + CODE : {code ministériel} (gauche) ;
 //   - Effectifs « G {garçons}  F {filles}  T {total} » + Date (droite) ;
-//   - Tableau 14 colonnes exactement comme le modèle : n° | matricule |
-//     nom | prenoms | sexe | jour | mois | annee | lieu de naissance |
-//     nationalite | père | mere | nacte | lieuacte ;
+//   - Tableau 12 colonnes (demande utilisateur) : n° | matricule | nom |
+//     prenoms | sexe | date et lieu de naissance (fusion jj/mm/aaaa à
+//     {lieu}) | nationalite | nom et prénoms du père | nom et prénoms de
+//     la mère | nacte | date de l'acte | lieuacte ;
+//   - POLICE ARIAL, taille 12 (demande utilisateur) ;
 //   - Lignes vides pour compléter la page (modèle papier) ;
 //   - Pagination multipage : « ELEVES (n) » en bas de CHAQUE page, numéro
 //     de page en haut au centre, signature « LE DIRECTEUR » (soulignée)
@@ -37,7 +39,7 @@ import type { CSSProperties } from "react";
 import { studentsApi } from "@/lib/api";
 import type { StudentWithClass } from "@/lib/types";
 
-import { INK, OFFICIAL_FONT } from "./official-doc";
+import { INK } from "./official-doc";
 import { PRINT_COLOR_STYLE } from "@/components/ci-decor";
 import {
   canPrintDocument,
@@ -46,15 +48,20 @@ import {
   usePrintRole,
 } from "@/lib/print-guard";
 
-// === Pagination (hauteurs calibrées A4 paysage : zone imprimable 194mm) ===
-// Ligne de tableau : 6mm fixe. Page 1 : en-tête ~41mm + thead 8mm + 21
-// lignes (126mm) + pied 6mm ≈ 181mm ≤ 194mm. Pages suivantes : numéro 5mm
-// + thead 8mm + 27 lignes (162mm) ≈ 175mm. Dernière page : 25 lignes +
-// place pour la signature « LE DIRECTEUR ».
-const ROWS_FIRST_PAGE = 21;
-const ROWS_PER_PAGE = 27;
-const ROWS_LAST_PAGE = 25;
-const ROW_HEIGHT = "6mm";
+// POLICE ARIAL taille 12 (demande utilisateur) — Helvetica/Liberation Sans
+// en secours (métriques identiques, Linux).
+const DOC_FONT = '"Arial", "Helvetica", "Liberation Sans", sans-serif';
+
+// === Pagination (hauteurs calibrées A4 paysage : zone imprimable 194mm,
+// boîte page 192mm — padding 6mm haut/bas → 180mm utiles ; ligne 7mm en
+// Arial 12) ===
+// Page 1 : en-tête ~50mm + thead 8mm + 17 lignes (119mm) + écart 3mm ≈
+// 180mm. Pages suivantes : écart 4mm + thead 8mm + 24 lignes (168mm) =
+// 180mm. Dernière page : 22 lignes + place pour « LE DIRECTEUR ».
+const ROWS_FIRST_PAGE = 17;
+const ROWS_PER_PAGE = 24;
+const ROWS_LAST_PAGE = 22;
+const ROW_HEIGHT = "7mm";
 
 // Date du jour au format jj/mm/aaaa (rendu identique serveur/client).
 function todayFr(): string {
@@ -79,6 +86,32 @@ function titleCasePrenoms(s: string): string {
     .replace(/(^|[\s'\-])(\p{L})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
 }
 
+// « DATE ET LIEU DE NAISSANCE » (colonne fusionnée — demande utilisateur) :
+// jj/mm/aaaa à {lieu}. Dégradé gracieux : année seule, jour/mois seuls…
+function fmtDateLieuNaissance(s?: StudentWithClass | null): string {
+  if (!s) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  const j = s.birth_day;
+  const m = s.birth_month;
+  const a = s.birth_year;
+  let date = "";
+  if (j && m && a) date = `${p(j)}/${p(m)}/${a}`;
+  else if (a) date = String(a);
+  else if (j && m) date = `${p(j)}/${p(m)}`;
+  const lieu = (s.birth_place ?? "").trim();
+  if (date && lieu) return `${date} à ${lieu}`;
+  return date || lieu;
+}
+
+// « DATE DE L'ACTE » : saisie via input date (ISO aaaa-mm-jj) → affichage
+// jj/mm/aaaa ; une valeur déjà en jj/mm/aaaa passe telle quelle.
+function fmtDateActe(v: string | number | null | undefined): string {
+  const s = v == null ? "" : String(v).trim();
+  if (!s) return "";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : s;
+}
+
 // Cellule texte : null/undefined → vide (la grille reste propre comme le
 // modèle papier — les champs manquants se complètent à la main).
 function cell(v: string | number | null | undefined): string {
@@ -92,8 +125,8 @@ const GRID = "1px solid #000000";
 
 const thStyle: CSSProperties = {
   border: GRID,
-  padding: "1px 2px",
-  fontSize: "9px",
+  padding: "1px 3px",
+  fontSize: "12px",
   fontWeight: 700,
   textAlign: "center",
   verticalAlign: "middle",
@@ -107,7 +140,7 @@ function tdStyle(align: "left" | "center", red = false): CSSProperties {
   return {
     border: GRID,
     padding: "0 3px",
-    fontSize: "9.5px",
+    fontSize: "12px", // ARIAL 12 (demande utilisateur)
     height: ROW_HEIGHT,
     textAlign: align,
     verticalAlign: "middle",
@@ -120,7 +153,9 @@ function tdStyle(align: "left" | "center", red = false): CSSProperties {
   };
 }
 
-// Les 14 colonnes EXACTES du modèle (libellés en minuscules comme l'image).
+// Les 12 colonnes (demande utilisateur : fusion date+lieu de naissance,
+// père/mère « nom et prénoms », colonne DATE DE L'ACTE entre nacte et
+// lieuacte). Libellés en minuscules comme le modèle.
 const COLS: Array<{
   w: string;
   label: string;
@@ -129,20 +164,18 @@ const COLS: Array<{
   { w: "3.5%", label: "n°", align: "center" },
   { w: "8%", label: "matricule", align: "center" },
   { w: "10%", label: "nom", align: "left" },
-  { w: "13.5%", label: "prenoms", align: "left" },
-  { w: "4.5%", label: "sexe", align: "center" },
-  { w: "3.8%", label: "jour", align: "center" },
-  { w: "4.7%", label: "mois", align: "center" },
-  { w: "4.7%", label: "annee", align: "center" },
-  { w: "9.8%", label: "lieu de naissance", align: "left" },
-  { w: "8%", label: "nationalite", align: "left" },
-  { w: "11%", label: "père", align: "left" },
-  { w: "9%", label: "mere", align: "left" },
-  { w: "4.8%", label: "nacte", align: "center" },
-  { w: "4.7%", label: "lieuacte", align: "center" },
+  { w: "13%", label: "prenoms", align: "left" },
+  { w: "4%", label: "sexe", align: "center" },
+  { w: "14%", label: "date et lieu de naissance", align: "left" },
+  { w: "7.5%", label: "nationalite", align: "left" },
+  { w: "12.5%", label: "nom et prénoms du père", align: "left" },
+  { w: "11.5%", label: "nom et prénoms de la mère", align: "left" },
+  { w: "5.5%", label: "nacte", align: "center" },
+  { w: "6.5%", label: "date de l'acte", align: "center" },
+  { w: "4%", label: "lieuacte", align: "center" },
 ];
 
-// Découpe la classe en pages : [21, 27, 27, …, 25] lignes (la dernière
+// Découpe la classe en pages : [17, 24, 24, …, 22] lignes (la dernière
 // page garde la place de la signature « LE DIRECTEUR »).
 function pageCapacities(total: number): number[] {
   if (total <= ROWS_FIRST_PAGE) return [Math.max(ROWS_FIRST_PAGE - 2, 5)];
@@ -263,7 +296,7 @@ export function CandidatesListDocument({
       <div
         id="liste-candidats-doc"
         className={`mx-auto my-3 ${canPrint ? "" : "print-locked"}`}
-        style={{ width: "100%", maxWidth: "281mm", fontFamily: OFFICIAL_FONT, color: INK }}
+        style={{ width: "100%", maxWidth: "281mm", fontFamily: DOC_FONT, color: INK }}
       >
         {pages.map((rows, pageIdx) => {
           const isFirst = pageIdx === 0;
@@ -289,7 +322,7 @@ export function CandidatesListDocument({
                   left: 0,
                   right: 0,
                   textAlign: "center",
-                  fontSize: "10px",
+                  fontSize: "11px",
                   color: INK,
                 }}
               >
@@ -307,7 +340,7 @@ export function CandidatesListDocument({
                   }}
                 >
                   {/* Bloc ministériel + école (gauche) */}
-                  <div style={{ width: "33%", fontSize: "10.5px", lineHeight: 1.4 }}>
+                  <div style={{ width: "33%", fontSize: "12px", lineHeight: 1.3 }}>
                     <div>Ministère de l&apos;Education Nationale</div>
                     <div>Et de l&apos;Alphabétisation</div>
                     <div style={{ fontStyle: "italic", fontWeight: 700, marginTop: "1px" }}>
@@ -334,10 +367,10 @@ export function CandidatesListDocument({
                         {iep?.inspector_email || "…………"}
                       </span>
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: "12px", marginTop: "5px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "13px", marginTop: "5px" }}>
                       ECOLE : {data.school.name}
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: "11px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "12px" }}>
                       CODE: {data.school.code || "…………"}
                     </div>
                   </div>
@@ -378,12 +411,12 @@ export function CandidatesListDocument({
                     style={{
                       width: "21%",
                       textAlign: "center",
-                      fontSize: "11px",
-                      lineHeight: 1.35,
+                      fontSize: "12px",
+                      lineHeight: 1.3,
                     }}
                   >
                     <div>République de Côte d&apos;Ivoire</div>
-                    <div style={{ fontSize: "10.5px", padding: "1px 0" }}>
+                    <div style={{ fontSize: "11.5px", padding: "1px 0" }}>
                       Union-Discipline-Travail
                     </div>
                     <img
@@ -394,14 +427,14 @@ export function CandidatesListDocument({
                     <div
                       style={{
                         fontWeight: 700,
-                        fontSize: "12.5px",
+                        fontSize: "13px",
                         letterSpacing: "1.5px",
                         marginTop: "3px",
                       }}
                     >
                       G {garcons}&nbsp;&nbsp;F {filles}&nbsp;&nbsp;T {total}
                     </div>
-                    <div style={{ fontWeight: 600, fontSize: "10.5px", marginTop: "1px" }}>
+                    <div style={{ fontWeight: 600, fontSize: "11.5px", marginTop: "1px" }}>
                       Date: {todayFr()}
                     </div>
                   </div>
@@ -449,14 +482,12 @@ export function CandidatesListDocument({
                           {s?.first_name ? titleCasePrenoms(s.first_name) : ""}
                         </td>
                         <td style={tdStyle("center")}>{cell(s?.gender)}</td>
-                        <td style={tdStyle("center")}>{cell(s?.birth_day)}</td>
-                        <td style={tdStyle("center")}>{cell(s?.birth_month)}</td>
-                        <td style={tdStyle("center")}>{cell(s?.birth_year)}</td>
-                        <td style={tdStyle("left")}>{cell(s?.birth_place)}</td>
+                        <td style={tdStyle("left")}>{fmtDateLieuNaissance(s)}</td>
                         <td style={tdStyle("left")}>{cell(s?.nationality)}</td>
                         <td style={tdStyle("left")}>{cell(s?.father_name)}</td>
                         <td style={tdStyle("left")}>{cell(s?.mother_name)}</td>
                         <td style={tdStyle("center")}>{cell(s?.acte_number)}</td>
+                        <td style={tdStyle("center")}>{fmtDateActe(s?.acte_date)}</td>
                         <td style={tdStyle("center")}>{cell(s?.acte_place)}</td>
                       </tr>
                     );
@@ -488,7 +519,7 @@ export function CandidatesListDocument({
                   left: 0,
                   right: 0,
                   textAlign: "center",
-                  fontSize: "11px",
+                  fontSize: "12px",
                   color: INK,
                 }}
               >

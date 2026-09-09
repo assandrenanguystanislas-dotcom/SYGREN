@@ -473,6 +473,7 @@ export const studentsApi = {
     father_name?: string; // nom et prénoms du père
     mother_name?: string; // nom et prénoms de la mère
     acte_number?: string; // n° de l'acte de naissance
+    acte_date?: string; // date de l'acte de naissance
     acte_place?: string; // lieu d'établissement de l'acte
     // === Résultats de fin d'année ===
     scolarite_cours?: number; // 1..10 — 0/absent = non renseignée
@@ -500,6 +501,7 @@ export const studentsApi = {
       father_name: string;
       mother_name: string;
       acte_number: string;
+      acte_date: string;
       acte_place: string;
       matricule: string; // string vide = effacer le matricule
       // === Résultats de fin d'année — 0/"" = effacer (NULL) ===

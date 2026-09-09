@@ -217,6 +217,7 @@ type CreateStudentRequest struct {
 	FatherName  *string `json:"father_name,omitempty"` // nom et prénoms du père
 	MotherName  *string `json:"mother_name,omitempty"` // nom et prénoms de la mère
 	ActeNumber  *string `json:"acte_number,omitempty"` // n° de l'acte de naissance
+	ActeDate    *string `json:"acte_date,omitempty"`   // date de l'acte de naissance
 	ActePlace   *string `json:"acte_place,omitempty"`  // lieu d'établissement de l'acte
 	// === Résultats de fin d'année (document officiel) ===
 	// Scolarités : listes déroulantes 1..10 (création : 0/absent = non
@@ -433,6 +434,7 @@ func CreateStudent(w http.ResponseWriter, r *http.Request) {
 	student.FatherName = normalizeTextPtr(req.FatherName)
 	student.MotherName = normalizeTextPtr(req.MotherName)
 	student.ActeNumber = normalizeTextPtr(req.ActeNumber)
+	student.ActeDate = normalizeTextPtr(req.ActeDate)
 	student.ActePlace = normalizeTextPtr(req.ActePlace)
 
 	// === Résultats de fin d'année (création : 0/absent → NULL) ===
@@ -602,6 +604,9 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ActeNumber != nil {
 		student.ActeNumber = normalizeTextPtr(req.ActeNumber)
+	}
+	if req.ActeDate != nil {
+		student.ActeDate = normalizeTextPtr(req.ActeDate)
 	}
 	if req.ActePlace != nil {
 		student.ActePlace = normalizeTextPtr(req.ActePlace)
