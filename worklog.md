@@ -3928,3 +3928,20 @@ Stage Summary:
 - L'état nominatif du personnel est désormais en ARIAL 12 sur tout le document (tableau, école/année, N.B, signature) — cohérent avec la LISTE DES CANDIDATS AU CEPE
 - Les noms et prénoms du personnel ne se coupent plus : cellule insécable + colonne élargie, largeurs des 20 colonnes recalibrées
 - Commit a53dde4 déployé (Vercel READY) ; aucun impact base de données
+
+---
+Task ID: 22
+Agent: Z.ai Code (session 22 — ÉTAT NOMINATIF : entêtes verticaux, Arial 10 directeur/adjoint(e), contacts sans +225)
+Task: « ecrire classe, echelon, cours en verticale et prendre la police arial taille 10 pour les cases dédiées au directeur et adjoint aux contacts. pour les contacts enlever les +225 »
+
+Work Log:
+- Cible : personnel-document.tsx (état nominatif du personnel) — front-only, aucune migration Neon
+- ENTÊTES VERTICAUX : CLASSE, ÉCHELON, COURS écrits verticalement (bas → haut) via thVerticalSpan (writingMode vertical-rl + transform rotate 180deg, nowrap) dans des cellules thVertical (padding réduit) — les colonnes étroites (2.4-3.1 %) gardent leur largeur, l'entête s'allonge comme sur les tableaux administratifs
+- ARIAL 10 CADRES : StaffRow détecte isOfficial = /direct|adjoint/i sur s.fonction (valeurs réelles Neon : « DIRECTEUR » ×4, « ADJOINT(E) » ×1) → TOUTES les cellules des lignes directeur/directrice/adjoint(e) en 10px (tdc/tdl + cellule nom 10px, majuscules + rouge femmes conservés) ; autres agents en Arial 12
+- CONTACTS : tdContact (10px, nowrap) sur TOUTE la colonne (uniforme) + fmtContact() retire le préfixe « +225 » à l'affichage (+2250101263515 → 0101263515) ; numéros sans indicatif inchangés (10 chiffres constatés en base pour la majorité)
+- Inspection données réelles : requêtes API + Neon (scripts/inspect_phones.py) — phones mixtes (10 avec +225, le reste en 10 chiffres), fonctions « DIRECTEUR »/« ADJOINT(E) » → détection regex justifiée
+- Tests : next build OK (17/17) ; commit 8710250 (auteur assandrenanguystanislas) ; Vercel READY sur 8710250 ; Render LIVE health 200 (commit front-only → déploiement backend 73b05ae inchangé, attendu)
+
+Stage Summary:
+- Entêtes CLASSE / ÉCHELON / COURS verticaux, lignes directeur & adjoint(e) en Arial 10, colonne Contact en Arial 10 sans préfixe +225 — l'état nominatif reste en Arial 12 ailleurs, noms/prénoms toujours insécables
+- Commit 8710250 déployé (Vercel READY, Render LIVE inchangé) ; aucun impact base de données
