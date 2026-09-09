@@ -207,6 +207,19 @@ type Student struct {
 	// mais n'est pas exposé dans l'UI (champ dormant depuis l'origine).
 	BirthYear *int       `gorm:"type:integer" json:"birth_year,omitempty"`
 	BirthDate *time.Time `json:"birth_date,omitempty"`
+	// === Identité civile étendue (demande utilisateur — inscription) ===
+	// Jour + mois complètent l'année de naissance (BirthYear) pour former
+	// la date complète ; les champs texte sont trimés, "" → NULL.
+	// Nullable : NULL = non renseigné (les élèves existants ne sont pas
+	// impactés — AutoMigrate ajoute les colonnes sans backfill).
+	BirthDay    *int    `gorm:"type:integer" json:"birth_day,omitempty"`   // 1..31
+	BirthMonth  *int    `gorm:"type:integer" json:"birth_month,omitempty"` // 1..12
+	BirthPlace  *string `gorm:"type:text" json:"birth_place,omitempty"`    // lieu de naissance
+	Nationality *string `gorm:"type:text" json:"nationality,omitempty"`    // nationalité
+	FatherName  *string `gorm:"type:text" json:"father_name,omitempty"`    // nom et prénoms du père
+	MotherName  *string `gorm:"type:text" json:"mother_name,omitempty"`    // nom et prénoms de la mère
+	ActeNumber  *string `gorm:"type:text" json:"acte_number,omitempty"`    // n° de l'acte de naissance
+	ActePlace   *string `gorm:"type:text" json:"acte_place,omitempty"`     // lieu d'établissement de l'acte
 	// === Résultats de fin d'année (document officiel « RESULTATS DE FIN
 	// D'ANNEE ») ===
 	// ScolariteCours — scolarité dans le cours (années passées dans l'école),

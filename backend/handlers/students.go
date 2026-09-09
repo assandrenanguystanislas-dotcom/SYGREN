@@ -101,6 +101,18 @@ type CreateStudentRequest struct {
 	Gender    string  `json:"gender"`               // M / F
 	BirthYear *int    `json:"birth_year,omitempty"` // année de naissance seule, ex: 2006 (optionnel)
 	BirthDate *string `json:"birth_date,omitempty"` // ISO 8601 (dormant — pas d'UI)
+	// === Identité civile étendue (demande utilisateur) ===
+	// Jour/mois complètent l'année ; textes trimés ("" → NULL).
+	// Sémantique : création 0/absent/"" = non renseigné ; mise à jour
+	// nil = inchangé, 0/"" = effacer (NULL).
+	BirthDay    *int    `json:"birth_day,omitempty"`   // 1..31
+	BirthMonth  *int    `json:"birth_month,omitempty"` // 1..12
+	BirthPlace  *string `json:"birth_place,omitempty"` // lieu de naissance
+	Nationality *string `json:"nationality,omitempty"` // nationalité
+	FatherName  *string `json:"father_name,omitempty"` // nom et prénoms du père
+	MotherName  *string `json:"mother_name,omitempty"` // nom et prénoms de la mère
+	ActeNumber  *string `json:"acte_number,omitempty"` // n° de l'acte de naissance
+	ActePlace   *string `json:"acte_place,omitempty"`  // lieu d'établissement de l'acte
 	// === Résultats de fin d'année (document officiel) ===
 	// Scolarités : listes déroulantes 1..10 (création : 0/absent = non
 	// renseigné ; mise à jour : nil = inchangé, 0 = effacer).
@@ -131,6 +143,37 @@ func validateBirthYear(y int) error {
 		return fmt.Errorf("année de naissance invalide : %d (attendu entre 1900 et %d)", y, current)
 	}
 	return nil
+}
+
+// validateBirthDay vérifie la plage du jour de naissance (1..31 — la
+// validité calendaire fine dépend du mois/année, on reste sur 1..31
+// comme sur le formulaire d'inscription papier).
+func validateBirthDay(d int) error {
+	if d < 1 || d > 31 {
+		return fmt.Errorf("jour de naissance invalide : %d (attendu entre 1 et 31)", d)
+	}
+	return nil
+}
+
+// validateBirthMonth vérifie la plage du mois de naissance (1..12).
+func validateBirthMonth(m int) error {
+	if m < 1 || m > 12 {
+		return fmt.Errorf("mois de naissance invalide : %d (attendu entre 1 et 12)", m)
+	}
+	return nil
+}
+
+// normalizeTextPtr trime un champ texte optionnel : nil → nil (inchangé /
+// non renseigné), "" ou blancs → nil (NULL en base), sinon la valeur trimée.
+func normalizeTextPtr(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*s)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 // validateScolarite vérifie la plage d'une scolarité (années) du document
@@ -263,6 +306,30 @@ func CreateStudent(w http.ResponseWriter, r *http.Request) {
 		student.BirthYear = &y
 	}
 
+	// === Identité civile étendue (création : 0/absent/"" → NULL) ===
+	if req.BirthDay != nil && *req.BirthDay != 0 {
+		if err := validateBirthDay(*req.BirthDay); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		v := *req.BirthDay
+		student.BirthDay = &v
+	}
+	if req.BirthMonth != nil && *req.BirthMonth != 0 {
+		if err := validateBirthMonth(*req.BirthMonth); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		v := *req.BirthMonth
+		student.BirthMonth = &v
+	}
+	student.BirthPlace = normalizeTextPtr(req.BirthPlace)
+	student.Nationality = normalizeTextPtr(req.Nationality)
+	student.FatherName = normalizeTextPtr(req.FatherName)
+	student.MotherName = normalizeTextPtr(req.MotherName)
+	student.ActeNumber = normalizeTextPtr(req.ActeNumber)
+	student.ActePlace = normalizeTextPtr(req.ActePlace)
+
 	// === Résultats de fin d'année (création : 0/absent → NULL) ===
 	if req.ScolariteCours != nil && *req.ScolariteCours != 0 {
 		if err := validateScolarite("scolarité dans le cours", *req.ScolariteCours); err != nil {
@@ -391,6 +458,48 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 			y := *req.BirthYear
 			student.BirthYear = &y
 		}
+	}
+
+	// === Identité civile étendue : nil = inchangé ; 0/"" = effacer (NULL) ===
+	if req.BirthDay != nil {
+		if *req.BirthDay == 0 {
+			student.BirthDay = nil
+		} else if err := validateBirthDay(*req.BirthDay); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		} else {
+			v := *req.BirthDay
+			student.BirthDay = &v
+		}
+	}
+	if req.BirthMonth != nil {
+		if *req.BirthMonth == 0 {
+			student.BirthMonth = nil
+		} else if err := validateBirthMonth(*req.BirthMonth); err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		} else {
+			v := *req.BirthMonth
+			student.BirthMonth = &v
+		}
+	}
+	if req.BirthPlace != nil {
+		student.BirthPlace = normalizeTextPtr(req.BirthPlace)
+	}
+	if req.Nationality != nil {
+		student.Nationality = normalizeTextPtr(req.Nationality)
+	}
+	if req.FatherName != nil {
+		student.FatherName = normalizeTextPtr(req.FatherName)
+	}
+	if req.MotherName != nil {
+		student.MotherName = normalizeTextPtr(req.MotherName)
+	}
+	if req.ActeNumber != nil {
+		student.ActeNumber = normalizeTextPtr(req.ActeNumber)
+	}
+	if req.ActePlace != nil {
+		student.ActePlace = normalizeTextPtr(req.ActePlace)
 	}
 
 	// === Résultats de fin d'année : nil = inchangé ; 0/"" = effacer (NULL) ===

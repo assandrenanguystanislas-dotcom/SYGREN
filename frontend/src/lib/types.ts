@@ -171,6 +171,15 @@ export interface Student {
   gender: "M" | "F" | string;
   birth_date?: string | null;
   birth_year?: number | null; // année de naissance seule (ex: 2006) — null si non renseignée
+  // === Identité civile étendue (demande utilisateur) ===
+  birth_day?: number | null; // jour de naissance (1..31) — null si non renseigné
+  birth_month?: number | null; // mois de naissance (1..12) — null si non renseigné
+  birth_place?: string | null; // lieu de naissance
+  nationality?: string | null; // nationalité
+  father_name?: string | null; // nom et prénoms du père
+  mother_name?: string | null; // nom et prénoms de la mère
+  acte_number?: string | null; // n° de l'acte de naissance
+  acte_place?: string | null; // lieu d'établissement de l'acte
   // === Résultats de fin d'année (document officiel) ===
   scolarite_cours?: number | null; // scolarité dans le cours (années, 1..10)
   scolarite_totale?: number | null; // scolarité totale (années, 1..10)

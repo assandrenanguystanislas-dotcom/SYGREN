@@ -58,6 +58,15 @@ interface FormData {
   gender: "M" | "F";
   matricule: string; // fourni par le Ministère de l'Éducation (optionnel)
   birth_year: string; // année de naissance seule, ex: "2006" — state string (input), parse à la soumission ; "" = non renseignée
+  // === Identité civile étendue (demande utilisateur) ===
+  birth_day: string; // "1".."31" — "" = non renseigné
+  birth_month: string; // "1".."12" — "" = non renseigné
+  birth_place: string; // lieu de naissance
+  nationality: string; // nationalité
+  father_name: string; // nom et prénoms du père
+  mother_name: string; // nom et prénoms de la mère
+  acte_number: string; // n° de l'acte de naissance
+  acte_place: string; // lieu d'établissement de l'acte
   // === Résultats de fin d'année (listes déroulantes) ===
   scolarite_cours: string; // "1".."10" — "" = non renseignée
   scolarite_totale: string; // "1".."10" — "" = non renseignée
@@ -71,18 +80,49 @@ const EMPTY: FormData = {
   gender: "M",
   matricule: "",
   birth_year: "",
+  birth_day: "",
+  birth_month: "",
+  birth_place: "",
+  nationality: "",
+  father_name: "",
+  mother_name: "",
+  acte_number: "",
+  acte_place: "",
   scolarite_cours: "",
   scolarite_totale: "",
   decision_conseil: "",
 };
 
+// Mois de naissance (liste déroulante) — valeur = index + 1 (janvier = 1).
+const MONTHS_FR = [
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
+];
+
 // Payload API : birth_year / scolarités sont des numbers (0 = non
 // renseignée / effacer) ; decision_conseil "" = pas encore statuée / effacer.
 type StudentPayload = Omit<
   FormData,
-  "birth_year" | "scolarite_cours" | "scolarite_totale" | "decision_conseil"
+  | "birth_year"
+  | "birth_day"
+  | "birth_month"
+  | "scolarite_cours"
+  | "scolarite_totale"
+  | "decision_conseil"
 > & {
   birth_year: number;
+  birth_day: number;
+  birth_month: number;
   scolarite_cours: number;
   scolarite_totale: number;
   decision_conseil: DecisionConseil | "";
@@ -204,6 +244,14 @@ export function StudentsView() {
       gender: s.gender as "M" | "F",
       matricule: s.matricule ?? "",
       birth_year: s.birth_year != null ? String(s.birth_year) : "",
+      birth_day: s.birth_day != null ? String(s.birth_day) : "",
+      birth_month: s.birth_month != null ? String(s.birth_month) : "",
+      birth_place: s.birth_place ?? "",
+      nationality: s.nationality ?? "",
+      father_name: s.father_name ?? "",
+      mother_name: s.mother_name ?? "",
+      acte_number: s.acte_number ?? "",
+      acte_place: s.acte_place ?? "",
       scolarite_cours: s.scolarite_cours != null ? String(s.scolarite_cours) : "",
       scolarite_totale: s.scolarite_totale != null ? String(s.scolarite_totale) : "",
       decision_conseil: s.decision_conseil ?? "",
@@ -213,9 +261,11 @@ export function StudentsView() {
   }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // birth_year / scolarités : "" (champ vide) → 0 → backend = NULL (non
-    // renseignée / effacée). decision_conseil : "" → backend = NULL.
+    // birth_year / jour / mois / scolarités : "" (champ vide) → 0 → backend =
+    // NULL (non renseignée / effacée). decision_conseil : "" → backend = NULL.
     const birth_year = form.birth_year ? parseInt(form.birth_year, 10) : 0;
+    const birth_day = form.birth_day ? parseInt(form.birth_day, 10) : 0;
+    const birth_month = form.birth_month ? parseInt(form.birth_month, 10) : 0;
     const scolarite_cours = form.scolarite_cours
       ? parseInt(form.scolarite_cours, 10)
       : 0;
@@ -225,6 +275,8 @@ export function StudentsView() {
     const payload: StudentPayload = {
       ...form,
       birth_year,
+      birth_day,
+      birth_month,
       scolarite_cours,
       scolarite_totale,
       decision_conseil: form.decision_conseil as DecisionConseil | "",
@@ -679,6 +731,65 @@ export function StudentsView() {
                 />
               </div>
             </div>
+            {/* === Naissance : jour + mois + année (demande utilisateur) === */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="student-birth-day">Jour</Label>
+                <Select
+                  value={form.birth_day}
+                  onValueChange={(v) => setForm({ ...form, birth_day: v })}
+                >
+                  <SelectTrigger id="student-birth-day">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    {Array.from({ length: 31 }, (_, k) => (
+                      <SelectItem key={k + 1} value={String(k + 1)}>
+                        {k + 1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="student-birth-month">Mois</Label>
+                <Select
+                  value={form.birth_month}
+                  onValueChange={(v) => setForm({ ...form, birth_month: v })}
+                >
+                  <SelectTrigger id="student-birth-month">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    {MONTHS_FR.map((m, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="student-birth-year">Année de naissance</Label>
+                <Input
+                  id="student-birth-year"
+                  value={form.birth_year}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      birth_year: e.target.value.replace(/[^0-9]/g, "").slice(0, 4),
+                    })
+                  }
+                  placeholder="Ex : 2006"
+                  inputMode="numeric"
+                  autoComplete="off"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Optionnel — définit l&apos;âge dans les Résultats de fin
+                  d&apos;année.
+                </p>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="student-gender">Sexe</Label>
@@ -698,25 +809,80 @@ export function StudentsView() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="student-birth-year">Année de naissance</Label>
+                <Label htmlFor="student-nationality">Nationalité</Label>
                 <Input
-                  id="student-birth-year"
-                  value={form.birth_year}
+                  id="student-nationality"
+                  value={form.nationality}
                   onChange={(e) =>
-                    setForm({
-                      ...form,
-                      birth_year: e.target.value.replace(/[^0-9]/g, "").slice(0, 4),
-                    })
+                    setForm({ ...form, nationality: e.target.value })
                   }
-                  placeholder="Ex : 2006"
-                  inputMode="numeric"
+                  placeholder="Ex : Ivoirienne"
                   autoComplete="off"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Format court — uniquement l&apos;année. Optionnel. Définit
-                  l&apos;âge de l&apos;élève dans les Résultats de fin
-                  d&apos;année.
-                </p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="student-birth-place">Lieu de naissance</Label>
+              <Input
+                id="student-birth-place"
+                value={form.birth_place}
+                onChange={(e) =>
+                  setForm({ ...form, birth_place: e.target.value })
+                }
+                placeholder="Ex : Yamoussoukro"
+                autoComplete="off"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="student-father">Père</Label>
+                <Input
+                  id="student-father"
+                  value={form.father_name}
+                  onChange={(e) =>
+                    setForm({ ...form, father_name: e.target.value })
+                  }
+                  placeholder="Nom et prénoms du père"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="student-mother">Mère</Label>
+                <Input
+                  id="student-mother"
+                  value={form.mother_name}
+                  onChange={(e) =>
+                    setForm({ ...form, mother_name: e.target.value })
+                  }
+                  placeholder="Nom et prénoms de la mère"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="student-acte-number">N° acte de naissance</Label>
+                <Input
+                  id="student-acte-number"
+                  value={form.acte_number}
+                  onChange={(e) =>
+                    setForm({ ...form, acte_number: e.target.value })
+                  }
+                  placeholder="Ex : 1234/2020"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="student-acte-place">Lieu de l&apos;acte</Label>
+                <Input
+                  id="student-acte-place"
+                  value={form.acte_place}
+                  onChange={(e) =>
+                    setForm({ ...form, acte_place: e.target.value })
+                  }
+                  placeholder="Centre d'état civil où l'acte est établi"
+                  autoComplete="off"
+                />
               </div>
             </div>
             {/* === Résultats de fin d'année — listes déroulantes === */}

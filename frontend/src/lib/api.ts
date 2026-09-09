@@ -455,6 +455,15 @@ export const studentsApi = {
     gender: "M" | "F";
     matricule?: string; // fourni par le Ministère de l'Éducation (optionnel)
     birth_year?: number; // année de naissance seule, ex: 2006 — 0/absent = non renseignée
+    // === Identité civile étendue (demande utilisateur) ===
+    birth_day?: number; // 1..31 — 0/absent = non renseigné
+    birth_month?: number; // 1..12 — 0/absent = non renseigné
+    birth_place?: string; // lieu de naissance — "" = non renseigné
+    nationality?: string; // nationalité
+    father_name?: string; // nom et prénoms du père
+    mother_name?: string; // nom et prénoms de la mère
+    acte_number?: string; // n° de l'acte de naissance
+    acte_place?: string; // lieu d'établissement de l'acte
     // === Résultats de fin d'année ===
     scolarite_cours?: number; // 1..10 — 0/absent = non renseignée
     scolarite_totale?: number; // 1..10 — 0/absent = non renseignée
@@ -473,6 +482,15 @@ export const studentsApi = {
       gender: "M" | "F";
       birth_year: number; // année seule — 0 = effacer (NULL)
       birth_date: string;
+      // === Identité civile étendue — 0/"" = effacer (NULL) ===
+      birth_day: number; // 1..31 — 0 = effacer
+      birth_month: number; // 1..12 — 0 = effacer
+      birth_place: string; // string vide = effacer
+      nationality: string;
+      father_name: string;
+      mother_name: string;
+      acte_number: string;
+      acte_place: string;
       matricule: string; // string vide = effacer le matricule
       // === Résultats de fin d'année — 0/"" = effacer (NULL) ===
       scolarite_cours: number; // 1..10
