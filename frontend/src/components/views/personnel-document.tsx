@@ -36,6 +36,17 @@
 //     insécable (nowrap) + colonne élargie et largeurs des 20 colonnes
 //     rééquilibrées en conséquence.
 //
+// v5 — LECTURE VERTICALE + ARIAL 10 CADRES + CONTACTS SANS +225
+//   (demande utilisateur) :
+//   - Entêtes CLASSE, ÉCHELON et COURS écrits VERTICALEMENT (bas → haut,
+//     writing-mode vertical-rl + rotation 180°) comme sur les tableaux
+//     administratifs — colonnes étroites préservées ;
+//   - Lignes du DIRECTEUR / de la DIRECTRICE et de l'ADJOINT(E) (fonction
+//     déclarée dans le dossier) en ARIAL 10 ;
+//   - Colonne CONTACT en ARIAL 10, préfixe « +225 » retiré à l'affichage
+//     (+2250101263515 → 0101263515) ; les numéros saisis sans indicatif
+//     passent inchangés.
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -89,6 +100,15 @@ function sumCol(values: Array<number | null | undefined>): number | null {
   return vals.reduce((a, b) => a + b, 0);
 }
 
+/** CONTACT : préfixe « +225 » retiré à l'affichage (demande utilisateur)
+ *  — « +2250101263515 » → « 0101263515 ». Un numéro saisi sans indicatif
+ *  passe inchangé ; un numéro qui NE commence PAS par 225 aussi. */
+function fmtContact(v: string | null | undefined): string {
+  const s = (v ?? "").trim();
+  if (!s) return "";
+  return s.replace(/^\+?225/, "").trim();
+}
+
 // Bordures du tableau en VERT DRAPEAU (inspiration bulletins individuels)
 // et entêtes sur FOND VERT DRAPEAU (texte blanc, sortent à l'impression
 // grâce à print-color-adjust: exact).
@@ -126,6 +146,30 @@ const tdNom: React.CSSProperties = {
   whiteSpace: "nowrap",
   overflow: "hidden",
 };
+
+/** Cellule CONTACT : ARIAL 10 (demande utilisateur) — la colonne entière
+ *  est uniformisée (le « +225 » retiré par fmtContact allège aussi le
+ *  contenu). */
+const tdContact: React.CSSProperties = {
+  ...tdLeft,
+  fontSize: "10px",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+};
+
+/** Libellé d'entête écrit VERTICALEMENT (bas → haut) : CLASSE, ÉCHELON,
+ *  COURS — demande utilisateur. writing-mode vertical + rotation 180°,
+ *  lisible de bas en haut comme sur les tableaux administratifs. */
+const thVerticalSpan: CSSProperties = {
+  writingMode: "vertical-rl",
+  transform: "rotate(180deg)",
+  display: "inline-block",
+  whiteSpace: "nowrap",
+  letterSpacing: "0.5px",
+};
+
+/** Cellule d'entête verticale : padding réduit (la colonne est étroite). */
+const thVertical: CSSProperties = { ...th, padding: "3px 2px" };
 
 export function PersonnelDocument({
   schoolId,
@@ -347,11 +391,12 @@ export function PersonnelDocument({
                 <br />
                 IS IAS
               </th>
-              <th style={th} rowSpan={2}>
-                Classe
+              <th style={thVertical} rowSpan={2}>
+                {/* v5 — libellé écrit VERTICALEMENT (demande utilisateur) */}
+                <span style={thVerticalSpan}>Classe</span>
               </th>
-              <th style={th} rowSpan={2}>
-                Échelon
+              <th style={thVertical} rowSpan={2}>
+                <span style={thVerticalSpan}>Échelon</span>
               </th>
               <th style={th} rowSpan={2}>
                 Date entrée F.P
@@ -362,8 +407,9 @@ export function PersonnelDocument({
               <th style={th} colSpan={2}>
                 Dates
               </th>
-              <th style={th} rowSpan={2}>
-                Cours
+              <th style={thVertical} rowSpan={2}>
+                {/* v5 — libellé écrit VERTICALEMENT (demande utilisateur) */}
+                <span style={thVerticalSpan}>Cours</span>
               </th>
               <th style={th} colSpan={3}>
                 Effectif
@@ -490,9 +536,24 @@ export function PersonnelDocument({
   );
 }
 
-/** Une ligne agent du tableau (20 cellules). */
+/** Une ligne agent du tableau (20 cellules).
+ *
+ *  v5 — les lignes dont la FONCTION déclarée dans le dossier contient
+ *  « Directeur / Directrice / Adjoint » (le directeur et l'adjoint au
+ *  directeur) passent en ARIAL 10 (demande utilisateur) ; la colonne
+ *  CONTACT est en ARIAL 10 pour toutes les lignes et le préfixe « +225 »
+ *  est retiré à l'affichage. */
 function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
   const isWoman = s.sexe === "F";
+  const isOfficial = /direct|adjoint/i.test(s.fonction ?? "");
+  // Cellules de la ligne : ARIAL 10 pour le directeur et l'adjoint(e),
+  // ARIAL 12 pour les autres agents.
+  const tdc: React.CSSProperties = isOfficial
+    ? { ...td, fontSize: "10px" }
+    : td;
+  const tdl: React.CSSProperties = isOfficial
+    ? { ...tdLeft, fontSize: "10px" }
+    : tdLeft;
   const birth = formatDossierDate(s.date_naissance);
   const birthCell = birth
     ? s.lieu_naissance
@@ -501,24 +562,25 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
     : (s.lieu_naissance ?? "");
   return (
     <tr>
-      <td style={td}>{n}</td>
+      <td style={tdc}>{n}</td>
       <td
         style={{
           ...tdNom,
           fontWeight: 600,
           // Task 37 — noms et prénoms EN CARACTÈRE D'IMPRIMERIE
-          // (majuscules), police 12 ; v4 — UNE SEULE LIGNE (nowrap).
-          fontSize: "12px",
+          // (majuscules) ; v4 — police 12 + UNE SEULE LIGNE (nowrap) ;
+          // v5 — ARIAL 10 sur les lignes directeur / adjoint(e).
+          fontSize: isOfficial ? "10px" : "12px",
           textTransform: "uppercase",
           color: isWoman ? "#e00000" : INK, // « écrire le nom des femmes en rouge »
         }}
       >
         {s.full_name}
       </td>
-      <td style={td}>{s.matricule ?? ""}</td>
-      <td style={tdLeft}>{birthCell}</td>
-      <td style={td}>{s.categorie ?? ""}</td>
-      <td style={td}>
+      <td style={tdc}>{s.matricule ?? ""}</td>
+      <td style={tdl}>{birthCell}</td>
+      <td style={tdc}>{s.categorie ?? ""}</td>
+      <td style={tdc}>
         {/* CLASSE : notation administrative courte — 1 · 2 · E
             (Exceptionnelle) · P (Principale) — mêmes items que la
             liste déroulante du dossier personnel. */}
@@ -526,22 +588,23 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
           ? (CLASSE_GRADE_LABELS[s.classe_grade] ?? String(s.classe_grade))
           : ""}
       </td>
-      <td style={td}>{s.echelon ?? ""}</td>
-      <td style={td}>{formatDossierDate(s.date_entree_fp)}</td>
-      <td style={td}>{s.fonction ?? ""}</td>
-      <td style={td}>{formatDossierDate(s.date_entree_dren)}</td>
-      <td style={td}>{formatDossierDate(s.date_entree_iep)}</td>
+      <td style={tdc}>{s.echelon ?? ""}</td>
+      <td style={tdc}>{formatDossierDate(s.date_entree_fp)}</td>
+      <td style={tdc}>{s.fonction ?? ""}</td>
+      <td style={tdc}>{formatDossierDate(s.date_entree_dren)}</td>
+      <td style={tdc}>{formatDossierDate(s.date_entree_iep)}</td>
       {/* COURS : le champ explicite du dossier personnel (bande déroulante
           CP1..CM2) prime sur la classe affectée (module Classes). */}
-      <td style={td}>{s.cours ?? s.class_name ?? ""}</td>
-      <td style={td}>{fmtNum(s.effectif_f)}</td>
-      <td style={td}>{fmtNum(s.effectif_g)}</td>
-      <td style={td}>{fmtNum(s.effectif_t)}</td>
-      <td style={td}>{fmtNum(s.redoublant_f)}</td>
-      <td style={td}>{fmtNum(s.redoublant_g)}</td>
-      <td style={td}>{fmtNum(s.redoublant_t)}</td>
-      <td style={tdLeft}>{s.phone ?? ""}</td>
-      <td style={td}>&nbsp;</td>
+      <td style={tdc}>{s.cours ?? s.class_name ?? ""}</td>
+      <td style={tdc}>{fmtNum(s.effectif_f)}</td>
+      <td style={tdc}>{fmtNum(s.effectif_g)}</td>
+      <td style={tdc}>{fmtNum(s.effectif_t)}</td>
+      <td style={tdc}>{fmtNum(s.redoublant_f)}</td>
+      <td style={tdc}>{fmtNum(s.redoublant_g)}</td>
+      <td style={tdc}>{fmtNum(s.redoublant_t)}</td>
+      {/* CONTACT : ARIAL 10 + « +225 » retiré (demande utilisateur). */}
+      <td style={tdContact}>{fmtContact(s.phone)}</td>
+      <td style={tdc}>&nbsp;</td>
     </tr>
   );
 }
