@@ -6,8 +6,9 @@ import { Suspense, type ReactNode } from "react";
 // même raison que /personnel-doc et /resultats-fin-annee-doc : le changement
 // de contexte de page après le document génère une page blanche finale).
 // Import CSS de route : chargé après globals.css, il gagne la cascade sur
-// le @page portrait du relevé (la fiche d'inscription de l'élève expose
-// TOUTE l'identité civile — exige la largeur paysage).
+// le @page portrait du relevé (la LISTE DES CANDIDATS compte 14 colonnes —
+// jour, mois, année, lieu de naissance, nationalité, père, mère, n° et lieu
+// de l'acte — exige la largeur paysage du modèle papier de l'utilisateur).
 import "./print.css";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 // hors dashboard (l'impression des documents est cassée dans le shell —
 // conteneurs flex/overflow du shell tronquent l'isolement print). Suspense
 // requis par useSearchParams.
-export default function FicheEleveDocLayout({
+export default function ListeCandidatsDocLayout({
   children,
 }: {
   children: ReactNode;

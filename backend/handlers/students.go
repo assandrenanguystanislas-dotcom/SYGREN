@@ -92,30 +92,26 @@ func ListStudents(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetStudent — fiche d'UN élève (document « Fiche d'inscription de
-// l'élève » du module Élèves) : élève enrichi (classe + école), école,
-// IEP (en-tête officiel du document) et année scolaire en cours.
+// GetClassCandidates — payload du document officiel « LISTE DES CANDIDATS
+// DE {classe} A L'EXAMEN DU CEPE » (module Élèves — document reçu de
+// l'utilisateur, image ELEVES IA_1/IA_2) : classe, école (avec code
+// ministériel), IEP (en-tête officiel), directeur, année scolaire et la
+// liste ordonnée (nom, prénoms) des élèves de la classe.
 //
-// RBAC par périmètre (même modèle que ListStudents — élève → classe → école) :
-//   - admin / inspector : tout élève ;
-//   - director : élèves de SON école ;
-//   - teacher : élèves de SA classe (teacher_id de la classe) ;
+// RBAC par périmètre (même modèle que ListStudents — classe → école) :
+//   - admin / inspector : toutes les classes ;
+//   - director : classes de SON école ;
+//   - teacher : SA classe (teacher_id de la classe) ;
 //   - parent : refusé (portail dédié).
-func GetStudent(w http.ResponseWriter, r *http.Request) {
+func GetClassCandidates(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		middleware.JSONError(w, "id élève requis", http.StatusBadRequest)
-		return
-	}
-
-	var st models.Student
-	if err := database.DB.First(&st, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "élève introuvable", http.StatusNotFound)
+		middleware.JSONError(w, "id classe requis", http.StatusBadRequest)
 		return
 	}
 
 	var cls models.Class
-	if err := database.DB.First(&cls, "id = ?", st.ClassID).Error; err != nil {
+	if err := database.DB.First(&cls, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "classe introuvable", http.StatusNotFound)
 		return
 	}
@@ -130,12 +126,12 @@ func GetStudent(w http.ResponseWriter, r *http.Request) {
 		// accès total
 	case "director":
 		if ctxSchoolID(r) != school.ID {
-			middleware.JSONError(w, "accès refusé : élève hors de votre école", http.StatusForbidden)
+			middleware.JSONError(w, "accès refusé : classe hors de votre école", http.StatusForbidden)
 			return
 		}
 	case "teacher":
 		if cls.TeacherID == nil || *cls.TeacherID != ctxUserID(r) {
-			middleware.JSONError(w, "accès refusé : élève hors de votre classe", http.StatusForbidden)
+			middleware.JSONError(w, "accès refusé : classe qui n'est pas la vôtre", http.StatusForbidden)
 			return
 		}
 	default:
@@ -146,9 +142,9 @@ func GetStudent(w http.ResponseWriter, r *http.Request) {
 	var iep models.IEP
 	database.DB.First(&iep, "id = ?", school.IEPID)
 
-	// Nom du directeur de l'école (signature « Le Directeur » de la
-	// fiche — premier directeur actif, même convention que les autres
-	// documents officiels).
+	// Nom du directeur de l'école (signature « Le Directeur » du document —
+	// premier directeur actif, même convention que les autres documents
+	// officiels).
 	directeurName := ""
 	var dir models.User
 	if err := database.DB.Select("full_name").
@@ -157,18 +153,26 @@ func GetStudent(w http.ResponseWriter, r *http.Request) {
 		directeurName = dir.FullName
 	}
 
-	// Année scolaire « 2025 2026 » (rentrée août/septembre → juillet) —
-	// même convention que le document « RESULTATS DE FIN D'ANNEE ».
+	// Année scolaire « 2026 2027 » (rentrée août/septembre → juillet) —
+	// même convention que les autres documents officiels.
 	now := time.Now()
 	start := now.Year()
 	if now.Month() < time.August {
 		start--
 	}
 
-	row := StudentWithClass{Student: st, ClassName: cls.Name, SchoolName: school.Name}
+	var students []models.Student
+	if err := database.DB.Where("class_id = ?", cls.ID).
+		Order("last_name ASC, first_name ASC").Find(&students).Error; err != nil {
+		middleware.JSONError(w, "erreur récupération élèves", http.StatusInternalServerError)
+		return
+	}
+	rows := make([]StudentWithClass, 0, len(students))
+	for _, s := range students {
+		rows = append(rows, StudentWithClass{Student: s, ClassName: cls.Name, SchoolName: school.Name})
+	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"student": row,
 		"class": map[string]interface{}{
 			"id":    cls.ID,
 			"name":  cls.Name,
@@ -188,6 +192,8 @@ func GetStudent(w http.ResponseWriter, r *http.Request) {
 		},
 		"directeur":      directeurName,
 		"annee_scolaire": fmt.Sprintf("%d %d", start, start+1),
+		"students":       rows,
+		"count":          len(rows),
 	})
 }
 

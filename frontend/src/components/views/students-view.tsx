@@ -238,22 +238,6 @@ export function StudentsView() {
     setDialogOpen(true);
   }
 
-  // Fiche d'inscription de l'élève — document officiel A4 PAYSAGE (route
-  // dédiée /fiche-eleve-doc, ouverte dans un nouvel onglet avec le token ;
-  // même pattern que le « Document officiel » des résultats de fin
-  // d'année). Visible par tout rôle qui accède au module Élèves.
-  function openFiche(s: StudentWithClass) {
-    let token = "";
-    try {
-      const raw = localStorage.getItem("sygren-auth");
-      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
-    } catch {
-      /* token absent — l'API refusera, la page l'affichera */
-    }
-    const url = `${window.location.origin}/fiche-eleve-doc?student=${encodeURIComponent(s.id)}&t=${encodeURIComponent(token)}`;
-    window.open(url, "_blank");
-  }
-
   function openEdit(s: StudentWithClass) {
     setForm({
       class_id: s.class_id,
@@ -332,6 +316,32 @@ export function StudentsView() {
   // soit. Director et teacher ont toujours leur scope (RBAC backend).
   const waitingForSchool = isAdmin && !hasSchoolSelected;
 
+  // === Liste des candidats (document officiel « LISTE DES CANDIDATS ...
+  // A L'EXAMEN DU CEPE », A4 paysage — image reçue de l'utilisateur) ===
+  // Classe ciblée : la classe sélectionnée du filtre ; pour l'enseignant
+  // (pas de filtre), son unique classe chargée par le backend (RBAC).
+  const candidatsClassId =
+    classFilter !== "all"
+      ? classFilter
+      : isTeacher && classes.length === 1
+        ? classes[0].id
+        : "";
+
+  // Ouvre la route dédiée /liste-candidats-doc dans un nouvel onglet avec
+  // le token — même pattern que les autres documents officiels. Accessible
+  // à tout rôle qui accède au module Élèves.
+  function openListeCandidats() {
+    let token = "";
+    try {
+      const raw = localStorage.getItem("sygren-auth");
+      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+    } catch {
+      /* token absent — l'API refusera, la page l'affichera */
+    }
+    const url = `${window.location.origin}/liste-candidats-doc?class=${encodeURIComponent(candidatsClassId)}&t=${encodeURIComponent(token)}`;
+    window.open(url, "_blank");
+  }
+
   // Filtrage local : uniquement la recherche texte (le filtre école/classe est
   // déjà appliqué côté backend via les query params studentsApi.list(classId)
   // et le RBAC du handler ListStudents).
@@ -373,25 +383,46 @@ export function StudentsView() {
                 </p>
               </div>
             </div>
-            {canManage && (
-              <div className="flex items-center gap-2">
-                <Button onClick={openCreate} size="sm" className="shadow-sm">
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Inscrire un élève
-                </Button>
-                <Button
-                  onClick={() => setImportOpen(true)}
-                  size="sm"
-                  variant="outline"
-                  disabled={!schoolFilter}
-                  className="shadow-sm"
-                  title={!schoolFilter ? "Sélectionnez d'abord une école" : "Importer un fichier Excel d'élèves"}
-                >
-                  <Upload className="w-4 h-4 mr-1.5" />
-                  Importer Excel
-                </Button>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Liste des candidats CEPE — document officiel A4 paysage
+                  (image reçue de l'utilisateur) : nécessite une classe
+                  précise (filtre classe, ou l'unique classe de
+                  l'enseignant). Accessible à tout rôle du module. */}
+              <Button
+                onClick={openListeCandidats}
+                size="sm"
+                variant="outline"
+                disabled={!candidatsClassId}
+                className="shadow-sm"
+                title={
+                  !candidatsClassId
+                    ? "Sélectionnez d'abord une classe précise"
+                    : "Liste des candidats de la classe à l'examen du CEPE (document officiel A4 paysage)"
+                }
+              >
+                <FileText className="w-4 h-4 mr-1.5" />
+                Liste des candidats
+              </Button>
+              {canManage && (
+                <>
+                  <Button onClick={openCreate} size="sm" className="shadow-sm">
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Inscrire un élève
+                  </Button>
+                  <Button
+                    onClick={() => setImportOpen(true)}
+                    size="sm"
+                    variant="outline"
+                    disabled={!schoolFilter}
+                    className="shadow-sm"
+                    title={!schoolFilter ? "Sélectionnez d'abord une école" : "Importer un fichier Excel d'élèves"}
+                  >
+                    <Upload className="w-4 h-4 mr-1.5" />
+                    Importer Excel
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
           {/* === Filtres en cascade (admin + director seulement) ===
               - admin : École (toutes) → Classe (cascade selon école)
@@ -558,8 +589,9 @@ export function StudentsView() {
                     <TableHead>Décision</TableHead>
                     <TableHead>Classe</TableHead>
                     <TableHead>École</TableHead>
-                    {/* Actions : la fiche est accessible à tout rôle du module ;
-                        modification / suppression selon permissions. */}
+                    {/* Actions : modification / suppression selon permissions.
+                        La LISTE DES CANDIDATS (document officiel) est dans la
+                        barre d'actions en tête de module. */}
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -637,15 +669,6 @@ export function StudentsView() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openFiche(s)}
-                            title="Fiche d'inscription de l'élève (document officiel A4 paysage)"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </Button>
                           {canEdit && (
                             <Button
                               variant="ghost"

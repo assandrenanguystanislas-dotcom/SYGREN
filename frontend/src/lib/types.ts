@@ -388,6 +388,26 @@ export interface StudentWithClass extends Student {
   school_name?: string;
 }
 
+// Payload du document officiel « LISTE DES CANDIDATS ... A L'EXAMEN DU
+// CEPE » (module Élèves — GET /api/classes/{id}/candidates) : en-tête
+// institutionnel (école + IEP), directeur (signature), année scolaire et
+// liste ordonnée des élèves de la classe.
+export interface ClassCandidatesPayload {
+  class: { id: string; name: string; level: string };
+  school: { id: string; name: string; code?: string };
+  iep?: {
+    name?: string;
+    region?: string;
+    bp?: string;
+    inspector_phone?: string;
+    inspector_email?: string;
+  } | null;
+  directeur?: string | null;
+  annee_scolaire: string;
+  students: StudentWithClass[];
+  count: number;
+}
+
 export interface TeacherWithDetails extends User {
   school_name?: string;
   class_name?: string | null;

@@ -1,0 +1,12 @@
+@page {
+  size: 297mm 210mm; /* A4 PAYSAGE — dimensions explicites */
+  margin: 8mm;
+}
+
+@media print {
+  #liste-candidats-doc {
+    width: auto !important;
+    max-width: 281mm !important;
+    margin: 0 auto !important; /* centré si la feuille sort en portrait */
+  }
+}

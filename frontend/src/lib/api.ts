@@ -25,6 +25,7 @@ import type {
   ClassWithDetails,
   Student,
   StudentWithClass,
+  ClassCandidatesPayload,
   TeacherWithDetails,
   DirectorWithDetails,
   InspectorWithDetails,
@@ -448,25 +449,15 @@ export const studentsApi = {
       q ? `/api/students?${q}` : "/api/students",
     );
   },
-  // Fiche d'UN élève — payload complet du document « Fiche d'inscription
-  // de l'élève » (module Élèves, bouton « Fiche » de chaque ligne) :
-  // élève enrichi (classe + école), école, IEP (en-tête officiel),
-  // directeur (signature) et année scolaire en cours.
-  get: (id: string) =>
-    apiFetch<{
-      student: StudentWithClass;
-      class: { id: string; name: string; level: string };
-      school: { id: string; name: string; code?: string };
-      iep?: {
-        name?: string;
-        region?: string;
-        bp?: string;
-        inspector_phone?: string;
-        inspector_email?: string;
-      } | null;
-      directeur?: string | null;
-      annee_scolaire: string;
-    }>(`/api/students/${id}`),
+  // Liste des candidats d'UNE classe — payload complet du document officiel
+  // « LISTE DES CANDIDATS ... A L'EXAMEN DU CEPE » (module Élèves, bouton
+  // « Liste des candidats ») : classe, école (avec code ministériel), IEP
+  // (en-tête officiel), directeur (signature), année scolaire et élèves
+  // ordonnés (nom, prénoms).
+  candidates: (classId: string) =>
+    apiFetch<ClassCandidatesPayload>(
+      `/api/classes/${classId}/candidates`,
+    ),
   create: (data: {
     class_id: string;
     first_name: string;
