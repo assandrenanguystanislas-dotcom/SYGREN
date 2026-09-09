@@ -448,6 +448,25 @@ export const studentsApi = {
       q ? `/api/students?${q}` : "/api/students",
     );
   },
+  // Fiche d'UN élève — payload complet du document « Fiche d'inscription
+  // de l'élève » (module Élèves, bouton « Fiche » de chaque ligne) :
+  // élève enrichi (classe + école), école, IEP (en-tête officiel),
+  // directeur (signature) et année scolaire en cours.
+  get: (id: string) =>
+    apiFetch<{
+      student: StudentWithClass;
+      class: { id: string; name: string; level: string };
+      school: { id: string; name: string; code?: string };
+      iep?: {
+        name?: string;
+        region?: string;
+        bp?: string;
+        inspector_phone?: string;
+        inspector_email?: string;
+      } | null;
+      directeur?: string | null;
+      annee_scolaire: string;
+    }>(`/api/students/${id}`),
   create: (data: {
     class_id: string;
     first_name: string;

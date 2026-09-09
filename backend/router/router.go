@@ -139,6 +139,7 @@ func New(cfg *config.Config) http.Handler {
 		// saisie sur le nom, les prénoms, l'année de naissance…) —
 		// contrôle RBAC + scope effet dans le handler UpdateStudent.
 		r.Get("/api/students", handlers.ListStudents)
+		r.Get("/api/students/{id}", handlers.GetStudent)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireModule(models.ModuleStudents, "write"))
 			r.Post("/api/students", handlers.CreateStudent)

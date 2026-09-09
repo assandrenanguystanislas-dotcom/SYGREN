@@ -13,6 +13,7 @@ import {
   School as SchoolIcon,
   GraduationCap,
   Upload,
+  FileText,
 } from "lucide-react";
 
 import { studentsApi, classesApi, schoolsApi } from "@/lib/api";
@@ -236,6 +237,23 @@ export function StudentsView() {
     setEditing(null);
     setDialogOpen(true);
   }
+
+  // Fiche d'inscription de l'élève — document officiel A4 PAYSAGE (route
+  // dédiée /fiche-eleve-doc, ouverte dans un nouvel onglet avec le token ;
+  // même pattern que le « Document officiel » des résultats de fin
+  // d'année). Visible par tout rôle qui accède au module Élèves.
+  function openFiche(s: StudentWithClass) {
+    let token = "";
+    try {
+      const raw = localStorage.getItem("sygren-auth");
+      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+    } catch {
+      /* token absent — l'API refusera, la page l'affichera */
+    }
+    const url = `${window.location.origin}/fiche-eleve-doc?student=${encodeURIComponent(s.id)}&t=${encodeURIComponent(token)}`;
+    window.open(url, "_blank");
+  }
+
   function openEdit(s: StudentWithClass) {
     setForm({
       class_id: s.class_id,
@@ -540,7 +558,9 @@ export function StudentsView() {
                     <TableHead>Décision</TableHead>
                     <TableHead>Classe</TableHead>
                     <TableHead>École</TableHead>
-                    {canEdit && <TableHead className="text-right">Actions</TableHead>}
+                    {/* Actions : la fiche est accessible à tout rôle du module ;
+                        modification / suppression selon permissions. */}
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -615,9 +635,18 @@ export function StudentsView() {
                       <TableCell className="text-muted-foreground text-xs">
                         {s.school_name ?? "—"}
                       </TableCell>
-                      {canEdit && (
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openFiche(s)}
+                            title="Fiche d'inscription de l'élève (document officiel A4 paysage)"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </Button>
+                          {canEdit && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -627,19 +656,19 @@ export function StudentsView() {
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            {canManage && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={() => setDeleteTarget(s)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      )}
+                          )}
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(s)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
