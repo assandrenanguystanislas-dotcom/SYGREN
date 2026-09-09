@@ -92,11 +92,12 @@ func ListStudents(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetClassCandidates — payload du document officiel « LISTE DES CANDIDATS
-// DE {classe} A L'EXAMEN DU CEPE » (module Élèves — document reçu de
-// l'utilisateur, image ELEVES IA_1/IA_2) : classe, école (avec code
-// ministériel), IEP (en-tête officiel), directeur, année scolaire et la
-// liste ordonnée (nom, prénoms) des élèves de la classe.
+// GetClassCandidates — payload du document officiel « LISTE ALPHABETIQUE
+// DES CANDIDATS AU CEPE SESSION {année} » (module Élèves — document reçu
+// de l'utilisateur, image ELEVES IA_1/IA_2) : classe, école (avec code
+// ministériel et centre d'examen de rattachement), IEP (en-tête
+// officiel), directeur, année scolaire et la liste ordonnée (nom,
+// prénoms) des élèves de la classe.
 //
 // RBAC par périmètre (même modèle que ListStudents — classe → école) :
 //   - admin / inspector : toutes les classes ;
@@ -141,6 +142,20 @@ func GetClassCandidates(w http.ResponseWriter, r *http.Request) {
 
 	var iep models.IEP
 	database.DB.First(&iep, "id = ?", school.IEPID)
+
+	// Centre d'examen de rattachement de l'école (demande utilisateur :
+	// « se référer au module écoles, centres d'examens ») — nom affiché
+	// sous le CODE dans l'en-tête du document. Vide si l'école n'est
+	// pas encore affectée à un centre (la ligne reste à compléter à
+	// la main sur le document papier).
+	examCenterName := ""
+	if school.ExamCenterID != nil && *school.ExamCenterID != "" {
+		var center models.ExamCenter
+		if err := database.DB.Select("name").
+			First(&center, "id = ?", *school.ExamCenterID).Error; err == nil {
+			examCenterName = center.Name
+		}
+	}
 
 	// Nom du directeur de l'école (signature « Le Directeur » du document —
 	// premier directeur actif, même convention que les autres documents
@@ -191,6 +206,7 @@ func GetClassCandidates(w http.ResponseWriter, r *http.Request) {
 			"inspector_email": iep.InspectorEmail,
 		},
 		"directeur":      directeurName,
+		"exam_center":    examCenterName,
 		"annee_scolaire": fmt.Sprintf("%d %d", start, start+1),
 		"students":       rows,
 		"count":          len(rows),

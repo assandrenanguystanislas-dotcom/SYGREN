@@ -18,8 +18,9 @@
 //   - Titre encadré (bord arrondi, ombre portée) : « LISTE ALPHABETIQUE
 //     DES CANDIDATS / AU CEPE SESSION {année} » — année de l'examen =
 //     année de fin de l'année scolaire en cours (rentrée août/septembre) ;
-//   - ECOLE : {nom} + CODE : {code ministériel} + CENTRE D'EXAMEN
-//     (gauche — révision 2) ;
+//   - ECOLE : {nom} + CODE : {code ministériel} + CENTRE D'EXAMEN (nom
+//     du centre de rattachement de l'école — module Écoles, bouton
+//     « Centres d'examen » ; vide si non affectée — révision 2/3) ;
 //   - Effectifs « G {garçons}  F {filles}  T {total} » + Date (droite) ;
 //   - Tableau 12 colonnes (demande utilisateur) : n° | matricule | nom |
 //     prenoms | sexe | date et lieu de naissance (fusion jj/mm/aaaa à
@@ -376,7 +377,7 @@ export function CandidatesListDocument({
                       CODE: {data.school.code || "…………"}
                     </div>
                     <div style={{ fontWeight: 700, fontSize: "12px" }}>
-                      CENTRE D&apos;EXAMEN: {data.school.name || "…………"}
+                      CENTRE D&apos;EXAMEN: {data.exam_center || "…………"}
                     </div>
                   </div>
 

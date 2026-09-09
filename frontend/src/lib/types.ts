@@ -404,6 +404,7 @@ export interface ClassCandidatesPayload {
     inspector_email?: string;
   } | null;
   directeur?: string | null;
+  exam_center?: string | null; // nom du centre d'examen de rattachement de l'école
   annee_scolaire: string;
   students: StudentWithClass[];
   count: number;
