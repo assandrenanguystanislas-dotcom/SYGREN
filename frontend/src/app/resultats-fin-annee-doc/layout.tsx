@@ -2,11 +2,10 @@
 
 import { Suspense, type ReactNode } from "react";
 
-// @page PAR DÉFAUT de la route : A4 PAYSAGE, marge 8mm (sans page nommée —
+// @page PAR DÉFAUT de la route : A4 PORTRAIT, marge 8mm (sans page nommée —
 // même raison que /personnel-doc : le changement de contexte de page après
 // le document génère une page blanche finale). Import CSS de route : chargé
-// après globals.css, il gagne la cascade sur le @page portrait du relevé
-// (l'identité civile complète en colonnes exige la largeur paysage).
+// après globals.css, il gagne la cascade sur le @page paysage du personnel.
 import "./print.css";
 
 export const dynamic = "force-dynamic";

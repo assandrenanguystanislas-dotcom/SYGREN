@@ -11,7 +11,7 @@
 //   - aperçu du tableau par élève : âge (déduit de l'année de naissance),
 //     scolarités (1..10), moyenne des compositions, moyenne de la
 //     composition de passage, moyenne annuelle = (MC + 2 × MCP)/3, décision ;
-//   - bouton « Document officiel » → /resultats-fin-annee-doc (A4 paysage,
+//   - bouton « Document officiel » → /resultats-fin-annee-doc (A4 portrait,
 //     impression 100 % navigateur — discipline du projet : zéro PDF serveur).
 
 import { useState } from "react";
