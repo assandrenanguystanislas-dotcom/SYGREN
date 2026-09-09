@@ -40,18 +40,6 @@ export function canPrintDocument(
   return false;
 }
 
-/** LISTE DES CANDIDATS AU CEPE — document signé « LE DIRECTEUR » : c'est
- *  le directeur de l'école qui le prépare et le transmet à l'inspection,
- *  il doit donc pouvoir l'imprimer (demande utilisateur : « le PDF n'est
- *  pas disponible » — le verrou Task 23/24 des modules Résultats/Bulletins
- *  ne doit PAS s'appliquer à ce document). L'enseignant et le parent
- *  restent en consultation seule. */
-export function canPrintCandidatesList(
-  role: string | null | undefined,
-): boolean {
-  return canPrintDocument(role, false) || role === "director";
-}
-
 /** Hook : résout le rôle du user courant sur les pages d'impression.
  *  Les pages sont ouvertes dans un nouvel onglet avec le token dans l'URL
  *  (stocké dans localStorage) — si le profil n'est pas encore dans le

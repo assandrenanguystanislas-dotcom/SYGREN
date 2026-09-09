@@ -657,6 +657,42 @@
   }
 }
 
+/* === LISTE DES CANDIDATS AU CEPE — Print CSS (A4 PAYSAGE multipage) ===
+ * Route dédiée /liste-candidats-doc (son print.css pose le @page par
+ * défaut 297mm×210mm, marge 8mm). Même technique d'isolement que les
+ * autres documents : la règle commune body * { visibility: hidden }
+ * (bloc « Synthèse » en haut de ce fichier) masque TOUT à l'impression —
+ * SANS cette contre-règle le document s'imprime en pages BLANCHES (bug
+ * signalé : « le PDF n'est pas disponible » — l'aperçu et le PDF sortent
+ * vides pour TOUS les rôles, y compris l'admin, alors que l'écran est
+ * correct ; même bug que celui déjà corrigé sur #resultats-fin-annee-doc).
+ * Document multipage (pages fixes 192mm + break-after) : boîte statique
+ * dans le flux, JAMAIS de position:absolute (tronquée à la 1re page).
+ * Largeur/centrage gérés par le print.css de la route (max-width 281mm). */
+@media print {
+  #liste-candidats-doc,
+  #liste-candidats-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #liste-candidats-doc {
+    background: white !important;
+    position: static !important;
+    width: auto !important;
+    min-height: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  #liste-candidats-doc tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
 /* === VERROU D'IMPRESSION DES DOCUMENTS OFFICIELS (v2) ===
  * Politique : les documents imprimables des modules « Résultats » et
  * « Bulletins » ne peuvent être imprimés que par l'Admin IEP et le Super
@@ -667,12 +703,10 @@
  * Spécificité : :is(#id…).print-locked (0,1,1,0) surclasse les contre-règles
  * #id (0,1,0,0) définies plus haut dans ce fichier.
  * Task 23 : les documents officiels PDA (plan réseau, fiche école, suivi
- * pluriannuel) et l'état nominatif du personnel sont également couverts.
- * EXCEPTION (demande utilisateur) : la LISTE DES CANDIDATS AU CEPE
- * (#liste-candidats-doc) est signée « LE DIRECTEUR » — le directeur
- * peut l'imprimer (canPrintCandidatesList) ; le verrou CSS ne s'applique
- * donc à CE document que pour les rôles encore plus restreints
- * (enseignant, parent). */
+ * pluriannuel) et l'état nominatif du personnel sont également couverts,
+ * ainsi que la LISTE DES CANDIDATS AU CEPE (#liste-candidats-doc) :
+ * AUCUN directeur ni adjoint n'imprime de document (demande utilisateur)
+ * — admin et Admin IEP uniquement. */
 @media print {
   :is(#resultats-fin-annee-doc, #bulletins-fin-annee-doc, #releve-doc,
       #synthese-doc, #bulletins-doc, #pda-plan-doc, #pda-doc, #pda-tl-doc,

@@ -44,7 +44,7 @@ import type { StudentWithClass } from "@/lib/types";
 import { INK } from "./official-doc";
 import { PRINT_COLOR_STYLE } from "@/components/ci-decor";
 import {
-  canPrintCandidatesList,
+  canPrintDocument,
   PrintLockBadge,
   PrintLockDocumentMessage,
   usePrintRole,
@@ -201,10 +201,13 @@ export function CandidatesListDocument({
   onClose: () => void;
 }) {
   const role = usePrintRole();
-  // Document signé « LE DIRECTEUR » : imprimable par l'admin, l'Admin IEP
-  // ET le directeur (les autres documents officiels restent verrouillés
-  // pour lui — verrou Task 23/24 limité aux modules Résultats/Bulletins).
-  const canPrint = canPrintCandidatesList(role);
+  // POLITIQUE (demande utilisateur) : AUCUN directeur ni adjoint au
+  // directeur n'imprime de document — tout est grisé à leur niveau (comme
+  // les enseignants). Imprimable par l'admin et l'Admin IEP uniquement.
+  // NB : le bug « PDF pas disponible » pour les rôles autorisés venait du
+  // CSS d'impression (contre-règle #liste-candidats-doc absente de
+  // globals.css) — corrigé là-bas.
+  const canPrint = canPrintDocument(role, false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["liste-candidats", classId],
     queryFn: () => studentsApi.candidates(classId),
