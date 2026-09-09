@@ -1072,6 +1072,17 @@ export interface EndOfYearRow {
   last_name?: string;
   first_name?: string;
   gender: "M" | "F" | string;
+  // Identité civile complète (document en PAYSAGE — « tous les détails »
+  // saisis à l'inscription ; nil = champ non renseigné → case vide).
+  birth_day?: number | null; // 1..31
+  birth_month?: number | null; // 1..12
+  birth_year?: number | null; // ex: 2018
+  birth_place?: string | null; // lieu de naissance
+  nationality?: string | null;
+  father_name?: string | null; // père
+  mother_name?: string | null; // mère
+  acte_number?: string | null; // n° de l'acte de naissance
+  acte_place?: string | null; // lieu de l'acte
   age?: number | null; // année de référence − année de naissance
   scolarite_cours?: number | null;
   scolarite_totale?: number | null;

@@ -66,6 +66,20 @@ type EndOfYearRow struct {
 	FirstName string `json:"first_name,omitempty"` // prénoms
 	Gender    string `json:"gender"`               // M | F
 
+	// Identité civile complète (demande utilisateur — document passé en
+	// PAYSAGE « pour prendre en compte tous les détails » : les champs
+	// saisis à l'inscription apparaissent désormais comme colonnes).
+	// Pointeurs nil = champ non renseigné → case vide du document.
+	BirthDay    *int    `json:"birth_day,omitempty"`   // 1..31
+	BirthMonth  *int    `json:"birth_month,omitempty"` // 1..12
+	BirthYear   *int    `json:"birth_year,omitempty"`  // ex: 2018
+	BirthPlace  *string `json:"birth_place,omitempty"` // lieu de naissance
+	Nationality *string `json:"nationality,omitempty"` // nationalité
+	FatherName  *string `json:"father_name,omitempty"` // père
+	MotherName  *string `json:"mother_name,omitempty"` // mère
+	ActeNumber  *string `json:"acte_number,omitempty"` // n° de l'acte de naissance
+	ActePlace   *string `json:"acte_place,omitempty"`  // lieu de l'acte
+
 	// Âge = année de référence − année de naissance (nil si non calculable).
 	Age *int `json:"age,omitempty"`
 
@@ -320,6 +334,15 @@ func buildEndOfYearSheet(school models.School, cls models.Class, year int) (map[
 			LastName:        st.LastName,
 			FirstName:       st.FirstName,
 			Gender:          st.Gender,
+			BirthDay:        st.BirthDay,
+			BirthMonth:      st.BirthMonth,
+			BirthYear:       st.BirthYear,
+			BirthPlace:      st.BirthPlace,
+			Nationality:     st.Nationality,
+			FatherName:      st.FatherName,
+			MotherName:      st.MotherName,
+			ActeNumber:      st.ActeNumber,
+			ActePlace:       st.ActePlace,
 			ScolariteCours:  st.ScolariteCours,
 			ScolariteTotale: st.ScolariteTotale,
 			DecisionConseil: st.DecisionConseil,

@@ -1,8 +1,10 @@
 "use client";
 
 // === Document officiel « RESULTATS DE FIN D'ANNEE » (modèle IEPP) ===
-// Reproduction FIDÈLE de l'architecture du document reçu (A4 PORTRAIT,
-// 2 pages — 72 lignes numérotées comme le modèle) :
+// Reproduction FIDÈLE de l'architecture du document reçu — désormais A4
+// PAYSAGE (demande utilisateur : « le document doit être disposé en paysage
+// pour prendre en compte tous les détails ») afin d'accueillir l'identité
+// civile COMPLÈTE de chaque élève en colonnes :
 //   - En-tête institutionnel : bloc ministériel (« Ministère de l'Education
 //     Nationale / de l'Alphabétisation et de l'Enseignement Technique »,
 //     Direction Régionale, Inspection Préscolaire et Primaire, BP/Tél,
@@ -12,11 +14,14 @@
 //     empattements, comme le modèle) ;
 //   - Lignes « ECOLE : … » (gauche) et « Cours : … / Date : … » (droite,
 //     date du jour au format jj/mm/aaaa) ;
-//   - Tableau du modèle : N° | Nom et Prénoms | Âge (déduit de l'année de
-//     naissance) | Scolarité dans le cours | Scolarité totale | Moyenne des
-//     compositions | Moyenne de la composition de passage | Moyenne annuelle
-//     | Décision du Conseil des Maîtres (sous-colonnes Admis | Red | Abd —
-//     croix « X » selon la décision A / R / ABD de l'élève) ;
+//   - Tableau (18 colonnes, paysage) : N° | Nom et Prénoms | Date de
+//     naissance (jj/mm/aaaa — jour + mois + année) | Âge (déduit de
+//     l'année de naissance) | Lieu de naissance | Nationalité | Père |
+//     Mère | N° acte | Lieu de l'acte | Scolarité dans le cours |
+//     Scolarité totale | Moyenne des compositions | Moyenne de la
+//     composition de passage | Moyenne annuelle | Décision du Conseil des
+//     Maîtres (sous-colonnes Admis | Red | Abd — croix « X » selon la
+//     décision A / R / ABD de l'élève) ;
 //   - Lignes numérotées 1 → 72 (élèves d'abord, lignes vierges ensuite),
 //     rangées PAR ORDRE DE MÉRITE (moyenne annuelle décroissante — le N°
 //     vaut rang) ; noms des FILLES en rouge ;
@@ -33,7 +38,7 @@
 // tricolores et les armoiries en filigrane sont conservés.
 //
 // Données : /api/reports/end-of-year (source unique — le document ne
-// recalcule rien). Impression 100 % navigateur A4 portrait (route dédiée
+// recalcule rien). Impression 100 % navigateur A4 PAYSAGE (route dédiée
 // /resultats-fin-annee-doc — zéro PDF serveur, discipline du projet).
 
 import { useQuery } from "@tanstack/react-query";
@@ -82,11 +87,30 @@ function todayFr(): string {
 
 // Bordures du tableau en VERT DRAPEAU et entêtes sur FOND VERT DRAPEAU
 // (texte blanc — sortent à l'impression via print-color-adjust: exact).
+
+/** Date de naissance « jj/mm/aaaa » — composée avec ce qui est renseigné
+ *  (jour 1..31, mois 1..12, année) ; jour/mois sur 2 chiffres ; partie
+ *  absente = omise (ex. seule l'année saisie → « 2018 ») ; rien → vide. */
+function fmtBirthDate(row: EndOfYearRow): string {
+  const p2 = (n: number | null | undefined) =>
+    n == null ? null : String(n).padStart(2, "0");
+  const parts = [
+    p2(row.birth_day),
+    p2(row.birth_month),
+    row.birth_year && row.birth_year > 0 ? String(row.birth_year) : null,
+  ];
+  return parts.filter(Boolean).join("/");
+}
+
+/** Chaîne d'identité civile : nil = champ non renseigné → case vide. */
+function civilText(v: string | null | undefined): string {
+  return (v ?? "").trim();
+}
 const th: CSSProperties = {
   border: `1px solid ${CI_GREEN}`,
-  padding: "2px 3px",
-  fontSize: "12px", // Task 37 — police d'écriture portée à 12
-  lineHeight: 1.2,
+  padding: "1px 2px",
+  fontSize: "9.5px", // paysage 18 colonnes — entêtes compactes (retour ligne)
+  lineHeight: 1.15,
   fontWeight: 700, // entêtes en gras comme le modèle reçu
   textAlign: "center",
   verticalAlign: "middle",
@@ -97,31 +121,40 @@ const th: CSSProperties = {
 
 const td: CSSProperties = {
   border: `1px solid ${CI_GREEN}`,
-  padding: "1px 3px",
-  fontSize: "12px", // Task 37 — police d'écriture portée à 12
+  padding: "1px 2px",
+  fontSize: "10.5px", // paysage 18 colonnes — écriture compacte et lisible
   lineHeight: 1.2,
   textAlign: "center",
   verticalAlign: "middle",
   color: INK,
-  height: "15px",
+  height: "13px",
 };
 
 const tdLeft: CSSProperties = { ...td, textAlign: "left" };
 
 /** Largeurs des colonnes du tableau principal (colgroup — PAS de nœuds
- *  texte entre les <col>, erreur d'hydratation React sinon). */
+ *  texte entre les <col>, erreur d'hydratation React sinon). Somme = 100 %
+ *  de la largeur imprimable A4 paysage (281mm) — identité civile d'abord,
+ *  résultats ensuite, décision en fin (modèle reçu). */
 const COL_WIDTHS = [
-  "4%", // N°
-  "24%", // Nom et Prénoms
-  "5.5%", // Âge
-  "8%", // Scolarité dans le cours
-  "7.5%", // Scolarité totale
-  "9.5%", // Moyenne des compositions
-  "10.5%", // Moyenne de la composition de passage
-  "8.5%", // Moyenne annuelle
-  "7.5%", // Décision — Admis
-  "7.5%", // Décision — Red
-  "7.5%", // Décision — Abd
+  "2.5%", // N°
+  "15%", // Nom et Prénoms
+  "5.5%", // Date de naissance (jj/mm/aaaa)
+  "2.5%", // Âge
+  "7%", // Lieu de naissance
+  "5.5%", // Nationalité
+  "8.5%", // Père
+  "8.5%", // Mère
+  "6%", // N° acte
+  "7%", // Lieu de l'acte
+  "4.5%", // Scolarité dans le cours
+  "4%", // Scolarité totale
+  "4.5%", // Moyenne des compositions
+  "4.5%", // Moyenne de la composition de passage
+  "4%", // Moyenne annuelle
+  "3.5%", // Décision — Admis
+  "3.5%", // Décision — Red
+  "3.5%", // Décision — Abd
 ];
 
 /** Rouge des noms de FILLES (convention des tableaux de classement —
@@ -202,10 +235,10 @@ export function EndOfYearDocument({
           · {data.count} élève(s) · Année {data.year}
         </h3>
         <div className="flex items-center gap-2">
-          {/* Format d'impression verrouillé par @page (portrait) — rappel
+          {/* Format d'impression verrouillé par @page (paysage) — rappel
               visible pour l'utilisateur (masqué à l'impression) */}
           <span className="hidden sm:inline text-xs text-muted-foreground mr-1">
-            Format : A4 portrait
+            Format : A4 paysage
           </span>
           {canPrint ? (
             <button
@@ -235,7 +268,7 @@ export function EndOfYearDocument({
         className={`bg-white mx-auto shadow-lg print:shadow-none mt-3 ${canPrint ? "" : "print-locked"}`}
         style={{
           width: "100%",
-          maxWidth: "210mm", // A4 portrait
+          maxWidth: "297mm", // A4 paysage
           padding: "8mm 9mm",
           fontFamily: OFFICIAL_FONT,
           color: INK,
@@ -343,7 +376,8 @@ export function EndOfYearDocument({
           </span>
         </div>
 
-        {/* --- Tableau principal (modèle : 11 colonnes) --- */}
+        {/* --- Tableau principal (paysage — 18 colonnes : identité civile
+               complète puis résultats du modèle reçu) --- */}
         <table
           style={{
             width: "100%",
@@ -366,7 +400,28 @@ export function EndOfYearDocument({
                 Nom et Prénoms
               </th>
               <th style={th} rowSpan={2}>
+                Date de naissance
+              </th>
+              <th style={th} rowSpan={2}>
                 Âge
+              </th>
+              <th style={th} rowSpan={2}>
+                Lieu de naissance
+              </th>
+              <th style={th} rowSpan={2}>
+                Nationalité
+              </th>
+              <th style={th} rowSpan={2}>
+                Père
+              </th>
+              <th style={th} rowSpan={2}>
+                Mère
+              </th>
+              <th style={th} rowSpan={2}>
+                N° acte
+              </th>
+              <th style={th} rowSpan={2}>
+                Lieu de l&apos;acte
               </th>
               <th style={th} rowSpan={2}>
                 Scolarité dans le cours
@@ -540,7 +595,9 @@ function formatNomPrenoms(row: EndOfYearRow): string {
   return row.full_name;
 }
 
-/** Une ligne élève (ou vierge) du tableau principal. La décision du conseil
+/** Une ligne élève (ou vierge) du tableau principal. Les colonnes
+ *  d'identité civile (date/lieu de naissance, nationalité, père, mère,
+ *  n° et lieu de l'acte) précèdent les résultats ; la décision du conseil
  *  des maîtres marque une croix « X » dans UNE des sous-colonnes
  *  Admis / Red / Abd (comme sur le document papier). */
 function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) {
@@ -549,7 +606,7 @@ function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) 
       <tr>
         <td style={td}>{n}</td>
         <td style={tdLeft}>&nbsp;</td>
-        {Array.from({ length: 9 }, (_, k) => (
+        {Array.from({ length: 16 }, (_, k) => (
           <td key={k} style={td}>
             &nbsp;
           </td>
@@ -576,7 +633,14 @@ function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) 
       >
         {formatNomPrenoms(row)}
       </td>
+      <td style={td}>{fmtBirthDate(row)}</td>
       <td style={td}>{row.age ?? ""}</td>
+      <td style={tdLeft}>{civilText(row.birth_place)}</td>
+      <td style={tdLeft}>{civilText(row.nationality)}</td>
+      <td style={tdLeft}>{civilText(row.father_name)}</td>
+      <td style={tdLeft}>{civilText(row.mother_name)}</td>
+      <td style={tdLeft}>{civilText(row.acte_number)}</td>
+      <td style={tdLeft}>{civilText(row.acte_place)}</td>
       <td style={td}>{row.scolarite_cours ?? ""}</td>
       <td style={td}>{row.scolarite_totale ?? ""}</td>
       <td style={td}>{fmtMoy(row.moyenne_compositions, row.has_moyenne_compositions)}</td>
