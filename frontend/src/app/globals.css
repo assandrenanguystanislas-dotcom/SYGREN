@@ -667,14 +667,19 @@
  * Spécificité : :is(#id…).print-locked (0,1,1,0) surclasse les contre-règles
  * #id (0,1,0,0) définies plus haut dans ce fichier.
  * Task 23 : les documents officiels PDA (plan réseau, fiche école, suivi
- * pluriannuel) et l'état nominatif du personnel sont également couverts. */
+ * pluriannuel) et l'état nominatif du personnel sont également couverts.
+ * EXCEPTION (demande utilisateur) : la LISTE DES CANDIDATS AU CEPE
+ * (#liste-candidats-doc) est signée « LE DIRECTEUR » — le directeur
+ * peut l'imprimer (canPrintCandidatesList) ; le verrou CSS ne s'applique
+ * donc à CE document que pour les rôles encore plus restreints
+ * (enseignant, parent). */
 @media print {
   :is(#resultats-fin-annee-doc, #bulletins-fin-annee-doc, #releve-doc,
       #synthese-doc, #bulletins-doc, #pda-plan-doc, #pda-doc, #pda-tl-doc,
-      #personnel-doc).print-locked,
+      #personnel-doc, #liste-candidats-doc).print-locked,
   :is(#resultats-fin-annee-doc, #bulletins-fin-annee-doc, #releve-doc,
       #synthese-doc, #bulletins-doc, #pda-plan-doc, #pda-doc, #pda-tl-doc,
-      #personnel-doc).print-locked * {
+      #personnel-doc, #liste-candidats-doc).print-locked * {
     visibility: hidden !important;
   }
   .print-lock-message,

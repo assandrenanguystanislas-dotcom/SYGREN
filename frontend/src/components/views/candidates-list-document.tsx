@@ -44,7 +44,7 @@ import type { StudentWithClass } from "@/lib/types";
 import { INK } from "./official-doc";
 import { PRINT_COLOR_STYLE } from "@/components/ci-decor";
 import {
-  canPrintDocument,
+  canPrintCandidatesList,
   PrintLockBadge,
   PrintLockDocumentMessage,
   usePrintRole,
@@ -201,7 +201,10 @@ export function CandidatesListDocument({
   onClose: () => void;
 }) {
   const role = usePrintRole();
-  const canPrint = canPrintDocument(role, false);
+  // Document signé « LE DIRECTEUR » : imprimable par l'admin, l'Admin IEP
+  // ET le directeur (les autres documents officiels restent verrouillés
+  // pour lui — verrou Task 23/24 limité aux modules Résultats/Bulletins).
+  const canPrint = canPrintCandidatesList(role);
   const { data, isLoading, error } = useQuery({
     queryKey: ["liste-candidats", classId],
     queryFn: () => studentsApi.candidates(classId),
