@@ -1,8 +1,8 @@
 "use client";
 
-// === Document officiel « LISTE DES CANDIDATS DE {classe} A L'EXAMEN DU
-// === CEPE {année} » (module Élèves — image ELEVES IA_1 / IA_2 reçue de
-// l'utilisateur) ===
+// === Document officiel « LISTE ALPHABETIQUE DES CANDIDATS AU CEPE
+// === SESSION {année} » (module Élèves — image ELEVES IA_1 / IA_2 reçue
+// de l'utilisateur) ===
 //
 // C'EST CE DOCUMENT (et non le « RESULTATS DE FIN D'ANNEE », resté
 // inchangé, ni l'ancienne fiche individuelle supprimée) qui doit
@@ -15,10 +15,11 @@
 //     Direction Régionale + Inspection Préscolaire et Primaire (italique
 //     gras), BP/Tel/Courriel à gauche ; République de Côte d'Ivoire +
 //     Union-Discipline-Travail + armoiries à droite ;
-//   - Titre encadré (bord arrondi, ombre portée) : « LISTE DES CANDIDATS
-//     DE {CLASSE} A L'EXAMEN / DU CEPE {année} » — année de l'examen =
+//   - Titre encadré (bord arrondi, ombre portée) : « LISTE ALPHABETIQUE
+//     DES CANDIDATS / AU CEPE SESSION {année} » — année de l'examen =
 //     année de fin de l'année scolaire en cours (rentrée août/septembre) ;
-//   - ECOLE : {nom} + CODE : {code ministériel} (gauche) ;
+//   - ECOLE : {nom} + CODE : {code ministériel} + CENTRE D'EXAMEN
+//     (gauche — révision 2) ;
 //   - Effectifs « G {garçons}  F {filles}  T {total} » + Date (droite) ;
 //   - Tableau 12 colonnes (demande utilisateur) : n° | matricule | nom |
 //     prenoms | sexe | date et lieu de naissance (fusion jj/mm/aaaa à
@@ -153,26 +154,28 @@ function tdStyle(align: "left" | "center", red = false): CSSProperties {
   };
 }
 
-// Les 12 colonnes (demande utilisateur : fusion date+lieu de naissance,
-// père/mère « nom et prénoms », colonne DATE DE L'ACTE entre nacte et
-// lieuacte). Libellés en minuscules comme le modèle.
+// Les 12 colonnes (fusion date+lieu de naissance, père/mère « nom et
+// prénoms », colonne DATE DE L'ACTE entre nacte et lieuacte).
+// Largeurs rééquilibrées (révision 2 — demande utilisateur) : n°, nom,
+// sexe et nacte réduites ; prenoms et lieuacte élargies. Libellés en
+// minuscules comme le modèle.
 const COLS: Array<{
   w: string;
   label: string;
   align: "left" | "center";
 }> = [
-  { w: "3.5%", label: "n°", align: "center" },
+  { w: "3%", label: "n°", align: "center" },
   { w: "8%", label: "matricule", align: "center" },
-  { w: "10%", label: "nom", align: "left" },
-  { w: "13%", label: "prenoms", align: "left" },
-  { w: "4%", label: "sexe", align: "center" },
+  { w: "7.5%", label: "nom", align: "left" },
+  { w: "16.5%", label: "prenoms", align: "left" },
+  { w: "3%", label: "sexe", align: "center" },
   { w: "14%", label: "date et lieu de naissance", align: "left" },
   { w: "7.5%", label: "nationalite", align: "left" },
   { w: "12.5%", label: "nom et prénoms du père", align: "left" },
   { w: "11.5%", label: "nom et prénoms de la mère", align: "left" },
-  { w: "5.5%", label: "nacte", align: "center" },
+  { w: "4.5%", label: "nacte", align: "center" },
   { w: "6.5%", label: "date de l'acte", align: "center" },
-  { w: "4%", label: "lieuacte", align: "center" },
+  { w: "5.5%", label: "lieuacte", align: "center" },
 ];
 
 // Découpe la classe en pages : [17, 24, 24, …, 22] lignes (la dernière
@@ -241,7 +244,6 @@ export function CandidatesListDocument({
   const filles = students.filter((s) => s.gender === "F").length;
 
   const iep = data.iep;
-  const classeName = (data.class.name || "…………").toUpperCase();
   const annee = cepeExamYear();
 
   // Découpage en pages + lignes vides de complétion (modèle papier).
@@ -263,8 +265,8 @@ export function CandidatesListDocument({
       {/* Barre d'outils (masquée à l'impression) */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b px-4 py-2 print:hidden">
         <h3 className="font-semibold text-sm">
-          Liste des candidats CEPE {annee} — {data.class.name} ·{" "}
-          {data.school.name}
+          Liste alphabétique des candidats CEPE {annee} — {data.class.name}
+          {" "}· {data.school.name}
         </h3>
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline text-xs text-muted-foreground mr-1">
@@ -373,6 +375,9 @@ export function CandidatesListDocument({
                     <div style={{ fontWeight: 700, fontSize: "12px" }}>
                       CODE: {data.school.code || "…………"}
                     </div>
+                    <div style={{ fontWeight: 700, fontSize: "12px" }}>
+                      CENTRE D&apos;EXAMEN: {data.school.name || "…………"}
+                    </div>
                   </div>
 
                   {/* Titre encadré (centre) */}
@@ -400,9 +405,9 @@ export function CandidatesListDocument({
                         ...PRINT_COLOR_STYLE,
                       }}
                     >
-                      LISTE DES CANDIDATS DE {classeName} A L&apos;EXAMEN
+                      LISTE ALPHABETIQUE DES CANDIDATS
                       <br />
-                      DU CEPE {annee}
+                      AU CEPE SESSION {annee}
                     </span>
                   </div>
 
@@ -444,7 +449,7 @@ export function CandidatesListDocument({
               {/* Espace entre en-tête et tableau (page 1) */}
               <div style={{ height: isFirst ? "3mm" : "4mm" }} />
 
-              {/* --- Tableau 14 colonnes (modèle exact de l'utilisateur) --- */}
+              {/* --- Tableau 12 colonnes (modèle + révisions utilisateur) --- */}
               <table
                 style={{
                   width: "100%",
