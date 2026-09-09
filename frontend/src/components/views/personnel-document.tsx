@@ -28,6 +28,14 @@
 //   - Bordures du tableau en vert drapeau ; boîte du titre sur fond
 //     pastel orange bordé de vert ; ligne TOTAL sur fond pastel vert.
 //
+// v4 — ARIAL 12 (demande utilisateur, module Utilisateurs) :
+//   - Tout le document passe en police ARIAL (fallback Helvetica /
+//     Liberation Sans — métriques identiques sous Linux) ;
+//   - Contenu du tableau porté à 12px (comme la LISTE DES CANDIDATS) ;
+//   - NOMS ET PRÉNOMS du personnel sur UNE SEULE LIGNE : cellule
+//     insécable (nowrap) + colonne élargie et largeurs des 20 colonnes
+//     rééquilibrées en conséquence.
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -51,7 +59,6 @@ import { formatDossierDate, type PersonnelStaffRow } from "@/lib/types";
 
 import {
   INK,
-  OFFICIAL_FONT,
   OfficialDocHeader,
 } from "./official-doc";
 import {
@@ -62,6 +69,11 @@ import {
   CI_ORANGE_BG,
   PRINT_COLOR_STYLE,
 } from "@/components/ci-decor";
+
+// POLICE ARIAL taille 12 (demande utilisateur) — Helvetica/Liberation Sans
+// en secours (métriques identiques, Linux). Même choix que la LISTE DES
+// CANDIDATS AU CEPE.
+const DOC_FONT = '"Arial", "Helvetica", "Liberation Sans", sans-serif';
 
 /** Effectif/redoublant au format du document reçu : 07, 11, 147 —
  *  « 00 » pour un zéro SAISI, case vide si non renseigné (les « # »). */
@@ -83,7 +95,7 @@ function sumCol(values: Array<number | null | undefined>): number | null {
 const th: CSSProperties = {
   border: `1px solid ${CI_GREEN}`,
   padding: "2px 3px",
-  fontSize: "9px",
+  fontSize: "12px", // ARIAL 12 (demande utilisateur)
   lineHeight: 1.2,
   fontWeight: 700, // entêtes en gras comme le modèle reçu
   textAlign: "center",
@@ -96,7 +108,7 @@ const th: CSSProperties = {
 const td: CSSProperties = {
   border: `1px solid ${CI_GREEN}`,
   padding: "1px 3px",
-  fontSize: "9px",
+  fontSize: "12px", // ARIAL 12 (demande utilisateur)
   lineHeight: 1.25,
   textAlign: "center",
   verticalAlign: "middle",
@@ -104,7 +116,16 @@ const td: CSSProperties = {
   height: "18px",
 };
 
+/** Cellule NOM ET PRÉNOMS : contenu INSÉCABLE — nom et prénoms du
+ *  personnel toujours sur la MÊME LIGNE (demande utilisateur). La
+ *  colonne a été élargie (cf. colgroup) pour absorber la taille 12. */
 const tdLeft: React.CSSProperties = { ...td, textAlign: "left" };
+
+const tdNom: React.CSSProperties = {
+  ...tdLeft,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+};
 
 export function PersonnelDocument({
   schoolId,
@@ -203,7 +224,7 @@ export function PersonnelDocument({
           width: "100%",
           maxWidth: "297mm", // A4 paysage
           padding: "5mm 7mm",
-          fontFamily: OFFICIAL_FONT,
+          fontFamily: DOC_FONT, // ARIAL 12 (demande utilisateur)
           color: INK,
           overflowX: "auto",
           position: "relative", // filigrane armoiries DANS LE FOND
@@ -227,8 +248,7 @@ export function PersonnelDocument({
               border: `2.2px solid ${CI_GREEN}`,
               borderRadius: "14px",
               padding: "6px 30px 7px",
-              fontFamily:
-                '"Cambria", "Caladea", Georgia, "Times New Roman", serif',
+              // Police ARIAL (héritée du document — demande utilisateur).
               fontSize: "19px",
               fontWeight: 700,
               letterSpacing: "1.5px",
@@ -252,7 +272,7 @@ export function PersonnelDocument({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
-            fontSize: "11.5px",
+            fontSize: "12px",
             margin: "0 2px 3px",
             color: INK,
           }}
@@ -279,27 +299,31 @@ export function PersonnelDocument({
             {/* Rendu en tableau : PAS de nœuds texte entre les <col> (les
                 espaces JSX dans <colgroup> provoquent une erreur
                 d'hydratation React « whitespace text node »). */}
+            {/* v4 — largeurs rééquilibrées pour l'ARIAL 12 : colonne NOM
+                ET PRÉNOMS élargie (15.6 %, cellule insécable → noms et
+                prénoms sur la même ligne), dates calibrées jj/mm/aaaa,
+                colonnes numériques réduites. */}
             {[
-              "3%", // N°
-              "11.5%", // Nom et prénoms
-              "6.5%", // Matricule
+              "2.4%", // N°
+              "15.6%", // Nom et prénoms (insécable)
+              "5.4%", // Matricule
               "10%", // Date et lieu de naissance
-              "3.6%", // IO IA IS IAS
-              "3.8%", // Classe
-              "4.4%", // Échelon
-              "7%", // Date entrée F.P
-              "6.8%", // Fonction
-              "5.6%", // Entrée DREN
-              "5.6%", // Entrée IEP
-              "4.6%", // Cours
-              "3.6%", // Effectif F
-              "3.6%", // Effectif G
-              "3.6%", // Effectif T
-              "3.6%", // Redoublants F
-              "3.6%", // Redoublants G
-              "3.6%", // Redoublants T
-              "6.7%", // Contact
-              "7.3%", // Emargement
+              "2.7%", // IO IA IS IAS
+              "2.4%", // Classe
+              "2.4%", // Échelon
+              "6.8%", // Date entrée F.P
+              "5.4%", // Fonction
+              "6.8%", // Entrée DREN
+              "6.8%", // Entrée IEP
+              "3.1%", // Cours
+              "2.8%", // Effectif F
+              "2.8%", // Effectif G
+              "2.8%", // Effectif T
+              "2.8%", // Redoublants F
+              "2.8%", // Redoublants G
+              "2.8%", // Redoublants T
+              "6.4%", // Contact
+              "7%", // Emargement
             ].map((w, i) => (
               <col key={i} style={{ width: w }} />
             ))}
@@ -390,7 +414,6 @@ export function PersonnelDocument({
                   ...th,
                   background: CI_GREEN_BG,
                   color: CI_GREEN_TEXT,
-                  fontSize: "10px",
                 }}
               >
                 TOTAL
@@ -432,7 +455,7 @@ export function PersonnelDocument({
           </div>
           <div
             style={{
-              fontSize: "11.5px",
+              fontSize: "12px",
               fontWeight: 700,
               margin: "0 0 0 18%",
               lineHeight: 1.45,
@@ -449,7 +472,7 @@ export function PersonnelDocument({
           </div>
           <div
             style={{
-              fontSize: "12.5px",
+              fontSize: "12px",
               fontWeight: 700,
               margin: "8px 0 0 18%",
               letterSpacing: "0.4px",
@@ -481,10 +504,10 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
       <td style={td}>{n}</td>
       <td
         style={{
-          ...tdLeft,
+          ...tdNom,
           fontWeight: 600,
           // Task 37 — noms et prénoms EN CARACTÈRE D'IMPRIMERIE
-          // (majuscules) et police portée à 12.
+          // (majuscules), police 12 ; v4 — UNE SEULE LIGNE (nowrap).
           fontSize: "12px",
           textTransform: "uppercase",
           color: isWoman ? "#e00000" : INK, // « écrire le nom des femmes en rouge »
