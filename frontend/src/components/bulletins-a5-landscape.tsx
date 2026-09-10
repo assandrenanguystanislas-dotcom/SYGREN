@@ -617,9 +617,12 @@ export default function BulletinsA5Landscape({
                           </p>
                         )}
                         {/* Nom du maître de classe (titulaire) imprimé en bas
-                            de la zone — dynamique, depuis releve-data. */}
+                            de la zone — dynamique, depuis releve-data.
+                            Demande utilisateur — nom du maître en CARACTÈRE
+                            D'IMPRIMERIE (majuscules) et EN GRAS, harmonisé
+                            avec la zone « Visa du Directeur ». */}
                         {eleve.maitreName && (
-                          <p className="mt-auto text-[9px] font-semibold leading-tight pb-0.5 px-1.5">
+                          <p className="mt-auto text-center text-[9px] font-bold uppercase leading-tight tracking-wide pb-0.5 px-1.5">
                             {eleve.maitreName}
                           </p>
                         )}

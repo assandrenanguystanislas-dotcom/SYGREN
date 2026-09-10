@@ -347,16 +347,11 @@ func buildReleveData(session models.EvaluationSession, classID string) (ReleveDa
 		directorName = director.FullName
 	}
 
-	// 10b. Récupérer le nom du maître de la classe (Class.TeacherID → User).
-	// Un directeur peut tenir une classe (RBAC) — le titulaire est
-	// simplement l'utilisateur affecté à la classe, quel que soit son rôle.
-	teacherName := ""
-	if class.TeacherID != nil && *class.TeacherID != "" {
-		var teacher models.User
-		if err := database.DB.First(&teacher, "id = ?", *class.TeacherID).Error; err == nil {
-			teacherName = teacher.FullName
-		}
-	}
+	// 10b. Nom du maître de la classe — résolution PARTAGÉE (l'utilisateur
+	// affecté à la classe, quel que soit son rôle — un directeur peut
+	// tenir une classe ; à défaut repli sur le COURS TENU du dossier du
+	// personnel) : cf. resolveClassTeacherName (helpers.go).
+	teacherName := resolveClassTeacherName(class)
 
 	// 11. Date formatée (jj/mm/aaaa) — utilise la date du jour côté serveur
 	// pour le document final. Le frontend peut la surcharger si besoin.

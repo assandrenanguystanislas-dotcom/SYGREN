@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"sygren-api/database"
 	"sygren-api/middleware"
+	"sygren-api/models"
 )
 
 // jsonResponse writes a JSON response with the given status code.
@@ -94,4 +96,39 @@ func monthLabelFR(month int) string {
 		return months[month-1]
 	}
 	return "—"
+}
+
+// resolveClassTeacherName retourne le nom du TENANT DU COURS d'une classe
+// — partagé par le document officiel « Resultats de fin d'année » (Le
+// tenant du cours), le bulletin individuel (Le Maître chargé du cours) et
+// les relevés/bulletins A5 (Appréciation et Visa du Maître) :
+//  1. PRIORITÉ : l'utilisateur affecté à la classe (classes.teacher_id —
+//     quel que soit son rôle : un directeur peut tenir une classe, RBAC) ;
+//  2. REPLI (v25 — 4 classes sur 582 seulement ont un teacher_id) :
+//     l'enseignant ACTIF de la même école dont le COURS TENU (users.cours,
+//     bande déroulante CP1..CM2 du dossier personnel, cf.
+//     handlers/personnel.go) correspond au nom de la classe (ex :
+//     cours='CM2' pour la classe CM2).
+//
+// Noms nettoyés (TrimSpace) ; champs existants : AUCUNE migration Neon.
+func resolveClassTeacherName(cls models.Class) string {
+	teacherName := ""
+	if cls.TeacherID != nil && *cls.TeacherID != "" {
+		var t models.User
+		if err := database.DB.Select("full_name").First(&t, "id = ?", *cls.TeacherID).Error; err == nil {
+			teacherName = strings.TrimSpace(t.FullName)
+		}
+	}
+	if strings.TrimSpace(teacherName) != "" {
+		return teacherName
+	}
+	var t models.User
+	if err := database.DB.Select("full_name").
+		Where("school_id = ? AND role = ? AND active = ? AND UPPER(cours) = ?",
+			cls.SchoolID, models.RoleTeacher, true,
+			strings.ToUpper(strings.TrimSpace(cls.Name))).
+		Order("created_at ASC").First(&t).Error; err == nil {
+		teacherName = strings.TrimSpace(t.FullName)
+	}
+	return teacherName
 }
