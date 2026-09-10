@@ -3964,3 +3964,21 @@ Stage Summary:
 - Le document officiel Résultats de fin d'année est en Arial 12, noms insécables, entêtes verticaux (scolarité/admis/red/abd/moyenne annuelle), « Fait à DABOU, le [date du jour] » et le nom de l'inspecteur (« M. DOSSO LACINE ») s'affiche sous le visa
 - Bulletin individuel : noms du maître et du directeur en bas des cases de signature ; module Bulletins : visa du directeur en majuscules grasses
 - Commit 8c386e8 déployé et vérifié (Render LIVE + Vercel READY) ; aucune modification de schéma
+
+---
+Task ID: 24
+Agent: Z.ai Code (session 24 — Résultats : annulation des entêtes verticaux + nom du tenant du cours/maître chargé du cours alimenté)
+Task: « 1) dans resultat document officiel, annuler la position verticale. ecrire le nom du tenant du cours en caractere d'imprimerie et en gras. 2) dans resultat bulletin, ecrire le nom du maitre chargé du cours en caractere d'imprimerie et en gras. »
+
+Work Log:
+- DIAGNOSTIC DATA (scripts/check_teacher_name.py + inspect_titulaire.py) : le front affichait DÉJÀ les noms en majuscules gras (uppercase + fontWeight 700, Task 37/23) MAIS le champ teacher_name restait vide — seules 4 classes sur 582 ont un classes.teacher_id (EPP COTIERE PALMERAIE CP2/CE2/CE1 seed + EPP COSROU LEKR CM2) ; users.cours (cours tenu, session 20) entièrement vide en prod — d'où l'absence de nom sous « Le tenant du cours » et « Le Maître chargé du cours »
+- DOC OFFICIEL (end-of-year-document.tsx) : ANNULATION de la lecture verticale v4 — SCOLARITÉ DANS LE COURS / SCOLARITÉ TOTALE / MOYENNE ANNUELLE + sous-entêtes ADMIS / RED / ABD reviennent À L'HORIZONTALE (th standard, texte simple) ; constantes thVerticalSpan + thVertical supprimées (lint) ; commentaire v5 en tête de fichier ; largeurs de colonnes inchangées (identiques au modèle pré-v4)
+- BACKEND (end_of_year.go v3) : teacher_name — priorité classes.teacher_id (inchangée, TrimSpace ajouté) puis NOUVEAU repli : enseignant ACTIF de la même école dont le COURS TENU users.cours correspond au nom de la classe (UPPER(cours) = UPPER(TrimSpace(cls.name)), Order created_at ASC) ; champs existants → AUCUNE migration Neon
+- TEST E2E LOCAL (scripts/test_fallback_local.py — SQLite local, DATABASE_URL du bac à sable neutralisée) : REPLI users.cours OK (classe CP1 sans teacher_id → « KOUAME TEST TITULAIRE » via cours='CP1') + PRIORITÉ teacher_id OK (classe CP2 avec teacher_id → « DIABATE TEST AFFECTE ») ; go build + go vet + next build OK (17/17)
+- Pièges évités : édition ayant converti TABULATIONS→espaces sur tout le Go (diff 812 lignes) → fichier restauré et patch ré-appliqué par script avec tabulations (diff final 21+/1-) ; rm -rf backend/storage a supprimé des SOURCES (r2.go, storage.go) → git checkout immédiat + go build de contrôle OK
+- Déploiement : commit fa48d9b (backend+frontend, auteur assandrenanguystanislas) → Render LIVE sur fa48d9b (backend redéployé, health HTTP 200) + Vercel READY sur fa48d9b ; API prod re-vérifiée (teacher_name, directeur, inspecteur intacts) ; NEON : AUCUN changement de schéma (lecture des colonnes existantes users.cours / classes.teacher_id)
+
+Stage Summary:
+- Document officiel : entêtes de nouveau HORIZONTAUX (verticaux annulés à la demande) — Arial 12, noms insécables, Fait à DABOU daté, visa inspecteur conservés
+- Le nom du tenant du cours (document officiel) ET du maître chargé du cours (bulletin individuel) s'affiche désormais en MAJUSCULES GRAS dès que la classe a un enseignant affecté OU dès que le COURS TENU est renseigné dans le dossier du personnel (module Utilisateurs > Personnel, champ COURS CP1..CM2)
+- Commit fa48d9b déployé et vérifié (Render LIVE + Vercel READY) ; aucune migration Neon
