@@ -32,18 +32,24 @@
 // (labels sur fond pastel orange, entêtes vertes) — les rubans
 // tricolores et les armoiries en filigrane sont conservés.
 //
-// v4 — ARIAL 12 + LECTURE VERTICALE + FAIT À DABOU (demande utilisateur,
+// v4 — ARIAL 12 + FAIT À DABOU (demande utilisateur,
 // module Résultats > Document officiel) :
 //   - Tout le document en police ARIAL (fallback Helvetica / Liberation
 //     Sans — métriques identiques sous Linux), texte à 12px ;
 //   - NOMS ET PRÉNOMS des élèves sur UNE SEULE LIGNE (cellule insécable) ;
-//   - Entêtes SCOLARITÉ DANS LE COURS, SCOLARITÉ TOTALE, MOYENNE
-//     ANNUELLE et sous-entêtes ADMIS / RED / ABD écrits VERTICALEMENT
-//     (bas → haut) comme sur les tableaux administratifs ;
 //   - « Fait à DABOU, le … » complété avec la DATE DU JOUR (jj/mm/aaaa) ;
 //   - Le nom de l'inspecteur sous « Visa de l'Inspecteur » est désormais
 //     alimenté par le backend depuis le champ officiel de l'IEP
 //     (ieps.inspector_name — cf. end_of_year.go v2).
+//
+// v5 — ENTÊTES HORIZONTAUX + NOM DU TITULAIRE (demande utilisateur) :
+//   - ANNULATION de la lecture verticale (v4) : SCOLARITÉ DANS LE
+//     COURS, SCOLARITÉ TOTALE, MOYENNE ANNUELLE et ADMIS / RED / ABD
+//     reviennent À L'HORIZONTALE (écriture normale, comme le modèle) ;
+//   - le nom du TENANT DU COURS s'écrit sous la signature en caractère
+//     d'imprimerie (majuscules) gras — alimenté par le backend
+//     (classes.teacher_id, puis repli sur le COURS TENU du dossier du
+//     personnel : users.cours — cf. end_of_year.go v3).
 //
 // Données : /api/reports/end-of-year (source unique — le document ne
 // recalcule rien). Impression 100 % navigateur A4 portrait (route dédiée
@@ -133,21 +139,6 @@ const tdNom: CSSProperties = {
   whiteSpace: "nowrap",
   overflow: "hidden",
 };
-
-/** Libellé d'entête écrit VERTICALEMENT (bas → haut) : SCOLARITÉ DANS LE
- *  COURS, SCOLARITÉ TOTALE, MOYENNE ANNUELLE, ADMIS, RED, ABD — demande
- *  utilisateur. writing-mode vertical + rotation 180°, lisible de bas en
- *  haut comme sur les tableaux administratifs (état nominatif, etc.). */
-const thVerticalSpan: CSSProperties = {
-  writingMode: "vertical-rl",
-  transform: "rotate(180deg)",
-  display: "inline-block",
-  whiteSpace: "nowrap",
-  letterSpacing: "0.5px",
-};
-
-/** Cellule d'entête verticale : padding réduit (la colonne est étroite). */
-const thVertical: CSSProperties = { ...th, padding: "3px 2px" };
 
 /** Largeurs des colonnes du tableau principal (colgroup — PAS de nœuds
  *  texte entre les <col>, erreur d'hydratation React sinon). */
@@ -408,12 +399,13 @@ export function EndOfYearDocument({
               <th style={th} rowSpan={2}>
                 Âge
               </th>
-              <th style={thVertical} rowSpan={2}>
-                {/* v4 — libellé écrit VERTICALEMENT (demande utilisateur) */}
-                <span style={thVerticalSpan}>Scolarité dans le cours</span>
+              {/* v5 — entêtes À L'HORIZONTALE (annulation de la lecture
+                  verticale v4, demande utilisateur) */}
+              <th style={th} rowSpan={2}>
+                Scolarité dans le cours
               </th>
-              <th style={thVertical} rowSpan={2}>
-                <span style={thVerticalSpan}>Scolarité totale</span>
+              <th style={th} rowSpan={2}>
+                Scolarité totale
               </th>
               <th style={th} rowSpan={2}>
                 Moyenne des compositions
@@ -421,26 +413,18 @@ export function EndOfYearDocument({
               <th style={th} rowSpan={2}>
                 Moyenne de la composition de passage
               </th>
-              <th style={thVertical} rowSpan={2}>
-                {/* v4 — libellé écrit VERTICALEMENT (demande utilisateur) */}
-                <span style={thVerticalSpan}>Moyenne annuelle</span>
+              <th style={th} rowSpan={2}>
+                Moyenne annuelle
               </th>
               <th style={th} colSpan={3}>
                 Décision du Conseil des Maîtres
               </th>
             </tr>
             <tr>
-              {/* v4 — sous-entêtes ADMIS / RED / ABD verticales (demande
-                  utilisateur) */}
-              <th style={thVertical}>
-                <span style={thVerticalSpan}>Admis</span>
-              </th>
-              <th style={thVertical}>
-                <span style={thVerticalSpan}>Red</span>
-              </th>
-              <th style={thVertical}>
-                <span style={thVerticalSpan}>Abd</span>
-              </th>
+              {/* v5 — sous-entêtes À L'HORIZONTALE (annulation v4) */}
+              <th style={th}>Admis</th>
+              <th style={th}>Red</th>
+              <th style={th}>Abd</th>
             </tr>
           </thead>
           <tbody>

@@ -212,11 +212,31 @@ func buildEndOfYearSheet(school models.School, cls models.Class, year int) (map[
 
 	// Nom du tenant du cours (enseignant affecté à la classe) et de
 	// l'inspecteur (Visa de l'Inspecteur du modèle reçu).
+	// v3 — le nom du titulaire doit s'ÉCRIRE sous la signature en
+	// caractère d'imprimerie gras (document officiel « Le tenant du
+	// cours » + bulletin individuel « Le Maître chargé du cours »).
+	// Priorité : l'enseignant affecté à la classe (classes.teacher_id) ;
+	// à défaut — 4 classes sur 582 seulement ont un teacher_id — repli
+	// sur le dossier du personnel : l'enseignant ACTIF de la même école
+	// dont le COURS TENU (users.cours — bande déroulante CP1..CM2 du
+	// dossier, cf. handlers/personnel.go) correspond au nom de la classe
+	// (ex : cours='CM2' pour la classe CM2). Champs existants : AUCUNE
+	// migration Neon.
 	teacherName := ""
 	if cls.TeacherID != nil {
 		var t models.User
 		if err := database.DB.Select("full_name").First(&t, "id = ?", *cls.TeacherID).Error; err == nil {
-			teacherName = t.FullName
+			teacherName = strings.TrimSpace(t.FullName)
+		}
+	}
+	if strings.TrimSpace(teacherName) == "" {
+		var t models.User
+		if err := database.DB.Select("full_name").
+			Where("school_id = ? AND role = ? AND active = ? AND UPPER(cours) = ?",
+				cls.SchoolID, models.RoleTeacher, true,
+				strings.ToUpper(strings.TrimSpace(cls.Name))).
+			Order("created_at ASC").First(&t).Error; err == nil {
+			teacherName = strings.TrimSpace(t.FullName)
 		}
 	}
 	// Nom de l'inspecteur titulaire de l'IEP (Visa de l'Inspecteur du
