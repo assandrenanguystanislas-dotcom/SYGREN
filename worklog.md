@@ -3982,3 +3982,22 @@ Stage Summary:
 - Document officiel : entêtes de nouveau HORIZONTAUX (verticaux annulés à la demande) — Arial 12, noms insécables, Fait à DABOU daté, visa inspecteur conservés
 - Le nom du tenant du cours (document officiel) ET du maître chargé du cours (bulletin individuel) s'affiche désormais en MAJUSCULES GRAS dès que la classe a un enseignant affecté OU dès que le COURS TENU est renseigné dans le dossier du personnel (module Utilisateurs > Personnel, champ COURS CP1..CM2)
 - Commit fa48d9b déployé et vérifié (Render LIVE + Vercel READY) ; aucune migration Neon
+
+---
+Task ID: 25
+Agent: Z.ai Code (session 25 — Bulletins A5 : nom du maître en majuscules gras + résolution du titulaire factorisée)
+Task: « oui » — confirmation de l'harmonisation proposée en fin de session 24 : le nom du maître dans la zone « APPRÉCIATION ET VISA DU MAÎTRE » du module Bulletins (A5) en CARACTÈRE D'IMPRIMERIE (majuscules) et EN GRAS.
+
+Work Log:
+- Bac à sable réinitialisé entre les sessions (2e fois) → restauration : re-clone HEAD 1945fbb + identité git repo-level, Go 1.25.0 (/home/z/go-dist — piège : tar avec --strip-components=1 sinon le binaire est dans go/bin), bun install (806 paquets), psycopg réinstallé
+- bulletins-a5-landscape.tsx : nom du maître text-[9px] font-semibold → text-center text-[9px] font-bold uppercase tracking-wide (harmonisé avec la zone « Visa du Directeur » de la session 23), position en bas de zone conservée (mt-auto)
+- TROU DE DONNÉES IDENTIQUE AU DOC OFFICIEL : le handler releve-data (reports.go, 10b) résolvait le maître UNIQUEMENT via classes.teacher_id (4/582) → sans repli, la zone maître serait restée vide pour 578 classes malgré le changement de style
+- REFACTOR : helper partagé resolveClassTeacherName(cls) dans helpers.go — PRIORITÉ classes.teacher_id (quel que soit le rôle : un directeur peut tenir une classe), REPLI users.cours (= nom de la classe, enseignant actif de l'école) ; end_of_year.go et reports.go l'utilisent (comportement identique doc officiel / bulletin individuel / A5)
+- Tests : go build + go vet + gofmt -w helpers.go (liste numérotée du commentaire) + next build OK ; test e2e local SQLite (scripts/test_fallback_local.py) : REPLI users.cours OK + PRIORITÉ teacher_id OK
+- Piège évité (déjà vu en 24) : rm -rf backend/storage supprime des SOURCES (r2.go, storage.go) → git checkout immédiat + go build de contrôle ; seuls backend/data (SQLite de test) et les artefacts /tmp sont nettoyés
+- Déploiement : commit 568e2e4 (backend+frontend, auteur assandrenanguystanislas) → Render LIVE sur 568e2e4 (health 200) + Vercel READY sur 568e2e4 ; API prod re-vérifiée (teacher_name/directeur/inspecteur intacts) ; NEON : AUCUN changement de schéma (classes=582, teacher_id=4, users.cours=0)
+
+Stage Summary:
+- Module Bulletins (A5) : le nom du maître s'affiche en MAJUSCULES GRAS en bas de la zone « APPRÉCIATION ET VISA DU MAÎTRE »
+- La résolution du tenant du cours est FACTORISÉE (resolveClassTeacherName) : document officiel, bulletin individuel et relevés/bulletins A5 utilisent la même logique (teacher_id puis cours tenu)
+- Commit 568e2e4 déployé et vérifié (Render LIVE + Vercel READY) ; aucune migration Neon
