@@ -3945,3 +3945,22 @@ Work Log:
 Stage Summary:
 - Entêtes CLASSE / ÉCHELON / COURS verticaux, lignes directeur & adjoint(e) en Arial 10, colonne Contact en Arial 10 sans préfixe +225 — l'état nominatif reste en Arial 12 ailleurs, noms/prénoms toujours insécables
 - Commit 8710250 déployé (Vercel READY, Render LIVE inchangé) ; aucun impact base de données
+
+---
+Task ID: 23
+Agent: Z.ai Code (session 23 — Résultats/Bulletins : Arial 12 + verticaux + Fait à DABOU + visa inspecteur + signatures bas de case + visa directeur majuscules)
+Task: 1) module Résultats, document officiel : Arial 12, noms/prénoms sur une même ligne, scolarité/admis/red/abd/moyenne annuelle en vertical, « Fait à DABOU, le … » à la date du jour, nom de l'inspecteur sous le visa ; 2) bulletin individuel fin d'année : noms du maître et du directeur juste avant le trait du bas ; 3) module Bulletins, visa du directeur : nom en caractère d'imprimerie + gras
+
+Work Log:
+- Sandbox réinitialisé entre les sessions → re-clone HEAD 6f55f41, identité git repo-level, Go 1.25.0 réinstallé (/home/z/go-dist), bun install
+- DOC OFFICIEL (end-of-year-document.tsx) : DOC_FONT Arial sur le conteneur (OFFICIAL_FONT Calibri retiré, import nettoyé) ; boîte du titre en Arial hérité (serif Cambria retiré) ; bloc signatures 12.5→12px ; cellule Nom et Prénoms → tdNom (nowrap + overflow hidden, insécable) ; entêtes SCOLARITÉ DANS LE COURS / SCOLARITÉ TOTALE / MOYENNE ANNUELLE + sous-entêtes ADMIS / RED / ABD verticaux (thVerticalSpan : writingMode vertical-rl + rotate 180deg, lisible bas → haut) ; « Fait à DABOU, le <b>{todayFr()}</b> » (date du jour jj/mm/aaaa, remplace les pointillés)
+- VISA INSPECTEUR — BUG DATA TROUVÉ : l'API retournait inspecteur='' car buildEndOfYearSheet ne lisait que les comptes role=inspector (AUCUN en base) alors que ieps.inspector_name = « M. DOSSO LACINE » est renseigné ; backend end_of_year.go : inspectorName = iep.InspectorName (TrimSpace) en priorité — même source que la SYNTHÈSE (synthese.go) — repli sur le compte inspecteur actif si le champ est vide ; strings importé ; go build + go vet OK ; API prod vérifiée : inspecteur='M. DOSSO LACINE'
+- BULLETIN INDIVIDUEL (end-of-year-bulletin.tsx) : les cases de signature (30mm) du Maître chargé du cours et du Directeur restructurées en flex column (height 26.4mm = 30mm − padding) ; le nom (déjà majuscules gras) reçoit marginTop:auto → imprimé EN BAS de la case, juste avant le trait du bas
+- MODULE BULLETINS (bulletins-a5-landscape.tsx) : nom du directeur zone « Visa du Directeur » : font-semibold → font-bold + uppercase + tracking-wide (caractère d'imprimerie + gras)
+- Déploiement : commit unique 8c386e8 (auteur assandrenanguystanislas, backend+frontend) → Render LIVE sur 8c386e8 (backend redéployé, health OK) + Vercel READY sur 8c386e8 ; NEON : AUCUNE migration (lecture de la colonne existante ieps.inspector_name)
+- Vérification prod : GET /api/reports/end-of-year → inspecteur renseigné ; login admin OK
+
+Stage Summary:
+- Le document officiel Résultats de fin d'année est en Arial 12, noms insécables, entêtes verticaux (scolarité/admis/red/abd/moyenne annuelle), « Fait à DABOU, le [date du jour] » et le nom de l'inspecteur (« M. DOSSO LACINE ») s'affiche sous le visa
+- Bulletin individuel : noms du maître et du directeur en bas des cases de signature ; module Bulletins : visa du directeur en majuscules grasses
+- Commit 8c386e8 déployé et vérifié (Render LIVE + Vercel READY) ; aucune modification de schéma
