@@ -431,7 +431,10 @@ export default function BulletinsA5Landscape({
                               imprimé en bas, place pour signer au-dessus. */}
                           <div className="h-[96px] flex flex-col justify-end pb-1 px-1">
                             {iepInfo?.director_name && (
-                              <p className="text-center text-[9px] font-semibold leading-tight">
+                              /* Demande utilisateur — nom du directeur en
+                                 CARACTÈRE D'IMPRIMERIE (majuscules) et EN
+                                 GRAS dans la zone « Visa du Directeur ». */
+                              <p className="text-center text-[9px] font-bold uppercase leading-tight tracking-wide">
                                 {iepInfo.director_name}
                               </p>
                             )}

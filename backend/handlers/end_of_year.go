@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"sygren-api/database"
@@ -218,8 +219,16 @@ func buildEndOfYearSheet(school models.School, cls models.Class, year int) (map[
 			teacherName = t.FullName
 		}
 	}
-	inspectorName := ""
-	if school.IEPID != "" {
+	// Nom de l'inspecteur titulaire de l'IEP (Visa de l'Inspecteur du
+	// modèle reçu) : le nom OFFICIEL enregistré dans le module Écoles > IEP
+	// (ieps.inspector_name — même source que la SYNTHÈSE DES RÉSULTATS)
+	// fait foi ; à défaut, repli sur le compte utilisateur inspecteur
+	// affecté à l'IEP (role=inspector, actif). v2 — l'IEP DABOU 1 n'a
+	// AUCUN compte inspecteur mais un inspector_name renseigné : le visa
+	// du document restait vide (demande utilisateur — écrire le nom de
+	// l'inspecteur sous « Visa de l'Inspecteur »).
+	inspectorName := strings.TrimSpace(iep.InspectorName)
+	if inspectorName == "" && school.IEPID != "" {
 		var insp models.User
 		if err := database.DB.Select("full_name").
 			Where("iep_id = ? AND role = ? AND active = ?", school.IEPID, models.RoleInspector, true).

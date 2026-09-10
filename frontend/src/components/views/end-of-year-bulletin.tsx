@@ -547,29 +547,41 @@ function BulletinCopy({
               >
                 <div
                   style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: GREEN_TEXT,
-                    textDecoration: "underline",
+                    display: "flex",
+                    flexDirection: "column",
+                    // Remplit la case (30mm − padding 1.8mm × 2) : le nom
+                    // est poussé EN BAS de la case (marginTop auto) —
+                    // « juste avant le trait du bas » (demande utilisateur).
+                    height: "26.4mm",
                   }}
                 >
-                  Le Maître chargé du cours
-                </div>
-                {data.class.teacher_name ? (
-                  /* Nom du titulaire EN CARACTÈRE D'IMPRIMERIE (majuscules
-                     gras) — AUCUN trait discontinu dans la case */
                   <div
                     style={{
                       fontSize: "12px",
                       fontWeight: 700,
-                      marginTop: "1.2mm",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.3px",
+                      color: GREEN_TEXT,
+                      textDecoration: "underline",
                     }}
                   >
-                    {data.class.teacher_name}
+                    Le Maître chargé du cours
                   </div>
-                ) : null}
+                  {data.class.teacher_name ? (
+                    /* Nom du titulaire EN CARACTÈRE D'IMPRIMERIE (majuscules
+                       gras), JUSTE AVANT LE TRAIT DU BAS de la case —
+                       AUCUN trait discontinu dans la case */
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        marginTop: "auto",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.3px",
+                      }}
+                    >
+                      {data.class.teacher_name}
+                    </div>
+                  ) : null}
+                </div>
               </td>
               <td
                 style={{
@@ -583,29 +595,41 @@ function BulletinCopy({
               >
                 <div
                   style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: GREEN_TEXT,
-                    textDecoration: "underline",
+                    display: "flex",
+                    flexDirection: "column",
+                    // Remplit la case (30mm − padding 1.8mm × 2) : le nom
+                    // est poussé EN BAS de la case (marginTop auto) —
+                    // « juste avant le trait du bas » (demande utilisateur).
+                    height: "26.4mm",
                   }}
                 >
-                  Le Directeur
-                </div>
-                {data.directeur ? (
-                  /* Nom du directeur EN CARACTÈRE D'IMPRIMERIE (majuscules
-                     gras) — AUCUN trait discontinu dans la case */
                   <div
                     style={{
                       fontSize: "12px",
                       fontWeight: 700,
-                      marginTop: "1.2mm",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.3px",
+                      color: GREEN_TEXT,
+                      textDecoration: "underline",
                     }}
                   >
-                    {data.directeur}
+                    Le Directeur
                   </div>
-                ) : null}
+                  {data.directeur ? (
+                    /* Nom du directeur EN CARACTÈRE D'IMPRIMERIE (majuscules
+                       gras), JUSTE AVANT LE TRAIT DU BAS de la case —
+                       AUCUN trait discontinu dans la case */
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        marginTop: "auto",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.3px",
+                      }}
+                    >
+                      {data.directeur}
+                    </div>
+                  ) : null}
+                </div>
               </td>
             </tr>
           </tbody>

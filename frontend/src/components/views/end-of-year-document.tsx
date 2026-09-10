@@ -32,6 +32,19 @@
 // (labels sur fond pastel orange, entêtes vertes) — les rubans
 // tricolores et les armoiries en filigrane sont conservés.
 //
+// v4 — ARIAL 12 + LECTURE VERTICALE + FAIT À DABOU (demande utilisateur,
+// module Résultats > Document officiel) :
+//   - Tout le document en police ARIAL (fallback Helvetica / Liberation
+//     Sans — métriques identiques sous Linux), texte à 12px ;
+//   - NOMS ET PRÉNOMS des élèves sur UNE SEULE LIGNE (cellule insécable) ;
+//   - Entêtes SCOLARITÉ DANS LE COURS, SCOLARITÉ TOTALE, MOYENNE
+//     ANNUELLE et sous-entêtes ADMIS / RED / ABD écrits VERTICALEMENT
+//     (bas → haut) comme sur les tableaux administratifs ;
+//   - « Fait à DABOU, le … » complété avec la DATE DU JOUR (jj/mm/aaaa) ;
+//   - Le nom de l'inspecteur sous « Visa de l'Inspecteur » est désormais
+//     alimenté par le backend depuis le champ officiel de l'IEP
+//     (ieps.inspector_name — cf. end_of_year.go v2).
+//
 // Données : /api/reports/end-of-year (source unique — le document ne
 // recalcule rien). Impression 100 % navigateur A4 portrait (route dédiée
 // /resultats-fin-annee-doc — zéro PDF serveur, discipline du projet).
@@ -43,7 +56,7 @@ import type { CSSProperties } from "react";
 import { reportsApi } from "@/lib/api";
 import type { EndOfYearRow, EndOfYearSummaryRow } from "@/lib/types";
 
-import { INK, OFFICIAL_FONT } from "./official-doc";
+import { INK } from "./official-doc";
 import {
   CIArmoiriesWatermark,
   CI_GREEN,
@@ -80,6 +93,11 @@ function todayFr(): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+// POLICE ARIAL taille 12 (demande utilisateur) — Helvetica/Liberation Sans
+// en secours (métriques identiques, Linux). Même choix que les autres
+// documents officiels (état nominatif, liste des candidats).
+const DOC_FONT = '"Arial", "Helvetica", "Liberation Sans", sans-serif';
+
 // Bordures du tableau en VERT DRAPEAU et entêtes sur FOND VERT DRAPEAU
 // (texte blanc — sortent à l'impression via print-color-adjust: exact).
 const th: CSSProperties = {
@@ -107,6 +125,29 @@ const td: CSSProperties = {
 };
 
 const tdLeft: CSSProperties = { ...td, textAlign: "left" };
+
+/** Cellule NOM ET PRÉNOMS : contenu INSÉCABLE — nom et prénoms de l'élève
+ *  toujours sur la MÊME LIGNE (demande utilisateur). */
+const tdNom: CSSProperties = {
+  ...tdLeft,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+};
+
+/** Libellé d'entête écrit VERTICALEMENT (bas → haut) : SCOLARITÉ DANS LE
+ *  COURS, SCOLARITÉ TOTALE, MOYENNE ANNUELLE, ADMIS, RED, ABD — demande
+ *  utilisateur. writing-mode vertical + rotation 180°, lisible de bas en
+ *  haut comme sur les tableaux administratifs (état nominatif, etc.). */
+const thVerticalSpan: CSSProperties = {
+  writingMode: "vertical-rl",
+  transform: "rotate(180deg)",
+  display: "inline-block",
+  whiteSpace: "nowrap",
+  letterSpacing: "0.5px",
+};
+
+/** Cellule d'entête verticale : padding réduit (la colonne est étroite). */
+const thVertical: CSSProperties = { ...th, padding: "3px 2px" };
 
 /** Largeurs des colonnes du tableau principal (colgroup — PAS de nœuds
  *  texte entre les <col>, erreur d'hydratation React sinon). */
@@ -237,7 +278,7 @@ export function EndOfYearDocument({
           width: "100%",
           maxWidth: "210mm", // A4 portrait
           padding: "8mm 9mm",
-          fontFamily: OFFICIAL_FONT,
+          fontFamily: DOC_FONT, // ARIAL 12 (demande utilisateur)
           color: INK,
           overflowX: "auto",
           position: "relative", // filigrane armoiries DANS LE FOND
@@ -281,7 +322,7 @@ export function EndOfYearDocument({
             </div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "12.5px", color: INK }}>
+            <div style={{ fontSize: "12px", color: INK }}>
               République de Côte d&apos;Ivoire
             </div>
             <div style={{ fontSize: "12px", color: INK, padding: "1px 0" }}>
@@ -304,8 +345,7 @@ export function EndOfYearDocument({
               background: CI_ORANGE_BG,
               borderRadius: "14px",
               padding: "6px 34px 7px",
-              fontFamily:
-                '"Cambria", "Caladea", Georgia, "Times New Roman", serif',
+              // Police ARIAL (héritée du document — demande utilisateur).
               fontSize: "19px",
               fontWeight: 700,
               letterSpacing: "1.5px",
@@ -368,11 +408,12 @@ export function EndOfYearDocument({
               <th style={th} rowSpan={2}>
                 Âge
               </th>
-              <th style={th} rowSpan={2}>
-                Scolarité dans le cours
+              <th style={thVertical} rowSpan={2}>
+                {/* v4 — libellé écrit VERTICALEMENT (demande utilisateur) */}
+                <span style={thVerticalSpan}>Scolarité dans le cours</span>
               </th>
-              <th style={th} rowSpan={2}>
-                Scolarité totale
+              <th style={thVertical} rowSpan={2}>
+                <span style={thVerticalSpan}>Scolarité totale</span>
               </th>
               <th style={th} rowSpan={2}>
                 Moyenne des compositions
@@ -380,17 +421,26 @@ export function EndOfYearDocument({
               <th style={th} rowSpan={2}>
                 Moyenne de la composition de passage
               </th>
-              <th style={th} rowSpan={2}>
-                Moyenne annuelle
+              <th style={thVertical} rowSpan={2}>
+                {/* v4 — libellé écrit VERTICALEMENT (demande utilisateur) */}
+                <span style={thVerticalSpan}>Moyenne annuelle</span>
               </th>
               <th style={th} colSpan={3}>
                 Décision du Conseil des Maîtres
               </th>
             </tr>
             <tr>
-              <th style={th}>Admis</th>
-              <th style={th}>Red</th>
-              <th style={th}>Abd</th>
+              {/* v4 — sous-entêtes ADMIS / RED / ABD verticales (demande
+                  utilisateur) */}
+              <th style={thVertical}>
+                <span style={thVerticalSpan}>Admis</span>
+              </th>
+              <th style={thVertical}>
+                <span style={thVerticalSpan}>Red</span>
+              </th>
+              <th style={thVertical}>
+                <span style={thVerticalSpan}>Abd</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -443,7 +493,7 @@ export function EndOfYearDocument({
             color: INK,
           }}
         >
-          Fait à ……………………. Le ……..…/…….……/{data.year}
+          Fait à DABOU, le <b>{todayFr()}</b>
         </div>
 
         {/* --- Signatures (modèle) — Task 37 : NOMS du directeur,
@@ -453,7 +503,7 @@ export function EndOfYearDocument({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            fontSize: "12.5px",
+            fontSize: "12px",
             fontWeight: 700,
             marginTop: "18px",
             padding: "0 2%",
@@ -563,14 +613,15 @@ function EndOfYearTableRow({ row, n }: { row: EndOfYearRow | null; n: number }) 
       <td style={td}>{n}</td>
       <td
         style={{
-          ...tdLeft,
+          ...tdNom,
           fontWeight: 600,
           // Demande utilisateur — NOM en CARACTÈRE D'IMPRIMERIE
           // (majuscules) puis prénoms en minuscule (voir
           // formatNomPrenoms ; les parties last_name / first_name
-          // viennent de l'API). Le text-transform uppercase de la
-          // Task 37 est retiré : le formatage se fait sur la chaîne.
-          // Noms des FILLES en rouge (les garçons restent en encre noire).
+          // viennent de l'API) ; v4 — UNE SEULE LIGNE (nowrap). Le
+          // text-transform uppercase de la Task 37 est retiré : le
+          // formatage se fait sur la chaîne. Noms des FILLES en rouge
+          // (les garçons restent en encre noire).
           color: row.gender === "F" ? FILLE_RED : undefined,
         }}
       >
