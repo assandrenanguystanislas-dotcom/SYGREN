@@ -68,6 +68,13 @@ func New(cfg *config.Config) http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(cfg))
 
+		// v5 (session 26) — périmètre STRICT du rôle conseiller : toute
+		// route hors de sa liste blanche (profil, nav, mot de passe,
+		// /api/conseiller/*) renvoie 403 — demande utilisateur : « ces
+		// conseillers pourront voir seulement leurs directeurs et leurs
+		// adjoints aux directeurs ».
+		r.Use(middleware.ConseillerScope)
+
 		r.Get("/api/me", handlers.Me)
 		r.Post("/api/auth/change-password", handlers.ChangePassword)
 
@@ -121,6 +128,42 @@ func New(cfg *config.Config) http.Handler {
 			r.Put("/api/exam-centers/{id}", handlers.UpdateExamCenter)
 			r.Delete("/api/exam-centers/{id}", handlers.DeleteExamCenter)
 		})
+
+		// Secteurs d'écoles — v5 (session 26) : regroupement des écoles par
+		// secteur de conseiller pédagogique. Lecture : admin (tous) +
+		// inspector (son IEP) — scope dans le handler ; écriture = mêmes
+		// droits que le module Écoles (comme les centres d'examen).
+		r.Get("/api/sectors", handlers.ListSectors)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleSchools, "write"))
+			r.Post("/api/sectors", handlers.CreateSector)
+			r.Put("/api/sectors/{id}", handlers.UpdateSector)
+			r.Delete("/api/sectors/{id}", handlers.DeleteSector)
+			// Affectations du secteur : écoles (schools.sector_id) et
+			// conseillers (users.sector_id) — remplacement complet.
+			r.Put("/api/sectors/{id}/schools", handlers.SetSectorSchools)
+			r.Put("/api/sectors/{id}/conseillers", handlers.SetSectorConseillers)
+		})
+
+		// Comptes conseillers — v5 (session 26) : module Utilisateurs >
+		// onglet Conseillers (admin + inspector). Le conseiller lui-même
+		// n'y a PAS accès (isolation : il ne voit que son périmètre).
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleUsersConseillers, "read"))
+			r.Get("/api/conseillers", handlers.ListConseillers)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleUsersConseillers, "write"))
+			r.Post("/api/conseillers", handlers.CreateConseiller)
+			r.Put("/api/conseillers/{id}", handlers.UpdateConseiller)
+			r.Delete("/api/conseillers/{id}", handlers.DeleteConseiller)
+		})
+
+		// Vue conseiller « Mon Secteur » — v5 (session 26) : périmètre
+		// STRICT (directeurs et adjoints au directeur des écoles de SON
+		// secteur, déduit côté serveur de users.sector_id). Admin /
+		// inspector : consultation d'assistance via ?sector_id=.
+		r.Get("/api/conseiller/staff", handlers.ConseillerStaff)
 
 		// Classes — lecture ouverte, écriture admin + inspector + director
 		r.Get("/api/classes", handlers.ListClasses)

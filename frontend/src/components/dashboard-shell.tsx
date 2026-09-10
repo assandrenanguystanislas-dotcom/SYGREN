@@ -20,6 +20,7 @@ import {
   History,
   Lock,
   KeyRound,
+  Network,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
@@ -96,7 +97,27 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Utilisateurs",
     icon: <UserCog className="w-4 h-4" />,
     roles: ["admin", "inspector", "director"],
-    moduleKeys: ["users.teachers", "users.directors", "users.inspectors", "users-admin"],
+    // v5 (session 26) — "users.conseillers" : onglet Conseillers
+    // (admin + inspector). Le conseiller LUI-MÊME n'a pas ce module :
+    // il ne voit que sa vue « Mon Secteur » ci-dessous.
+    moduleKeys: [
+      "users.teachers",
+      "users.directors",
+      "users.inspectors",
+      "users.conseillers",
+      "users-admin",
+    ],
+  },
+  // === v5 (session 26) — Vue conseiller « Mon Secteur » : périmètre
+  // STRICT du conseiller pédagogique (directeurs et adjoints au
+  // directeur des écoles de SON secteur). Item visible uniquement pour
+  // le rôle conseiller (module "users.conseiller"). ===
+  {
+    id: "conseiller",
+    label: "Mon Secteur",
+    icon: <Network className="w-4 h-4" />,
+    roles: ["conseiller"],
+    moduleKeys: ["users.conseiller"],
   },
   {
     id: "subjects",
@@ -194,6 +215,14 @@ export const PARENT_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
   "parent-portal",
 ]);
 
+/** v5 (session 26) — périmètre UI du CONSEILLER : TOUT est grisé SAUF sa
+ *  vue « Mon Secteur » (demande utilisateur : « ces conseillers pourront
+ *  voir seulement leurs directeurs et leurs adjoints aux directeurs »).
+ *  Le conseiller atterrit directement dessus. */
+export const CONSEILLER_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
+  "conseiller",
+]);
+
 /** Task 23 + 24 + 26 — périmètre UI par rôle : retourne l'ensemble des vues
  *  autorisées pour les rôles « espace restreint » (Directeur, Enseignant,
  *  Parent) ou null pour les autres rôles (admin / inspector → filtrage
@@ -201,6 +230,8 @@ export const PARENT_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
 function allowedViewsForRole(role: Role): ReadonlySet<string> | null {
   if (role === "director" || role === "teacher") return WORKSPACE_VIEWS;
   if (role === "parent") return PARENT_ALLOWED_VIEWS;
+  // v5 (session 26) — le conseiller ne voit que « Mon Secteur »
+  if (role === "conseiller") return CONSEILLER_ALLOWED_VIEWS;
   return null;
 }
 
@@ -350,7 +381,9 @@ function SidebarContent({
                 grayed
                   ? user.role === "parent"
                     ? "Réservé au personnel — le parent accède uniquement au Portail Parent"
-                    : "Module réservé — accès non autorisé pour votre fonction"
+                    : user.role === "conseiller"
+                      ? "Réservé à l'administration — le conseiller accède uniquement à son secteur"
+                      : "Module réservé — accès non autorisé pour votre fonction"
                   : undefined
               }
               className={cn(

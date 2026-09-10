@@ -188,6 +188,12 @@ func seedDefaults(db *gorm.DB) error {
 		log.Println("[DB] seed RBAC warning:", err)
 	}
 
+	// 6. v5 (session 26) — SECTEURS D'ECOLES par défaut (demande
+	// utilisateur : COSROU, VIEUX-BADIEN, TOUPAH, OUSROU, LEBOUTOU,
+	// BOUBOURY). Idempotent : uniquement si la table est vide ET qu'une
+	// seule IEP existe (rattachement non ambigu).
+	seedSectors(db)
+
 	return nil
 }
 
@@ -330,4 +336,36 @@ func seedRBACCells(db *gorm.DB, roleByName map[string]string, onlyMissing bool) 
 		log.Printf("[DB] %d cellules role_module créées/mises à jour", count)
 	}
 	return nil
+}
+
+// seedSectors crée les SECTEURS D'ECOLES par défaut (v5, session 26).
+// Idempotent : aucun effet si la table sectors n'est pas vide. Les
+// secteurs sont rattachés à l'IEP UNIQUE de la base (si la base en
+// contient zéro ou plusieurs, le seed est ignoré — l'administration
+// crée ses secteurs depuis le module Écoles > « Secteurs d'écoles »).
+func seedSectors(db *gorm.DB) {
+	var sectorCount int64
+	db.Model(&models.Sector{}).Count(&sectorCount)
+	if sectorCount > 0 {
+		return
+	}
+	var iepCount int64
+	db.Model(&models.IEP{}).Count(&iepCount)
+	if iepCount != 1 {
+		log.Println("[DB] seed secteurs ignoré : la base doit contenir exactement une IEP")
+		return
+	}
+	var iep models.IEP
+	if err := db.First(&iep).Error; err != nil {
+		return
+	}
+	defaultSectors := []string{"COSROU", "VIEUX-BADIEN", "TOUPAH", "OUSROU", "LEBOUTOU", "BOUBOURY"}
+	for i, name := range defaultSectors {
+		s := models.Sector{IEPID: iep.ID, Name: name, Position: i + 1}
+		if err := db.Create(&s).Error; err != nil {
+			log.Println("[DB] seed sector:", name, err)
+			continue
+		}
+	}
+	log.Printf("[DB] %d secteurs d'écoles par défaut créés dans l'IEP %s", len(defaultSectors), iep.Name)
 }

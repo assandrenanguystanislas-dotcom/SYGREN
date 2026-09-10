@@ -66,6 +66,11 @@ import type {
   // Centres d'examen (documents officiels du plan IEPP)
   ExamCenter,
   ExamCenterWithStats,
+  // Secteurs d'écoles & Conseillers (v5 session 26)
+  Sector,
+  SectorWithStats,
+  ConseillerWithSector,
+  ConseillerStaffResponse,
 } from "./types";
 
 // En production (Vercel), NEXT_PUBLIC_API_URL pointe vers le backend déployé.
@@ -389,6 +394,94 @@ export const examCentersApi = {
     apiFetch<{ status: string }>(`/api/exam-centers/${id}`, {
       method: "DELETE",
     }),
+};
+
+// === Secteurs d'écoles (v5 session 26 — conseillers pédagogiques) ===
+
+export const sectorsApi = {
+  list: () =>
+    apiFetch<{ sectors: SectorWithStats[]; count: number }>("/api/sectors"),
+  create: (data: { iep_id: string; name: string; position?: number }) =>
+    apiFetch<Sector>("/api/sectors", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: { name?: string; position?: number }) =>
+    apiFetch<Sector>(`/api/sectors/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  /** Refusé (409) tant que des écoles ou des conseillers sont rattachés. */
+  remove: (id: string) =>
+    apiFetch<{ status: string }>(`/api/sectors/${id}`, {
+      method: "DELETE",
+    }),
+  /** Affectation des écoles du secteur (remplacement complet). */
+  setSchools: (id: string, schoolIds: string[]) =>
+    apiFetch<{ status: string; school_count: number }>(
+      `/api/sectors/${id}/schools`,
+      { method: "PUT", body: JSON.stringify({ school_ids: schoolIds }) },
+    ),
+  /** Affectation des conseillers du secteur (remplacement complet). */
+  setConseillers: (id: string, userIds: string[]) =>
+    apiFetch<{ status: string; conseiller_count: number }>(
+      `/api/sectors/${id}/conseillers`,
+      { method: "PUT", body: JSON.stringify({ user_ids: userIds }) },
+    ),
+};
+
+// === Comptes conseillers (v5 session 26 — module Utilisateurs) ===
+
+export const conseillersApi = {
+  list: (params?: { q?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.q) qs.set("q", params.q);
+    const q = qs.toString();
+    return apiFetch<{ conseillers: ConseillerWithSector[]; count: number }>(
+      q ? `/api/conseillers?${q}` : "/api/conseillers",
+    );
+  },
+  create: (data: {
+    full_name: string;
+    phone?: string | null;
+    email?: string | null;
+    password?: string;
+  }) =>
+    apiFetch<User>("/api/conseillers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: {
+      full_name?: string;
+      phone?: string | null;
+      email?: string | null;
+      password?: string;
+      active?: boolean;
+    },
+  ) =>
+    apiFetch<User>(`/api/conseillers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  remove: (id: string) =>
+    apiFetch<{ status: string }>(`/api/conseillers/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Vue conseiller « Mon Secteur » (v5 session 26) ===
+
+export const conseillerApi = {
+  /** Périmètre strict : directeurs + adjoints des écoles de SON secteur
+   *  (déduit côté serveur). admin/inspector : ?sector_id=. */
+  staff: (sectorId?: string) =>
+    apiFetch<ConseillerStaffResponse>(
+      sectorId
+        ? `/api/conseiller/staff?sector_id=${encodeURIComponent(sectorId)}`
+        : "/api/conseiller/staff",
+    ),
 };
 
 // === Classes ===
@@ -1413,6 +1506,10 @@ export const api = {
   usersAdmin: usersAdminApi,
   pda: pdaApi,
   examCenters: examCentersApi,
+  // v5 (session 26) — Secteurs d'écoles & Conseillers
+  sectors: sectorsApi,
+  conseillers: conseillersApi,
+  conseiller: conseillerApi,
   // v2
   parents: parentsApi,
   parentPortal: parentPortalApi,

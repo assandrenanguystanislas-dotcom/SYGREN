@@ -17,6 +17,7 @@ import {
   DIRECTOR_ALLOWED_VIEWS,
   TEACHER_ALLOWED_VIEWS,
   PARENT_ALLOWED_VIEWS,
+  CONSEILLER_ALLOWED_VIEWS,
 } from "@/components/dashboard-shell";
 import { WelcomeDashboard } from "@/components/dashboards/welcome-dashboard";
 import { IepView } from "@/components/views/iep-view";
@@ -28,6 +29,7 @@ import { EvaluationsView } from "@/components/views/evaluations-view";
 import { ResultsView } from "@/components/views/results-view";
 import { BulletinsView } from "@/components/views/bulletins-view";
 import { ParentPortalView } from "@/components/views/parent-portal-view";
+import { ConseillerView } from "@/components/views/conseiller-view";
 import { AnalyticsDashboard } from "@/components/views/analytics-dashboard";
 import { SettingsView, type SettingsTab } from "@/components/views/settings-view";
 import { AuditView } from "@/components/views/audit-view";
@@ -72,6 +74,10 @@ function isViewAllowed(item: NavItem, user: User | null, modules: string[]): boo
   // Task 26 — le PARENT n'accède QU'AU Portail Parent : tout le reste est
   // grisé dans la navigation et refusé en accès direct par hash.
   if (user.role === "parent") return PARENT_ALLOWED_VIEWS.has(item.id);
+  // v5 (session 26) — le CONSEILLER n'accède QU'À sa vue « Mon Secteur »
+  // (directeurs et adjoints au directeur des écoles de son secteur) : tout
+  // le reste est grisé et refusé en accès direct par hash.
+  if (user.role === "conseiller") return CONSEILLER_ALLOWED_VIEWS.has(item.id);
   if (modules.length === 0) {
     return item.roles.includes(user.role);
   }
@@ -233,9 +239,11 @@ function AppContent() {
     ? activeView
     : user.role === "parent"
       ? "parent-portal"
-      : user.role === "director" || user.role === "teacher"
-        ? "users"
-        : "dashboard";
+      : user.role === "conseiller"
+        ? "conseiller"
+        : user.role === "director" || user.role === "teacher"
+          ? "users"
+          : "dashboard";
 
   // Task 23 + 24 — navigation depuis la bande déroulante du module
   // Utilisateurs (rôles Directeur et Enseignant) : définit la vue cible et,
@@ -288,6 +296,7 @@ function AppContent() {
       )}
       {view === "bulletins" && <BulletinsView />}
       {view === "parent-portal" && <ParentPortalView />}
+      {view === "conseiller" && <ConseillerView />}
       {/* Architecture D-Phase4 — Refonte Settings : les anciennes vues
           « baremes », « permissions » et « reset-requests » deviennent des
           sous-onglets de la page Paramètres (routing top-level résolu via

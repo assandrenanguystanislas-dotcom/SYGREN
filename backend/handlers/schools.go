@@ -34,6 +34,9 @@ type SchoolWithStats struct {
 	// ExamCenterName — nom du centre d'examen de rattachement (documents
 	// officiels du plan IEPP), résolu en masse par ListSchools.
 	ExamCenterName string `json:"exam_center_name,omitempty"`
+	// SectorName — nom du SECTEUR D'ECOLES de rattachement (module
+	// Écoles > plage « Secteurs d'écoles », v5 session 26), résolu en masse.
+	SectorName string `json:"sector_name,omitempty"`
 }
 
 // ListSchools returns schools filtered by the user's scope.
@@ -112,6 +115,28 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Noms des SECTEURS D'ECOLES : 1 requête IN (...) (pattern anti-N+1,
+	// même convention que les centres d'examen ci-dessus) — affichés sur
+	// les cartes écoles (v5 session 26 : module Écoles > Secteurs).
+	sectorName := make(map[string]string)
+	sectorIDs := make([]string, 0, len(schools))
+	sectorSeen := make(map[string]bool, len(schools))
+	for _, s := range schools {
+		if s.SectorID != nil && *s.SectorID != "" && !sectorSeen[*s.SectorID] {
+			sectorSeen[*s.SectorID] = true
+			sectorIDs = append(sectorIDs, *s.SectorID)
+		}
+	}
+	if len(sectorIDs) > 0 {
+		var sectors []models.Sector
+		if err := database.DB.Select("id", "name").Where("id IN ?", sectorIDs).Find(&sectors).Error; err != nil {
+			log.Println("[schools] enrichissement secteurs:", err)
+		}
+		for _, sec := range sectors {
+			sectorName[sec.ID] = sec.Name
+		}
+	}
+
 	// Compteurs : 2 agrégats GROUP BY au lieu de 2 requêtes par école
 	// NB : une slice DISTINCTE par Scan — gorm Scan RÉUTILISE la slice
 	// passée en paramètre si sa capacité est non nulle (scan.go : « the
@@ -163,6 +188,9 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
 		}
 		if s.ExamCenterID != nil && *s.ExamCenterID != "" {
 			stats.ExamCenterName = centerName[*s.ExamCenterID]
+		}
+		if s.SectorID != nil && *s.SectorID != "" {
+			stats.SectorName = sectorName[*s.SectorID]
 		}
 		if s.LogoPath != nil && *s.LogoPath != "" && storage.Global != nil {
 			if u, err := storage.Global.PresignURL(r.Context(), *s.LogoPath); err == nil {

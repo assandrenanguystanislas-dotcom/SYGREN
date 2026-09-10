@@ -16,24 +16,33 @@ const (
 	// v2 — Portail Parent : consultation + impression du bulletin
 	// individuel de l'enfant (recherche par matricule).
 	RoleParent = "parent"
+	// v5 (session 26) — CONSEILLER pédagogique : suit les écoles de SON
+	// secteur (module Écoles > SECTEURS D'ECOLES) — voit uniquement les
+	// directeurs et les adjoints au directeur des écoles de son secteur.
+	RoleConseiller = "conseiller"
 )
 
 // AllRoles returns the list of valid roles (used by RBAC middleware)
 func AllRoles() []string {
-	return []string{RoleTeacher, RoleDirector, RoleInspector, RoleAdmin, RoleParent}
+	return []string{RoleTeacher, RoleDirector, RoleInspector, RoleAdmin, RoleParent,
+		RoleConseiller}
 }
 
 // === User ===
 // Base authentication entity. Login via phone OR email (cahier des charges §4.1).
 type User struct {
-	ID                 string  `gorm:"primaryKey;type:text" json:"id"`
-	Phone              *string `gorm:"uniqueIndex;type:text" json:"phone,omitempty"`
-	Email              *string `gorm:"uniqueIndex;type:text" json:"email,omitempty"`
-	Password           string  `gorm:"type:text" json:"-"` // bcrypt hash, never serialized
-	FullName           string  `gorm:"type:text" json:"full_name"`
-	Role               string  `gorm:"type:text;index" json:"role"`
-	IEPID              *string `gorm:"type:text" json:"iep_id,omitempty"`    // inspecteur / admin scope
-	SchoolID           *string `gorm:"type:text" json:"school_id,omitempty"` // directeur / teacher scope
+	ID       string  `gorm:"primaryKey;type:text" json:"id"`
+	Phone    *string `gorm:"uniqueIndex;type:text" json:"phone,omitempty"`
+	Email    *string `gorm:"uniqueIndex;type:text" json:"email,omitempty"`
+	Password string  `gorm:"type:text" json:"-"` // bcrypt hash, never serialized
+	FullName string  `gorm:"type:text" json:"full_name"`
+	Role     string  `gorm:"type:text;index" json:"role"`
+	IEPID    *string `gorm:"type:text" json:"iep_id,omitempty"`    // inspecteur / admin scope
+	SchoolID *string `gorm:"type:text" json:"school_id,omitempty"` // directeur / teacher scope
+	// v5 (session 26) — Secteur d'écoles du CONSEILLER (affectation via
+	// PUT /api/sectors/{id}/conseillers). NULL pour tous les autres rôles
+	// (le directeur / l'adjoint sont rattachés à une école via SchoolID).
+	SectorID           *string `gorm:"type:text" json:"sector_id,omitempty"` // conseiller : son secteur
 	Active             bool    `gorm:"default:true" json:"active"`
 	MustChangePassword bool    `gorm:"default:false" json:"must_change_password"` // temp password → user must change on first login
 	Service            string  `gorm:"type:text" json:"service,omitempty"`        // service au sein de l'IEP (ex: "Examen & Concours", "Statistique") — pour les Admins IEP
@@ -145,11 +154,36 @@ type School struct {
 	// « PLAN D'ACTION PLURIANNUEL DE L'IEPP » : les écoles y sont groupées
 	// par CENTRES D'EXAMENS). Nullable : NULL = école non encore affectée
 	// (affichée hors groupe dans les documents IEPP).
-	ExamCenterID *string   `gorm:"type:text;index" json:"exam_center_id,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ExamCenterID *string `gorm:"type:text;index" json:"exam_center_id,omitempty"`
+	// v5 (session 26) — SECTEURS D'ECOLES de rattachement (module Écoles
+	// > plage « Secteurs d'écoles » : COSROU, VIEUX-BADIEN, TOUPAH,
+	// OUSROU, LEBOUTOU, BOUBOURY…). Nullable : NULL = école hors secteur.
+	// L'affectation se fait via PUT /api/sectors/{id}/schools.
+	SectorID  *string   `gorm:"type:text;index" json:"sector_id,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (s *School) BeforeCreate(tx *gorm.DB) error {
+	if s.ID == "" {
+		s.ID = uuid.NewString()
+	}
+	return nil
+}
+
+// === Sector (Secteur d'écoles) — v5 session 26 ===
+// Regroupement d'écoles confié à un ou plusieurs CONSEILLERS (users avec
+// role=conseiller et sector_id pointant ici). Chaque école est rattachée
+// à un secteur via schools.sector_id. Modèle calqué sur ExamCenter :
+// rattaché à une IEP, ordonné par Position dans les vues.
+type Sector struct {
+	ID        string    `gorm:"primaryKey;type:text" json:"id"`
+	IEPID     string    `gorm:"type:text;index" json:"iep_id"`
+	Name      string    `gorm:"type:text" json:"name"`     // ex : « COSROU »
+	Position  int       `gorm:"default:0" json:"position"` // ordre d'affichage
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (s *Sector) BeforeCreate(tx *gorm.DB) error {
 	if s.ID == "" {
 		s.ID = uuid.NewString()
 	}
@@ -693,5 +727,7 @@ func AllModels() []interface{} {
 		// Centres d'examen — regroupement des écoles dans les
 		// documents officiels du plan (colonne CENTRES D'EXAMENS)
 		&ExamCenter{},
+		// v5 (session 26) — Secteurs d'écoles (conseillers pédagogiques)
+		&Sector{},
 	}
 }

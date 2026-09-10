@@ -45,7 +45,7 @@ export function LoginView() {
   // de téléphone. Tout le reste est grisé pour le parent sauf le Portail
   // Parent (dashboard-shell + page.tsx).
   const [loginRole, setLoginRole] = useState<
-    "admin" | "director" | "teacher" | "parent"
+    "admin" | "director" | "teacher" | "parent" | "conseiller"
   >("director");
 
   // Config adaptative selon le rôle sélectionné.
@@ -60,6 +60,9 @@ export function LoginView() {
     director: { label: "Code école", placeholder: "ex: E001103" },
     teacher: { label: "Code école", placeholder: "ex: E001103" },
     parent: { label: "Code (numéro de téléphone)", placeholder: "ex: 0701020304" },
+    // v5 (session 26) — le conseiller se connecte avec son téléphone OU
+    // son email (compte créé par l'administration, non rattaché à une école).
+    conseiller: { label: "Téléphone ou email", placeholder: "ex: 0701020304" },
   }[loginRole];
 
   // Task 25/26 — (ancien indice « Mot de passe standard : votre numéro de
@@ -76,11 +79,12 @@ export function LoginView() {
     { v: "director" as const, l: "Directeur" },
     { v: "teacher" as const, l: "Adjoint(e) au directeur" },
     { v: "parent" as const, l: "Parent" },
+    { v: "conseiller" as const, l: "Conseiller" },
   ];
 
   // === Reset password modal ===
   const [resetOpen, setResetOpen] = useState(false);
-  const [resetRole, setResetRole] = useState<"admin" | "inspector" | "director" | "teacher" | "parent">("director");
+  const [resetRole, setResetRole] = useState<"admin" | "inspector" | "director" | "teacher" | "parent" | "conseiller">("director");
   const [resetId, setResetId] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetDone, setResetDone] = useState(false);
@@ -118,7 +122,9 @@ export function LoginView() {
                 ? "Admin IEP"
                 : user.role === "parent"
                   ? "Parent"
-                  : "Adjoint(e) au directeur"
+                  : user.role === "conseiller"
+                    ? "Conseiller"
+                    : "Adjoint(e) au directeur"
         }`,
       });
     } catch (e) {
@@ -408,6 +414,7 @@ export function LoginView() {
                           { v: "director" as const, l: "Directeur" },
                           { v: "teacher" as const, l: "Adjoint(e) au directeur" },
                           { v: "parent" as const, l: "Parent" },
+                          { v: "conseiller" as const, l: "Conseiller" },
                         ]).map(({ v, l }) => (
                           <button key={v} type="button" onClick={() => setResetRole(v)}
                             className={`px-2 py-2 rounded text-xs border ${resetRole === v ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
@@ -418,7 +425,7 @@ export function LoginView() {
                     </div>
                     <div>
                       <label className="text-xs font-medium mb-1.5 block">
-                        {resetRole === "admin" || resetRole === "inspector" ? "Email" : resetRole === "director" ? "Code école" : resetRole === "parent" ? "Téléphone ou email" : "Téléphone"}
+                        {resetRole === "admin" || resetRole === "inspector" ? "Email" : resetRole === "director" ? "Code école" : resetRole === "parent" || resetRole === "conseiller" ? "Téléphone ou email" : "Téléphone"}
                       </label>
                       <Input value={resetId} onChange={(e) => setResetId(e.target.value)}
                         placeholder={resetRole === "director" ? "ex: E001103" : resetRole === "teacher" ? "ex: 0700000000" : "ex: email@sygren.ci"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   School as SchoolIcon,
@@ -18,6 +18,8 @@ import {
   X,
   Search,
   Landmark,
+  Network,
+  UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +29,8 @@ import {
   classesApi,
   teachersApi,
   examCentersApi,
+  sectorsApi,
+  conseillersApi,
 } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
@@ -37,6 +41,8 @@ import type {
   TeacherWithDetails,
   SchoolStatus,
   ExamCenterWithStats,
+  SectorWithStats,
+  ConseillerWithSector,
 } from "@/lib/types";
 import { SCHOOL_STATUS_LABELS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -107,6 +113,8 @@ export function SchoolsView() {
   const [centerFilter, setCenterFilter] = useState<string>("all");
   const [expandedSchoolId, setExpandedSchoolId] = useState<string | null>(null);
   const [centersOpen, setCentersOpen] = useState(false);
+  // v5 (session 26) — plage « SECTEURS D'ECOLES » du module Écoles
+  const [sectorsOpen, setSectorsOpen] = useState(false);
   const [logoOpen, setLogoOpen] = useState(false);
   const [logoTarget, setLogoTarget] = useState<SchoolWithStats | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -300,6 +308,17 @@ export function SchoolsView() {
                 >
                   <Landmark className="w-4 h-4 mr-1.5" />
                   Centres d&apos;examens
+                </Button>
+                {/* v5 (session 26) — secteurs d'écoles : regroupement des
+                    écoles par secteur de conseiller pédagogique. */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSectorsOpen(true)}
+                  title="Gérer les secteurs d'écoles (écoles et conseillers affectés à chaque secteur)"
+                >
+                  <Network className="w-4 h-4 mr-1.5" />
+                  Secteurs d&apos;écoles
                 </Button>
                 <Button onClick={openCreate} size="sm" className="shadow-sm">
                   <Plus className="w-4 h-4 mr-1.5" />
@@ -752,6 +771,17 @@ export function SchoolsView() {
           open={centersOpen}
           onOpenChange={setCentersOpen}
           ieps={ieps}
+        />
+      )}
+
+      {/* v5 (session 26) — plage « SECTEURS D'ECOLES » : création des
+          secteurs, affectation des écoles et des conseillers. */}
+      {canEdit && (
+        <SectorsDialog
+          open={sectorsOpen}
+          onOpenChange={setSectorsOpen}
+          ieps={ieps}
+          schools={allSchools}
         />
       )}
 
@@ -1298,6 +1328,510 @@ function ExamCentersDialog({
         description={
           deleteTarget
             ? `Supprimer « ${deleteTarget.name} » ? Le backend refuse si des écoles y sont encore rattachées.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={Trash2}
+        onConfirm={onDelete}
+        loading={deleteMut.isPending}
+      />
+    </>
+  );
+}
+
+/**
+ * SectorsDialog — gestion des SECTEURS D'ECOLES (v5, session 26).
+ *
+ * Chaque secteur regroupe des écoles (schools.sector_id) et reçoit des
+ * CONSEILLERS affectés (users.sector_id) : « les directeurs et les adjoints
+ * au directeurs dont les écoles sont dans les secteurs d'écoles concernés
+ * seront sous l'autorité de ces conseillers ». Un secteur non vidé ne peut
+ * pas être supprimé (refus backend 409).
+ */
+function SectorsDialog({
+  open,
+  onOpenChange,
+  ieps,
+  schools,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  ieps: IEPWithStats[];
+  schools: SchoolWithStats[];
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["sectors"],
+    queryFn: sectorsApi.list,
+    enabled: open,
+  });
+  // Comptes conseillers disponibles pour l'affectation (actifs uniquement
+  // acceptés par le backend — on n'affiche qu'eux).
+  const { data: consData } = useQuery({
+    queryKey: ["conseillers"],
+    queryFn: () => conseillersApi.list(),
+    enabled: open,
+  });
+  const sectors = data?.sectors ?? [];
+  const conseillers = useMemo(
+    () => (consData?.conseillers ?? []).filter((c) => c.active),
+    [consData],
+  );
+
+  const [name, setName] = useState("");
+  const [position, setPosition] = useState("");
+  const [iepId, setIepId] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<SectorWithStats | null>(
+    null,
+  );
+  // Secteur déplié + sélections courantes (écoles / conseillers)
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [schoolSel, setSchoolSel] = useState<Set<string>>(new Set());
+  const [conseillerSel, setConseillerSel] = useState<Set<string>>(new Set());
+  const [schoolSearch, setSchoolSearch] = useState("");
+
+  const createMut = useCrudMutation(sectorsApi.create, {
+    invalidateKeys: [["sectors"], ["schools"]],
+    successMessage: "Secteur créé",
+    actionLabel: "Création du secteur",
+  });
+  const updateMut = useCrudMutation(
+    (id: string, payload: { name?: string; position?: number }) =>
+      sectorsApi.update(id, payload),
+    {
+      invalidateKeys: [["sectors"], ["schools"]],
+      successMessage: "Secteur modifié",
+      actionLabel: "Modification du secteur",
+    },
+  );
+  const deleteMut = useCrudMutation(sectorsApi.remove, {
+    invalidateKeys: [["sectors"], ["schools"]],
+    successMessage: "Secteur supprimé",
+    actionLabel: "Suppression du secteur",
+  });
+  const setSchoolsMut = useCrudMutation(
+    (id: string, ids: string[]) => sectorsApi.setSchools(id, ids),
+    {
+      invalidateKeys: [["sectors"], ["schools"]],
+      successMessage: "Écoles du secteur enregistrées",
+      actionLabel: "Affectation des écoles",
+    },
+  );
+  const setConseillersMut = useCrudMutation(
+    (id: string, ids: string[]) => sectorsApi.setConseillers(id, ids),
+    {
+      invalidateKeys: [["sectors"], ["conseillers"]],
+      successMessage: "Conseillers du secteur enregistrés",
+      actionLabel: "Affectation des conseillers",
+    },
+  );
+
+  /** Déplier un secteur : pré-sélectionne ses écoles et ses conseillers. */
+  function toggleExpand(s: SectorWithStats) {
+    if (expandedId === s.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(s.id);
+    setSchoolSel(
+      new Set(schools.filter((x) => x.sector_id === s.id).map((x) => x.id)),
+    );
+    setConseillerSel(
+      new Set(
+        conseillers.filter((c) => c.sector_id === s.id).map((c) => c.id),
+      ),
+    );
+    setSchoolSearch("");
+  }
+
+  function toggleSel(
+    set: Set<string>,
+    setter: (s: Set<string>) => void,
+    id: string,
+  ) {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setter(next);
+  }
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const targetIep = iepId || ieps[0]?.id || "";
+    if (!targetIep) {
+      toast.error("Aucune IEP", {
+        description: "Créez une IEP avant d'ajouter un secteur d'écoles.",
+      });
+      return;
+    }
+    try {
+      await createMut.mutateAsync([
+        {
+          iep_id: targetIep,
+          name: name.trim(),
+          position: position ? Number(position) : undefined,
+        },
+      ]);
+      setName("");
+      setPosition("");
+    } catch {
+      /* toastée par useCrudMutation */
+    }
+  }
+
+  async function onSaveEdit(s: SectorWithStats) {
+    try {
+      await updateMut.mutateAsync([s.id, { name: editName.trim() }]);
+      setEditId(null);
+    } catch {
+      /* toastée */
+    }
+  }
+
+  async function onDelete() {
+    if (!deleteTarget) return;
+    try {
+      await deleteMut.mutateAsync([deleteTarget.id]);
+      setDeleteTarget(null);
+    } catch {
+      /* toastée */
+    }
+  }
+
+  const expanded = sectors.find((s) => s.id === expandedId) ?? null;
+  // Écoles de l'IEP du secteur déplié (l'affectation inter-IEP est refusée
+  // par le backend — on ne propose que les écoles autorisées).
+  const expandableSchools = expanded
+    ? schools
+        .filter((x) => x.iep_id === expanded.iep_id)
+        .filter(
+          (x) =>
+            !schoolSearch ||
+            x.name.toLowerCase().includes(schoolSearch.toLowerCase()) ||
+            (x.code ?? "").toLowerCase().includes(schoolSearch.toLowerCase()),
+        )
+    : [];
+
+  return (
+    <>
+      <EntityDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Secteurs d'écoles"
+        description="Regroupement des écoles par secteur : affectez des écoles et des conseillers — chaque conseiller suivra uniquement les directeurs et adjoints des écoles de son secteur."
+        icon={Network}
+        loading={createMut.isPending || updateMut.isPending}
+      >
+        <div className="space-y-4 pt-2">
+          {/* Création */}
+          <form onSubmit={onCreate} className="space-y-2">
+            {ieps.length > 1 && (
+              <Select value={iepId || ieps[0]?.id} onValueChange={setIepId}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="IEP" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ieps.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nom du secteur (ex : COSROU)"
+                required
+                className="flex-1"
+              />
+              <Input
+                value={position}
+                onChange={(e) =>
+                  setPosition(e.target.value.replace(/[^0-9]/g, ""))
+                }
+                placeholder="Ordre"
+                inputMode="numeric"
+                className="w-24 shrink-0"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!name.trim() || createMut.isPending}
+                className="shrink-0"
+              >
+                {createMut.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4 mr-1" />
+                )}
+                Ajouter
+              </Button>
+            </div>
+          </form>
+
+          {/* Liste des secteurs */}
+          <div className="max-h-[52vh] overflow-y-auto rounded-md border border-border/60 divide-y divide-border/60">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Chargement…
+              </div>
+            ) : sectors.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">
+                Aucun secteur d&apos;écoles — créez le premier ci-dessus
+                (ex&nbsp;: COSROU, VIEUX-BADIEN, TOUPAH, OUSROU, LEBOUTOU,
+                BOUBOURY).
+              </p>
+            ) : (
+              sectors.map((s) => (
+                <div key={s.id} className="px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    {editId === s.id ? (
+                      <>
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="h-8 flex-1"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") onSaveEdit(s);
+                            if (e.key === "Escape") setEditId(null);
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8"
+                          disabled={!editName.trim() || updateMut.isPending}
+                          onClick={() => onSaveEdit(s)}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8"
+                          onClick={() => setEditId(null)}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          onClick={() => toggleExpand(s)}
+                          aria-expanded={expandedId === s.id}
+                        >
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform ${
+                              expandedId === s.id ? "" : "-rotate-90"
+                            }`}
+                          />
+                          <span className="font-mono text-[10px] text-muted-foreground w-6 text-center shrink-0">
+                            {s.position}
+                          </span>
+                          <span className="font-medium text-sm truncate">
+                            {s.name}
+                          </span>
+                        </button>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">
+                          {s.school_count} école(s)
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] shrink-0 gap-1"
+                        >
+                          <UsersRound className="w-3 h-3" />
+                          {s.conseillers.length}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          title="Renommer"
+                          onClick={() => {
+                            setEditId(s.id);
+                            setEditName(s.name);
+                          }}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                          title="Supprimer (si aucune école ni conseiller rattaché)"
+                          onClick={() => setDeleteTarget(s)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Panneau déplié : écoles + conseillers du secteur */}
+                  {expandedId === s.id && (
+                    <div className="mt-3 space-y-4 border-t border-border/60 pt-3">
+                      {/* Écoles */}
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                            <SchoolIcon className="w-3.5 h-3.5" />
+                            Écoles du secteur
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            disabled={setSchoolsMut.isPending}
+                            onClick={() =>
+                              setSchoolsMut.mutateAsync([s.id, [...schoolSel]])
+                            }
+                          >
+                            {setSchoolsMut.isPending && (
+                              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                            )}
+                            Enregistrer ({schoolSel.size})
+                          </Button>
+                        </div>
+                        <Input
+                          value={schoolSearch}
+                          onChange={(e) => setSchoolSearch(e.target.value)}
+                          placeholder="Rechercher une école…"
+                          className="h-8 text-xs mb-2"
+                        />
+                        <div className="max-h-48 overflow-y-auto rounded-md border border-border/40 p-2 space-y-1">
+                          {expandableSchools.length === 0 ? (
+                            <p className="text-xs text-muted-foreground italic py-3 text-center">
+                              Aucune école de cette IEP.
+                            </p>
+                          ) : (
+                            expandableSchools.map((x) => (
+                              <label
+                                key={x.id}
+                                className="flex items-center gap-2 rounded px-1.5 py-1 hover:bg-muted/60 cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={schoolSel.has(x.id)}
+                                  onCheckedChange={() =>
+                                    toggleSel(schoolSel, setSchoolSel, x.id)
+                                  }
+                                  aria-label={`École ${x.name}`}
+                                />
+                                <span className="text-xs truncate flex-1">
+                                  {x.name}
+                                </span>
+                                {x.code && (
+                                  <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                                    {x.code}
+                                  </span>
+                                )}
+                                {x.sector_id && x.sector_id !== s.id && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] shrink-0 border-amber-300 text-amber-700 bg-amber-50"
+                                  >
+                                    autre secteur
+                                  </Badge>
+                                )}
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Conseillers */}
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                            <UsersRound className="w-3.5 h-3.5" />
+                            Conseillers affectés
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            disabled={setConseillersMut.isPending}
+                            onClick={() =>
+                              setConseillersMut.mutateAsync([
+                                s.id,
+                                [...conseillerSel],
+                              ])
+                            }
+                          >
+                            {setConseillersMut.isPending && (
+                              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                            )}
+                            Enregistrer ({conseillerSel.size})
+                          </Button>
+                        </div>
+                        {conseillers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border/40 rounded-md">
+                            Aucun compte conseiller — créez-en dans le module
+                            Utilisateurs &gt; onglet Conseillers.
+                          </p>
+                        ) : (
+                          <div className="max-h-36 overflow-y-auto rounded-md border border-border/40 p-2 space-y-1">
+                            {conseillers.map((c) => (
+                              <label
+                                key={c.id}
+                                className="flex items-center gap-2 rounded px-1.5 py-1 hover:bg-muted/60 cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={conseillerSel.has(c.id)}
+                                  onCheckedChange={() =>
+                                    toggleSel(
+                                      conseillerSel,
+                                      setConseillerSel,
+                                      c.id,
+                                    )
+                                  }
+                                  aria-label={`Conseiller ${c.full_name}`}
+                                />
+                                <span className="text-xs truncate flex-1">
+                                  {c.full_name}
+                                </span>
+                                {c.sector_id && c.sector_id !== s.id && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] shrink-0 border-amber-300 text-amber-700 bg-amber-50"
+                                  >
+                                    autre secteur
+                                  </Badge>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Cochez les écoles et les conseillers de chaque secteur puis
+            enregistrez. Chaque conseiller voit uniquement les directeurs et
+            adjoints au directeur des écoles de SON secteur (vue « Mon
+            Secteur »).
+          </p>
+        </div>
+      </EntityDialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Supprimer le secteur d'écoles ?"
+        description={
+          deleteTarget
+            ? `Supprimer « ${deleteTarget.name} » ? Le backend refuse si des écoles ou des conseillers y sont encore rattachés.`
             : ""
         }
         confirmLabel="Supprimer"

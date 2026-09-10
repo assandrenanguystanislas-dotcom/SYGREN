@@ -79,12 +79,15 @@ const (
 	ModuleUsersAdmin  = "users-admin" // NEW — suspend/reactivate, admin only
 	// v2 — Portail Parent
 	ModuleParentPortal = "parent-portal" // v2 NEW — consultation + impression bulletin individuel: parent (+admin+inspector)
+	// v5 (session 26) — Secteurs d'écoles & Conseillers
+	ModuleUsersConseillers = "users.conseillers" // CRUD comptes conseillers: admin+inspector
+	ModuleUsersConseiller  = "users.conseiller"  // vue « Mon Secteur » du conseiller (périmètre strict)
 )
 
 // RbacMatrixVersion — version de la matrice par défaut (voir seedRBAC).
 // Incrémenter à chaque changement de politique pour que les bases existantes
 // soient re-synchronisées au démarrage.
-const RbacMatrixVersion = 4
+const RbacMatrixVersion = 5
 
 // RbacMatrixVersionKey — clé du setting stockant la version appliquée.
 const RbacMatrixVersionKey = "rbac.matrix_version"
@@ -101,6 +104,8 @@ func AllModuleKeys() []string {
 		ModulePermissions, ModuleAudit, ModuleUsersAdmin,
 		// v2
 		ModuleParentPortal,
+		// v5 (session 26) — Secteurs d'écoles & Conseillers
+		ModuleUsersConseillers, ModuleUsersConseiller,
 	}
 }
 
@@ -138,6 +143,9 @@ func AllModuleMetas() []ModuleMeta {
 		{Key: ModuleUsersAdmin, Label: "Suspension/Réactivation", Description: "Gestion fine des statuts de comptes", IconHint: "UserX"},
 		// v2
 		{Key: ModuleParentPortal, Label: "Portail Parent", Description: "Consultation + impression du bulletin individuel de l'enfant (par matricule)", IconHint: "Home"},
+		// v5 (session 26) — Secteurs d'écoles & Conseillers
+		{Key: ModuleUsersConseillers, Label: "Utilisateurs · Conseillers", Description: "CRUD des comptes conseillers pédagogiques", IconHint: "UsersRound"},
+		{Key: ModuleUsersConseiller, Label: "Mon Secteur", Description: "Vue conseiller — directeurs et adjoints au directeur des écoles de son secteur", IconHint: "Network"},
 	}
 }
 
@@ -158,6 +166,8 @@ func DefaultRoles() []DefaultRoleSeed {
 		{Name: RoleTeacher, Label: "Adjoint(e) au directeur", Description: "Adjoint(e) au directeur — module Élèves et saisie des notes de sa classe", IsSystem: true, SortOrder: 4},
 		// v2 — Portail Parent
 		{Name: RoleParent, Label: "Parent", Description: "Parent — consultation et impression du bulletin individuel de son enfant (par matricule)", IsSystem: true, SortOrder: 5},
+		// v5 (session 26) — Conseiller pédagogique
+		{Name: RoleConseiller, Label: "Conseiller", Description: "Conseiller pédagogique — suivi des écoles de son secteur : voit uniquement leurs directeurs et adjoints au directeur", IsSystem: true, SortOrder: 6},
 	}
 }
 
@@ -173,7 +183,8 @@ type DefaultRoleModuleSeed struct {
 }
 
 func DefaultRoleModules() []DefaultRoleModuleSeed {
-	all := []string{RoleAdmin, RoleInspector, RoleDirector, RoleTeacher, RoleParent}
+	all := []string{RoleAdmin, RoleInspector, RoleDirector, RoleTeacher, RoleParent,
+		RoleConseiller}
 	var out []DefaultRoleModuleSeed
 
 	// Pré-allouer TOUTES les cellules (rôle × module) à false/false —
@@ -281,6 +292,20 @@ func DefaultRoleModules() []DefaultRoleModuleSeed {
 	out = setDefault(out, RoleParent, ModuleParentPortal, true, false)
 	out = setDefault(out, RoleAdmin, ModuleParentPortal, true, true)
 	out = setDefault(out, RoleInspector, ModuleParentPortal, true, true)
+
+	// --- v5 (session 26) — Secteurs d'écoles & Conseillers ---
+	// Le CONSEILLER accède UNIQUEMENT à sa vue « Mon Secteur » (directeurs
+	// et adjoints au directeur des écoles de son secteur) : aucun autre
+	// module (ni tableau de bord, ni gestion de comptes — demande
+	// utilisateur : « ces conseillers pourront voir seulement leurs
+	// directeurs et leurs adjoints aux directeurs »).
+	out = setDefault(out, RoleConseiller, ModuleUsersConseiller, true, false)
+	// CRUD des comptes conseillers (Utilisateurs > onglet Conseillers) :
+	// admin + inspector. L'affectation des conseillers AUX secteurs passe
+	// par le module Écoles > SECTEURS D'ECOLES (schools write, comme les
+	// centres d'examen).
+	out = setDefault(out, RoleAdmin, ModuleUsersConseillers, true, true)
+	out = setDefault(out, RoleInspector, ModuleUsersConseillers, true, true)
 
 	return out
 }

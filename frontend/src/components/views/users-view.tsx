@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Users, Building2, ShieldCheck, UserCog, UserRound, Pause, Play, Loader2, Navigation, Lock } from "lucide-react";
+import { Users, Building2, ShieldCheck, UserCog, UserRound, UsersRound, Pause, Play, Loader2, Navigation, Lock } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -57,6 +57,7 @@ import { TeachersView } from "./teachers-view";
 import { DirectorsView } from "./directors-view";
 import { InspectorsView } from "./inspectors-view";
 import { ParentsView } from "./parents-view";
+import { ConseillersView } from "./conseillers-view";
 
 interface UsersViewProps {
   /** Task 23 + 24 — bande déroulante « Accès direct à vos modules »
@@ -75,6 +76,7 @@ interface UsersViewProps {
  *   - "users.directors"   → onglet Directeurs
  *   - "users.inspectors"  → onglet Admin IEP
  *   - "users.parents"     → onglet Parents (v2 — Portail Parent)
+ *   - "users.conseillers" → onglet Conseillers (v5 — secteurs d'écoles)
  *   - "users-admin"        → onglet "Tous les comptes" (super admin seul)
  *
  * Task 23 + 24 — le DIRECTEUR et l'ENSEIGNANT atterrissent directement sur
@@ -108,6 +110,10 @@ export function UsersView({ onNavigate }: UsersViewProps) {
   const canSeeInspectors = hasModule("users.inspectors") || hasLegacyRole(["admin"]);
   // v2 — Onglet Parents (Portail Parent) : admin + inspector
   const canSeeParents = hasModule("users.parents") || hasLegacyRole(["admin", "inspector"]);
+  // v5 (session 26) — Onglet Conseillers : admin + inspector. Le conseiller
+  // lui-même n'a PAS ce module (isolation : il ne voit que « Mon Secteur »).
+  const canSeeConseillers =
+    hasModule("users.conseillers") || hasLegacyRole(["admin", "inspector"]);
   const canSeeAllAccounts = hasModule("users-admin") || hasLegacyRole(["admin"]);
 
   const visibleTabs = [
@@ -115,6 +121,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
     canSeeDirectors && "directors",
     canSeeInspectors && "inspectors",
     canSeeParents && "parents",
+    canSeeConseillers && "conseillers",
     canSeeAllAccounts && "all-accounts",
   ].filter(Boolean) as string[];
 
@@ -232,6 +239,7 @@ export function UsersView({ onNavigate }: UsersViewProps) {
     else if (visibleTabs[0] === "directors") inner = <DirectorsView />;
     else if (visibleTabs[0] === "inspectors") inner = <InspectorsView />;
     else if (visibleTabs[0] === "parents") inner = <ParentsView />;
+    else if (visibleTabs[0] === "conseillers") inner = <ConseillersView />;
     else if (visibleTabs[0] === "all-accounts") inner = <AllAccountsTab />;
     else inner = <TeachersView />;
     return (
@@ -277,6 +285,12 @@ export function UsersView({ onNavigate }: UsersViewProps) {
             Parents
           </TabsTrigger>
         )}
+        {canSeeConseillers && (
+          <TabsTrigger value="conseillers">
+            <UsersRound className="w-4 h-4 mr-1.5" />
+            Conseillers
+          </TabsTrigger>
+        )}
         {canSeeAllAccounts && (
           <TabsTrigger value="all-accounts">
             <UserCog className="w-4 h-4 mr-1.5" />
@@ -295,6 +309,9 @@ export function UsersView({ onNavigate }: UsersViewProps) {
       </TabsContent>
       <TabsContent value="parents">
         <ParentsView />
+      </TabsContent>
+      <TabsContent value="conseillers">
+        <ConseillersView />
       </TabsContent>
       <TabsContent value="all-accounts">
         <AllAccountsTab />

@@ -1,7 +1,13 @@
 // Types TypeScript correspondant aux modèles GORM du backend Go (models/models.go)
 // Ces types garantissent le typage statique entre le frontend et l'API.
 
-export type Role = "teacher" | "director" | "inspector" | "admin" | "parent";
+export type Role =
+  | "teacher"
+  | "director"
+  | "inspector"
+  | "admin"
+  | "parent"
+  | "conseiller"; // v5 session 26 — conseiller pédagogique de secteur
 
 export const ROLE_LABELS: Record<Role, string> = {
   teacher: "Adjoint(e) au directeur",
@@ -9,6 +15,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   inspector: "Admin IEP",
   admin: "Super-Administrateur",
   parent: "Parent",
+  conseiller: "Conseiller",
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -18,6 +25,8 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   inspector: "Administration multi-écoles — impression des documents autorisée",
   admin: "Administration globale du système SYGREN",
   parent: "Consultation + impression du bulletin individuel de l'enfant (par matricule)",
+  conseiller:
+    "Suivi des écoles de son secteur — voit uniquement leurs directeurs et adjoints au directeur",
 };
 
 // === Dossier personnel (module Utilisateurs — ÉTAT NOMINATIF DU PERSONNEL) ===
@@ -99,6 +108,9 @@ export interface User extends PersonnelDossier {
   service?: string;
   // v2 — Portail Parent : matricule de l'enfant (pré-remplit la recherche)
   child_matricule?: string | null;
+  // v5 (session 26) — SECTEUR D'ECOLES du conseiller (users.sector_id) :
+  // renseigné pour role=conseiller, NULL pour les autres rôles.
+  sector_id?: string | null;
   // Architecture D — Suspension
   suspended_at?: string | null;
   suspended_by_id?: string | null;
@@ -131,6 +143,7 @@ export interface School {
   status: SchoolStatus; // public | private | community
   logo_path?: string; // clé stockage (R2 prod / FS dev) — URL calculée par l'API
   exam_center_id?: string | null; // centre d'examen de rattachement (plan IEPP)
+  sector_id?: string | null; // v5 — SECTEUR D'ECOLES de rattachement (conseillers)
   created_at: string;
 }
 
@@ -376,6 +389,54 @@ export interface ExamCenter {
 
 export interface ExamCenterWithStats extends ExamCenter {
   school_count: number;
+}
+
+// === Secteurs d'écoles (v5 session 26 — conseillers pédagogiques) ===
+
+export interface Sector {
+  id: string;
+  iep_id: string;
+  name: string;
+  position: number; // ordre d'affichage
+  created_at: string;
+}
+
+export interface SectorWithStats extends Sector {
+  school_count: number;
+  conseillers: string[]; // noms des conseillers affectés
+}
+
+/** École du secteur (vue conseiller — champs affichables uniquement). */
+export interface SectorSchool {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+}
+
+/** Personnel du secteur : directeurs + adjoints au directeur ACTIFS. */
+export interface ConseillerStaffMember {
+  id: string;
+  full_name: string;
+  role: Role;
+  phone?: string | null;
+  email?: string | null;
+  fonction?: string | null; // DIRECTEUR | ADJOINT(E) (dossier personnel)
+  school_id?: string | null;
+  school_name?: string;
+  school_code?: string;
+}
+
+/** Réponse GET /api/conseiller/staff (vue « Mon Secteur »). */
+export interface ConseillerStaffResponse {
+  sector: { id: string; name: string; iep_id: string } | null;
+  schools: SectorSchool[];
+  staff: ConseillerStaffMember[];
+  counts?: { schools: number; staff: number };
+}
+
+export interface ConseillerWithSector extends User {
+  sector_name?: string;
 }
 
 export interface ClassWithDetails extends SchoolClass {
