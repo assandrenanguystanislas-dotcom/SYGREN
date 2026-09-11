@@ -4185,3 +4185,15 @@ Stage Summary:
 - La vue Mon Secteur EXACTE de la capture est désormais reproduite À L'IDENTIQUE côté admin/inspector : plage Secteurs d'écoles (œil par secteur) et onglet Conseillers (œil par conseiller) ; une seule implémentation partagée = zéro divergence future
 - Le conseiller conserve strictement le même rendu (composant partagé)
 - À vérifier après push : Render LIVE + Vercel READY, test navigateur conseiller + capture
+
+---
+Task ID: 33 (vérification production)
+Agent: Z.ai Code (session 33 — contrôle déploiements + navigateur réel)
+
+Work Log:
+- Push e50abc6 ; Vercel READY + Render LIVE (build déclenché via API Render — auto-déclenchement webhook encore absent, même contournement que session 32) ; health 200
+- Test navigateur réel (conseiller.cosrou) sur e50abc6 : vue Mon Secteur INTACTE après refactor — carte en-tête (9 écoles / 3 directeurs / 0 adjoint / 155 élèves / 54 classes), grille 9 écoles, école EPP COSROU LEKR dépliée (CE1 27/23/50 … CP2 11/13/24, CM2 titulaire DIDJA), recherche + filtre, personnel Directeurs/adjoints — identique à la capture mon-secteur-v31-complet.png fournie par l'utilisateur
+- Volet admin (œil « Voir le secteur ») : câblage vérifié par build ; test réel impossible depuis cette session (identifiants admin non disponibles) — le dialogue utilise le même endpoint que le conseiller (branche admin ?sector_id= du handler, code vérifié sectors.go)
+
+Stage Summary:
+- e50abc6 en production : la vue Mon Secteur est désormais UN composant partagé conseiller + supervision (plage Secteurs d'écoles et onglet Conseillers, boutons œil)
