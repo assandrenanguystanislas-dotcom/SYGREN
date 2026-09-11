@@ -616,6 +616,7 @@ export const studentsApi = {
   // Import Excel bulk : le frontend parse le .xls/.xlsx (SheetJS) et envoie
   // un tableau d'élèves (class_name = "CP2", pas un UUID — le backend fait
   // le lookup par nom dans l'école). Réponse : {created, skipped, failed, total}.
+  // Champs d'état civil facultatifs : vide/absent = NULL en base.
   bulkCreate: (data: {
     school_id: string; // requis pour admin ; ignoré pour director (force ctxSchoolID)
     students: {
@@ -624,6 +625,13 @@ export const studentsApi = {
       last_name: string;
       gender: string; // M/F (ou MASCULIN/FEMININ — normalisé backend)
       class_name: string; // "CP2" — lookup par nom dans l'école
+      nationality?: string; // nationalité
+      birth_place?: string; // lieu de naissance
+      father_name?: string; // nom et prénoms du père
+      mother_name?: string; // nom et prénoms de la mère
+      acte_number?: string; // n° de l'acte de naissance
+      acte_date?: string; // date de l'acte (jj/mm/aaaa)
+      acte_place?: string; // lieu d'établissement de l'acte
     }[];
   }) =>
     apiFetch<{

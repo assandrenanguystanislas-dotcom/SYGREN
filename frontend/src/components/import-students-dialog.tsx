@@ -23,6 +23,14 @@ interface ParsedStudent {
   first_name: string;
   gender_raw: string; // "MASCULIN"/"FEMININ" tel que lu
   class_name: string; // "CP2"
+  // État civil facultatif (colonnes supplémentaires, vide = non renseigné)
+  nationality: string; // nationalité
+  birth_place: string; // lieu de naissance
+  father_name: string; // nom et prénoms du père
+  mother_name: string; // nom et prénoms de la mère
+  acte_number: string; // n° de l'acte de naissance
+  acte_date: string; // date de l'acte (jj/mm/aaaa)
+  acte_place: string; // lieu d'établissement de l'acte
   // Erreurs de validation côté frontend (preview)
   errors: string[];
 }
@@ -60,10 +68,38 @@ function convertGender(s: string): "M" | "F" | "" {
   return "";
 }
 
+// Cellule → chaîne propre. Les dates Excel (cellules au format date, ex :
+// "date acte") sont converties en jj/mm/aaaa au lieu de "Mon Jan 05 2016…".
+function cellToString(c: unknown): string {
+  if (c === null || c === undefined) return "";
+  if (c instanceof Date) {
+    return dateToStr(c);
+  }
+  return String(c).trim();
+}
+
+function dateToStr(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+// Colonne « date acte » : Date SheetJS (cellDates:true) OU numéro de série Excel
+// brut (cellule numérique non formatée, ex : 43174 = 15/03/2018) OU texte libre.
+function cellToDateStr(c: unknown): string {
+  if (c === null || c === undefined || c === "") return "";
+  if (c instanceof Date) return dateToStr(c);
+  if (typeof c === "number" && c > 25568 && c < 100000) {
+    // Série Excel → Date (25569 = série du 1970-01-01, base 1900)
+    const d = new Date(Math.round((c - 25569) * 86400000));
+    return dateToStr(d);
+  }
+  return String(c).trim();
+}
+
 // Parse le fichier Excel (.xls/.xlsx) via SheetJS → tableau d'élèves + validation.
 async function parseExcel(file: File): Promise<ParsedStudent[]> {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array" });
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
   const sheetName = wb.SheetNames[0];
   if (!sheetName) throw new Error("Aucune feuille dans le fichier");
   const sheet = wb.Sheets[sheetName];
@@ -86,6 +122,31 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
   const idxPrenoms = findCol(["prenoms", "prenom", "first_name", "firstname", "forename"]);
   const idxSexe = findCol(["sexe", "sex", "gender", "genre"]);
   const idxNiveau = findCol(["niveau", "classe", "class", "level"]);
+  // État civil facultatif — synonymes larges (en-têtes normalisés sans accents).
+  const idxNationality = findCol(["nationalite", "nationality", "nation"]);
+  const idxBirthPlace = findCol([
+    "lieu de naissance", "lieu de naiss", "lieu naissance", "lieunaissance",
+    "lieu de naissance de l'eleve", "birthplace", "birth place", "birth_place",
+  ]);
+  const idxFather = findCol([
+    "pere", "nom du pere", "nom et prenoms du pere", "noms du pere", "pere (nom)",
+    "father", "father_name",
+  ]);
+  const idxMother = findCol([
+    "mere", "nom de la mere", "nom et prenoms de la mere", "noms de la mere", "mere (nom)",
+    "mother", "mother_name",
+  ]);
+  const idxActeNumber = findCol([
+    "n° acte", "n°acte", "no acte", "num acte", "numero acte", "n° de l'acte",
+    "n° de l'acte de naissance", "numero de l'acte", "numero d'acte", "acte n°", "acte no",
+  ]);
+  const idxActeDate = findCol([
+    "date acte", "date de l'acte", "date de l'acte de naissance", "date acte de naissance", "acte date",
+  ]);
+  const idxActePlace = findCol([
+    "lieu acte", "lieu de l'acte", "lieu de l'acte de naissance", "acte lieu",
+    "lieu d'etablissement de l'acte", "lieu etablissement de l'acte",
+  ]);
 
   // Colonnes obligatoires (matricule optionnel)
   const missing: string[] = [];
@@ -103,11 +164,19 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
     const row = rows[i] as unknown[];
     if (!row || row.every((c) => c === null || c === undefined || String(c).trim() === "")) continue;
 
-    const matricule = idxMatricule >= 0 ? String(row[idxMatricule] ?? "").trim() : "";
-    const last_name = String(row[idxNom] ?? "").trim();
-    const first_name = String(row[idxPrenoms] ?? "").trim();
-    const gender_raw = String(row[idxSexe] ?? "").trim();
-    const class_name = String(row[idxNiveau] ?? "").trim();
+    const matricule = idxMatricule >= 0 ? cellToString(row[idxMatricule]) : "";
+    const last_name = cellToString(row[idxNom]);
+    const first_name = cellToString(row[idxPrenoms]);
+    const gender_raw = idxSexe >= 0 ? cellToString(row[idxSexe]) : "";
+    const class_name = idxNiveau >= 0 ? cellToString(row[idxNiveau]) : "";
+    // État civil facultatif (chaîne vide si colonne absente ou cellule vide)
+    const nationality = idxNationality >= 0 ? cellToString(row[idxNationality]) : "";
+    const birth_place = idxBirthPlace >= 0 ? cellToString(row[idxBirthPlace]) : "";
+    const father_name = idxFather >= 0 ? cellToString(row[idxFather]) : "";
+    const mother_name = idxMother >= 0 ? cellToString(row[idxMother]) : "";
+    const acte_number = idxActeNumber >= 0 ? cellToString(row[idxActeNumber]) : "";
+    const acte_date = idxActeDate >= 0 ? cellToDateStr(row[idxActeDate]) : "";
+    const acte_place = idxActePlace >= 0 ? cellToString(row[idxActePlace]) : "";
 
     // Validation côté frontend (erreurs potentielles, flaggées dans le preview)
     const errors: string[] = [];
@@ -123,6 +192,13 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
       first_name,
       gender_raw,
       class_name,
+      nationality,
+      birth_place,
+      father_name,
+      mother_name,
+      acte_number,
+      acte_date,
+      acte_place,
       errors,
     });
   }
@@ -178,6 +254,14 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
           last_name: p.last_name,
           gender: convertGender(p.gender_raw) || p.gender_raw, // M/F, ou raw (backend normalisera/échouera)
           class_name: p.class_name,
+          // État civil facultatif — vide → undefined (NULL en base)
+          nationality: p.nationality || undefined,
+          birth_place: p.birth_place || undefined,
+          father_name: p.father_name || undefined,
+          mother_name: p.mother_name || undefined,
+          acte_number: p.acte_number || undefined,
+          acte_date: p.acte_date || undefined,
+          acte_place: p.acte_place || undefined,
         })),
       });
       setResult(res);
@@ -209,6 +293,8 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
           <DialogDescription>
             Sélectionnez un fichier Excel (.xls ou .xlsx) contenant les colonnes :
             <span className="font-mono text-xs"> matricule, nom, prenoms, sexe, niveau</span>.
+            Colonnes facultatives d'état civil (importées si présentes) :
+            <span className="font-mono text-xs"> nationalité, lieu de naissance, père, mère, n° acte, date acte, lieu acte</span>.
             Les matricules existants seront ignorés (skip), les classes introuvables signalées.
           </DialogDescription>
         </DialogHeader>
@@ -272,8 +358,8 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
           {/* Preview table (10 premières lignes) */}
           {parsed && parsed.length > 0 && (
             <div className="border rounded overflow-hidden">
-              <div className="max-h-80 overflow-y-auto">
-                <table className="w-full text-xs">
+              <div className="max-h-80 overflow-y-auto overflow-x-auto">
+                <table className="w-full text-xs min-w-[900px]">
                   <thead className="bg-gray-100 sticky top-0">
                     <tr>
                       <th className="p-1.5 text-left">Ligne</th>
@@ -282,6 +368,13 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                       <th className="p-1.5 text-left">Prénoms</th>
                       <th className="p-1.5 text-left">Sexe</th>
                       <th className="p-1.5 text-left">Niveau</th>
+                      <th className="p-1.5 text-left" title="Nationalité">Nat.</th>
+                      <th className="p-1.5 text-left" title="Lieu de naissance">Lieu naiss.</th>
+                      <th className="p-1.5 text-left" title="Nom et prénoms du père">Père</th>
+                      <th className="p-1.5 text-left" title="Nom et prénoms de la mère">Mère</th>
+                      <th className="p-1.5 text-left" title="N° de l'acte de naissance">N° acte</th>
+                      <th className="p-1.5 text-left" title="Date de l'acte de naissance">Date acte</th>
+                      <th className="p-1.5 text-left" title="Lieu d'établissement de l'acte">Lieu acte</th>
                       <th className="p-1.5 text-left">Erreurs</th>
                     </tr>
                   </thead>
@@ -291,9 +384,16 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                         <td className="p-1.5">{p.row}</td>
                         <td className="p-1.5 font-mono">{p.matricule || "—"}</td>
                         <td className="p-1.5">{p.last_name || <span className="text-red-500">(vide)</span>}</td>
-                        <td className="p-1.5 truncate max-w-[180px]">{p.first_name || <span className="text-red-500">(vide)</span>}</td>
+                        <td className="p-1.5 truncate max-w-[140px]">{p.first_name || <span className="text-red-500">(vide)</span>}</td>
                         <td className="p-1.5">{p.gender_raw}</td>
                         <td className="p-1.5 font-medium">{p.class_name}</td>
+                        <td className="p-1.5 text-gray-600">{p.nationality || "—"}</td>
+                        <td className="p-1.5 text-gray-600 truncate max-w-[100px]">{p.birth_place || "—"}</td>
+                        <td className="p-1.5 text-gray-600 truncate max-w-[110px]">{p.father_name || "—"}</td>
+                        <td className="p-1.5 text-gray-600 truncate max-w-[110px]">{p.mother_name || "—"}</td>
+                        <td className="p-1.5 text-gray-600">{p.acte_number || "—"}</td>
+                        <td className="p-1.5 text-gray-600 whitespace-nowrap">{p.acte_date || "—"}</td>
+                        <td className="p-1.5 text-gray-600 truncate max-w-[100px]">{p.acte_place || "—"}</td>
                         <td className="p-1.5 text-red-600 text-[10px]">{p.errors.join(", ") || "—"}</td>
                       </tr>
                     ))}
