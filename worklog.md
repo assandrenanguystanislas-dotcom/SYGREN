@@ -4148,3 +4148,21 @@ Work Log:
 
 Stage Summary:
 - Module MON SECTEUR v31 opérationnel en production et conforme à la spécification ; AUCUNE migration Neon, aucune donnée modifiée
+
+---
+Task ID: 32
+Agent: Z.ai Code (session 32 — vérification « exactement comme le PNG » + preuve visuelle)
+Task: « je veux exactement comme ce qui est decrit dans le png. module mon secteur et tous les accessoires s'y rapportant » — contrôle de conformité point par point de la production face à la spécification mon-secteur-conseiller.png.
+
+Work Log:
+- Déploiements contrôlés via API : Render LIVE et Vercel READY sur 73b9856 (HEAD), health 200
+- Test navigateur RÉEL en production (sygren.vercel.app, compte conseiller.cosrou) à la résolution exacte du PNG (1280x577) : vue Mon Secteur rendue conforme à la spécification — sidebar « Mon Secteur » actif orange, en-tête + badge Conseiller, carte Secteur ambrée (« Bienvenue CONSEILLER COSROU — voici votre périmètre de suivi. »), 5 badges stats (école(s)/directeur(s)/adjoint(s)/élève(s)/classe(s)) avec les mêmes icônes que le PNG (School, Building2, GraduationCap, Users, sans icône pour classes), grille « Écoles du secteur » (pin + nom + code + badge vert élève(s) + badge bleu classe(s)), section « Directeurs et adjoints au directeur » avec libellé exact
+- Zooms comparatifs PIL (bande badges + carte école) : icônes, libellés, couleurs et style de badges IDENTIQUES au PNG ; école dépliée en production (EPP COSROU LEKR : CP1/CP2, G/F/Total, « Non affecté » pour classes sans titulaire) = accessoire au-delà du PNG
+- Écart constaté = DONNÉES uniquement : COSROU compte 9 écoles (contre 4 sur la capture) — 5 écoles affectées depuis via le formulaire d'affectation ; Neon : 97 écoles, 33 affectées, 64 non affectées, 6 secteurs (COSROU 9, OUSROU 7, TOUPAH 7, VIEUX-BADIEN 5, BOUBOURY 3, LEBOUTOU 2)
+- Preuve visuelle : download/mon-secteur-spec-vs-prod.png (spécification vs production côte à côte, hors dépôt) + capture production du jour
+- Aucune modification de code → aucun push nécessaire ; aucune migration Neon (SELECT uniquement)
+
+Stage Summary:
+- Module MON SECTEUR = conforme à la spécification PNG en production, vérifié sur application réelle ; tous les accessoires présents (écoles dépliables classes/titulaires/effectifs, filtre par école, recherche, contacts cliquables, dashboard conseiller, périmètre strict RBAC)
+- Si l'utilisateur voit encore l'ancienne version : recharger avec Ctrl+Maj+R (cache navigateur)
+- Prochaine étape suggérée : rattachement des 64 écoles restantes via « Affectation des écoles » (module Écoles)
