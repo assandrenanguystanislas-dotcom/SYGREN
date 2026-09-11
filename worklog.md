@@ -4239,3 +4239,32 @@ Stage Summary:
 - `go build` + `go vet` OK · `tsc` 0 erreur · `next build` OK.
 - Push `9ec4393`+`fbeb5cf` → Vercel **READY** (fbeb5cf) · Render déclenchement manuel → **LIVE** (message commit fbeb5cf ; SHA vide = quirk API déclenchement manuel).
 - Santé : `/api/health` → `{"status":"ok"}` ; front HTTP 200.
+
+---
+## Task 36 — Répercussion import Excel → formulaire « Modifier l'élève »
+
+**Date** : 2026-09-12 | **Commit** : `e1d5845` | **Déploiements** : Vercel READY + Render LIVE (e1d5845, SHA vérifié des deux côtés)
+
+### Demande
+« je veux que l'importation des fichiers excel dans le module eleves ait une repercussion sur modifier l'eleve c'est a dire remplir automatiquement les champs de ce formulaire » — chaque colonne Excel importée doit se retrouver pré-remplie dans « Modifier l'élève ».
+
+### Diagnostic
+La chaîne d'édition était déjà complète (openEdit pré-remplit tous les champs, UpdateStudent les persiste, ListStudents les renvoie). Le chaînon manquant = **la naissance (jour/mois/année)** : ni parsée, ni envoyée, ni stockée par l'import. En outre, les en-têtes réels du fichier utilisateur (PNG LISTE DES CANDIDATS : « nacte », « lieuacte » collés) n'étaient pas reconnus.
+
+### Implémentation
+- **Backend** (`handlers/students.go`) : `BulkStudentInput` + `BirthDay/BirthMonth/BirthYear *int` ; `BulkCreateStudents` valide (validateBirthDay/Month/Year — une valeur hors plage fait échouer LA ligne seule) et persiste ; 0/absent → NULL.
+- **Frontend** (`import-students-dialog.tsx`) :
+  * colonnes séparées « jour » / « mois » / « annee » (nombres, textes « 07 », noms de mois français « MARS » → 3 via MONTHS_MAP) ;
+  * colonne combinée « date de naissance » en fallback : jj/mm/aaaa, jj/mm/aa (pivot 30), cellule Date SheetJS, série Excel, année seule ;
+  * synonymes ajoutés : `nacte`, `numeroacte` (n° acte), `lieuacte`, `lieunacte` (lieu acte) ;
+  * validation preview identique au backend (jour 1..31, mois 1..12, année 1900..courante) ; colonne « Naissance » jj/mm/aaaa dans l'aperçu ; description du dialog mise à jour.
+- **api.ts** : signature bulkCreate + birth_day/birth_month/birth_year.
+
+### Vérifications
+- `go build` OK + `gofmt` OK (toolchain 1.25.5 installée sous /home/z/toolchain) · `tsc` 0 erreur · `next build` OK.
+- **Test parsing 17/17** (`/home/z/my-project/scripts/test_import_excel.ts`, bun + SheetJS, helpers EXTRAITS du fichier livré) : 2 xlsx générés — A en-têtes PNG exacts (jour/mois/annee/nacte/lieuacte), B date combinée (texte, Date réelle, année seule) ; nombres/textes/mois français/hors plage/vide tous couverts.
+- **Test e2e production 30/30** (`/home/z/my-project/scripts/test_e2e_prod_36.py`) : login admin → école EPP COSROU LEKR → POST bulk (2 élèves avec naissance + état civil) → GET (13 champs vérifiés) → PUT « Modifier l'élève » (birth_day 5→9, birth_month 3→7, état civil intact) → DELETE nettoyage (vérifié : 0 élève test restant, 155 élèves inchangés).
+- Push `e1d5845` → Vercel **READY** (e1d5845) · Render déclenchement manuel → **LIVE** (e1d5845) · `/api/health` 200.
+
+### Résultat
+Import Excel → clic crayon « Modifier l'élève » : tous les champs (matricule, identité, classe, jour/mois/année de naissance, nationalité, lieu de naissance, père, mère, n°/date/lieu d'acte) sont automatiquement remplis à partir des colonnes importées.
