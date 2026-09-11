@@ -542,13 +542,16 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Personnel du secteur : directeurs ET adjoints au directeur ACTIFS des
-	// écoles du secteur (roles director + teacher — l'adjoint au directeur
-	// est un compte teacher dans SYGREN, cf. libellés RBAC).
+	// écoles du secteur. L'adjoint au directeur est un compte « teacher » dont
+	// la FONCTION de dossier personnel vaut « ADJOINT(E) » — les simples
+	// enseignants (fonction vide) ne font PAS partie du périmètre du
+	// conseiller (exigence stricte : « seulement leurs directeurs et leurs
+	// adjoints aux directeurs », rappel session 27).
 	var staff []models.User
 	if len(schoolIDs) > 0 {
 		if err := database.DB.
-			Where("school_id IN ? AND role IN ? AND active = ?",
-				schoolIDs, []string{models.RoleDirector, models.RoleTeacher}, true).
+			Where("school_id IN ? AND active = ? AND (role = ? OR (role = ? AND UPPER(fonction) = ?))",
+				schoolIDs, true, models.RoleDirector, models.RoleTeacher, "ADJOINT(E)").
 			Order("full_name ASC").Find(&staff).Error; err != nil {
 			middleware.JSONError(w, "erreur récupération du personnel", http.StatusInternalServerError)
 			return
