@@ -412,6 +412,9 @@ export interface SectorSchool {
   code: string;
   name: string;
   status: string;
+  /** v27 — statistiques de l'école (cartes « Mon Secteur ») */
+  class_count?: number;
+  student_count?: number;
 }
 
 /** Personnel du secteur : directeurs + adjoints au directeur ACTIFS. */
@@ -432,7 +435,7 @@ export interface ConseillerStaffResponse {
   sector: { id: string; name: string; iep_id: string } | null;
   schools: SectorSchool[];
   staff: ConseillerStaffMember[];
-  counts?: { schools: number; staff: number };
+  counts?: { schools: number; staff: number; classes?: number; students?: number };
 }
 
 export interface ConseillerWithSector extends User {

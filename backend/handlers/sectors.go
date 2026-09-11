@@ -107,10 +107,18 @@ func ListSectors(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]SectorWithStats, 0, len(sectors))
 	for _, s := range sectors {
+		// Fix session 27 : une slice Go nil est sérialisée « null » en JSON —
+		// le frontend lit .length (badge conseillers) et l'application
+		// plantait (« a client-side exception ») dès l'ouverture de la plage
+		// Secteurs tant qu'aucun conseiller n'était affecté. On force [].
+		cons := conseillerNames[s.ID]
+		if cons == nil {
+			cons = []string{}
+		}
 		result = append(result, SectorWithStats{
 			Sector:      s,
 			SchoolCount: counts[s.ID],
-			Conseillers: conseillerNames[s.ID],
+			Conseillers: cons,
 		})
 	}
 
@@ -476,14 +484,60 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	schoolIDs := make([]string, len(schools))
-	schoolsView := make([]map[string]interface{}, 0, len(schools))
 	for i, s := range schools {
 		schoolIDs[i] = s.ID
+	}
+
+	// Statistiques des écoles du secteur (demande utilisateur session 27 :
+	// « ajouter des statistiques des écoles » à la vue Mon Secteur) — mêmes
+	// agrégats GROUP BY que la liste des écoles, même piège gorm : une slice
+	// DISTINCTE par Scan (gorm réutilise la slice passée en paramètre).
+	classCounts := make(map[string]int64, len(schools))
+	studentCounts := make(map[string]int64, len(schools))
+	if len(schoolIDs) > 0 {
+		type idCount struct {
+			SchoolID string `json:"school_id"`
+			Count    int64  `json:"count"`
+		}
+		var classRows []idCount
+		if err := database.DB.Model(&models.Class{}).
+			Select("school_id", "COUNT(*) AS count").
+			Where("school_id IN ?", schoolIDs).
+			Group("school_id").
+			Scan(&classRows).Error; err != nil {
+			log.Println("[conseiller] compteur classes:", err)
+		}
+		for _, row := range classRows {
+			classCounts[row.SchoolID] = row.Count
+		}
+
+		var studentRows []idCount
+		if err := database.DB.Model(&models.Student{}).
+			Joins("JOIN classes ON classes.id = students.class_id").
+			Select("classes.school_id AS school_id", "COUNT(*) AS count").
+			Where("classes.school_id IN ?", schoolIDs).
+			Group("classes.school_id").
+			Scan(&studentRows).Error; err != nil {
+			log.Println("[conseiller] compteur élèves:", err)
+		}
+		for _, row := range studentRows {
+			studentCounts[row.SchoolID] = row.Count
+		}
+	}
+
+	var totalClasses, totalStudents int64
+	schoolsView := make([]map[string]interface{}, 0, len(schools))
+	for _, s := range schools {
+		totalClasses += classCounts[s.ID]
+		totalStudents += studentCounts[s.ID]
 		schoolsView = append(schoolsView, map[string]interface{}{
 			"id":     s.ID,
 			"code":   s.Code,
 			"name":   s.Name,
 			"status": s.Status,
+			// Statistiques par école (cartes Mon Secteur)
+			"class_count":   classCounts[s.ID],
+			"student_count": studentCounts[s.ID],
 		})
 	}
 
@@ -525,8 +579,10 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		"schools": schoolsView,
 		"staff":   staffView,
 		"counts": map[string]int64{
-			"schools": int64(len(schools)),
-			"staff":   int64(len(staffView)),
+			"schools":  int64(len(schools)),
+			"staff":    int64(len(staffView)),
+			"classes":  totalClasses,
+			"students": totalStudents,
 		},
 	})
 }

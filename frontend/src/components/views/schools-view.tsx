@@ -1648,7 +1648,7 @@ function SectorsDialog({
                           className="text-[10px] shrink-0 gap-1"
                         >
                           <UsersRound className="w-3 h-3" />
-                          {s.conseillers.length}
+                          {(s.conseillers ?? []).length}
                         </Badge>
                         <Button
                           variant="ghost"
