@@ -147,6 +147,15 @@ func GetSyntheseData(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "accès refusé : vous ne pouvez générer la synthèse que pour votre école", http.StatusForbidden)
 		return
 	}
+	if role == models.RoleConseiller {
+		// v6 (session 34) — consultation : l'école doit appartenir au secteur
+		// du conseiller (users.sector_id, résolu serveur).
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" || school.SectorID == nil || *school.SectorID != sectorID {
+			middleware.JSONError(w, "accès refusé : cette école n'est pas dans votre secteur", http.StatusForbidden)
+			return
+		}
+	}
 	if role == "inspector" {
 		var iep models.IEP
 		if err := database.DB.First(&iep, "id = ?", school.IEPID).Error; err != nil {

@@ -574,6 +574,19 @@ func GetStudentAnnualResults(w http.ResponseWriter, r *http.Request) {
 			middleware.JSONError(w, "accès refusé", http.StatusForbidden)
 			return
 		}
+	case models.RoleConseiller:
+		// v6 (session 34) — consultation : élève d'une école du secteur.
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" {
+			middleware.JSONError(w, "accès refusé", http.StatusForbidden)
+			return
+		}
+		var school models.School
+		if err := database.DB.Select("sector_id").First(&school, "id = ?", cls.SchoolID).Error; err != nil ||
+			school.SectorID == nil || *school.SectorID != sectorID {
+			middleware.JSONError(w, "accès refusé : élève hors de votre secteur", http.StatusForbidden)
+			return
+		}
 	case "teacher":
 		// L'enseignant doit appartenir à l'école de l'élève
 		schoolID := ctxSchoolID(r)

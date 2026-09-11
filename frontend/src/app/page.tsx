@@ -74,9 +74,10 @@ function isViewAllowed(item: NavItem, user: User | null, modules: string[]): boo
   // Task 26 — le PARENT n'accède QU'AU Portail Parent : tout le reste est
   // grisé dans la navigation et refusé en accès direct par hash.
   if (user.role === "parent") return PARENT_ALLOWED_VIEWS.has(item.id);
-  // v5 (session 26) — le CONSEILLER n'accède QU'À sa vue « Mon Secteur »
-  // (directeurs et adjoints au directeur des écoles de son secteur) : tout
-  // le reste est grisé et refusé en accès direct par hash.
+  // v5 (session 26) + v6 (session 34) — le CONSEILLER accède à sa vue
+  // « Mon Secteur » ET à la consultation des documents de son secteur
+  // (Résultats / Bulletins, impression verrouillée) : le reste est grisé
+  // et refusé en accès direct par hash.
   if (user.role === "conseiller") return CONSEILLER_ALLOWED_VIEWS.has(item.id);
   if (modules.length === 0) {
     return item.roles.includes(user.role);

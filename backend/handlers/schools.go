@@ -59,6 +59,16 @@ func ListSchools(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		query = query.Where("id = ?", schoolID)
+	case models.RoleConseiller:
+		// v6 (session 34) — consultation des documents de SON secteur :
+		// le conseiller ne voit que les écoles de son secteur
+		// (users.sector_id, résolu serveur). Aucun secteur → liste vide.
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" {
+			jsonResponse(w, http.StatusOK, map[string]interface{}{"schools": []interface{}{}, "count": 0})
+			return
+		}
+		query = query.Where("sector_id = ?", sectorID)
 	}
 
 	var schools []models.School

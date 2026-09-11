@@ -282,6 +282,19 @@ func pdaSchoolScopeForUser(r *http.Request) string {
 	return ""
 }
 
+// pdaSchoolIsInConseillerSector — v6 (session 34) : vérifie que l'école
+// donnée appartient au secteur du conseiller courant. Retourne false pour
+// tout rôle autre que conseiller (les checks spécifiques à chaque rôle sont
+// gérés en amont) — à n'utiliser QUE dans un branchement role == conseiller.
+func pdaSchoolIsInConseillerSector(r *http.Request, schoolID string) bool {
+	for _, id := range conseillerSectorSchoolIDs(r) {
+		if id == schoolID {
+			return true
+		}
+	}
+	return false
+}
+
 // pdaExamError — erreur de scope avec statut HTTP associé.
 type pdaExamError struct {
 	status int
@@ -298,6 +311,12 @@ func getPDAExamForUser(r *http.Request, examID string) (*models.PDAExam, error) 
 	}
 	if scope := pdaSchoolScopeForUser(r); scope != "" && exam.SchoolID != scope {
 		return nil, &pdaExamError{http.StatusForbidden, "accès refusé : cette évaluation appartient à une autre école"}
+	}
+	// v6 (session 34) — le conseiller consulte uniquement les évaluations
+	// des écoles de SON secteur (pdaSchoolScopeForUser ne le couvre pas :
+	// son périmètre est un secteur, pas une école unique).
+	if ctxRole(r) == models.RoleConseiller && !pdaSchoolIsInConseillerSector(r, exam.SchoolID) {
+		return nil, &pdaExamError{http.StatusForbidden, "accès refusé : cette évaluation appartient à une école hors de votre secteur"}
 	}
 	return &exam, nil
 }
@@ -332,7 +351,11 @@ func pdaClassForExam(exam *models.PDAExam, classID string) (*models.Class, error
 // director/teacher : périmètre imposé ; admin/inspector : tout ou school_id.
 func ListPDAExams(w http.ResponseWriter, r *http.Request) {
 	query := database.DB.Model(&models.PDAExam{})
-	if scope := pdaSchoolScopeForUser(r); scope != "" {
+	// v6 (session 34) — le conseiller est borné aux écoles de SON secteur.
+	if ctxRole(r) == models.RoleConseiller {
+		ids := conseillerSectorSchoolIDs(r)
+		query = query.Where("school_id IN ?", ids) // [] vide → aucune ligne
+	} else if scope := pdaSchoolScopeForUser(r); scope != "" {
 		query = query.Where("school_id = ?", scope)
 	} else if v := r.URL.Query().Get("school_id"); v != "" {
 		query = query.Where("school_id = ?", v)
@@ -1345,6 +1368,12 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 	}
 	if scope := pdaSchoolScopeForUser(r); scope != "" && cls.SchoolID != scope {
 		middleware.JSONError(w, "accès refusé : cette classe appartient à une autre école", http.StatusForbidden)
+		return
+	}
+	// v6 (session 34) — le conseiller ne consulte que les classes des
+	// écoles de SON secteur.
+	if ctxRole(r) == models.RoleConseiller && !pdaSchoolIsInConseillerSector(r, cls.SchoolID) {
+		middleware.JSONError(w, "accès refusé : cette classe appartient à une école hors de votre secteur", http.StatusForbidden)
 		return
 	}
 	if pdaMaxScore(cls.Level) == 0 {

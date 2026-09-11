@@ -77,6 +77,16 @@ func ListSessions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		query = query.Where("evaluation_sessions.school_id = ?", schoolID)
+	case models.RoleConseiller:
+		// v6 (session 34) — le conseiller consulte les sessions des
+		// écoles de SON secteur (JOIN schools déjà présent : filtre
+		// sur schools.sector_id). Aucun secteur → liste vide.
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" {
+			jsonResponse(w, http.StatusOK, map[string]interface{}{"sessions": []interface{}{}, "count": 0})
+			return
+		}
+		query = query.Where("schools.sector_id = ?", sectorID)
 	case "teacher":
 		// L'enseignant voit les sessions de son école
 		schoolID := ctxSchoolID(r)

@@ -103,6 +103,14 @@ func getSessionForUser(r *http.Request, sessionID string) (*models.EvaluationSes
 		if session.SchoolID != ctxSchoolID(r) {
 			return nil, fmt.Errorf("accès refusé")
 		}
+	case models.RoleConseiller:
+		// v6 (session 34) — consultation des documents de SON secteur : la
+		// session doit appartenir à une école du secteur du conseiller
+		// (users.sector_id, résolu serveur). default-deny conservé.
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" || school.SectorID == nil || *school.SectorID != sectorID {
+			return nil, fmt.Errorf("accès refusé : cette session appartient à une école hors de votre secteur")
+		}
 	case "teacher":
 		// L'enseignant doit appartenir à l'école de la session.
 		// Le JWT contient school_id si l'utilisateur en a un ; sinon on vérifie

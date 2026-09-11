@@ -135,6 +135,13 @@ func GetClassCandidates(w http.ResponseWriter, r *http.Request) {
 			middleware.JSONError(w, "accès refusé : classe qui n'est pas la vôtre", http.StatusForbidden)
 			return
 		}
+	case models.RoleConseiller:
+		// v6 (session 34) — consultation : école du secteur du conseiller.
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" || school.SectorID == nil || *school.SectorID != sectorID {
+			middleware.JSONError(w, "accès refusé : classe hors de votre secteur", http.StatusForbidden)
+			return
+		}
 	default:
 		middleware.JSONError(w, "accès refusé", http.StatusForbidden)
 		return

@@ -47,6 +47,17 @@ package models
 //     écriture, et les handlers renvoient un 403 explicite par précaution
 //     (défense en profondeur, la matrice étant modifiable à chaud).
 //
+// === v6 (session 34 — consultation des documents du secteur) ===
+//
+//   - Conseiller : lecture (CONSULTATION) des documents officiels des
+//     écoles de SON secteur — modules Résultats (reports) et Bulletins
+//     (report-cards). L'IMPRESSION reste verrouillée (print-guard.tsx :
+//     zone « Imprimer / PDF » grisée + blocage @media print) — seuls
+//     l'Admin IEP et le Super Admin impriment. Le périmètre SECTORIEL
+//     est appliqué dans les HANDLERS (schools/sessions/classes/computation/
+//     synthese/end_of_year/personnel/students/pda) ET dans le middleware
+//     ConseillerScope (liste blanche des routes de consultation).
+//
 // La matrice MIRRORS the RequireModule(...) calls in router.go. After seed,
 // every dynamic permission check returns the intended result. The super
 // admin can then edit the matrix via the /api/permissions UI.
@@ -87,7 +98,9 @@ const (
 // RbacMatrixVersion — version de la matrice par défaut (voir seedRBAC).
 // Incrémenter à chaque changement de politique pour que les bases existantes
 // soient re-synchronisées au démarrage.
-const RbacMatrixVersion = 5
+// v6 : conseiller +lecture Résultats/Bulletins (consultation sectorielle,
+// impression toujours verrouillée).
+const RbacMatrixVersion = 6
 
 // RbacMatrixVersionKey — clé du setting stockant la version appliquée.
 const RbacMatrixVersionKey = "rbac.matrix_version"
@@ -294,12 +307,19 @@ func DefaultRoleModules() []DefaultRoleModuleSeed {
 	out = setDefault(out, RoleInspector, ModuleParentPortal, true, true)
 
 	// --- v5 (session 26) — Secteurs d'écoles & Conseillers ---
-	// Le CONSEILLER accède UNIQUEMENT à sa vue « Mon Secteur » (directeurs
-	// et adjoints au directeur des écoles de son secteur) : aucun autre
-	// module (ni tableau de bord, ni gestion de comptes — demande
-	// utilisateur : « ces conseillers pourront voir seulement leurs
-	// directeurs et leurs adjoints aux directeurs »).
+	// Le CONSEILLER accède à sa vue « Mon Secteur » (directeurs et
+	// adjoints au directeur des écoles de son secteur) : aucun module de
+	// gestion de comptes (demande utilisateur : « ces conseillers
+	// pourront voir seulement leurs directeurs et leurs adjoints aux
+	// directeurs »).
 	out = setDefault(out, RoleConseiller, ModuleUsersConseiller, true, false)
+	// --- v6 (session 34) — Documents du secteur : CONSULTATION seule ---
+	// Le conseiller consulte les documents officiels (synthèses, relevés,
+	// résultats de fin d'année, bulletins A5, plan d'action) des écoles
+	// de SON secteur (périmètre appliqué dans les handlers + middleware
+	// ConseillerScope). L'impression reste verrouillée (print-guard).
+	out = setDefault(out, RoleConseiller, ModuleReports, true, false)
+	out = setDefault(out, RoleConseiller, ModuleReportCards, true, false)
 	// CRUD des comptes conseillers (Utilisateurs > onglet Conseillers) :
 	// admin + inspector. L'affectation des conseillers AUX secteurs passe
 	// par le module Écoles > SECTEURS D'ECOLES (schools write, comme les

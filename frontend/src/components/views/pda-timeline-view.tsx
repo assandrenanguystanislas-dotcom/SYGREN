@@ -91,7 +91,10 @@ function TimelineCellView({ cell }: { cell?: PdaTimelineCell }) {
 
 export function PdaTimelineView() {
   const user = useAuthStore((s) => s.user);
-  const needsSchoolSelect = user?.role === "admin" || user?.role === "inspector";
+  // v6 (session 34) — le conseiller consulte le suivi pluriannuel de son
+  // secteur (liste d'écoles bornée au secteur par le backend).
+  const needsSchoolSelect =
+    user?.role === "admin" || user?.role === "inspector" || user?.role === "conseiller";
   const [schoolFilter, setSchoolFilter] = useState<string>(
     needsSchoolSelect ? "" : (user?.school_id ?? ""),
   );

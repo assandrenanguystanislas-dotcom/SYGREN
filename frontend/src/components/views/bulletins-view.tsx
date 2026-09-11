@@ -72,11 +72,14 @@ export function BulletinsView() {
   // pas au module).
   const canPrint = canPrintDocument(user?.role, false);
   // Cascade stricte (même logique que students-view et results-view)
-  // - admin/inspector : doivent choisir une école → puis une session
+  // - admin/inspector/conseiller (v6) : doivent choisir une école → puis une
+  //   session (la liste des écoles du conseiller est bornée à SON secteur
+  //   par le backend)
   // - director/teacher : école figée (RBAC backend) → choisissent une session
   const isAdmin = user?.role === "admin";
   const isInspector = user?.role === "inspector";
-  const needsSchoolSelect = isAdmin || isInspector;
+  const isConseiller = user?.role === "conseiller";
+  const needsSchoolSelect = isAdmin || isInspector || isConseiller;
 
   // === Cascade : École → Session ===
   const [schoolFilter, setSchoolFilter] = useState<string>(

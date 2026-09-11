@@ -215,22 +215,33 @@ export const PARENT_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
   "parent-portal",
 ]);
 
-/** v5 (session 26) — périmètre UI du CONSEILLER : TOUT est grisé SAUF sa
- *  vue « Mon Secteur » (demande utilisateur : « ces conseillers pourront
- *  voir seulement leurs directeurs et leurs adjoints aux directeurs »).
- *  Le conseiller atterrit directement dessus. */
+/** v5 (session 26) — périmètre UI du CONSEILLER : sa vue « Mon Secteur »
+ *  (demande utilisateur : « ces conseillers pourront voir seulement leurs
+ *  directeurs et leurs adjoints aux directeurs »). Le conseiller atterrit
+ *  directement dessus.
+ *  v6 (session 34) — demande utilisateur : « les conseillers pourront voir
+ *  tous les documents PDF de leurs secteurs mais ne pourront pas les
+ *  imprimer car grisés » : les modules Résultats et Bulletins deviennent
+ *  cliquables (CONSULTATION des documents des écoles de son secteur — le
+ *  sélecteur d'écoles est borné au secteur côté serveur) ; l'impression
+ *  reste verrouillée (print-guard.tsx : zone « Imprimer / PDF » grisée +
+ *  blocage @media print — le rôle conseiller n'est pas autorisé). */
 export const CONSEILLER_ALLOWED_VIEWS: ReadonlySet<string> = new Set([
   "conseiller",
+  "results", // v6 — documents du secteur (synthèses, relevés, fin d'année, PDA)
+  "bulletins", // v6 — bulletins A5 du secteur (consultation seule)
 ]);
 
 /** Task 23 + 24 + 26 — périmètre UI par rôle : retourne l'ensemble des vues
  *  autorisées pour les rôles « espace restreint » (Directeur, Enseignant,
- *  Parent) ou null pour les autres rôles (admin / inspector → filtrage
- *  dynamique par modules[] inchangé, tout est actif). */
+ *  Parent, Conseiller v6) ou null pour les autres rôles (admin / inspector
+ *  → filtrage dynamique par modules[] inchangé, tout est actif). */
 function allowedViewsForRole(role: Role): ReadonlySet<string> | null {
   if (role === "director" || role === "teacher") return WORKSPACE_VIEWS;
   if (role === "parent") return PARENT_ALLOWED_VIEWS;
-  // v5 (session 26) — le conseiller ne voit que « Mon Secteur »
+  // v5 (session 26) + v6 (session 34) — le conseiller : « Mon Secteur »
+  // + consultation des documents de son secteur (Résultats / Bulletins,
+  // impression verrouillée)
   if (role === "conseiller") return CONSEILLER_ALLOWED_VIEWS;
   return null;
 }
@@ -382,7 +393,7 @@ function SidebarContent({
                   ? user.role === "parent"
                     ? "Réservé au personnel — le parent accède uniquement au Portail Parent"
                     : user.role === "conseiller"
-                      ? "Réservé à l'administration — le conseiller accède uniquement à son secteur"
+                      ? "Module non inclus dans votre périmètre — Mon Secteur + consultation des documents de votre secteur"
                       : "Module réservé — accès non autorisé pour votre fonction"
                   : undefined
               }

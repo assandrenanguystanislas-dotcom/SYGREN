@@ -74,6 +74,48 @@ func ctxIEPID(r *http.Request) string {
 	return ""
 }
 
+// conseillerSectorID — v6 (session 34) : résout le SECTEUR D'ECOLES du
+// conseiller courant (users.sector_id, lookup serveur — même convention que
+// ConseillerStaff). Le périmètre sectoriel n'est JAMAIS lu depuis le JWT :
+// une réaffectation est donc effective immédiatement, sans reconnexion.
+//
+// Retourne "" si le rôle n'est PAS conseiller ou si aucun secteur n'est
+// affecté — les handlers doivent alors renvoyer une réponse vide ou un 403
+// (jamais un périmètre élargi).
+func conseillerSectorID(r *http.Request) string {
+	if ctxRole(r) != models.RoleConseiller {
+		return ""
+	}
+	var me models.User
+	if err := database.DB.Select("sector_id").First(&me, "id = ?", ctxUserID(r)).Error; err != nil {
+		return ""
+	}
+	if me.SectorID == nil {
+		return ""
+	}
+	return *me.SectorID
+}
+
+// conseillerSectorSchoolIDs — IDs des écoles DU SECTEUR du conseiller
+// courant ([] vide si rôle autre, secteur non affecté ou secteur sans
+// école). Utilisé par les handlers dont le périmètre est une LISTE d'écoles
+// (PDA : examens du plan rattachés à une école).
+func conseillerSectorSchoolIDs(r *http.Request) []string {
+	sectorID := conseillerSectorID(r)
+	if sectorID == "" {
+		return []string{}
+	}
+	var ids []string
+	if err := database.DB.Model(&models.School{}).
+		Where("sector_id = ?", sectorID).Pluck("id", &ids).Error; err != nil {
+		return []string{}
+	}
+	if ids == nil {
+		ids = []string{}
+	}
+	return ids
+}
+
 // matriculeOrNA retourne la valeur du matricule s'il est non nil,
 // sinon "N/A". Utilisé pour les réponses JSON destinées à l'affichage.
 func matriculeOrNA(m *string) string {

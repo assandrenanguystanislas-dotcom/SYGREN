@@ -148,6 +148,18 @@ func GetPDAPlanAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		schoolQuery = schoolQuery.Where("id = ?", schoolID)
+	case models.RoleConseiller:
+		// v6 (session 34) — consultation : écoles de SON secteur.
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" {
+			jsonResponse(w, http.StatusOK, map[string]interface{}{
+				"year": year, "number": number, "kind": kind,
+				"centers": []interface{}{}, "grand_total": planSchoolRow{Disciplines: map[string]*planDisciplineStats{}},
+				"warnings": []string{}, "count": 0,
+			})
+			return
+		}
+		schoolQuery = schoolQuery.Where("sector_id = ?", sectorID)
 	case "inspector":
 		schoolQuery = schoolQuery.Where("iep_id = ?", ctxIEPID(r))
 	default: // admin — filtre IEP optionnel (document d'UNE inspection)

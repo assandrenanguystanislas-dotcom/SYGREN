@@ -110,10 +110,16 @@ export function EndOfYearView() {
   const isInspector = user?.role === "inspector";
   const isDirector = user?.role === "director";
   const isTeacher = user?.role === "teacher";
-  // Écriture des compteurs de classe = mêmes droits que le module Classes.
+  // v6 (session 34) — le conseiller consulte les documents de fin d'année
+  // des écoles de son secteur (lecture seule).
+  const isConseiller = user?.role === "conseiller";
+  // Écriture des compteurs de classe = mêmes droits que le module Classes
+  // (le conseiller est en CONSULTATION seule).
   const canEdit = isAdmin || isDirector || isInspector;
 
-  const needsSchoolSelect = isAdmin || isInspector;
+  // admin/inspector/conseiller (v6) : sélecteur d'écoles (la liste du
+  // conseiller est bornée à SON secteur par le backend).
+  const needsSchoolSelect = isAdmin || isInspector || isConseiller;
   const [schoolFilter, setSchoolFilter] = useState<string>(
     isDirector || isTeacher ? (user?.school_id ?? "") : "",
   );

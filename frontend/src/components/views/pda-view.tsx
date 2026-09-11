@@ -166,7 +166,10 @@ export function PdaView() {
   const queryClient = useQueryClient();
 
   // === Cascade stricte (même logique que le reste du module Résultats) ===
-  const needsSchoolSelect = user?.role === "admin" || user?.role === "inspector";
+  // v6 (session 34) — le conseiller consulte le plan d'action de son secteur
+  // (liste d'écoles bornée au secteur par le backend ; lecture seule).
+  const needsSchoolSelect =
+    user?.role === "admin" || user?.role === "inspector" || user?.role === "conseiller";
   const [schoolFilter, setSchoolFilter] = useState<string>(
     needsSchoolSelect ? "" : (user?.school_id ?? ""),
   );
@@ -216,7 +219,11 @@ export function PdaView() {
     enabled: !!examId && !!classId,
   });
 
-  const readOnly = resultsData?.read_only ?? false;
+  // v6 (session 34) — le conseiller est en CONSULTATION seule : la grille
+  // PDA est forcée en lecture seule (les écritures sont de toute façon
+  // refusées par le backend — RequireModule grades:write).
+  const isConseiller = user?.role === "conseiller";
+  const readOnly = (resultsData?.read_only ?? false) || isConseiller;
   const subjects: PdaSubjectInfo[] = resultsData?.subjects ?? [];
 
   // Rattrapage : abonner au plan les compositions actives non suivies
@@ -447,40 +454,46 @@ export function PdaView() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="shrink-0"
-                  title="Nouvelle évaluation (composition mensuelle ou examen blanc)"
-                  disabled={!hasSchool}
-                  onClick={() => setShowCreate(true)}
-                >
-                  <CalendarPlus className="w-4 h-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="shrink-0"
-                  title="Suivre les compositions mensuelles actives non encore suivies (rattrapage)"
-                  disabled={!hasSchool || backfillMutation.isPending}
-                  onClick={() => backfillMutation.mutate()}
-                >
-                  {backfillMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ListPlus className="w-4 h-4" />
-                  )}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="shrink-0 text-destructive hover:text-destructive"
-                  title="Retirer cette évaluation du plan"
-                  disabled={!examId}
-                  onClick={() => setShowDelete(true)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                {!isConseiller && (
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0"
+                    title="Nouvelle évaluation (composition mensuelle ou examen blanc)"
+                    disabled={!hasSchool}
+                    onClick={() => setShowCreate(true)}
+                  >
+                    <CalendarPlus className="w-4 h-4" />
+                  </Button>
+                )}
+                {!isConseiller && (
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0"
+                    title="Suivre les compositions mensuelles actives non encore suivies (rattrapage)"
+                    disabled={!hasSchool || backfillMutation.isPending}
+                    onClick={() => backfillMutation.mutate()}
+                  >
+                    {backfillMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ListPlus className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
+                {!isConseiller && (
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0 text-destructive hover:text-destructive"
+                    title="Retirer cette évaluation du plan"
+                    disabled={!examId}
+                    onClick={() => setShowDelete(true)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
 

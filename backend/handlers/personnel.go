@@ -267,6 +267,19 @@ func GetPersonnelSheet(w http.ResponseWriter, r *http.Request) {
 			middleware.JSONError(w, "accès refusé : école hors de votre IEP", http.StatusForbidden)
 			return
 		}
+	case models.RoleConseiller:
+		// v6 (session 34) — consultation : école du secteur du conseiller
+		// (users.sector_id, résolu serveur).
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" || school.SectorID == nil || *school.SectorID != sectorID {
+			middleware.JSONError(w, "accès refusé : école hors de votre secteur", http.StatusForbidden)
+			return
+		}
+	case models.RoleParent:
+		// v6 — défense en profondeur : le parent passe par le portail
+		// dédié (bulletin individuel), jamais par cet endpoint.
+		middleware.JSONError(w, "accès refusé", http.StatusForbidden)
+		return
 	}
 
 	var iep models.IEP

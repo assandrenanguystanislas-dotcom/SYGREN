@@ -70,8 +70,12 @@ function ResultsRankingView() {
   const isInspector = user?.role === "inspector";
   const isDirector = user?.role === "director";
   const isTeacher = user?.role === "teacher";
-  // admin et inspector doivent choisir une école (cascade stricte)
-  const needsSchoolSelect = isAdmin || isInspector;
+  // v6 (session 34) — le conseiller consulte les documents de son secteur :
+  // sélecteur d'écoles (la liste GET /api/schools est bornée au secteur par
+  // le backend).
+  const isConseiller = user?.role === "conseiller";
+  // admin/inspector/conseiller doivent choisir une école (cascade stricte)
+  const needsSchoolSelect = isAdmin || isInspector || isConseiller;
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
