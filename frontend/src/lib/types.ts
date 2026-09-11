@@ -407,6 +407,17 @@ export interface SectorWithStats extends Sector {
   conseillers: string[]; // noms des conseillers affectés
 }
 
+/** Classe active d'une école du secteur (détail dépliable — session 31). */
+export interface SectorSchoolClass {
+  id: string;
+  name: string;
+  level: string;
+  teacher_name?: string;
+  student_count: number;
+  garcons: number;
+  filles: number;
+}
+
 /** École du secteur (vue conseiller — champs affichables uniquement). */
 export interface SectorSchool {
   id: string;
@@ -416,6 +427,10 @@ export interface SectorSchool {
   /** v27 — statistiques de l'école (cartes « Mon Secteur ») */
   class_count?: number;
   student_count?: number;
+  /** v31 — éléments qui accompagnent le module Mon Secteur */
+  garcons?: number;
+  filles?: number;
+  classes?: SectorSchoolClass[];
 }
 
 /** Personnel du secteur : directeurs + adjoints au directeur ACTIFS. */

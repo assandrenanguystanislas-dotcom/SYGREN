@@ -525,6 +525,96 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Répartition Garçons / Filles par école + détail CLASSES actives du
+	// secteur (session 31 — « éléments qui l'accompagnent » de Mon
+	// Secteur) : le conseiller déplie une école pour voir ses classes
+	// (niveau, titulaire, effectif G/F) sans quitter son périmètre strict.
+	garconsBySchool := make(map[string]int64, len(schools))
+	fillesBySchool := make(map[string]int64, len(schools))
+	classStudentCounts := make(map[string]int64)
+	classGarcons := make(map[string]int64)
+	classFilles := make(map[string]int64)
+	type classRow struct {
+		ID        string
+		SchoolID  string
+		Name      string
+		Level     string
+		TeacherID *string
+	}
+	var classDetail []classRow
+	if len(schoolIDs) > 0 {
+		type genderCount struct {
+			SchoolID string
+			ClassID  string
+			Gender   string
+			Count    int64
+		}
+		var genderRows []genderCount
+		if err := database.DB.Model(&models.Student{}).
+			Joins("JOIN classes ON classes.id = students.class_id").
+			Select("classes.school_id AS school_id", "students.class_id AS class_id", "students.gender AS gender", "COUNT(*) AS count").
+			Where("classes.school_id IN ?", schoolIDs).
+			Group("classes.school_id, students.class_id, students.gender").
+			Scan(&genderRows).Error; err != nil {
+			log.Println("[conseiller] répartition G/F:", err)
+		}
+		for _, row := range genderRows {
+			switch row.Gender {
+			case "M":
+				garconsBySchool[row.SchoolID] += row.Count
+				classGarcons[row.ClassID] = row.Count
+			case "F":
+				fillesBySchool[row.SchoolID] += row.Count
+				classFilles[row.ClassID] = row.Count
+			}
+			classStudentCounts[row.ClassID] += row.Count
+		}
+
+		if err := database.DB.
+			Select("id", "school_id", "name", "level", "teacher_id").
+			Where("school_id IN ? AND active = ?", schoolIDs, true).
+			Order("name ASC").Find(&classDetail).Error; err != nil {
+			log.Println("[conseiller] classes du secteur:", err)
+		}
+	}
+
+	// Noms des titulaires (comptes rattachés aux classes du secteur).
+	teacherNames := make(map[string]string)
+	teacherIDs := make([]string, 0)
+	for _, c := range classDetail {
+		if c.TeacherID != nil && *c.TeacherID != "" {
+			teacherIDs = append(teacherIDs, *c.TeacherID)
+		}
+	}
+	if len(teacherIDs) > 0 {
+		var teachers []models.User
+		if err := database.DB.Select("id", "full_name").
+			Where("id IN ?", teacherIDs).Find(&teachers).Error; err == nil {
+			for _, t := range teachers {
+				teacherNames[t.ID] = t.FullName
+			}
+		}
+	}
+
+	// Classes groupées par école — slice NON nil par école (piège gorm/JSON
+	// session 27 : une slice nil se sérialise `null` et casse le front).
+	classesBySchool := make(map[string][]map[string]interface{}, len(schools))
+	for _, c := range classDetail {
+		teacherName := ""
+		if c.TeacherID != nil {
+			teacherName = teacherNames[*c.TeacherID]
+		}
+		classesBySchool[c.SchoolID] = append(classesBySchool[c.SchoolID], map[string]interface{}{
+			"id":            c.ID,
+			"name":          c.Name,
+			"level":         c.Level,
+			"teacher_name":  teacherName,
+			"student_count": classStudentCounts[c.ID],
+			"garcons":       classGarcons[c.ID],
+			"filles":        classFilles[c.ID],
+		})
+	}
+
 	var totalClasses, totalStudents int64
 	schoolsView := make([]map[string]interface{}, 0, len(schools))
 	for _, s := range schools {
@@ -538,7 +628,13 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 			// Statistiques par école (cartes Mon Secteur)
 			"class_count":   classCounts[s.ID],
 			"student_count": studentCounts[s.ID],
+			"garcons":       garconsBySchool[s.ID],
+			"filles":        fillesBySchool[s.ID],
 		})
+		if classesBySchool[s.ID] == nil {
+			classesBySchool[s.ID] = []map[string]interface{}{}
+		}
+		schoolsView[len(schoolsView)-1]["classes"] = classesBySchool[s.ID]
 	}
 
 	// Personnel du secteur : directeurs ET adjoints au directeur ACTIFS des

@@ -4114,3 +4114,22 @@ Work Log:
 
 Stage Summary:
 - Affectation des écoles aux secteurs disponible des deux côtés ; prête pour le rattachement massif des 70 écoles de Dabou ville ; audit trail complet (school.sector_updated + sector.schools_updated)
+
+---
+Task ID: 31
+Agent: Z.ai Code (session 31 — module MON SECTEUR complet + éléments qui l'accompagnent)
+Task: « le module mon secteur n'a pas été créé avec ses éléments qui l'accompagnent » — porter la vue conseiller au niveau de la spécification mon-secteur-conseiller.png et ajouter tous ses éléments fonctionnels ; corriger les bugs annexes constatés.
+
+Work Log:
+- DIAGNOSTIC prod (navigateur réel + audit Neon) : la vue Mon Secteur existait mais restait statique ; le libellé exact du PNG de la carte « Directeurs et adjoints au directeur » n'avait jamais été répliqué ; 3 erreurs TS préexistantes au HEAD ; recherche de l'onglet Conseillers silencieusement inopérante (chaîne passée à la place de { q }) ; 6 comptes conseillers sans téléphone (connexion par téléphone impossible — email seul)
+- BACKEND sectors.go (ConseillerStaff, +96 lignes, tabs préservées via patch Python + gofmt) : répartition Garçons/Filles par école, détail CLASSES actives par école (niveau, titulaire via users.full_name, effectif G/F/total) — même endpoint strict, aucun élargissement du périmètre ; slice classes jamais nil (leçon session 27)
+- FRONTEND conseiller-view.tsx : libellés exacts du PNG (« Personnel de ces communautés éducatives, désigné pour superviser et rendre compte au niveau du secteur. ») ; cartes écoles cliquables → panneau détail (classes : Classe | Titulaire | G | F | Total + badges garçons/filles) ; filtre personnel PAR ÉCOLE (Select) ; contacts cliquables (tel: / mailto:) ; indication « Cliquez sur une école… »
+- FRONTEND welcome-dashboard.tsx : cas conseiller complet (stats secteur via conseillerApi.staff + action rapide « Mon Secteur ») — corrige TS2366 + TS2741
+- FRONTEND conseillers-view.tsx : recherche corrigée (conseillersApi.list({ q })) — corrige TS2345
+- Vérifications : go build + go vet OK ; tsc --noEmit = 0 erreur (3 préexistantes corrigées au passage) ; next build OK
+- Aucune migration Neon (aucun changement de schéma — SELECT uniquement)
+
+Stage Summary:
+- Mon Secteur conforme à la spécification PNG et enrichi de tous ses éléments : écoles dépliables (classes/titulaires/effectifs G-F), filtre par école, contacts cliquables, libellés exacts
+- Tableau de bord conseiller défini (défensif) ; recherche Conseillers admin fonctionnelle ; 0 erreur TypeScript
+- Reste ouvert : téléphones réels des 6 conseillers (connexion par téléphone), secteur d'ASSALE ABE CARTIN, renommage des comptes génériques

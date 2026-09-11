@@ -1,8 +1,7 @@
 "use client";
 
 /**
- * v5 (session 26) — ConseillerView : vue « MON SECTEUR » du conseiller
- * pédagogique.
+ * v31 — ConseillerView : module « MON SECTEUR » du conseiller pédagogique.
  *
  * Périmètre STRICT (demande utilisateur : « ces conseillers pourront voir
  * seulement leurs directeurs et leurs adjoints aux directeurs ») :
@@ -13,6 +12,16 @@
  *   - aucun autre module n'est accessible (dashboard-shell grise tout le
  *     reste, page.tsx refuse les accès directs par hash, la matrice RBAC
  *     v5 ne donne au conseiller que la lecture de ce module).
+ *
+ * v31 — « éléments qui l'accompagnent » (le module est désormais complet,
+ * conforme à la spécification mon-secteur-conseiller.png) :
+ *   - écoles DÉPLIABLES : classes actives de l'école (niveau, titulaire,
+ *     effectif Garçons / Filles / Total) — données du même endpoint strict ;
+ *   - effectif détaillé G/F par école ;
+ *   - personnel filtrable PAR ÉCOLE + contacts cliquables (tél. / email) ;
+ *   - libellés exacts de la spécification (carte « Directeurs et adjoints
+ *     au directeur » : « Personnel de ces communautés éducatives, désigné
+ *     pour superviser et rendre compte au niveau du secteur. »).
  *
  * Lecture seule : le conseiller CONSULTE (autorité hiérarchique), la
  * gestion des comptes reste réservée à l'administration.
@@ -32,14 +41,27 @@ import {
   MapPin,
   UserRound,
   Search,
+  ChevronDown,
+  BookOpen,
 } from "lucide-react";
 
 import { conseillerApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { ROLE_LABELS, type ConseillerStaffMember } from "@/lib/types";
+import {
+  ROLE_LABELS,
+  type ConseillerStaffMember,
+  type SectorSchool,
+} from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -62,6 +84,10 @@ function fonctionLabel(m: ConseillerStaffMember): string {
 export function ConseillerView() {
   const user = useAuthStore((s) => s.user);
   const [search, setSearch] = useState("");
+  const [schoolFilter, setSchoolFilter] = useState<string>("all");
+  // École dont le détail (classes, effectifs G/F) est déplié — une seule
+  // à la fois (null = toutes repliées).
+  const [expandedSchool, setExpandedSchool] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["conseiller-staff"],
@@ -119,15 +145,17 @@ export function ConseillerView() {
     );
   }
 
-  // Filtrage local du personnel (recherche nom / école / contact)
+  // Filtrage local du personnel (recherche nom / école / contact + filtre
+  // par école — élément qui accompagne le module, session 31).
   const q = search.trim().toLowerCase();
   const filteredStaff = staff.filter(
     (m) =>
-      !q ||
-      m.full_name.toLowerCase().includes(q) ||
-      (m.school_name ?? "").toLowerCase().includes(q) ||
-      (m.phone ?? "").toLowerCase().includes(q) ||
-      (m.email ?? "").toLowerCase().includes(q),
+      (schoolFilter === "all" || m.school_id === schoolFilter) &&
+      (!q ||
+        m.full_name.toLowerCase().includes(q) ||
+        (m.school_name ?? "").toLowerCase().includes(q) ||
+        (m.phone ?? "").toLowerCase().includes(q) ||
+        (m.email ?? "").toLowerCase().includes(q)),
   );
 
   const directors = staff.filter((m) => m.role === "director").length;
@@ -143,6 +171,10 @@ export function ConseillerView() {
     (acc, s) => acc + (s.class_count ?? 0),
     0,
   );
+
+  // École dépliée (détail classes / effectifs G-F) — session 31.
+  const expanded =
+    schools.find((s) => s.id === expandedSchool) ?? null;
 
   return (
     <div className="space-y-4">
@@ -196,47 +228,141 @@ export function ConseillerView() {
           </CardTitle>
           <CardDescription>
             Les établissements dont relèvent vos directeurs et leurs adjoints.
+            Cliquez sur une école pour voir ses classes et leurs effectifs.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           {schools.length === 0 ? (
             <p className="text-xs text-muted-foreground italic py-4 text-center">
               Aucune école rattachée à ce secteur pour le moment.
             </p>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {schools.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center gap-2 rounded-md border border-border/60 bg-card px-3 py-2"
-                >
-                  <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{s.name}</p>
-                    {s.code && (
-                      <p className="text-[10px] font-mono text-muted-foreground">
-                        {s.code}
-                      </p>
+            <>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {schools.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() =>
+                      setExpandedSchool((cur) => (cur === s.id ? null : s.id))
+                    }
+                    aria-expanded={expandedSchool === s.id}
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 text-left transition-colors ${
+                      expandedSchool === s.id
+                        ? "border-primary/50 bg-primary/5"
+                        : "border-border/60 bg-card hover:border-primary/30 hover:bg-muted/30"
+                    }`}
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{s.name}</p>
+                      {s.code && (
+                        <p className="text-[10px] font-mono text-muted-foreground">
+                          {s.code}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"
+                      >
+                        <Users className="w-3 h-3" />
+                        {s.student_count ?? 0} élève(s)
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] border-sky-200 bg-sky-50 text-sky-700"
+                      >
+                        {s.class_count ?? 0} classe(s)
+                      </Badge>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
+                          expandedSchool === s.id ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Détail de l'école dépliée : classes + effectifs G/F
+                  (élément qui accompagne le module — session 31). */}
+              {expanded && (
+                <div className="rounded-lg border border-primary/25 bg-muted/20 p-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SchoolIcon className="w-4 h-4 text-primary" />
+                    <p className="text-sm font-semibold">{expanded.name}</p>
+                    {expanded.code && (
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {expanded.code}
+                      </span>
                     )}
+                    <div className="flex items-center gap-1.5 sm:ml-auto">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] border-sky-200 bg-sky-50 text-sky-700"
+                      >
+                        {(expanded.garcons ?? 0)} garçon(s)
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] border-pink-200 bg-pink-50 text-pink-700"
+                      >
+                        {(expanded.filles ?? 0)} fille(s)
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"
-                    >
-                      <Users className="w-3 h-3" />
-                      {s.student_count ?? 0} élève(s)
-                    </Badge>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] border-sky-200 bg-sky-50 text-sky-700"
-                    >
-                      {s.class_count ?? 0} classe(s)
-                    </Badge>
-                  </div>
+                  {(expanded.classes ?? []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-2 text-center">
+                      Aucune classe active dans cette école.
+                    </p>
+                  ) : (
+                    <div className="rounded-md border overflow-hidden bg-card">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead>Classe</TableHead>
+                            <TableHead>Titulaire</TableHead>
+                            <TableHead className="text-center">G</TableHead>
+                            <TableHead className="text-center">F</TableHead>
+                            <TableHead className="text-center">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {expanded.classes!.map((c) => (
+                            <TableRow key={c.id}>
+                              <TableCell className="font-medium">
+                                <span className="flex items-center gap-1.5">
+                                  <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
+                                  {c.name}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {c.teacher_name || (
+                                  <span className="text-muted-foreground">
+                                    Non affecté
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center text-sm">
+                                {c.garcons}
+                              </TableCell>
+                              <TableCell className="text-center text-sm">
+                                {c.filles}
+                              </TableCell>
+                              <TableCell className="text-center text-sm font-semibold">
+                                {c.student_count}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -249,20 +375,35 @@ export function ConseillerView() {
             Directeurs et adjoints au directeur
           </CardTitle>
           <CardDescription>
-            Personnel placé sous votre autorité pédagogique (comptes actifs
-            des écoles du secteur).
+            Personnel de ces communautés éducatives, désigné pour superviser
+            et rendre compte au niveau du secteur.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {staff.length > 0 && (
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher par nom, école ou contact…"
-                className="pl-9"
-              />
+          {(staff.length > 0 || schools.length > 0) && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Rechercher par nom, école ou contact…"
+                  className="pl-9"
+                />
+              </div>
+              <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+                <SelectTrigger className="sm:w-[240px]">
+                  <SelectValue placeholder="Toutes les écoles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les écoles</SelectItem>
+                  {schools.map((s: SectorSchool) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
           {staff.length === 0 ? (
@@ -316,16 +457,22 @@ export function ConseillerView() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {m.phone && (
-                          <span className="flex items-center gap-1">
+                          <a
+                            href={`tel:${m.phone.replace(/\s+/g, "")}`}
+                            className="flex items-center gap-1 hover:text-primary"
+                          >
                             <Phone className="w-3 h-3" />
                             {m.phone}
-                          </span>
+                          </a>
                         )}
                         {m.email && (
-                          <span className="flex items-center gap-1">
+                          <a
+                            href={`mailto:${m.email}`}
+                            className="flex items-center gap-1 hover:text-primary"
+                          >
                             <Mail className="w-3 h-3" />
                             {m.email}
-                          </span>
+                          </a>
                         )}
                         {!m.phone && !m.email && "—"}
                       </TableCell>

@@ -15,10 +15,11 @@ import {
   Sparkles,
   BarChart3,
   Home,
+  Network,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
-import { iepApi, schoolsApi, studentsApi, subjectsApi, teachersApi } from "@/lib/api";
+import { conseillerApi, iepApi, schoolsApi, studentsApi, subjectsApi, teachersApi } from "@/lib/api";
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,13 @@ export function WelcomeDashboard({ onNavigate }: { onNavigate: (view: string) =>
     queryFn: () => teachersApi.list(),
     enabled: !!user && (user.role === "admin" || user.role === "director"),
   });
+  // v31 — périmètre du conseiller (écoles / élèves / classes de SON
+  // secteur) pour les cartes statistiques de son tableau de bord.
+  const { data: conseillerData } = useQuery({
+    queryKey: ["conseiller-staff"],
+    queryFn: () => conseillerApi.staff(),
+    enabled: !!user && user.role === "conseiller",
+  });
 
   if (!user) return null;
 
@@ -84,6 +92,10 @@ export function WelcomeDashboard({ onNavigate }: { onNavigate: (view: string) =>
       studentCount: studentsData?.count ?? 0,
       subjectCount: subjectsData?.count ?? 0,
       teacherCount: teachersData?.count ?? 0,
+      conseillerSchoolCount: conseillerData?.counts?.schools ?? 0,
+      conseillerStudentCount: conseillerData?.counts?.students ?? 0,
+      conseillerClassCount: conseillerData?.counts?.classes ?? 0,
+      conseillerStaffCount: conseillerData?.counts?.staff ?? 0,
     },
   );
 
@@ -211,6 +223,11 @@ interface StatsData {
   studentCount: number;
   subjectCount: number;
   teacherCount: number;
+  // v31 — périmètre du conseiller (son secteur).
+  conseillerSchoolCount: number;
+  conseillerStudentCount: number;
+  conseillerClassCount: number;
+  conseillerStaffCount: number;
 }
 
 function buildStats(role: Role, d: StatsData): StatCard[] {
@@ -250,6 +267,14 @@ function buildStats(role: Role, d: StatsData): StatCard[] {
       return [
         { label: "Portail Parent", value: "→", hint: "bulletin individuel de l'enfant", icon: <Home className="w-5 h-5" />, tone: "orange" },
       ];
+    case "conseiller":
+      // v31 — statistiques du SECTEUR du conseiller (module Mon Secteur).
+      return [
+        { label: "Écoles du secteur", value: String(d.conseillerSchoolCount), hint: "mon périmètre de suivi", icon: <School className="w-5 h-5" />, tone: "orange" },
+        { label: "Élèves du secteur", value: String(d.conseillerStudentCount), hint: "toutes écoles confondues", icon: <Users className="w-5 h-5" />, tone: "green" },
+        { label: "Classes du secteur", value: String(d.conseillerClassCount), hint: "CP1 → CM2", icon: <BookOpen className="w-5 h-5" />, tone: "neutral" },
+        { label: "Directeurs et adjoints", value: String(d.conseillerStaffCount), hint: "comptes actifs", icon: <Network className="w-5 h-5" />, tone: "orange" },
+      ];
   }
 }
 
@@ -279,5 +304,8 @@ const QUICK_ACTIONS: Record<
   ],
   parent: [
     { label: "Consulter le bulletin", hint: "Matricule de l'enfant", view: "parent-portal", icon: <Home className="w-4 h-4" /> },
+  ],
+  conseiller: [
+    { label: "Mon Secteur", hint: "Écoles, directeurs et adjoints", view: "conseiller", icon: <Network className="w-4 h-4" /> },
   ],
 };

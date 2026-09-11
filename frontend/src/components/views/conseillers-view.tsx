@@ -73,7 +73,10 @@ export function ConseillersView() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["conseillers", search],
-    queryFn: () => conseillersApi.list(search.trim() || undefined),
+    // v31 — l'API attend un OBJET { q } (le passage direct de la chaîne
+    // rendait la recherche silencieusement inopérante).
+    queryFn: () =>
+      conseillersApi.list(search.trim() ? { q: search.trim() } : undefined),
   });
 
   const createMut = useCrudMutation(conseillersApi.create, {
