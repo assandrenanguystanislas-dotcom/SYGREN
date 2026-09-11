@@ -25,12 +25,13 @@ import {
   Phone,
   Search,
   Network,
+  Eye,
 } from "lucide-react";
 
 import { conseillersApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
-import type { User } from "@/lib/types";
+import type { ConseillerWithSector, User } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SectorViewDialog } from "@/components/secteur/sector-view-dialog";
 import {
   Table,
   TableBody,
@@ -70,6 +72,11 @@ export function ConseillersView() {
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  // v33 — « reproduire la même chose » : consultation du secteur du
+  // conseiller dans la vue Mon Secteur exacte (SectorViewDialog partagé).
+  const [viewTarget, setViewTarget] = useState<ConseillerWithSector | null>(
+    null,
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["conseillers", search],
@@ -294,6 +301,18 @@ export function ConseillersView() {
                       {canManage && (
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
+                            {c.sector_id && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setViewTarget(c)}
+                                aria-label={`Voir le secteur de ${c.full_name}`}
+                                title="Voir son secteur — vue Mon Secteur du conseiller"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -434,6 +453,15 @@ export function ConseillersView() {
         icon={Trash2}
         onConfirm={onDelete}
         loading={deleteMut.isPending}
+      />
+
+      {/* v33 — « reproduire la même chose » : la vue Mon Secteur EXACTE du
+          conseiller, ouverte depuis sa ligne (bouton œil). */}
+      <SectorViewDialog
+        open={!!viewTarget}
+        onOpenChange={(o) => !o && setViewTarget(null)}
+        sectorId={viewTarget?.sector_id ?? ""}
+        sectorName={viewTarget?.sector_name}
       />
     </div>
   );

@@ -4166,3 +4166,22 @@ Stage Summary:
 - Module MON SECTEUR = conforme à la spécification PNG en production, vérifié sur application réelle ; tous les accessoires présents (écoles dépliables classes/titulaires/effectifs, filtre par école, recherche, contacts cliquables, dashboard conseiller, périmètre strict RBAC)
 - Si l'utilisateur voit encore l'ancienne version : recharger avec Ctrl+Maj+R (cache navigateur)
 - Prochaine étape suggérée : rattachement des 64 écoles restantes via « Affectation des écoles » (module Écoles)
+
+---
+Task ID: 33
+Agent: Z.ai Code (session 33 — « reproduire la même chose » : vue Mon Secteur partagée admin/conseiller)
+Task: « reproduire la meme chose en creant dans module mon secteur » (capture mon-secteur-v31-complet.png fournie) — reproduire la vue Mon Secteur exacte et la rendre accessible côté administration.
+
+Work Log:
+- DIAGNOSTIC : la capture fournie = la production v31 actuelle (test navigateur re-vérifié : conforme point par point) ; le module n'est visible QUE du rôle conseiller (roles: ["conseiller"] dans dashboard-shell) — un utilisateur admin ne voit donc AUCUNE trace du module, d'où la persistance de la demande ; cache HTTP écarté (max-age=0 must-revalidate, pas de service worker) ; backend DÉJÀ prêt dès la v5 : GET /api/conseiller/staff accepte ?sector_id= pour admin/inspector (sectors.go ConseillerStaff), frontend conseillerApi.staff(sectorId) aussi
+- REFACTOR : corps de vue extrait dans frontend/src/components/secteur/sector-overview.tsx (markup IDENTIQUE à la capture v31 : carte secteur ambrée + 5 badges, écoles du secteur + cartes badges, écoles dépliables classes/titulaires G/F, recherche + filtre par école, contacts cliquables) ; conseiller-view.tsx devient une enveloppe fine (états chargement/erreur/aucun secteur + SectorOverview)
+- NOUVEAU : frontend/src/components/secteur/sector-view-dialog.tsx — SectorViewDialog (Dialogue 1100px, scrollable) : charge conseillerApi.staff(sector_id) et rend le MÊME SectorOverview (ligne d'accueil = consultation de supervision)
+- INTÉGRATIONS : plage « Secteurs d'écoles » (schools-view.tsx) : bouton œil « Voir le secteur — vue Mon Secteur du conseiller » par ligne de secteur ; onglet « Conseillers » (conseillers-view.tsx) : bouton œil « Voir son secteur » par conseiller affecté (sector_id) ; les deux rendent SectorViewDialog
+- FIX TS : viewTarget typé ConseillerWithSector (sector_name absent de User)
+- Vérifications : tsc --noEmit = 0 erreur ; next build OK ; backend NON modifié (aucun fichier Go touché — build Render actuel fait foi) ; package-lock.json généré par npm NON commité (le dépôt utilise bun.lock)
+- Aucune migration Neon (endpoint existant, SELECT uniquement)
+
+Stage Summary:
+- La vue Mon Secteur EXACTE de la capture est désormais reproduite À L'IDENTIQUE côté admin/inspector : plage Secteurs d'écoles (œil par secteur) et onglet Conseillers (œil par conseiller) ; une seule implémentation partagée = zéro divergence future
+- Le conseiller conserve strictement le même rendu (composant partagé)
+- À vérifier après push : Render LIVE + Vercel READY, test navigateur conseiller + capture

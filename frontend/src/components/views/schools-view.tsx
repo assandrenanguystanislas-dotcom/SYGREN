@@ -21,6 +21,7 @@ import {
   Network,
   UsersRound,
   ListChecks,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -58,6 +59,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { SectorViewDialog } from "@/components/secteur/sector-view-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
@@ -1478,6 +1480,9 @@ function SectorsDialog({
   const [schoolSel, setSchoolSel] = useState<Set<string>>(new Set());
   const [conseillerSel, setConseillerSel] = useState<Set<string>>(new Set());
   const [schoolSearch, setSchoolSearch] = useState("");
+  // v33 — « reproduire la même chose » : consultation du secteur dans la
+  // vue Mon Secteur exacte du conseiller (SectorViewDialog partagé).
+  const [viewSector, setViewSector] = useState<SectorWithStats | null>(null);
 
   const createMut = useCrudMutation(sectorsApi.create, {
     invalidateKeys: [["sectors"], ["schools"]],
@@ -1741,6 +1746,15 @@ function SectorsDialog({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 shrink-0"
+                          title="Voir le secteur — vue Mon Secteur du conseiller"
+                          onClick={() => setViewSector(s)}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
                           title="Renommer"
                           onClick={() => {
                             setEditId(s.id);
@@ -1926,6 +1940,15 @@ function SectorsDialog({
         icon={Trash2}
         onConfirm={onDelete}
         loading={deleteMut.isPending}
+      />
+
+      {/* v33 — « reproduire la même chose » : la vue Mon Secteur EXACTE du
+          conseiller, ouverte depuis chaque secteur (bouton œil). */}
+      <SectorViewDialog
+        open={!!viewSector}
+        onOpenChange={(o) => !o && setViewSector(null)}
+        sectorId={viewSector?.id ?? ""}
+        sectorName={viewSector?.name}
       />
     </>
   );
