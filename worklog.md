@@ -4197,3 +4197,21 @@ Work Log:
 
 Stage Summary:
 - e50abc6 en production : la vue Mon Secteur est désormais UN composant partagé conseiller + supervision (plage Secteurs d'écoles et onglet Conseillers, boutons œil)
+
+---
+Task ID: 34
+Agent: Super Z (assistant SYGREN)
+Task: Conseillers — consultation des documents PDF de leur secteur, impression grisée (v6)
+
+Work Log:
+- Backend v6 : matrice RBAC 5→6 (conseiller +lecture reports/report-cards), middleware ConseillerScope étendu (lectures documents), helpers conseillerSectorID/conseillerSectorSchoolIDs, périmètre sectoriel (users.sector_id) appliqué dans ListSchools, ListSessions, ListClasses, getSessionForUser, GetStudentAnnualResults, GetSyntheseData, GetEndOfYearSheet, GetPersonnelSheet (+deny parent), GetClassCandidates, PDA (exams/results/remediation/summary/timeline/plan-action).
+- Frontend : CONSEILLER_ALLOWED_VIEWS += results/bulletins ; needsSchoolSelect conseiller dans results/bulletins/end-of-year/pda/pda-timeline ; grille PDA lecture seule, boutons d'écriture masqués.
+- Fix 7b05996 : ListClasses conseiller — JOIN schools ambigu (name) → sous-requête IN (détecté par le test local full-stack).
+- Vérifications : go build/vet OK ; tsc 0 erreur ; next build OK ; 12/12 contrôles API local ; test navigateur réel (nav conseiller, sélecteur sectoriel, document visible + badge « Zone Imprimer / PDF verrouillée », print-locked actif Ctrl+P ; admin non régressé : impression active).
+- Déploiements : e914507 puis 7b05996 — Vercel READY + Render LIVE (déclenchement manuel) pour les deux.
+
+Stage Summary:
+- Les conseillers voient tous les documents PDF de leur secteur (Résultats + Bulletins) mais ne peuvent pas imprimer (zones grisées, blocage CSS).
+- Périmètre strict : seules les écoles de LEUR secteur (users.sector_id) ; hors secteur → 403 ; écritures → 403.
+- Preuves : download/conseiller-synthese-grisee.png, conseiller-bulletins-grisee.png, conseiller-nav-mon-secteur.png ; scripts/ (seed + 12 tests sécurité).
+- NB production : compte conseiller.cosrou@sygren.ci → « identifiants invalides » (mot de passe changé ?) ; aucun compte conseiller générique n'a de données de session dans son secteur — les documents apparaîtront dès que des sessions/notes existeront dans les écoles des secteurs.
