@@ -4133,3 +4133,18 @@ Stage Summary:
 - Mon Secteur conforme à la spécification PNG et enrichi de tous ses éléments : écoles dépliables (classes/titulaires/effectifs G-F), filtre par école, contacts cliquables, libellés exacts
 - Tableau de bord conseiller défini (défensif) ; recherche Conseillers admin fonctionnelle ; 0 erreur TypeScript
 - Reste ouvert : téléphones réels des 6 conseillers (connexion par téléphone), secteur d'ASSALE ABE CARTIN, renommage des comptes génériques
+
+---
+Task ID: 31 (addendum)
+Agent: Z.ai Code (session 31 — vérification production)
+Task: Vérification navigateur réel du module Mon Secteur v31 en production.
+
+Work Log:
+- Déploiements vérifiés : Render LIVE + Vercel READY + health 200 sur 628c497 PUIS 11b0dfa
+- BUG trouvé au test réel puis corrigé (11b0dfa) : détail classes vide — GORM ne mappe pas un struct local anonyme via Find ; corrigé avec Model(&models.Class{}) + Scan (même pattern que les agrégats session 27) ; gofmt (l'éditeur avait de nouveau converti les tabs)
+- Test navigateur complet (conseiller.cosrou) : école EPP COSROU LEKR dépliée → badges 79 garçon(s) / 76 fille(s) + tableau 6 classes (CE1 27/23/50 … CP2 11/13/24), titulaires affichés (CM2 : la directrice) ; filtre personnel par école fonctionnel ; contacts cliquables ; libellé exact de la spécification PNG
+- Cohérence arithmétique : totaux classes = 155 élèves = total de l'en-tête ✓
+- Capture production : download/guide-conseillers/mon-secteur-v31-complet.png (hors dépôt, dossier local)
+
+Stage Summary:
+- Module MON SECTEUR v31 opérationnel en production et conforme à la spécification ; AUCUNE migration Neon, aucune donnée modifiée
