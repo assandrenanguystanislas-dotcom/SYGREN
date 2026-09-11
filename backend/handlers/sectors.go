@@ -570,10 +570,11 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 			classStudentCounts[row.ClassID] += row.Count
 		}
 
-		if err := database.DB.
+		if err := database.DB.Model(&models.Class{}).
 			Select("id", "school_id", "name", "level", "teacher_id").
 			Where("school_id IN ? AND active = ?", schoolIDs, true).
-			Order("name ASC").Find(&classDetail).Error; err != nil {
+			Order("name ASC").
+			Scan(&classDetail).Error; err != nil {
 			log.Println("[conseiller] classes du secteur:", err)
 		}
 	}
