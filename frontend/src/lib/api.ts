@@ -632,6 +632,9 @@ export const studentsApi = {
       acte_number?: string; // n° de l'acte de naissance
       acte_date?: string; // date de l'acte (jj/mm/aaaa)
       acte_place?: string; // lieu d'établissement de l'acte
+      birth_day?: number; // jour de naissance 1..31 (répercussion « Modifier l'élève »)
+      birth_month?: number; // mois de naissance 1..12
+      birth_year?: number; // année de naissance (ex: 2016)
     }[];
   }) =>
     apiFetch<{

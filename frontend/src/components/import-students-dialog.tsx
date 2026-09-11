@@ -31,6 +31,13 @@ interface ParsedStudent {
   acte_number: string; // n° de l'acte de naissance
   acte_date: string; // date de l'acte (jj/mm/aaaa)
   acte_place: string; // lieu d'établissement de l'acte
+  // Naissance — colonnes « jour », « mois », « annee » (séparées) OU
+  // colonne unique « date de naissance » (jj/mm/aaaa). 0 = non renseigné.
+  // RÉPERCUSSION (demande utilisateur) : ces valeurs alimentent ensuite le
+  // formulaire « Modifier l'élève » (pré-remplissage openEdit).
+  birth_day: number; // 1..31 — 0 = absent/vide
+  birth_month: number; // 1..12 — 0 = absent/vide
+  birth_year: number; // ex: 2016 — 0 = absent/vide
   // Erreurs de validation côté frontend (preview)
   errors: string[];
 }
@@ -81,6 +88,75 @@ function cellToString(c: unknown): string {
 function dateToStr(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+// Noms de mois français (texte libre « janv. », « janvier »…) → 1..12.
+// Certaines feuilles saisissent le mois en toutes lettres dans « mois ».
+const MONTHS_MAP: Record<string, number> = {
+  jan: 1, janv: 1, janvier: 1,
+  fev: 2, fevr: 2, fevrier: 2,
+  mar: 3, mars: 3,
+  avr: 4, avril: 4,
+  mai: 5,
+  jun: 6, juin: 6,
+  jul: 7, juillet: 7,
+  au: 8, aou: 8, aug: 8, aout: 8,
+  sep: 9, sept: 9, septembre: 9,
+  oct: 10, octobre: 10,
+  nov: 11, novembre: 11,
+  dec: 12, decembre: 12,
+};
+
+// Cellule → entier (jour / mois / année). Retourne 0 si vide/absent.
+// Accepte : nombre Excel (5), texte "5", "05", texte avec espaces.
+// Pour le mois : accepte aussi les noms français ("janvier" → 1).
+// Retourne -1 si la cellule est NON vide mais illisible (→ erreur preview).
+function cellToInt(c: unknown, isMonth = false): number {
+  if (c === null || c === undefined || c === "") return 0;
+  if (typeof c === "number" && Number.isFinite(c)) {
+    return Math.trunc(c);
+  }
+  const s = String(c).trim();
+  if (s === "") return 0;
+  if (/^\d{1,4}$/.test(s)) return parseInt(s, 10);
+  if (isMonth) {
+    const m = MONTHS_MAP[s.toLowerCase().replace(/[^a-zà-ÿ]/g, "")];
+    if (m) return m;
+  }
+  return -1; // non vide mais illisible
+}
+
+// Colonne « date de naissance » combinée → { d, m, y }. Accepte :
+//  - Date SheetJS (cellDates:true) ou numéro de série Excel (ex : 43174) ;
+//  - texte "05/03/2016", "5-3-2016", "5.3.2016" ;
+//  - année seule "2016" (jour/mois restent 0).
+// Retourne null si la cellule est non vide mais inexploitable.
+function parseBirthDateCombined(c: unknown): { d: number; m: number; y: number } | null {
+  if (c === null || c === undefined || c === "") return { d: 0, m: 0, y: 0 };
+  if (c instanceof Date) {
+    return { d: c.getDate(), m: c.getMonth() + 1, y: c.getFullYear() };
+  }
+  if (typeof c === "number" && c > 25568 && c < 100000) {
+    const dt = new Date(Math.round((c - 25569) * 86400000));
+    return { d: dt.getDate(), m: dt.getMonth() + 1, y: dt.getFullYear() };
+  }
+  const s = String(c).trim();
+  if (s === "") return { d: 0, m: 0, y: 0 };
+  // jj/mm/aaaa (ou jj-mm-aaaa, jj.mm.aaaa)
+  const full = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (full) {
+    return { d: parseInt(full[1], 10), m: parseInt(full[2], 10), y: parseInt(full[3], 10) };
+  }
+  // jj/mm/aa (2 chiffres → 19xx si >= 30 sinon 20xx, comme Excel)
+  const short = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})$/);
+  if (short) {
+    const yy = parseInt(short[3], 10);
+    return { d: parseInt(short[1], 10), m: parseInt(short[2], 10), y: yy >= 30 ? 1900 + yy : 2000 + yy };
+  }
+  // année seule
+  const yOnly = s.match(/^(\d{4})$/);
+  if (yOnly) return { d: 0, m: 0, y: parseInt(yOnly[1], 10) };
+  return null; // illisible
 }
 
 // Colonne « date acte » : Date SheetJS (cellDates:true) OU numéro de série Excel
@@ -139,6 +215,8 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
   const idxActeNumber = findCol([
     "n° acte", "n°acte", "no acte", "num acte", "numero acte", "n° de l'acte",
     "n° de l'acte de naissance", "numero de l'acte", "numero d'acte", "acte n°", "acte no",
+    // variantes collées (en-têtes réels du fichier utilisateur) :
+    "nacte", "n acte", "numeroacte",
   ]);
   const idxActeDate = findCol([
     "date acte", "date de l'acte", "date de l'acte de naissance", "date acte de naissance", "acte date",
@@ -146,6 +224,15 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
   const idxActePlace = findCol([
     "lieu acte", "lieu de l'acte", "lieu de l'acte de naissance", "acte lieu",
     "lieu d'etablissement de l'acte", "lieu etablissement de l'acte",
+    // variante collée (en-têtes réels du fichier utilisateur) :
+    "lieuacte", "lieunacte",
+  ]);
+  const idxJour = findCol(["jour", "jour naissance", "jour de naissance", "day"]);
+  const idxMois = findCol(["mois", "mois naissance", "mois de naissance", "month"]);
+  const idxAnnee = findCol(["annee", "annee naissance", "annee de naissance", "annee de naiss", "year"]);
+  const idxBirthDate = findCol([
+    "date de naissance", "date naissance", "datenaissance", "date de naiss",
+    "date naiss", "birthdate", "birth date", "date de naissance de l'eleve",
   ]);
 
   // Colonnes obligatoires (matricule optionnel)
@@ -178,12 +265,35 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
     const acte_date = idxActeDate >= 0 ? cellToDateStr(row[idxActeDate]) : "";
     const acte_place = idxActePlace >= 0 ? cellToString(row[idxActePlace]) : "";
 
+    // Naissance (répercussion « Modifier l'élève ») : colonnes séparées
+    // jour/mois/annee prioritaires, complétées par la colonne combinée
+    // « date de naissance » pour les champs encore vides. -1 = illisible.
+    let birth_day = idxJour >= 0 ? cellToInt(row[idxJour]) : 0;
+    let birth_month = idxMois >= 0 ? cellToInt(row[idxMois], true) : 0;
+    let birth_year = idxAnnee >= 0 ? cellToInt(row[idxAnnee]) : 0;
+    if (idxBirthDate >= 0) {
+      const combined = parseBirthDateCombined(row[idxBirthDate]);
+      if (combined) {
+        if (birth_day === 0) birth_day = combined.d;
+        if (birth_month === 0) birth_month = combined.m;
+        if (birth_year === 0) birth_year = combined.y;
+      }
+    }
+
     // Validation côté frontend (erreurs potentielles, flaggées dans le preview)
     const errors: string[] = [];
     if (!last_name) errors.push("nom vide");
     if (!first_name) errors.push("prénoms vides");
     if (!class_name) errors.push("niveau vide");
     if (convertGender(gender_raw) === "") errors.push(`genre invalide : "${gender_raw}"`);
+    // Naissance : mêmes règles que le backend (validateBirthDay/Month/Year)
+    if (birth_day === -1) errors.push("jour de naissance illisible");
+    else if (birth_day > 31) errors.push(`jour de naissance invalide : ${birth_day}`);
+    if (birth_month === -1) errors.push("mois de naissance illisible");
+    else if (birth_month > 12) errors.push(`mois de naissance invalide : ${birth_month}`);
+    if (birth_year === -1) errors.push("année de naissance illisible");
+    else if (birth_year !== 0 && (birth_year < 1900 || birth_year > new Date().getFullYear()))
+      errors.push(`année de naissance invalide : ${birth_year}`);
 
     students.push({
       row: i + 1, // 1-based ligne Excel (ligne 1 = en-tête, donc i+1 = ligne réelle)
@@ -199,6 +309,11 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
       acte_number,
       acte_date,
       acte_place,
+      // -1 (illisible) → 0 : la ligne est déjà flaggée en erreur, on n'envoie
+      // pas de valeur aberrante au backend.
+      birth_day: birth_day > 0 ? birth_day : 0,
+      birth_month: birth_month > 0 ? birth_month : 0,
+      birth_year: birth_year > 0 ? birth_year : 0,
       errors,
     });
   }
@@ -262,6 +377,10 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
           acte_number: p.acte_number || undefined,
           acte_date: p.acte_date || undefined,
           acte_place: p.acte_place || undefined,
+          // Naissance — alimente les champs du formulaire « Modifier l'élève »
+          birth_day: p.birth_day || undefined,
+          birth_month: p.birth_month || undefined,
+          birth_year: p.birth_year || undefined,
         })),
       });
       setResult(res);
@@ -293,7 +412,10 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
           <DialogDescription>
             Sélectionnez un fichier Excel (.xls ou .xlsx) contenant les colonnes :
             <span className="font-mono text-xs"> matricule, nom, prenoms, sexe, niveau</span>.
-            Colonnes facultatives d'état civil (importées si présentes) :
+            Colonnes facultatives reconnues (importées si présentes, puis pré-remplies
+            dans « Modifier l'élève ») :
+            <span className="font-mono text-xs"> jour, mois, annee</span> ou
+            <span className="font-mono text-xs"> date de naissance</span>,
             <span className="font-mono text-xs"> nationalité, lieu de naissance, père, mère, n° acte, date acte, lieu acte</span>.
             Les matricules existants seront ignorés (skip), les classes introuvables signalées.
           </DialogDescription>
@@ -359,7 +481,7 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
           {parsed && parsed.length > 0 && (
             <div className="border rounded overflow-hidden">
               <div className="max-h-80 overflow-y-auto overflow-x-auto">
-                <table className="w-full text-xs min-w-[900px]">
+                <table className="w-full text-xs min-w-[1000px]">
                   <thead className="bg-gray-100 sticky top-0">
                     <tr>
                       <th className="p-1.5 text-left">Ligne</th>
@@ -368,6 +490,7 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                       <th className="p-1.5 text-left">Prénoms</th>
                       <th className="p-1.5 text-left">Sexe</th>
                       <th className="p-1.5 text-left">Niveau</th>
+                      <th className="p-1.5 text-left" title="Date de naissance (jour/mois/année)">Naissance</th>
                       <th className="p-1.5 text-left" title="Nationalité">Nat.</th>
                       <th className="p-1.5 text-left" title="Lieu de naissance">Lieu naiss.</th>
                       <th className="p-1.5 text-left" title="Nom et prénoms du père">Père</th>
@@ -387,6 +510,11 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                         <td className="p-1.5 truncate max-w-[140px]">{p.first_name || <span className="text-red-500">(vide)</span>}</td>
                         <td className="p-1.5">{p.gender_raw}</td>
                         <td className="p-1.5 font-medium">{p.class_name}</td>
+                        <td className="p-1.5 whitespace-nowrap">
+                          {p.birth_day || p.birth_month || p.birth_year
+                            ? `${p.birth_day || "?"}/${p.birth_month || "?"}/${p.birth_year || "?"}`
+                            : <span className="text-gray-400">—</span>}
+                        </td>
                         <td className="p-1.5 text-gray-600">{p.nationality || "—"}</td>
                         <td className="p-1.5 text-gray-600 truncate max-w-[100px]">{p.birth_place || "—"}</td>
                         <td className="p-1.5 text-gray-600 truncate max-w-[110px]">{p.father_name || "—"}</td>

@@ -689,6 +689,14 @@ type BulkStudentInput struct {
 	ActeNumber  *string `json:"acte_number,omitempty"`
 	ActeDate    *string `json:"acte_date,omitempty"`
 	ActePlace   *string `json:"acte_place,omitempty"`
+	// Naissance (demande utilisateur « répercussion import → Modifier
+	// l'élève ») : jour/mois/année renseignés par l'import Excel doivent
+	// se retrouver pré-remplis dans le formulaire de modification.
+	// nil = non renseigné (NULL en base) — mêmes validations que
+	// CreateStudent/UpdateStudent (validateBirthDay/Month/Year).
+	BirthDay   *int `json:"birth_day,omitempty"`   // 1..31
+	BirthMonth *int `json:"birth_month,omitempty"` // 1..12
+	BirthYear  *int `json:"birth_year,omitempty"`  // ex: 2016 (1900..année courante)
 }
 
 // BulkImportRequest — payload du POST /api/students/bulk.
@@ -853,7 +861,55 @@ func BulkCreateStudents(w http.ResponseWriter, r *http.Request) {
 			seenInFile[m] = true
 		}
 
-		// 5) Insérer (état civil facultatif : trim, vide → NULL).
+		// 5) Naissance : nil = non renseigné ; sinon valider les
+		// plages (mêmes règles que l'inscription manuelle — une
+		// valeur hors plage fait échouer LA ligne, pas le fichier).
+		birthDay, birthMonth, birthYear := 0, 0, 0
+		if in.BirthDay != nil {
+			birthDay = *in.BirthDay
+		}
+		if in.BirthMonth != nil {
+			birthMonth = *in.BirthMonth
+		}
+		if in.BirthYear != nil {
+			birthYear = *in.BirthYear
+		}
+		var birthDayPtr, birthMonthPtr, birthYearPtr *int
+		if birthDay != 0 {
+			if err := validateBirthDay(birthDay); err != nil {
+				result.Failed = append(result.Failed, BulkImportDetail{
+					Row: row, Matricule: ptrToStr(matricule),
+					Reason: err.Error(),
+				})
+				continue
+			}
+			v := birthDay
+			birthDayPtr = &v
+		}
+		if birthMonth != 0 {
+			if err := validateBirthMonth(birthMonth); err != nil {
+				result.Failed = append(result.Failed, BulkImportDetail{
+					Row: row, Matricule: ptrToStr(matricule),
+					Reason: err.Error(),
+				})
+				continue
+			}
+			v := birthMonth
+			birthMonthPtr = &v
+		}
+		if birthYear != 0 {
+			if err := validateBirthYear(birthYear); err != nil {
+				result.Failed = append(result.Failed, BulkImportDetail{
+					Row: row, Matricule: ptrToStr(matricule),
+					Reason: err.Error(),
+				})
+				continue
+			}
+			v := birthYear
+			birthYearPtr = &v
+		}
+
+		// 6) Insérer (état civil facultatif : trim, vide → NULL).
 		st := models.Student{
 			Matricule:   matricule,
 			ClassID:     classID,
@@ -867,6 +923,9 @@ func BulkCreateStudents(w http.ResponseWriter, r *http.Request) {
 			ActeNumber:  optStrPtr(in.ActeNumber),
 			ActeDate:    optStrPtr(in.ActeDate),
 			ActePlace:   optStrPtr(in.ActePlace),
+			BirthDay:    birthDayPtr,
+			BirthMonth:  birthMonthPtr,
+			BirthYear:   birthYearPtr,
 		}
 		if err := tx.Create(&st).Error; err != nil {
 			result.Failed = append(result.Failed, BulkImportDetail{
