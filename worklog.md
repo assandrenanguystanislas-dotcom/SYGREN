@@ -4100,3 +4100,17 @@ Work Log:
 
 Stage Summary:
 - Captures versionnées dans download/guide-conseillers/ ; le projet contient désormais les visuels sources du guide ; identifiants toujours hors dépôt
+
+---
+Task ID: 30
+Agent: Z.ai Code (session 30 — formulaire « Affectation des écoles » aux secteurs)
+Task: « dans le module école crée un formulaire où les écoles sont présentes afin de les ajouter à chaque secteur » — affectation ÉCOLE→SECTEUR en complément du dialog Secteurs (sens secteur→écoles).
+
+Work Log:
+- BACKEND schools.go : SectorID *string sur CreateSchoolRequest (nil=inchangé, ""=hors secteur) ; resolveSector (existe + même IEP, règle identique à SetSectorSchools) ; câblage CreateSchool/UpdateSchool ; audit school.sector_updated
+- FRONTEND : schoolsApi create/update + sector_id ; SchoolWithStats.sector_name ; champ « Secteur d'écoles » du formulaire école (options = secteurs de l'IEP choisie) ; badge « Secteur X » (teal) sur les cartes ; bouton « Affectation des écoles » ; composant SectorAssignmentDialog : une ligne par école (nom, code, sélecteur), enregistrement immédiat PUT /api/schools/{id}, recherche nom/code, filtre par secteur (dont Hors secteur), compteurs, drafts optimistes
+- CORRECTIF FORMAT : schools.go était en tabs, réécrit en espaces par l'édition → gofmt -w, amend, force-with-lease
+- Vérifié : go build+vet, tsc (0 nouvelle erreur — 3 préexistantes au HEAD, fichiers non touchés), next build, Render LIVE + Vercel READY + health 200 sur d30f14a, RBAC conseiller 403 en prod, Neon inchangé (27/97 écoles, 6 secteurs, pas de migration)
+
+Stage Summary:
+- Affectation des écoles aux secteurs disponible des deux côtés ; prête pour le rattachement massif des 70 écoles de Dabou ville ; audit trail complet (school.sector_updated + sector.schools_updated)
