@@ -375,6 +375,7 @@ export interface SchoolWithStats extends School {
   student_count: number;
   logo_url?: string; // URL présignée (TTL court) — à recharger après expiration
   exam_center_name?: string; // résolu côté serveur (liste des écoles)
+  sector_name?: string; // v5 — nom du secteur d'écoles, résolu côté serveur
 }
 
 // === Centres d'examen (documents officiels du plan IEPP) ===

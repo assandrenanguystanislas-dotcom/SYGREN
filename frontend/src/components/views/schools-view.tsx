@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   School as SchoolIcon,
@@ -20,6 +20,7 @@ import {
   Landmark,
   Network,
   UsersRound,
+  ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,6 +74,7 @@ interface FormData {
   address: string;
   status: SchoolStatus;
   exam_center_id: string; // "" = aucun centre (sentinel UI __none__)
+  sector_id: string; // "" = hors secteur (sentinel UI __none__)
 }
 
 const EMPTY: FormData = {
@@ -82,6 +84,7 @@ const EMPTY: FormData = {
   address: "",
   status: "public",
   exam_center_id: "",
+  sector_id: "",
 };
 
 export function SchoolsView() {
@@ -103,6 +106,13 @@ export function SchoolsView() {
     queryKey: ["exam-centers"],
     queryFn: examCentersApi.list,
   });
+  // v5 (session 29) — secteurs d'écoles : liste pour le champ Secteur du
+  // formulaire école et le formulaire « Affectation des écoles ».
+  const { data: sectorsData } = useQuery({
+    queryKey: ["sectors"],
+    queryFn: sectorsApi.list,
+    enabled: canEdit,
+  });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolWithStats | null>(null);
@@ -115,6 +125,8 @@ export function SchoolsView() {
   const [centersOpen, setCentersOpen] = useState(false);
   // v5 (session 26) — plage « SECTEURS D'ECOLES » du module Écoles
   const [sectorsOpen, setSectorsOpen] = useState(false);
+  // v5 (session 29) — formulaire « Affectation des écoles aux secteurs »
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [logoOpen, setLogoOpen] = useState(false);
   const [logoTarget, setLogoTarget] = useState<SchoolWithStats | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -164,6 +176,7 @@ export function SchoolsView() {
       address: s.address,
       status: (s.status as SchoolStatus) ?? "public",
       exam_center_id: s.exam_center_id ?? "",
+      sector_id: s.sector_id ?? "",
     });
     setEditing(s);
     setDialogOpen(true);
@@ -257,6 +270,7 @@ export function SchoolsView() {
   const allSchools = data?.schools ?? [];
   const ieps = iepData?.ieps ?? [];
   const examCenters: ExamCenterWithStats[] = centersData?.exam_centers ?? [];
+  const sectors = sectorsData?.sectors ?? [];
 
   // Filtrage local : recherche textuelle + filtres statut et centre d'examen
   const schools = allSchools.filter((s) => {
@@ -319,6 +333,17 @@ export function SchoolsView() {
                 >
                   <Network className="w-4 h-4 mr-1.5" />
                   Secteurs d&apos;écoles
+                </Button>
+                {/* v5 (session 29) — formulaire « Affectation des écoles » :
+                    le sens école → secteur, une ligne par école. */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAssignmentOpen(true)}
+                  title="Affecter chaque école à son secteur (une ligne par école)"
+                >
+                  <ListChecks className="w-4 h-4 mr-1.5" />
+                  Affectation des écoles
                 </Button>
                 <Button onClick={openCreate} size="sm" className="shadow-sm">
                   <Plus className="w-4 h-4 mr-1.5" />
@@ -473,6 +498,17 @@ export function SchoolsView() {
                         >
                           <Landmark className="w-3 h-3 mr-1" />
                           {s.exam_center_name}
+                        </Badge>
+                      )}
+                      {/* v5 (session 29) — secteur d'écoles de l'école
+                          (nom résolu côté serveur : sector_name). */}
+                      {s.sector_name && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-teal-200 bg-teal-50 text-teal-700"
+                        >
+                          <Network className="w-3 h-3 mr-1" />
+                          Secteur {s.sector_name}
                         </Badge>
                       )}
                     </div>
@@ -659,6 +695,46 @@ export function SchoolsView() {
                 Résultats).
               </p>
             </div>
+            {/* Secteur d'écoles — affectation de l'école à un secteur de
+                conseiller pédagogique (vue « Mon Secteur », v5 session 29).
+                Options limitées aux secteurs de l'IEP choisie ci-dessus. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="school-sector">Secteur d&apos;écoles</Label>
+              <Select
+                value={form.sector_id || "__none__"}
+                onValueChange={(v) =>
+                  setForm({
+                    ...form,
+                    sector_id: v === "__none__" ? "" : v,
+                  })
+                }
+                disabled={!form.iep_id}
+              >
+                <SelectTrigger id="school-sector">
+                  <SelectValue
+                    placeholder={
+                      form.iep_id
+                        ? "Choisir un secteur… (ou aucun)"
+                        : "Choisir une IEP d'abord"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Aucun secteur —</SelectItem>
+                  {sectors
+                    .filter((sec) => sec.iep_id === form.iep_id)
+                    .map((sec) => (
+                      <SelectItem key={sec.id} value={sec.id}>
+                        {sec.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Regroupe les écoles suivies par un conseiller pédagogique
+                (vue « Mon Secteur »).
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="school-name">Nom de l'école</Label>
               <Input
@@ -782,6 +858,17 @@ export function SchoolsView() {
           onOpenChange={setSectorsOpen}
           ieps={ieps}
           schools={allSchools}
+        />
+      )}
+
+      {/* v5 (session 29) — formulaire « Affectation des écoles » : chaque
+          école présente une ligne avec le sélecteur de son secteur. */}
+      {canEdit && (
+        <SectorAssignmentDialog
+          open={assignmentOpen}
+          onOpenChange={setAssignmentOpen}
+          schools={allSchools}
+          sectors={sectors}
         />
       )}
 
@@ -1841,6 +1928,188 @@ function SectorsDialog({
         loading={deleteMut.isPending}
       />
     </>
+  );
+}
+
+/**
+ * SectorAssignmentDialog — formulaire « Affectation des écoles » (v5,
+ * session 29).
+ *
+ * Sens ÉCOLE → SECTEUR, en complément du dialog « Secteurs d'écoles »
+ * (sens secteur → écoles, cases à cocher) : chaque ligne présente une
+ * école avec le sélecteur de son secteur d'écoles ; le changement est
+ * enregistré immédiatement (PUT /api/schools/{id}, sector_id — le backend
+ * refuse un secteur d'une autre IEP, même règle que l'affectation par
+ * secteur). Filtres : recherche par nom/code et par secteur (dont
+ * « hors secteur ») pour préparer par exemple le rattachement des écoles
+ * de Dabou ville.
+ */
+function SectorAssignmentDialog({
+  open,
+  onOpenChange,
+  schools,
+  sectors,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  schools: SchoolWithStats[];
+  sectors: SectorWithStats[];
+}) {
+  const [search, setSearch] = useState("");
+  const [sectorFilter, setSectorFilter] = useState<string>("all");
+  // Choix optimistes par école : le sélecteur affiche la valeur locale en
+  // attendant le rechargement de la liste (invalidation ["schools"]).
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const assignMut = useCrudMutation(
+    (id: string, data: { sector_id?: string | null }) =>
+      schoolsApi.update(id, data),
+    {
+      invalidateKeys: [["schools"], ["sectors"]],
+      successMessage: "Affectation du secteur enregistrée",
+      actionLabel: "Affectation du secteur",
+    },
+  );
+
+  // Les schools rechargées reflètent les enregistrements réussis : on
+  // retire les choix optimistes devenus redondants.
+  useEffect(() => {
+    setDrafts({});
+  }, [schools]);
+
+  async function assign(schoolId: string, value: string) {
+    setDrafts((d) => ({ ...d, [schoolId]: value }));
+    try {
+      await assignMut.mutateAsync([
+        schoolId,
+        { sector_id: value === "__none__" ? "" : value },
+      ]);
+    } catch {
+      // Échec (ex : secteur d'une autre IEP) — on réaffiche la valeur
+      // réelle de l'école (le toast d'erreur est déjà émis par le hook).
+      setDrafts((d) => {
+        const next = { ...d };
+        delete next[schoolId];
+        return next;
+      });
+    }
+  }
+
+  const filtered = schools.filter((s) => {
+    const matchSearch =
+      !search ||
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      (s.code ?? "").toLowerCase().includes(search.toLowerCase());
+    const matchSector =
+      sectorFilter === "all" ||
+      (sectorFilter === "none" ? !s.sector_id : s.sector_id === sectorFilter);
+    return matchSearch && matchSector;
+  });
+
+  const assignedCount = schools.filter((s) => s.sector_id).length;
+
+  return (
+    <EntityDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Affectation des écoles"
+      description="Choisissez le secteur de chaque école — chaque conseiller suivra uniquement les directeurs et adjoints des écoles de son secteur (vue « Mon Secteur »)."
+      icon={ListChecks}
+      loading={assignMut.isPending}
+    >
+      <div className="space-y-3 pt-2">
+        {/* Compteurs + filtre par secteur */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="text-[10px]">
+            {assignedCount} / {schools.length} affectée(s)
+          </Badge>
+          <Badge
+            variant="outline"
+            className="text-[10px] border-amber-200 bg-amber-50 text-amber-700"
+          >
+            {schools.length - assignedCount} hors secteur
+          </Badge>
+          <Select value={sectorFilter} onValueChange={setSectorFilter}>
+            <SelectTrigger className="w-[180px] h-8 text-xs ml-auto">
+              <SelectValue placeholder="Filtrer par secteur" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les secteurs</SelectItem>
+              <SelectItem value="none">— Hors secteur —</SelectItem>
+              {sectors.map((sec) => (
+                <SelectItem key={sec.id} value={sec.id}>
+                  {sec.name} ({sec.school_count})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Recherche (nom ou code officiel) */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher une école (nom ou code)…"
+            className="pl-9 h-9 text-sm"
+          />
+        </div>
+
+        {/* Une ligne par école : nom, code, sélecteur du secteur */}
+        <div className="max-h-[46vh] overflow-y-auto rounded-md border border-border/60 divide-y divide-border/60">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">
+              Aucune école ne correspond.
+            </p>
+          ) : (
+            filtered.map((s) => {
+              const value = drafts[s.id] ?? s.sector_id ?? "__none__";
+              // Un école ne peut rejoindre qu'un secteur de SA propre IEP
+              // (contrôle backend : même règle sur PUT /api/sectors/...).
+              const options = sectors.filter(
+                (sec) => sec.iep_id === s.iep_id,
+              );
+              return (
+                <div key={s.id} className="flex items-center gap-2 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium truncate">{s.name}</p>
+                    {s.code && (
+                      <p className="text-[10px] font-mono text-muted-foreground">
+                        {s.code}
+                      </p>
+                    )}
+                  </div>
+                  <Select
+                    value={value}
+                    onValueChange={(v) => assign(s.id, v)}
+                    disabled={assignMut.isPending}
+                  >
+                    <SelectTrigger className="w-[180px] h-8 text-xs shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Hors secteur —</SelectItem>
+                      {options.map((sec) => (
+                        <SelectItem key={sec.id} value={sec.id}>
+                          {sec.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Le changement est enregistré dès la sélection ; seuls les secteurs
+          de l&apos;IEP de l&apos;école sont proposés. L&apos;affectation groupée
+          par secteur (cases à cocher) reste disponible via
+          «&nbsp;Secteurs d&apos;écoles&nbsp;».
+        </p>
+      </div>
+    </EntityDialog>
   );
 }
 

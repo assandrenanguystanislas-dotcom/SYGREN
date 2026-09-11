@@ -225,6 +225,10 @@ type CreateSchoolRequest struct {
 	// ExamCenterID — rattachement au centre d'examen (documents du plan IEPP).
 	// Pointeur pour distinguer « absent » (inchangé) de « vide » (détacher).
 	ExamCenterID *string `json:"exam_center_id,omitempty"`
+	// SectorID — SECTEUR D'ECOLES de rattachement (module Écoles : plages
+	// « Secteurs d'écoles » et « Affectation des écoles », v5 session 26/29).
+	// Pointeur pour distinguer « absent » (inchangé) de « vide » (hors secteur).
+	SectorID *string `json:"sector_id,omitempty"`
 }
 
 // resolveExamCenter — valide le rattachement d'une école à un centre
@@ -243,6 +247,24 @@ func resolveExamCenter(centerID string, iepID string) (*string, error) {
 		return nil, fmt.Errorf("ce centre d'examen appartient à une autre IEP")
 	}
 	return &center.ID, nil
+}
+
+// resolveSector — valide le rattachement d'une école à un secteur d'écoles.
+// Règles : "" = hors secteur (nil) ; sinon le secteur doit exister ET
+// appartenir à la même IEP que l'école (cohérence de l'arborescence, même
+// règle que PUT /api/sectors/{id}/schools).
+func resolveSector(sectorID string, iepID string) (*string, error) {
+	if sectorID == "" {
+		return nil, nil
+	}
+	var sector models.Sector
+	if err := database.DB.First(&sector, "id = ?", sectorID).Error; err != nil {
+		return nil, fmt.Errorf("secteur d'écoles introuvable")
+	}
+	if sector.IEPID != iepID {
+		return nil, fmt.Errorf("ce secteur d'écoles appartient à une autre IEP")
+	}
+	return &sector.ID, nil
 }
 
 // CreateSchool creates a new school (admin only).
@@ -298,6 +320,16 @@ func CreateSchool(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		school.ExamCenterID = centerID
+	}
+	// Rattachement optionnel au secteur d'écoles (vue « Mon Secteur »
+	// des conseillers pédagogiques — formulaire « Affectation des écoles »).
+	if req.SectorID != nil {
+		sectorID, err := resolveSector(*req.SectorID, req.IEPID)
+		if err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		school.SectorID = sectorID
 	}
 	if err := database.DB.Create(&school).Error; err != nil {
 		middleware.JSONError(w, "erreur création école", http.StatusInternalServerError)
@@ -372,6 +404,37 @@ func UpdateSchool(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		school.ExamCenterID = centerID
+	}
+	// Secteur d'écoles : nil = inchangé, "" = hors secteur, sinon
+	// rattacher (le secteur doit exister et appartenir à l'IEP de
+	// l'école — même règle que PUT /api/sectors/{id}/schools).
+	if req.SectorID != nil {
+		sectorID, err := resolveSector(*req.SectorID, school.IEPID)
+		if err != nil {
+			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		changed := (school.SectorID == nil) != (sectorID == nil) ||
+			(school.SectorID != nil && sectorID != nil &&
+				*school.SectorID != *sectorID)
+		school.SectorID = sectorID
+		if changed {
+			sectorName := ""
+			if sectorID != nil {
+				var sec models.Sector
+				if err := database.DB.Select("name").
+					First(&sec, "id = ?", *sectorID).Error; err == nil {
+					sectorName = sec.Name
+				}
+			}
+			// Piste d'audit : l'affectation côté école complète
+			// celle côté secteur (sector.schools_updated).
+			LogAction(r, "school.sector_updated", "school", &id, map[string]interface{}{
+				"school_name": school.Name,
+				"sector_id":   sectorID,
+				"sector_name": sectorName,
+			})
+		}
 	}
 	if err := database.DB.Save(&school).Error; err != nil {
 		middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)

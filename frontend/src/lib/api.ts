@@ -332,6 +332,7 @@ export const schoolsApi = {
     name: string;
     address: string;
     status: "public" | "private" | "community";
+    sector_id?: string | null; // "" / null = hors secteur (formulaire « Affectation des écoles »)
   }) =>
     apiFetch<School>("/api/schools", {
       method: "POST",
@@ -346,6 +347,7 @@ export const schoolsApi = {
       address?: string;
       status?: "public" | "private" | "community";
       exam_center_id?: string | null; // "" / null = détacher du centre
+      sector_id?: string | null; // "" / null = hors secteur (détacher)
     },
   ) =>
     apiFetch<School>(`/api/schools/${id}`, {
