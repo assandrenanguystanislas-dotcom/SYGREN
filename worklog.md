@@ -4215,3 +4215,27 @@ Stage Summary:
 - Périmètre strict : seules les écoles de LEUR secteur (users.sector_id) ; hors secteur → 403 ; écritures → 403.
 - Preuves : download/conseiller-synthese-grisee.png, conseiller-bulletins-grisee.png, conseiller-nav-mon-secteur.png ; scripts/ (seed + 12 tests sécurité).
 - NB production : compte conseiller.cosrou@sygren.ci → « identifiants invalides » (mot de passe changé ?) ; aucun compte conseiller générique n'a de données de session dans son secteur — les documents apparaîtront dès que des sessions/notes existeront dans les écoles des secteurs.
+
+---
+## Task 35 — Saison de démonstration + Import Excel état civil enrichi
+
+**Date** : 2026-09-12 | **Commits** : `9ec4393` (feature) + `fbeb5cf` (gofmt) | **Déploiements** : Vercel READY + Render LIVE (fbeb5cf)
+
+### 1) Saison de démonstration (production, Neon)
+- Créée pour **EPP COSROU LEKR** (code E001119, secteur COSROU — l'école pilote avec 155 élèves) : **Composition N°1 — septembre 2026**, statut **open** (fenêtre 2026-09-11 08:00 → 2026-09-25 08:00 UTC).
+- Seed répliquant exactement la logique backend : `CreateSession` (sessions.go) + `pdaAutoSubscribeSession` (pda.go : entrée PDA kind=composition, threshold=50) + `computeSessionResults` (computation.go : matières par `levels LIKE className/level`, EPS exclue, barèmes grade_scales, moyenne pondérée coef, échelle CP/CE=/10 CM=/20).
+- Données : **760 notes** (is_draft=false) sur 155 élèves × 5 classes actives (CM2 vide), **155 moyennes précalculées** dans `student_session_results`, 1 entrée PDA.
+- Vérification croisée indépendante (recalcul SQL pur vs moyennes stockées) : **155/155 identiques**. Moyennes de classe : CE1 6,49/10 · CE2 6,95/10 · CM1 13,19/20 · CP1 6,17/10 · CP2 6,56/10.
+- Script : `scripts/seed_demo_season_35.py` (idempotent), contrôle : `scripts/verify_demo_season_35.py`.
+
+### 2) Import Excel élèves enrichi (état civil)
+- **Backend** (`handlers/students.go`) : `BulkStudentInput` + 7 champs facultatifs `*string` — nationality, birth_place, father_name, mother_name, acte_number, acte_date, acte_place — trim/NULL via nouveau helper `optStrPtr`. Colonnes DB déjà présentes (modèle Student inchangé).
+- **Frontend** (`import-students-dialog.tsx`) : détection large de synonymes d'en-têtes normalisés (ex : « Nom du Père », « N° Acte », « Date de l'acte de naissance »…) ; `XLSX.read` avec `cellDates:true` + fallback série Excel (43174 → 15/03/2018) pour la colonne date acte ; aperçu étendu 14 colonnes (scroll horizontal) ; description du dialog mise à jour. `api.ts` : signature `bulkCreate` étendue.
+- Piège corrigé grâce au test : SheetJS renvoie des numéros de série Excel (pas des Date) sans `cellDates:true` → cellules date lues « 43174 ». Test parsing (`scripts/test_import_parse_35.js`) : ✓ majuscules/accents/variantes, ✓ dates natives jj/mm/aaaa.
+- Fiche élève (students-view) affichait déjà ces 7 champs en édition — l'import était le chaînon manquant.
+- Modèle Excel livré : `download/modele-import-eleves-sygren.xlsx` (12 colonnes + exemples).
+
+### Vérifications
+- `go build` + `go vet` OK · `tsc` 0 erreur · `next build` OK.
+- Push `9ec4393`+`fbeb5cf` → Vercel **READY** (fbeb5cf) · Render déclenchement manuel → **LIVE** (message commit fbeb5cf ; SHA vide = quirk API déclenchement manuel).
+- Santé : `/api/health` → `{"status":"ok"}` ; front HTTP 200.
