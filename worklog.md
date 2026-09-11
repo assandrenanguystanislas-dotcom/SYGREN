@@ -4049,3 +4049,54 @@ Stage Summary:
 - PÉRIMÈTRE STRICT RÉTABLI : seuls directeurs et adjoints au directeur (fonction ADJOINT(E)) ; simples enseignants exclus
 - 6 comptes conseillers actifs avec identifiants communiqués ; 27 écoles rattachées aux 6 secteurs ; isolation RBAC vérifiée (403) côté API et navigation grisée côté client
 - Reste à la main de l'utilisateur : secteur d'ASSALE ABE CARTIN ; renommage des comptes génériques quand les vrais noms seront connus ; confirmation de l'inclusion de EPP PETIT BADIEN dans VIEUX-BADIEN ; éventuel rattachement des 70 écoles de Dabou ville
+
+---
+Task ID: 27 (confirmation)
+Agent: Z.ai Code (session 27 — passe de confirmation finale après « confirmer » de l'utilisateur)
+Task: « confirmer » — l'utilisateur confirme le provisioning tel quel ; re-vérification complète de l'état de production avant remise finale (identifiants re-communiqués).
+
+Work Log:
+- verify_deploy_27.py : Render LIVE sur 7582142 + Vercel READY (7582142 et 60b0a63 docs) + /api/health 200 — déploiements conformes
+- verify_accounts_27.py : login 200 des 6 comptes conseillers ; listing brut des personnels des écoles des secteurs confirme que les enseignants sans fonction (fonction=None) sont hors périmètre API (seuls directeurs + ADJOINT(E) passent)
+- confirm_state_27.py (nouveau) : état Neon des 6 secteurs — chaque secteur a exactement 1 conseiller actif ; 27 écoles rattachées (COSROU 4 / VIEUX-BADIEN 5 / TOUPAH 7 / OUSROU 6 / LEBOUTOU 2 / BOUBOURY 3) ; totaux élèves/classes calculés via JOIN students→classes (piège : students n'a PAS school_id, schools n'a PAS active — colonnes réelles : students.class_id, schools.status)
+- Corrections du script d'inspection : st.school_id→JOIN classes c2, s.active supprimé (colonne inexistante)
+- « confirmer » interprété comme validation du provisioning : EPP PETIT BADIEN CONFIRMÉ dans VIEUX-BADIEN ; répartition des 27 écoles entérinée ; identifiants re-communiqués au canal chat
+
+Stage Summary:
+- ÉTAT CONFIRMÉ EN PROD : 6 secteurs × 1 conseiller × écoles affectées ; logins OK ; déploiements Render/Vercel sur le SHA du fix ; aucune modification de code ni de données lors de cette passe
+- Reste ouvert (à la main de l'utilisateur) : secteur d'ASSALE ABE CARTIN (tél 0141291356, sans email, sector_id NULL) ; renommage des 6 comptes génériques quand les vrais noms seront connus ; éventuel rattachement des 70 écoles de Dabou ville
+
+---
+Task ID: 28
+Agent: Z.ai Code (session 28 — Guide du Conseiller PDF à partir des 2 captures de production)
+Task: « utiliser ces 2 fichiers Image » (mon-secteur-conseiller.png + secteurs-dialog-ok.png) → choix utilisateur : Guide conseillers PDF 2-3 pages + identifiants par conseiller inclus.
+
+Work Log:
+- ROUTE PDF : skill pdf chargé intégralement (SKILL.md, fonts.md, creative-flow.md, overflow.md, palette.md, typography.md, pagination.md, cover.md, cover-backgrounds.md) → brief creative-flow (guide/handbook), rendu html2pdf-next.js (Playwright + Paged.js)
+- LIVRABLE : /home/z/my-project/download/guide-conseillers/ — guide-conseiller-sygren.html (+ 2 captures copiées, chemins relatifs) et guide-conseiller-sygren.pdf (6 pages, 470 Ko, vectoriel)
+- STRUCTURE : couverture ancrée à gauche (ligne verticale 6px, kicker, héros 54px, résumé, 3 pills stats, méta, footer — ancres absolues, S3.9 respecté) ; 6 sections en flux : rôle/compte (4 étapes connexion + callout sécurité), vue Mon Secteur (capture 1 + badges totaux), périmètre strict, gestion admin (capture 2), 6 encadrés identifiants (email + mot de passe initial orange, monospace), bonnes pratiques (4 cartes) + carte de clôture
+- PALETTE : vert SYGREN une seule famille (#1a3c2a/#2d6b4a/#4a9a6a/#f2f8f4 — préset Forest Green de palette.md) + orange #b06e1f en XS (mots de passe) = 5 couleurs chromatiques max ; police Inter→repli Liberation Sans (Google Fonts inaccessible hors-ligne, fallback déclaré)
+- PIÈGES VALIDATEUR : poster_validate check-html → cover_validate.js (prévu pour couvertures ISOLÉES seulement) signalait les .divider du CORPS (3px→« lignes », gap 11px<40) → dividers refondus en .section-title::after (pseudo-élément, rendu identique) ; faux positif restant = <b> enfant d'un .body-text (relation parent-enfant, pas une collision) — Pass 1 couverture réelle : OK
+- PIÈGE BUILD : pagedjs absent → npm install + symlink /home/z/my-project/node_modules/pagedjs (chemin exact vérifié par le script : __dirname/../../../node_modules)
+- POST-TRAITEMENT (scripts/finalize_guide.py) : numérotation pypdf (couverture masquée, corps 1..5, pieds de page Helvetica 8pt) + métadonnées (Title/Author SYGREN/Subject/Creator Z.ai) + contrôle U+FFFD via pymupdf (bug pypdf KeyError bbox sur extraction) ; compression finale garbage=4 deflate → 872→470 Ko ; double-tampon évité (régénération puis finalize unique)
+- QA FINAL : pdf_qa.py --no-tables = 10 passed, 1 warning (asymétrie couverture L/R — Voulue, gabarit ancré à gauche type Template 01, exemption overflow.md §1.5) ; inspection visuelle des 6 pages rendues : aucune coupure de carte/figure, remplissage dernière page ≈51% (>40%)
+
+Stage Summary:
+- Guide du Conseiller livré (HTML source + PDF vectoriel 6 pages) : connexion onglet Conseiller, vue Mon Secteur illustrée par la capture réelle, périmètre strict, identifiants des 6 secteurs en encadrés imprimables, bonnes pratiques
+- Aucune modification du dépôt SYGREN (aucun push, aucune donnée Neon) — livrable documentaire uniquement
+- Identifiants intégrés au document : conseiller.<secteur>@sygren.ci / <SECTEUR>@2026 (mots de passe initiaux, changement à la 1re connexion recommandé dans le guide)
+
+---
+Task ID: 29
+Agent: Z.ai Code (session 29 — insertion des captures du guide dans le dépôt)
+Task: « secteurs-dialog et mon-secteur-conseiller ne sont pas présents dans le projet, il faut les insérer » — versionner les 2 captures de production utilisées par le Guide du Conseiller.
+
+Work Log:
+- Diagnostic : captures présentes côté livraison (download/guide-conseillers/) mais absentes du dépôt ; dossier download/ du dépôt vide depuis le commit initial
+- Insertion de download/guide-conseillers/mon-secteur-conseiller.png et secteurs-dialog-ok.png (captures production : vue Mon Secteur conseiller + dialogue Secteurs d'écoles côté admin)
+- guide-conseiller-sygren.pdf et .html volontairement EXCLUS du dépôt : ils contiennent les identifiants initiaux des 6 conseillers en clair (règle : aucun secret dans l'historique Git)
+- Contrôle PDF : 2 captures bien intégrées au guide (pages 3 et 4)
+- Aucun changement de code backend/frontend ; Neon inchangé
+
+Stage Summary:
+- Captures versionnées dans download/guide-conseillers/ ; le projet contient désormais les visuels sources du guide ; identifiants toujours hors dépôt
