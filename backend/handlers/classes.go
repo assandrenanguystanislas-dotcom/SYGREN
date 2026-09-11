@@ -54,15 +54,17 @@ func ListClasses(w http.ResponseWriter, r *http.Request) {
 		}
 		query = query.Where("school_id = ?", schoolID)
 	case models.RoleConseiller:
-		// v6 (session 34) — consultation : classes des écoles de SON secteur
-		// (JOIN schools pour le filtre sectoriel). Aucun secteur → liste vide.
+		// v6 (session 34) — consultation : classes des écoles de SON secteur.
+		// Sous-requête IN (pas de JOIN : les colonnes name/active des deux
+		// tables rendraient le ORDER BY/WHERE ambigus). Aucun secteur → vide.
 		sectorID := conseillerSectorID(r)
 		if sectorID == "" {
 			jsonResponse(w, http.StatusOK, map[string]interface{}{"classes": []interface{}{}, "count": 0})
 			return
 		}
-		query = query.Joins("JOIN schools ON schools.id = classes.school_id").
-			Where("schools.sector_id = ?", sectorID)
+		query = query.Where("school_id IN (?)",
+			database.DB.Model(&models.School{}).
+				Select("id").Where("sector_id = ?", sectorID))
 	case "teacher":
 		// L'enseignant ne voit que sa classe
 		userID := ctxUserID(r)
