@@ -4424,3 +4424,22 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 ### Résultat
 - Rien à coder : la Task 25 est conforme et en production. Pour que le nom s'affiche sur un bulletin : **affecter un titulaire à la classe** (teacher_id) **ou** renseigner le **COURS tenu** du maître dans son dossier personnel (Utilisateurs > Personnel, champ COURS CP1..CM2) — le repli se charge du reste à la prochaine génération des bulletins.
 - Points de données liés restants (choix utilisateur) : 578 classes sans titulaire/cours tenu ; les 4 titulaires actuels impriment déjà correctement.
+
+---
+## Task 25 (suite) — État de saisie des titulaires (classeur Excel livré)
+
+**Date** : 2026-09-13 | **Livrable** : `download/Etat-saisie-titulaires-classes-SYGREN.xlsx` | Aucun code/déploiement (livrable de saisie)
+
+### Contenu
+- **Récapitulatif** : couverture par secteur (formules vivantes COUNTIF sur les feuilles de détail) — TOTAL 97 écoles / 582 classes / 4 avec titulaire / 578 sans.
+- **Classes à saisir** (578 lignes) : école, secteur, classe, élèves (priorité = effectif > 0 en gras ambre), agents SYGREN de l'école (candidats), colonne vide « Titulaire à affecter » ; filtres + volets figés + impression paysage.
+- **Classes déjà OK** (4 lignes) : référence des classes qui impriment déjà le nom.
+- **Personnel & cours tenu** (35 agents actifs) : 2e voie — liste déroulante CP1..CM2 en colonne « COURS à renseigner ».
+
+### Constats production
+- Médiane : 1 agent SYGREN par école (35 agents / 97 écoles) → la saisie des titulaires passera surtout par la création du personnel dans l'app.
+- **Doublon de nom** : deux écoles DISTINCTES (ids différents) s'appellent « EPP COTIERE PALMERAIE » (BADIA) — signalé dans le classeur (note) ; à renommer dans le module Écoles.
+
+### QA
+- Pipeline skill xlsx : recalc 0 erreur (37 formules) → audit 0 erreur → validate exit 0 ; contrôle sémantique Python (97/582/4/578) OK.
+- Scripts : extract_etat_25.py, build_etat_25.py (réutilisables pour regénérer l'état après saisie).
