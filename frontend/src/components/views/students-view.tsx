@@ -14,6 +14,7 @@ import {
   GraduationCap,
   Upload,
   FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import { studentsApi, classesApi, schoolsApi } from "@/lib/api";
@@ -49,7 +50,11 @@ import {
 } from "@/components/ui/table";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { ImportStudentsDialog } from "@/components/import-students-dialog";
+import {
+  ImportStudentsDialog,
+  type ParsedStudent,
+  convertGender,
+} from "@/components/import-students-dialog";
 import { cn } from "@/lib/utils";
 
 interface FormData {
@@ -112,6 +117,57 @@ const MONTHS_FR = [
   "Décembre",
 ];
 
+// === Saisie assistée depuis le fichier importé ===
+// Demande utilisateur : « l'importation du fichier Excel doit aider à remplir
+// directement les champs existants dans le formulaire Inscrire un élève ».
+
+// « jj/mm/aaaa » (format produit par l'import Excel, cf. cellToDateStr) →
+// « aaaa-mm-jj » (format de l'input <input type="date"> du formulaire).
+// Déjà ISO → tel quel ; tout le reste (texte libre) → "" (à saisir).
+function frToIsoDate(s: string): string {
+  const t = (s || "").trim();
+  const m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (m) {
+    return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  return "";
+}
+
+// Ligne Excel parsée → FormData du formulaire « Inscrire un élève » :
+// CHAQUE colonne reconnue du fichier pré-remplit le champ correspondant du
+// formulaire. La classe du fichier est résolue par nom (insensible à la
+// casse/espaces) parmi les classes de l'école ; introuvable → "" (l'utilisateur
+// la choisit — le bouton « Inscrire l'élève » reste désactivé tant que la
+// classe n'est pas définie). Scolarités/décision : non pré-remplies (absentes
+// du fichier d'import).
+function formFromParsed(p: ParsedStudent, classes: ClassWithDetails[]): FormData {
+  const key = p.class_name.trim().toUpperCase().replace(/\s+/g, "");
+  const cls = classes.find(
+    (c) => c.name.trim().toUpperCase().replace(/\s+/g, "") === key,
+  );
+  return {
+    class_id: cls?.id ?? "",
+    first_name: p.first_name,
+    last_name: p.last_name,
+    gender: convertGender(p.gender_raw) || "M",
+    matricule: p.matricule,
+    birth_year: p.birth_year ? String(p.birth_year) : "",
+    birth_day: p.birth_day ? String(p.birth_day) : "",
+    birth_month: p.birth_month ? String(p.birth_month) : "",
+    birth_place: p.birth_place,
+    nationality: p.nationality,
+    father_name: p.father_name,
+    mother_name: p.mother_name,
+    acte_number: p.acte_number,
+    acte_date: frToIsoDate(p.acte_date),
+    acte_place: p.acte_place,
+    scolarite_cours: "",
+    scolarite_totale: "",
+    decision_conseil: "",
+  };
+}
+
 // Payload API : birth_year / scolarités sont des numbers (0 = non
 // renseignée / effacer) ; decision_conseil "" = pas encore statuée / effacer.
 type StudentPayload = Omit<
@@ -170,6 +226,12 @@ export function StudentsView() {
     null,
   );
   const [importOpen, setImportOpen] = useState(false);
+  // Saisie assistée : lignes parsées du fichier + index courant. Non null =
+  // le formulaire « Inscrire un élève » est pré-rempli depuis le fichier ;
+  // après chaque inscription réussie, il avance automatiquement à la ligne
+  // suivante (le fichier guide la saisie jusqu'à épuisement).
+  const [importQueue, setImportQueue] = useState<ParsedStudent[] | null>(null);
+  const [queueIdx, setQueueIdx] = useState(0);
 
   // === Écoles (admin seulement) ===
   const { data: schoolsData } = useQuery({
@@ -289,11 +351,23 @@ export function StudentsView() {
     try {
       if (editing) {
         await updateMut.mutateAsync([editing.id, payload]);
+        setDialogOpen(false);
       } else {
         await createMut.mutateAsync([payload]);
-        // toast déjà affiché par le hook ; le matricule est visible dans la liste
+        // Saisie assistée : inscription réussie → le formulaire se pré-remplit
+        // automatiquement avec la ligne SUIVANTE du fichier importé (demande
+        // « le fichier importé doit aider à compléter le formulaire »).
+        // Dernière ligne (ou mode manuel) → on referme le dialogue.
+        if (importQueue && queueIdx + 1 < importQueue.length) {
+          const next = queueIdx + 1;
+          setQueueIdx(next);
+          setForm(formFromParsed(importQueue[next], classes));
+        } else {
+          setImportQueue(null);
+          setQueueIdx(0);
+          setDialogOpen(false);
+        }
       }
-      setDialogOpen(false);
     } catch {
       /* toastée */
     }
@@ -343,6 +417,25 @@ export function StudentsView() {
     }
     const url = `${window.location.origin}/liste-candidats-doc?class=${encodeURIComponent(candidatsClassId)}&t=${encodeURIComponent(token)}`;
     window.open(url, "_blank");
+  }
+
+  // Saisie assistée : bouton « Inscrire » d'une ligne du preview d'import →
+  // ouvre le formulaire « Inscrire un élève » PRÉ-REMPLI avec les valeurs de
+  // cette ligne, puis avance automatique après chaque inscription (queue).
+  function openCreateFromImport(rows: ParsedStudent[], idx: number) {
+    setImportQueue(rows);
+    setQueueIdx(idx);
+    setForm(formFromParsed(rows[idx], classes));
+    setEditing(null);
+    setImportOpen(false); // referme le dialogue d'import
+    setDialogOpen(true);
+  }
+
+  // Quitte le mode saisie assistée (bouton du bandeau) — le formulaire reste
+  // ouvert avec ses valeurs courantes, mais l'avance automatique s'arrête.
+  function stopImportQueue() {
+    setImportQueue(null);
+    setQueueIdx(0);
   }
 
   // Filtrage local : uniquement la recherche texte (le filtre école/classe est
@@ -707,19 +800,61 @@ export function StudentsView() {
       {canEdit && (
         <EntityDialog
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          title={editing ? "Modifier l'élève" : "Inscrire un élève"}
+          onOpenChange={(o) => {
+            setDialogOpen(o);
+            if (!o) {
+              // Fermeture du formulaire → sortie du mode saisie assistée.
+              setImportQueue(null);
+              setQueueIdx(0);
+            }
+          }}
+          title={
+            editing
+              ? "Modifier l'élève"
+              : importQueue
+                ? `Inscrire un élève — fichier importé (${queueIdx + 1}/${importQueue.length})`
+                : "Inscrire un élève"
+          }
           description={
             editing
               ? isTeacher
                 ? "Corrigez les informations de l'élève (le matricule et la classe ne sont pas modifiables par le tenant du cours)."
                 : "Modifiez les informations de l'élève."
-              : "Le matricule est fourni par le Ministère de l'Éducation. Laissez vide si non disponible."
+              : importQueue
+                ? "Champs pré-remplis depuis le fichier Excel importé — vérifiez, complétez puis inscrivez : le formulaire passera à la ligne suivante."
+                : "Le matricule est fourni par le Ministère de l'Éducation. Laissez vide si non disponible."
           }
           icon={Users}
           loading={createMut.isPending || updateMut.isPending}
         >
           <form onSubmit={onSubmit} className="space-y-4 pt-2">
+            {/* === Bandeau saisie assistée (fichier importé) === */}
+            {importQueue && !editing && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-xs space-y-1.5">
+                <p className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  Champs remplis depuis le fichier importé — ligne Excel {importQueue[queueIdx]?.row} ({queueIdx + 1}/{importQueue.length})
+                </p>
+                <p className="text-amber-700 dark:text-amber-400">
+                  Vérifiez et complétez si besoin, puis cliquez « Inscrire l&apos;élève » :
+                  le formulaire se pré-remplira automatiquement avec la ligne suivante du fichier.
+                  {!form.class_id && (
+                    <span className="font-semibold">
+                      {' '}Classe « {importQueue[queueIdx]?.class_name} » introuvable dans cette école — sélectionnez-la ci-dessous avant d&apos;inscrire.
+                    </span>
+                  )}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-[11px]"
+                  onClick={stopImportQueue}
+                >
+                  Quitter le mode fichier
+                </Button>
+              </div>
+            )}
             {!isTeacher && (
               <div className="space-y-1.5">
                 <Label htmlFor="student-matricule">Matricule (Ministère)</Label>
@@ -1073,14 +1208,17 @@ export function StudentsView() {
         loading={deleteMut.isPending}
       />
 
-      {/* === Import Excel d'élèves (bulk) ===
+      {/* === Import Excel d'élèves (bulk + saisie assistée) ===
           Le directeur (ou admin avec école sélectionnée) importe un .xls/.xlsx
-          (matricule, nom, prenoms, sexe, niveau) → SheetJS parse → preview →
-          POST /api/students/bulk → skip doublons, lookup niveau→class_id. */}
+          (matricule, nom, prenoms, sexe, niveau + état civil) → SheetJS parse →
+          preview → POST /api/students/bulk (skip doublons, niveau→class_id),
+          OU bouton « Inscrire » d'une ligne → formulaire « Inscrire un élève »
+          pré-rempli avec CETTE ligne, avance automatique ligne suivante. */}
       <ImportStudentsDialog
         open={importOpen}
         onOpenChange={setImportOpen}
         schoolId={schoolFilter}
+        onRegisterRow={openCreateFromImport}
         onImported={() => {
           // Rafraîchir la liste des élèves + classes (effectifs mis à jour).
           refetch();

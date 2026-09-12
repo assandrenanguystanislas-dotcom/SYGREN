@@ -12,11 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X } from "lucide-react";
+import { Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X, UserPlus } from "lucide-react";
 import { studentsApi } from "@/lib/api";
 
 // === Types ===
-interface ParsedStudent {
+// Exporté : students-view.tsx construit le formulaire « Inscrire un élève »
+// pré-rempli à partir d'une ligne parsée (saisie assistée depuis le fichier).
+export interface ParsedStudent {
   row: number; // 1-based, ligne Excel (hors en-tête)
   matricule: string;
   last_name: string;
@@ -54,6 +56,13 @@ interface ImportStudentsDialogProps {
   onOpenChange: (open: boolean) => void;
   schoolId: string; // école cible (director: son école ; admin: école sélectionnée)
   onImported?: () => void; // callback pour rafraîchir la liste après import
+  // Saisie assistée (demande utilisateur : « le fichier importé doit aider à
+  // compléter le formulaire Inscrire un élève ») : le bouton « Inscrire »
+  // d'une ligne du preview passe la main au formulaire « Inscrire un élève »
+  // pré-rempli avec CETTE ligne. Le parent reçoit la liste complète des
+  // lignes parsées + l'index de départ : après chaque inscription réussie,
+  // le formulaire avance automatiquement à la ligne suivante.
+  onRegisterRow?: (rows: ParsedStudent[], index: number) => void;
 }
 
 // === Helpers ===
@@ -68,7 +77,8 @@ function normalizeHeader(s: string): string {
 }
 
 // Convertit le genre : MASCULIN/M/MALE/G → "M", FEMININ/F/FEMALE → "F", "" sinon.
-function convertGender(s: string): "M" | "F" | "" {
+// Exporté : réutilisé par students-view (pré-remplissage du formulaire).
+export function convertGender(s: string): "M" | "F" | "" {
   const n = s.toUpperCase().trim();
   if (["MASCULIN", "M", "MALE", "G"].includes(n)) return "M";
   if (["FEMININ", "F", "FEMALE"].includes(n)) return "F";
@@ -321,13 +331,16 @@ async function parseExcel(file: File): Promise<ParsedStudent[]> {
 }
 
 // === Composant ===
-export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported }: ImportStudentsDialogProps) {
+export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported, onRegisterRow }: ImportStudentsDialogProps) {
   const [fileName, setFileName] = useState("");
   const [parsed, setParsed] = useState<ParsedStudent[] | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  // Preview : 10 premières lignes, extensible (« Afficher plus ») pour laisser
+  // l'utilisateur choisir n'importe quelle ligne en saisie assistée.
+  const [previewLimit, setPreviewLimit] = useState(10);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = useCallback(() => {
@@ -337,6 +350,7 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
     setParsing(false);
     setImporting(false);
     setResult(null);
+    setPreviewLimit(10);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
@@ -418,6 +432,13 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
             <span className="font-mono text-xs"> date de naissance</span>,
             <span className="font-mono text-xs"> nationalité, lieu de naissance, père, mère, n° acte, date acte, lieu acte</span>.
             Les matricules existants seront ignorés (skip), les classes introuvables signalées.
+            {onRegisterRow && (
+              <>
+                {' '}Astuce : le bouton <span className="font-semibold">« Inscrire »</span> d'une
+                ligne ouvre le formulaire « Inscrire un élève » pré-rempli avec les valeurs
+                du fichier — après validation, il passe automatiquement à la ligne suivante.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -499,10 +520,13 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                       <th className="p-1.5 text-left" title="Date de l'acte de naissance">Date acte</th>
                       <th className="p-1.5 text-left" title="Lieu d'établissement de l'acte">Lieu acte</th>
                       <th className="p-1.5 text-left">Erreurs</th>
+                      {onRegisterRow && (
+                        <th className="p-1.5 text-left" title="Ouvrir le formulaire « Inscrire un élève » pré-rempli avec cette ligne">Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
-                    {parsed.slice(0, 10).map((p, i) => (
+                    {parsed.slice(0, previewLimit).map((p, i) => (
                       <tr key={i} className={p.errors.length > 0 ? "bg-red-50" : (i % 2 === 0 ? "bg-white" : "bg-gray-50")}>
                         <td className="p-1.5">{p.row}</td>
                         <td className="p-1.5 font-mono">{p.matricule || "—"}</td>
@@ -523,14 +547,35 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported 
                         <td className="p-1.5 text-gray-600 whitespace-nowrap">{p.acte_date || "—"}</td>
                         <td className="p-1.5 text-gray-600 truncate max-w-[100px]">{p.acte_place || "—"}</td>
                         <td className="p-1.5 text-red-600 text-[10px]">{p.errors.join(", ") || "—"}</td>
+                        {onRegisterRow && (
+                          <td className="p-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[11px] gap-1"
+                              title="Ouvrir le formulaire « Inscrire un élève » pré-rempli avec cette ligne (puis avance automatique ligne par ligne)"
+                              onClick={() => onRegisterRow(parsed, i)}
+                            >
+                              <UserPlus className="w-3 h-3" />
+                              Inscrire
+                            </Button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {parsed.length > 10 && (
-                <div className="bg-gray-100 p-2 text-center text-xs text-gray-500">
-                  … et {parsed.length - 10} autres lignes (preview tronquée)
+              {parsed.length > previewLimit && (
+                <div className="bg-gray-100 p-2 text-center">
+                  <button
+                    type="button"
+                    className="text-xs text-primary font-medium hover:underline"
+                    onClick={() => setPreviewLimit((l) => l + 50)}
+                  >
+                    Afficher plus de lignes ({parsed.length - previewLimit} restantes)
+                  </button>
                 </div>
               )}
             </div>
