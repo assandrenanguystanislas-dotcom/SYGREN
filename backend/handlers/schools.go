@@ -453,13 +453,29 @@ func UpdateSchool(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, school)
 }
 
-// DeleteSchool removes a school (cascade-check: must have no classes).
+// DeleteSchool removes a school.
+//
+// v7 (session 41) — « donner la main au super admin pour toutes
+// modifications des données » : le garde-fou porte désormais sur les
+// ÉLÈVES et non plus sur les classes. Une école est supprimable dès
+// qu'aucun élève n'y est inscrit — ses classes encore vides (ex : les
+// 6 classes CP1→CM2 auto-créées à la création de l'école) sont
+// supprimées avec elle, au lieu d'exiger 6 suppressions manuelles.
+// 409 tant qu'au moins un élève est inscrit dans une de ses classes
+// (sécurité : pas de suppression destructrice d'élèves par effet de bord).
 func DeleteSchool(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var classCount int64
-	database.DB.Model(&models.Class{}).Where("school_id = ?", id).Count(&classCount)
-	if classCount > 0 {
-		middleware.JSONError(w, "impossible de supprimer : des classes existent dans cette école", http.StatusConflict)
+	var studentCount int64
+	database.DB.Model(&models.Student{}).
+		Joins("JOIN classes ON classes.id = students.class_id").
+		Where("classes.school_id = ?", id).Count(&studentCount)
+	if studentCount > 0 {
+		middleware.JSONError(w, "impossible de supprimer : des élèves sont encore inscrits dans cette école (supprimez ou déplacez les élèves d'abord)", http.StatusConflict)
+		return
+	}
+	// Cascade : classes vides restantes (aucun élève — garanti par le garde-fou ci-dessus).
+	if err := database.DB.Where("school_id = ?", id).Delete(&models.Class{}).Error; err != nil {
+		middleware.JSONError(w, "erreur suppression des classes de l'école", http.StatusInternalServerError)
 		return
 	}
 	if err := database.DB.Delete(&models.School{}, "id = ?", id).Error; err != nil {

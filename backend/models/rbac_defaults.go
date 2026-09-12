@@ -58,6 +58,19 @@ package models
 //     synthese/end_of_year/personnel/students/pda) ET dans le middleware
 //     ConseillerScope (liste blanche des routes de consultation).
 //
+// === v7 (session 41 — la main TOTALE au Super Admin) ===
+//
+//   - Demande utilisateur : « il faut donner la main au super admin pour
+//     toutes modifications des données ». Le Super Admin obtient lecture
+//     + ÉCRITURE sur TOUS les modules de données (y compris le journal
+//     d'audit, sans route d'écriture de toute façon) — seule la vue
+//     personnelle du conseiller (users.conseiller, module de NAVIGATION
+//     et non de données) lui reste fermée pour ne pas polluer sa nav.
+//   - GARANTIE STRUCTURELLE : IsIrreducible renvoie true pour le Super
+//     Admin sur tous ces modules — la matrice ne peut PLUS jamais lui
+//     retirer la main (même via l'UI Permissions, la ligne Super Admin
+//     est verrouillée lecture+écriture partout).
+//
 // La matrice MIRRORS the RequireModule(...) calls in router.go. After seed,
 // every dynamic permission check returns the intended result. The super
 // admin can then edit the matrix via the /api/permissions UI.
@@ -98,9 +111,9 @@ const (
 // RbacMatrixVersion — version de la matrice par défaut (voir seedRBAC).
 // Incrémenter à chaque changement de politique pour que les bases existantes
 // soient re-synchronisées au démarrage.
-// v6 : conseiller +lecture Résultats/Bulletins (consultation sectorielle,
-// impression toujours verrouillée).
-const RbacMatrixVersion = 6
+// v7 : la main TOTALE au Super Admin — lecture + écriture sur TOUS les
+// modules de données, irréductible (session 41).
+const RbacMatrixVersion = 7
 
 // RbacMatrixVersionKey — clé du setting stockant la version appliquée.
 const RbacMatrixVersionKey = "rbac.matrix_version"
@@ -327,6 +340,23 @@ func DefaultRoleModules() []DefaultRoleModuleSeed {
 	out = setDefault(out, RoleAdmin, ModuleUsersConseillers, true, true)
 	out = setDefault(out, RoleInspector, ModuleUsersConseillers, true, true)
 
+	// --- v7 (session 41) — LA MAIN TOTALE AU SUPER ADMIN ---
+	// Demande : « il faut donner la main au super admin pour toutes
+	// modifications des données ». Boucle finale : lecture + ÉCRITURE
+	// sur TOUS les modules de données. Seule exception : users.conseiller
+	// (vue personnelle « Mon Secteur » du conseiller — module de
+	// navigation, aucune donnée de modification derrière ; conservé
+	// false/false pour que l'item n'apparaisse pas dans la nav admin).
+	// IsIrreducible (ci-dessous) verrouille structurellement ces
+	// cellules : aucune édition de la matrice ne peut retirer la main
+	// au Super Admin.
+	for _, mod := range AllModuleKeys() {
+		if mod == ModuleUsersConseiller {
+			continue
+		}
+		out = setDefault(out, RoleAdmin, mod, true, true)
+	}
+
 	return out
 }
 
@@ -347,13 +377,16 @@ func setDefault(slice []DefaultRoleModuleSeed, roleName, module string, canRead,
 // These (role × module) pairs cannot be revoked via the UI even by the super admin.
 // Prevents self-lockout and ensures audit trail integrity.
 // The middleware asserts these are always true regardless of DB state.
+//
+// v7 (session 41) — le Super Admin garde la main sur TOUTES les données,
+// par construction : tous ses modules de données sont irréductibles
+// (lecture + écriture forcées dans le cache rbac, cellules verrouillées
+// dans l'UI Permissions). Seule exception : users.conseiller (vue
+// personnelle du conseiller, non irréductible — pas une donnée).
 func IsIrreducible(roleName, module string) bool {
 	switch roleName {
 	case RoleAdmin:
-		switch module {
-		case ModuleSettings, ModulePermissions, ModuleAudit, ModuleUsersAdmin, ModuleUsersInspectors:
-			return true
-		}
+		return module != ModuleUsersConseiller
 	}
 	return false
 }

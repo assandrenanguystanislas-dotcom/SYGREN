@@ -657,12 +657,36 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteStudent removes a student.
+//
+// v7 (session 41) — traçabilité : la suppression écrit désormais dans le
+// journal d'audit (constaté manquant en session 39 — les élèves supprimés
+// puis réimportés étaient invisibles dans l'historique ; la main totale
+// du super admin s'accompagne de la trace de TOUTES les modifications).
 func DeleteStudent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	var student models.Student
+	if err := database.DB.First(&student, "id = ?", id).Error; err != nil {
+		middleware.JSONError(w, "élève introuvable", http.StatusNotFound)
+		return
+	}
+
 	if err := database.DB.Delete(&models.Student{}, "id = ?", id).Error; err != nil {
 		middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
 		return
 	}
+
+	// Audit — suppression d'une donnée sensible : qui, quoi, quelles valeurs.
+	sid := student.ID
+	LogAction(r, "student.deleted", "student", &sid, map[string]interface{}{
+		"matricule":  student.Matricule,
+		"nom":        student.LastName,
+		"prenoms":    student.FirstName,
+		"sexe":       student.Gender,
+		"class_id":   student.ClassID,
+		"birth_year": student.BirthYear,
+	})
+
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

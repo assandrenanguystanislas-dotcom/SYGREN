@@ -53,16 +53,17 @@ export function PermissionsView({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      <Card className="border-amber-200 bg-amber-50/50">
+      <Card className="border-emerald-200 bg-emerald-50/50">
         <CardContent className="pt-6 flex gap-3">
-          <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <Info className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm space-y-1">
-            <p className="font-medium text-amber-800">Règles de sécurité (irréductibles)</p>
-            <p className="text-amber-700">
-              Le rôle <strong>Super Admin</strong> garde toujours l'accès aux modules{" "}
-              <code>settings</code>, <code>permissions</code>, <code>audit</code>,{" "}
-              <code>users-admin</code> et <code>users.inspectors</code>. Ces cases sont
-              verrouillées — impossible de les décocher — pour éviter tout auto-blocage.
+            <p className="font-medium text-emerald-800">La main totale du Super Admin (garantie par construction)</p>
+            <p className="text-emerald-700">
+              Le rôle <strong>Super Admin</strong> a lecture + écriture sur <strong>TOUS</strong> les modules de
+              données — sa ligne est entièrement verte et verrouillée : impossible de lui retirer la main, même
+              depuis cette matrice (anti auto-blocage, session 41). Seule la vue personnelle du conseiller
+              (<code>users.conseiller</code> — « Mon Secteur », consultation sans données de gestion) reste
+              spécifique au rôle Conseiller.
             </p>
           </div>
         </CardContent>
@@ -101,10 +102,27 @@ export function PermissionsView({ embedded = false }: { embedded?: boolean }) {
                 </TableHeader>
                 <TableBody>
                   {data.roles.map((role) => (
-                    <TableRow key={role.id} className={role.is_system ? "bg-slate-50/40" : ""}>
+                    <TableRow
+                      key={role.id}
+                      className={
+                        role.name === "admin"
+                          ? "bg-emerald-50/60"
+                          : role.is_system
+                            ? "bg-slate-50/40"
+                            : ""
+                      }
+                    >
                       <TableCell className="sticky left-0 bg-card z-10">
                         <div className="flex flex-col">
-                          <span className="font-medium">{role.label}</span>
+                          <span className="font-medium flex items-center gap-1.5 flex-wrap">
+                            {role.label}
+                            {/* v7 (session 41) — la main totale du Super Admin */}
+                            {role.name === "admin" && (
+                              <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px] px-1.5 py-0">
+                                Contrôle total
+                              </Badge>
+                            )}
+                          </span>
                           <span className="text-[11px] text-muted-foreground">
                             {role.description}
                           </span>
