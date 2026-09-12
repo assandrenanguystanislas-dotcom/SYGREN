@@ -4329,3 +4329,9 @@ Deux chemins d'import cohabitent : BULK (tout le fichier d'un coup) et SAISIE AS
 
 ### Résultat
 Le directeur importe son fichier Excel → aperçu → UN clic sur le bouton orange → tous les élèves inscrits automatiquement jusqu'à la dernière ligne, avec tous les champs du fichier (matricule, classe auto-trouvée, naissance, père, mère, acte). Le rapport détaille chaque ligne ; les lignes refusées restent réinscriables individuellement via le bouton « Inscrire » (formulaire pré-rempli Task 38).
+
+### Test production réel (addendum Task 39)
+- **Test navigateur RÉEL** (compte directeur TEMPORAIRE créé puis supprimé, école E015766) : import du fichier 3 élèves → aperçu → **bouton orange « Inscrire automatiquement les 3 élèves » visible en bas** → UN clic → « Import terminé : 3 Créés, 0 Ignoré, 0 Échoué » → liste rafraîchie (MAT-TEST-001 CP1 / 002 CE2 / 003 CM1).
+- **Neon** : 3 élèves vérifiés avec 14/14 champs (identité, sexe, classe auto-résolue, naissance j/m/a, lieu, nationalité, père, mère, n° acte, lieu acte) ; nettoyage 0 résidu, 209 élèves + 1086 notes inchangés.
+- Captures : download/sygren-39-bouton-orange.png, sygren-39-resultat-auto.png.
+- **Constat parallèle** : activité utilisateur simultanée en production — EPP VIEUX BADIEN 3 (E001154) : 22 élèves ré-importés en masse pendant le test (l'utilisateur testait visiblement le flux). Rappel : la suppression d'un élève (DeleteStudent) n'écrit PAS dans audit_logs — amélioration candidate.
