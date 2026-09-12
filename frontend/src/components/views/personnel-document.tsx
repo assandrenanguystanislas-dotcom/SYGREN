@@ -136,15 +136,16 @@ const td: CSSProperties = {
   height: "18px",
 };
 
-/** Cellule NOM ET PRÉNOMS : contenu INSÉCABLE — nom et prénoms du
- *  personnel toujours sur la MÊME LIGNE (demande utilisateur). La
- *  colonne a été élargie (cf. colgroup) pour absorber la taille 12. */
+/** Cellule NOM ET PRÉNOMS : session 40 — noms du personnel TOUJOURS
+ *  COMPLETS (ancienne demande « une seule ligne » rapportée : les noms
+ *  longs passent désormais à la ligne au lieu d'être coupés). */
 const tdLeft: React.CSSProperties = { ...td, textAlign: "left" };
 
 const tdNom: React.CSSProperties = {
   ...tdLeft,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
+  // Demande utilisateur (session 40) : noms complets — plus de
+  // nowrap/overflow hidden ; les noms longs passent à la ligne.
+  overflowWrap: "break-word",
 };
 
 /** Cellule CONTACT : ARIAL 10 (demande utilisateur) — la colonne entière

@@ -76,20 +76,51 @@ interface ReleveData {
   stats: ReleveStats;
 }
 
-// === Pagination dynamique ===
-const PAGE_1_LIMIT = 40;
-const OTHER_PAGE_LIMIT = 45;
+// === Pagination dynamique (budget de lignes) ===
+// Demande utilisateur : les noms et prénoms sont TOUJOURS écrits en entier —
+// une ligne du tableau peut donc occuper 2-3 lignes de texte. Chaque élève
+// coûte autant d'unités que de lignes estimées de son identité (1 unité =
+// une ligne simple, comme avant) : les pages gardent la taille A4 et la
+// numérotation reste continue.
+const PAGE_1_BUDGET = 40;
+const OTHER_PAGE_BUDGET = 45;
 
-function chunkStudents(students: ReleveStudent[]): ReleveStudent[][] {
+// Largeur estimée de la colonne Nom (mm) — minWidth 48px ≈ 13mm, l'auto-
+// layout lui en accorde généralement un peu plus.
+const NOM_COL_MM = 14;
+
+// Estimation du nombre de lignes rendues par un texte dans une colonne de
+// largeur donnée (mm) — calibration ≈1,1 mm par caractère à 11px.
+function estLines(text: string, widthMm: number): number {
+  const w = (text || "").length * 1.1;
+  return Math.max(1, Math.ceil(w / Math.max(widthMm, 6)));
+}
+
+// Coût d'un élève = max(lignes du nom, lignes des prénoms). Marge de
+// sécurité de 12mm sur la largeur Prénoms (l'auto-layout est généreux).
+function studentLineCost(lastName: string, firstName: string, prenomsWidthMm: number): number {
+  return Math.max(
+    estLines(lastName, NOM_COL_MM),
+    estLines(firstName, prenomsWidthMm - 12),
+  );
+}
+
+function chunkStudents(students: ReleveStudent[], prenomsWidthMm: number): ReleveStudent[][] {
   if (students.length === 0) return [[]];
   const pages: ReleveStudent[][] = [];
-  let remaining = [...students];
-  pages.push(remaining.slice(0, PAGE_1_LIMIT));
-  remaining = remaining.slice(PAGE_1_LIMIT);
-  while (remaining.length > 0) {
-    pages.push(remaining.slice(0, OTHER_PAGE_LIMIT));
-    remaining = remaining.slice(OTHER_PAGE_LIMIT);
+  let current: ReleveStudent[] = [];
+  let budget = PAGE_1_BUDGET;
+  for (const s of students) {
+    const cost = studentLineCost(s.last_name, s.first_name, prenomsWidthMm);
+    if (current.length > 0 && budget - cost < 0) {
+      pages.push(current);
+      current = [];
+      budget = OTHER_PAGE_BUDGET;
+    }
+    current.push(s);
+    budget -= cost;
   }
+  if (current.length > 0) pages.push(current);
   return pages;
 }
 
@@ -145,18 +176,18 @@ function abbreviateSubject(name: string): string {
   }
 }
 
-// === Système d'abréviation dynamique des prénoms ===
+// === Largeur disponible pour la colonne Prénoms ===
 //
-// Au lieu d'abréger aveuglément à partir du 4ème prénom, on calcule l'espace
-// disponible pour la colonne Prénoms en fonction du nombre de matières (plus
-// il y a de matières, moins il y a de place), puis on décide dynamiquement
-// combien de prénoms abréger.
+// Ancien système : les prénoms étaient ABRÉGÉS (initiales) quand ils ne
+// tenaient pas. Demande utilisateur (session 40) : TOUS les noms et
+// prénoms sont désormais écrits EN ENTIER dans le relevé — la fonction
+// sert uniquement à ESTIMER la largeur de la colonne pour la pagination
+// (budget de lignes) : plus il y a de matières, moins la colonne Prénoms
+// a de place, plus les identités longues coûtent de lignes.
 //
-// Étapes :
-//   1. Calculer la largeur disponible (mm) selon le nombre de matières
-//   2. Estimer la largeur du texte complet des prénoms
-//   3. Si tout tient → afficher tel quel
-//   4. Sinon → abréger progressivement : 4ème+, puis 3ème+, puis 2ème+
+// Contenu utile A4 = 210 - 2×8mm (@page margin) = 194mm.
+// Colonnes fixes ≈ 56mm (N°, Matricule, Nom, Total, Moy, Obs).
+// Colonnes matières : subjectCount × (6mm si >6 matières, sinon 11mm).
 
 // Largeur disponible pour la colonne Prénoms (en mm, pour A4 portrait 210mm).
 // Contenu utile = 210 - 2×8mm (@page margin) = 194mm.
@@ -164,71 +195,10 @@ function abbreviateSubject(name: string): string {
 // Colonnes matières : subjectCount × (8mm si >6 matières, sinon 12mm).
 // Reste pour Prénoms = 194 - 70 - (subjectCount × matiereWidth).
 function getAvailableWidthForPrenoms(subjectCount: number): number {
-  // Nouvelles largeurs fixes (px → mm à ~3.78px/mm) :
-  // N°: 24px≈6mm, Matricule: 73px≈19mm, Nom: 60px≈16mm,
-  // Total: 22px≈6mm, Moyenne: 22px≈6mm, Observat.: 22px≈6mm
-  // N°: 21px≈6mm, Matricule: 67px≈18mm, Nom: 52px≈14mm,
-  // Total: 22px≈6mm, Moyenne: 22px≈6mm, Observat.: 22px≈6mm
-  // Total fixe = 6+18+14+6+6+6 = 56mm
   const matiereWidth = subjectCount > 6 ? 6 : 11;
   const fixedColumns = 56;
   const availableWidth = 194 - fixedColumns - subjectCount * matiereWidth;
   return Math.max(availableWidth, 20);
-}
-
-// Estime la largeur d'affichage d'un texte (en mm) pour text-[11px].
-// Calibration : 1.1mm par caractère (compact pour CP, suffit pour CM).
-function estimateTextWidth(text: string): number {
-  return text.length * 1.1;
-}
-
-// Abréviation progressive : initialise un prénom en "X." (première lettre + point).
-function toInitial(name: string): string {
-  return name.charAt(0).toUpperCase() + ".";
-}
-
-// Décide dynamiquement combien de prénoms abréger selon l'espace disponible.
-// Stratégie :
-//   - Si tout tient → afficher tel quel
-//   - Sinon → abréger le 4ème+ en initiales, re-tester
-//   - Si ça ne suffit pas → abréger aussi le 3ème+, re-tester
-//   - En dernier recours → abréger le 2ème+ (garder seulement le 1er entier)
-function smartAbbreviate(fullName: string, availableWidthMm: number): string {
-  const parts = fullName.trim().split(/\s+/);
-
-  // Cas simple : 1-3 prénoms, on teste si ça tient
-  const fullWidth = estimateTextWidth(fullName);
-  if (fullWidth <= availableWidthMm) return fullName;
-
-  // Si 4 prénoms ou plus : abréger progressivement
-  if (parts.length >= 4) {
-    // Niveau 1 : garder 3 premiers entiers, abréger le reste
-    const lvl1 = [...parts.slice(0, 3), ...parts.slice(3).map(toInitial)].join(" ");
-    if (estimateTextWidth(lvl1) <= availableWidthMm) return lvl1;
-
-    // Niveau 2 : garder 2 premiers, abréger le reste
-    const lvl2 = [...parts.slice(0, 2), ...parts.slice(2).map(toInitial)].join(" ");
-    if (estimateTextWidth(lvl2) <= availableWidthMm) return lvl2;
-
-    // Niveau 3 : garder 1 seul, abréger le reste
-    const lvl3 = [parts[0], ...parts.slice(1).map(toInitial)].join(" ");
-    return lvl3;
-  }
-
-  // 2-3 prénoms qui ne tiennent pas : abréger le dernier
-  if (parts.length === 3) {
-    const lvl1 = [parts[0], parts[1], toInitial(parts[2])].join(" ");
-    if (estimateTextWidth(lvl1) <= availableWidthMm) return lvl1;
-    const lvl2 = [parts[0], toInitial(parts[1]), toInitial(parts[2])].join(" ");
-    return lvl2;
-  }
-
-  if (parts.length === 2) {
-    const lvl1 = [parts[0], toInitial(parts[1])].join(" ");
-    return lvl1;
-  }
-
-  return fullName;
 }
 
 function fmt(v: number, hasGrade: boolean): string {
@@ -336,8 +306,6 @@ export default function RelevePage() {
     );
   }
 
-  const pages = chunkStudents(data.students);
-  // Liste des matières — extraite du 1er élève (tous partagent la même liste)
   const subjects: { name: string; display_name: string; max_score: number }[] =
     data.students[0]?.grades?.map((g) => ({
       name: g.subject_name,
@@ -345,10 +313,18 @@ export default function RelevePage() {
       max_score: g.max_score,
     })) ?? [];
   const stats = data.stats;
-  // Largeur disponible pour la colonne Prénoms (dépend du nombre de matières).
-  // CP a 9 matières → peu de place → abréviation agressive.
-  // CM a 5 matières → beaucoup de place → prénoms souvent entiers.
+  // Largeur disponible pour la colonne Prénoms (dépend du nombre de
+  // matières) — sert à ESTIMER le coût en lignes de chaque identité pour
+  // la pagination (les noms/prénoms sont désormais toujours entiers).
   const prenomWidth = getAvailableWidthForPrenoms(subjects.length);
+  const pages = chunkStudents(data.students, prenomWidth);
+  // Numérotation continue : offset cumulé d'élèves avant chaque page.
+  const pageOffsets: number[] = [];
+  let studentAcc = 0;
+  for (const p of pages) {
+    pageOffsets.push(studentAcc);
+    studentAcc += p.length;
+  }
 
   return (
     <div className="bg-gray-100 min-h-screen py-8 print:bg-white print:p-0 print:py-0">
@@ -477,7 +453,7 @@ export default function RelevePage() {
                     >
                       <th className="border border-[#009E60] p-0 text-[11px]" style={{ minWidth: "18px", maxWidth: "24px" }}>N°</th>
                       <th className="border border-[#009E60] p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "65px", maxWidth: "75px" }}>Matricule</th>
-                      <th className="border border-[#009E60] p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "48px", maxWidth: "65px" }}>Nom</th>
+                      <th className="border border-[#009E60] p-0 text-[11px] whitespace-nowrap" style={{ minWidth: "48px" }}>Nom</th>
                       {/* Prénoms : pas de largeur fixe → s'étend dynamiquement */}
                       <th className="border border-[#009E60] p-0.5 text-[11px]">Prénoms</th>
                       {/* Matières dynamiques : abrégées, sans barème.
@@ -580,17 +556,17 @@ export default function RelevePage() {
                   </thead>
                   <tbody>
                     {pageData.map((e, i) => {
-                      const num = (isFirstPage ? 0 : PAGE_1_LIMIT + (pageIndex - 1) * OTHER_PAGE_LIMIT) + i + 1;
+                      const num = pageOffsets[pageIndex] + i + 1;
                       const isFille = e.gender === "F";
                       return (
                         <tr key={num} className="h-4">
                           <td className="border border-[#009E60] p-0 font-semibold text-[11px]">{num}</td>
                           <td className="border border-[#009E60] p-0 font-bold text-[11px] font-mono">{e.matricule}</td>
-                          <td className={`border border-[#009E60] p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
+                          <td className={`border border-[#009E60] p-0 px-0.5 text-left font-bold break-words leading-[1.15] text-[11px] ${isFille ? 'text-red-600' : ''}`}>
                             {e.last_name.toUpperCase()}
                           </td>
-                          <td className={`border border-[#009E60] p-0 px-0.5 text-left font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[11px] ${isFille ? 'text-red-600' : ''}`}>
-                            {smartAbbreviate(e.first_name, prenomWidth).toUpperCase()}
+                          <td className={`border border-[#009E60] p-0 px-0.5 text-left font-bold break-words leading-[1.15] text-[11px] ${isFille ? 'text-red-600' : ''}`}>
+                            {e.first_name.toUpperCase()}
                           </td>
                           {subjects.map((subj, idx) => {
                             const g = e.grades[idx];

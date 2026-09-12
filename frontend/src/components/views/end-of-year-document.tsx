@@ -132,12 +132,16 @@ const td: CSSProperties = {
 
 const tdLeft: CSSProperties = { ...td, textAlign: "left" };
 
-/** Cellule NOM ET PRÉNOMS : contenu INSÉCABLE — nom et prénoms de l'élève
- *  toujours sur la MÊME LIGNE (demande utilisateur). */
+/** Cellule NOM ET PRÉNOMS : session 40 — nom et prénoms de l'élève
+ *  TOUJOURS COMPLETS (ancienne demande « insécable / une seule ligne »
+ *  rapportée : les identités longues passent à la ligne au lieu d'être
+ *  coupées). */
 const tdNom: CSSProperties = {
   ...tdLeft,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
+  // Demande utilisateur (session 40) : noms et prénoms TOUJOURS complets —
+  // plus de nowrap/overflow hidden (l'ancien « une seule ligne » coupait
+  // les identités longues) ; le texte passe à la ligne.
+  overflowWrap: "break-word",
 };
 
 /** Largeurs des colonnes du tableau principal (colgroup — PAS de nœuds

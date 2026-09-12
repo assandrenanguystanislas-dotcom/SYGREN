@@ -148,8 +148,10 @@ function tdStyle(align: "left" | "center", red = false): CSSProperties {
     verticalAlign: "middle",
     color: red ? "#dc2626" : INK,
     background: "#ffffff",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
+    // Demande utilisateur (session 40) : TOUS les noms et prénoms écrits en
+    // entier — plus de nowrap/overflow hidden qui coupaient les noms longs ;
+    // le texte passe à la ligne et la ligne du tableau s'ajuste.
+    overflowWrap: "break-word",
     lineHeight: 1.15,
     ...PRINT_COLOR_STYLE,
   };
