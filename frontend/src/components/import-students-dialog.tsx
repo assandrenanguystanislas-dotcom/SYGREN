@@ -535,7 +535,7 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported,
                         <td className="p-1.5">{p.row}</td>
                         <td className="p-1.5 font-mono">{p.matricule || "—"}</td>
                         <td className="p-1.5">{p.last_name || <span className="text-red-500">(vide)</span>}</td>
-                        <td className="p-1.5 truncate max-w-[140px]">{p.first_name || <span className="text-red-500">(vide)</span>}</td>
+                        <td className="p-1.5 min-w-[160px] break-words">{p.first_name || <span className="text-red-500">(vide)</span>}</td>
                         <td className="p-1.5">{p.gender_raw}</td>
                         <td className="p-1.5 font-medium">{p.class_name}</td>
                         <td className="p-1.5 whitespace-nowrap">
@@ -544,12 +544,12 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported,
                             : <span className="text-gray-400">—</span>}
                         </td>
                         <td className="p-1.5 text-gray-600">{p.nationality || "—"}</td>
-                        <td className="p-1.5 text-gray-600 truncate max-w-[100px]">{p.birth_place || "—"}</td>
-                        <td className="p-1.5 text-gray-600 truncate max-w-[110px]">{p.father_name || "—"}</td>
-                        <td className="p-1.5 text-gray-600 truncate max-w-[110px]">{p.mother_name || "—"}</td>
+                        <td className="p-1.5 text-gray-600 min-w-[110px] break-words">{p.birth_place || "—"}</td>
+                        <td className="p-1.5 text-gray-600 min-w-[130px] break-words">{p.father_name || "—"}</td>
+                        <td className="p-1.5 text-gray-600 min-w-[130px] break-words">{p.mother_name || "—"}</td>
                         <td className="p-1.5 text-gray-600">{p.acte_number || "—"}</td>
                         <td className="p-1.5 text-gray-600 whitespace-nowrap">{p.acte_date || "—"}</td>
-                        <td className="p-1.5 text-gray-600 truncate max-w-[100px]">{p.acte_place || "—"}</td>
+                        <td className="p-1.5 text-gray-600 min-w-[110px] break-words">{p.acte_place || "—"}</td>
                         <td className="p-1.5 text-red-600 text-[10px]">{p.errors.join(", ") || "—"}</td>
                         {onRegisterRow && (
                           <td className="p-1.5">
