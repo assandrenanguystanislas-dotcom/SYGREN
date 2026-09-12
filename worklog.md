@@ -4402,3 +4402,25 @@ Le Super Admin dispose de la main totale sur toutes les données, garantie struc
 
 ### Résultat
 Le conseiller dispose de la consultation SANS impression sur les deux modules cités : Bulletins (déjà en place, v6) et état nominatif du personnel (désormais accessible depuis « Mon Secteur » → bouton « État nominatif » — le module Utilisateurs reste réservé à la gestion des comptes). L'impression des documents officiels reste réservée à l'Admin IEP + Super Admin.
+
+---
+## Task 25 (re-vérification) — Bulletins A5 : « Appréciation et Visa du Maître » (nom en MAJUSCULES GRAS)
+
+**Date** : 2026-09-13 | **Commit fonctionnel** : `568e2e4` (session 25, déjà dans HEAD) | **Aucun nouveau code** — session de contrôle de bout en bout
+
+### Demande
+« Task 25 — Bulletins A5 : "Appréciation et Visa du Maître" (nom de l'enseignant en majuscules + gras) — ok »
+
+### Constat
+- La fonctionnalité était **déjà livrée en session 25** (commit `568e2e4`, ancêtre du HEAD `3065503`) : `bulletins-a5-landscape.tsx` rend le nom du maître en bas de la zone visa avec `text-[9px] font-bold uppercase tracking-wide` (MAJUSCULES + GRAS, harmonisé avec « Visa du Directeur ») ; le nom est résolu côté backend par `resolveClassTeacherName` (helpers.go) — priorité `classes.teacher_id`, repli sur le COURS tenu du personnel — puis transmis via `teacher_name` (releve-data) → `maitreName` (page.tsx) → `eleve.maitreName` (composant). La mention « reste au backlog : Task 25 » dans le résumé de la session 42 était périmée.
+- **État des données production (Neon)** : 582 classes actives — 4 seulement ont un `teacher_id` valide (3 à EPP COTIERE PALMERAIE, 1 à EPP COSROU LEKR) et 0 enseignant a le COURS tenu renseigné → pour 99,3 % des bulletins, la zone visa s'imprime SANS nom (rendu conditionnel : rien à afficher si aucun maître résolvable). C'est une question de SAISIE, pas de code.
+
+### Preuve de bout en bout en production (lecture seule)
+- Compte conseiller TEMPORAIRE (protocole sessions 39/42, secteur COSROU) : login 200 → `GET /api/reports/releve-data?session_id=…&class_id=…` sur EPP COSROU LEKR :
+  - CM2 (AVEC titulaire) → HTTP 200, `teacher_name = "DIDJA KOUADIO BLA ÉMELINE"` ✓ (le backend LIVE sert bien le nom, qui s'imprimera en MAJUSCULES GRAS) ;
+  - CE1 (SANS titulaire) → HTTP 200, `teacher_name = ""` ✓ (zone sans nom, conforme).
+- Nettoyage : compte test supprimé + audit lié purgé — **0 résidu** (scripts : `check_maitre_25.py`, `prove_teachername_25.py`).
+
+### Résultat
+- Rien à coder : la Task 25 est conforme et en production. Pour que le nom s'affiche sur un bulletin : **affecter un titulaire à la classe** (teacher_id) **ou** renseigner le **COURS tenu** du maître dans son dossier personnel (Utilisateurs > Personnel, champ COURS CP1..CM2) — le repli se charge du reste à la prochaine génération des bulletins.
+- Points de données liés restants (choix utilisateur) : 578 classes sans titulaire/cours tenu ; les 4 titulaires actuels impriment déjà correctement.
