@@ -4311,3 +4311,21 @@ Chemin unique : **Utilisateurs > Conseillers** (créer le compte actif : nom + e
 
 ### Résultat
 Deux chemins d'import cohabitent : BULK (tout le fichier d'un coup) et SAISIE ASSISTÉE (le fichier pré-remplit « Inscrire un élève » ligne par ligne — contrôle humain avant chaque inscription). Captures : download/sygren-38-formulaire-prerempli.png, sygren-38-avance-ligne2.png.
+
+---
+## Task 39 — Bouton orange : inscription AUTOMATIQUE de tout le fichier importé en un clic
+
+**Date** : 2026-09-12 | **Commit** : `737b5e9` | **Déploiements** : Vercel READY (737b5e9) · Render non concerné (backend inchangé)
+
+### Demande
+« ok je suis d'accord mais je veux que une fois les élèves importés, l'inscription ne doit pas se faire élève après élève mais appuyer directement sur le bouton orange du bas pour que tout soit inscrit automatiquement » — la saisie assistée ligne par ligne (Task 38) est acceptée, mais le chemin PRINCIPAL doit être l'inscription en masse en UN clic.
+
+### Implémentation (frontend seul — POST /api/students/bulk déjà complet)
+- **import-students-dialog.tsx** : grand bouton ORANGE pleine largeur sous l'aperçu « Inscrire automatiquement les N élèves » (bordure/fond orange, Users) → handleImport existant = un seul POST /api/students/bulk avec TOUTES les lignes : classes résolues par nom côté backend, matricules déjà en base/doublons ignorés, état civil + naissance enregistrés, rapport détaillé created/skipped/failed par ligne. Pendant l'inscription : spinner « Inscription automatique en cours… (N élèves) », boutons « Inscrire » par ligne désactivés. Bloc masqué après résultat (pas de re-clic accidentel). Ancien bouton pied de page redondant (« Importer N élèves ») retiré ; description du dialogue réécrite : mode automatique (orange) en principal, mode assisté « Inscrire » par ligne en second pour la vérification.
+
+### Vérifications
+- `tsc --noEmit` = 0 erreur ; `next build` OK (aucun fichier Go touché).
+- Push 737b5e9 → Vercel READY (737b5e9) ; Render LIVE inchangé (backend identique).
+
+### Résultat
+Le directeur importe son fichier Excel → aperçu → UN clic sur le bouton orange → tous les élèves inscrits automatiquement jusqu'à la dernière ligne, avec tous les champs du fichier (matricule, classe auto-trouvée, naissance, père, mère, acte). Le rapport détaille chaque ligne ; les lignes refusées restent réinscriables individuellement via le bouton « Inscrire » (formulaire pré-rempli Task 38).
