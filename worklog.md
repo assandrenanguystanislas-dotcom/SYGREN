@@ -4335,3 +4335,28 @@ Le directeur importe son fichier Excel → aperçu → UN clic sur le bouton ora
 - **Neon** : 3 élèves vérifiés avec 14/14 champs (identité, sexe, classe auto-résolue, naissance j/m/a, lieu, nationalité, père, mère, n° acte, lieu acte) ; nettoyage 0 résidu, 209 élèves + 1086 notes inchangés.
 - Captures : download/sygren-39-bouton-orange.png, sygren-39-resultat-auto.png.
 - **Constat parallèle** : activité utilisateur simultanée en production — EPP VIEUX BADIEN 3 (E001154) : 22 élèves ré-importés en masse pendant le test (l'utilisateur testait visiblement le flux). Rappel : la suppression d'un élève (DeleteStudent) n'écrit PAS dans audit_logs — amélioration candidate.
+
+---
+## Task 40 — Noms et prénoms TOUJOURS écrits en entier (aperçu import + TOUS les documents à imprimer)
+
+**Date** : 2026-09-12 | **Commits** : `6ba28f6` (aperçu) + `0fdbe22` (documents) | **Déploiements** : Vercel READY (6ba28f6, 0fdbe22) · Render non concerné
+
+### Demande
+« je voudrais que tu ajustes les lignes pour que tous les noms et prenoms soient écrits. je veux que tu étendes à tous les documents à imprimer »
+
+### Audit complet des troncatures
+Seuls 5 endroits coupaient les identités — tous corrigés :
+1. **Aperçu d'import Excel** (6ba28f6) : prénoms (140px), lieu naissance (100px), père/mère (110px), lieu acte (100px) en `truncate` → `break-words` + largeurs mini ; texte wraps, lignes auto-ajustées.
+2. **Relevé de notes /releve** (0fdbe22) : fin de l'ABRÉVIATION des prénoms (smartAbbreviate/initiales supprimées) + Nom sans ellipsis/max-65px → `break-words` ; **pagination à budget de lignes** (PAGE_1/OTHER_BUDGET 40/45 unités, coût = lignes estimées nom/prénoms, numérotation par offsets cumulés) — les pages A4 ne débordent pas, test logique : courts 40+10 (inchangé), longs 13/15/15/7, intégrité OK.
+3. **Liste des candidats CEPE** : tdStyle sans nowrap/overflow hidden (tableLayout fixed conservé, wrap).
+4. **Résultats de fin d'année** : tdNom sans nowrap/overflow hidden (ancienne demande « insécable » rapportée par la nouvelle).
+5. **Personnel** : tdNom sans nowrap/overflow hidden.
+Bulletins A5, bulletin fin d'année, PDA-doc/plan/timeline, synthèse : vérifiés SANS clip (texte wrappe déjà) — rien à faire. Matières abrégées du relevé CONSERVÉES (noms de matières, pas des personnes).
+
+### Vérifications
+- tsc 0 erreur + next build OK ×2 ; Vercel READY 6ba28f6 puis 0fdbe22 ; Render LIVE (aucun Go modifié) ; baseline 209 élèves.
+- **Test navigateur RÉEL production** (directeur temporaire créé/supprimé, E015766) : fichier à identités extrêmes (nom 37 car., prénoms 68 car.) → aperçu : « ZALLIERSKOUSKOWSKY-PETITHOMME-ASSAMOI » + « JEAN-MARIE CHARLES-EMMANUEL FRANÇOIS-XAVIER ALEXANDRE-BENOÎT KOUAME » affichés ENTIERS sur plusieurs lignes, père 3 lignes entier, 0 troncature. Aucun import (preview seul), 0 résidu, 209 élèves.
+- Captures : download/sygren-40-noms-entiers-apercu.png, sygren-40-noms-entiers-gauche.png ; fichier test : download/test-noms-longs-40.xlsx ; script : test_pagination_40.js.
+
+### Résultat
+Toutes les identités (élèves, père, mère, personnel) s'affichent et s'impriment EN ENTIER partout : aperçu d'import, relevé de notes, liste des candidats CEPE, résultats de fin d'année, personnel. Les longues identités passent à la ligne ; la pagination du relevé s'adapte automatiquement.
