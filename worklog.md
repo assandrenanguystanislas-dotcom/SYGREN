@@ -4360,3 +4360,45 @@ Bulletins A5, bulletin fin d'année, PDA-doc/plan/timeline, synthèse : vérifi�
 
 ### Résultat
 Toutes les identités (élèves, père, mère, personnel) s'affichent et s'impriment EN ENTIER partout : aperçu d'import, relevé de notes, liste des candidats CEPE, résultats de fin d'année, personnel. Les longues identités passent à la ligne ; la pagination du relevé s'adapte automatiquement.
+
+---
+## Task 41 — La main TOTALE au Super Admin sur toutes les données (RBAC v7)
+
+**Date** : 2026-09-12 | **Commit** : `3d687b5` | **Déploiements** : Vercel READY (3d687b5) · Render déployé live (backend modifié) | **Matrice production** : `rbac.matrix_version = 7`
+
+### Demande
+« il faut donner la main au super admin pour toutes modifications des données »
+
+### Implémentation (backend)
+- **rbac_defaults.go v7** (`RbacMatrixVersion = 7`) : le Super Admin obtient lecture + ÉCRITURE sur TOUS les modules de données (boucle finale sur `AllModuleKeys`). Seule exception : `users.conseiller` (vue de navigation « Mon Secteur », pas une donnée — conservé false/false pour ne pas polluer la nav admin).
+- **IsIrreducible(admin) = true** pour tous ces modules : la main ne peut plus être retirée au Super Admin — ni via la matrice, ni via l'UI Permissions (ligne Super Admin verrouillée lecture+écriture partout, badge « Irréductible »).
+- Re-seed versionné au démarrage : la base existante est re-synchronisée à la v7.
+
+### Vérifications (production)
+- Neon : `rbac.matrix_version = 7` ; spot-check admin lecture+écriture (students/audit/settings) OK.
+- Vercel READY (3d687b5) ; Render live. (Session coupée avant la rédaction de cette entrée — section rédigée rétroactivement en session 42.)
+
+### Résultat
+Le Super Admin dispose de la main totale sur toutes les données, garantie structurellement (cellules irréductibles).
+
+---
+## Task 42 — Conseiller : consultation de l'ÉTAT NOMINATIF du personnel (impression verrouillée)
+
+**Date** : 2026-09-13 | **Commit** : `3b11516` | **Déploiements** : Vercel READY (3b11516) · Render non concerné (aucun Go modifié, LIVE inchangé)
+
+### Demande
+« 1) dans le module bulletin, le conseiller peut voir les bulletins mais ne peut pas les imprimer. 2) dans le module utilisateurs, le conseiller peut voir l'état nominatif mais ne peut pas l'imprimer »
+
+### Diagnostic (vérité production)
+- **Point 1 déjà en place depuis la v6 (session 34)** : le conseiller voit les bulletins de son secteur (nav Bulletins + données bornées au secteur côté serveur) et l'impression y est verrouillée (print-guard.tsx : badge « Zone Imprimer / PDF verrouillée — réservée à l'Admin IEP » + `.print-locked` bloque même Ctrl+P). Rien à modifier — comportement confirmé conforme.
+- **Point 2** : en Neon, le rôle conseiller n'a en lecture que `report-cards`, `reports`, `users.conseiller` — le module Utilisateurs lui est fermé. MAIS le backend autorise DÉJÀ la consultation de l'état nominatif du personnel des écoles de SON secteur (`GET /api/reports/personnel` : case `RoleConseiller` bornée au secteur + liste blanche ConseillerScope `/api/reports/*`) et le document `/personnel-doc` verrouille lui-même l'impression pour le conseiller (`canPrintDocument` = admin/inspector seulement). Il manquait uniquement l'ENTRÉE UI.
+
+### Implémentation (frontend seul)
+- **sector-overview.tsx** (vue « Mon Secteur » du conseiller, composant partagé avec la supervision admin/inspector) : bouton « État nominatif » (FileText, outline) à côté du filtre école du personnel — ouvre `/personnel-doc?school=…` dans un nouvel onglet pour l'école sélectionnée ; désactivé tant qu'aucune école n'est choisie (info-bulle « Sélectionnez d'abord une école dans le filtre ») ; info-bulle de consultation précisant que l'impression reste réservée à l'Admin IEP et au Super Admin. Le document ouvert affiche le badge de verrou + le blocage d'impression pour le conseiller — exactement le schéma « voir OUI / imprimer NON » des bulletins.
+
+### Vérifications
+- `tsc --noEmit` = 0 erreur ; `next build` OK ; push `3b11516` → Vercel READY (3b11516) ; Render LIVE inchangé (aucun fichier Go touché), `/api/health` 200.
+- **Test production de bout en bout** (compte conseiller TEMPORAIRE créé puis supprimé — 0 résidu, audit lié purgé) : login conseiller 200 → `GET /api/reports/personnel` sur 2 écoles du secteur VIEUX-BADIEN → HTTP 200 (EPP NIAMIAMBO, EPP NIGUI NANOU) → contrôle négatif école hors secteur (EC ACHY BROU MARTHE) → HTTP 403 (verrou sectoriel intact).
+
+### Résultat
+Le conseiller dispose de la consultation SANS impression sur les deux modules cités : Bulletins (déjà en place, v6) et état nominatif du personnel (désormais accessible depuis « Mon Secteur » → bouton « État nominatif » — le module Utilisateurs reste réservé à la gestion des comptes). L'impression des documents officiels reste réservée à l'Admin IEP + Super Admin.
