@@ -4268,3 +4268,24 @@ La chaîne d'édition était déjà complète (openEdit pré-remplit tous les ch
 
 ### Résultat
 Import Excel → clic crayon « Modifier l'élève » : tous les champs (matricule, identité, classe, jour/mois/année de naissance, nationalité, lieu de naissance, père, mère, n°/date/lieu d'acte) sont automatiquement remplis à partir des colonnes importées.
+
+---
+## Task 37 — Session 37 : vérification production (post-reset environnement) + réponse « comment affecter un conseiller dans son secteur »
+
+**Date** : 2026-09-12 | **Aucun commit fonctionnel** | **Déploiements vérifiés** : Vercel READY (52879b5) · Render LIVE (e1d5845)
+
+### Demande
+Message d'ouverture de session (rétablissement du contexte : clonage, tokens, règles). Tâche reportée : répondre à « comment affecter un conseiller dans son secteur » — la seule demande du file jamais restée sans réponse.
+
+### Vérifications (aucune modification de code)
+- Environnement vierge (clone recréé) ; HEAD = 52879b5 ; sessions 34/35/36 confirmées réalisées et documentées.
+- Vercel **READY** sur 52879b5 (HEAD) ; Render **LIVE** sur e1d5845 (commit fonctionnel — 52879b5 docs-only) ; `/api/health` 200 ; front HTTP 200.
+- Neon : les 10 colonnes état civil + naissance présentes dans `students` (nationality, birth_place, birth_day/month/year, father_name, mother_name, acte_number, acte_date, acte_place) ; saison de démo **Composition N°1 — 09/2026** EPP COSROU LEKR toujours **open** (fenêtre 11/09 → 25/09) ; 209 élèves (155 à COSROU LEKR) ; 1086 notes finales ; 210 moyennes stockées.
+- Code confirmé (lecture seule) : l'affectation conseiller↔secteur n'existe QUE par le chemin A — `SectorsDialog` (schools-view.tsx) → `sectorsApi.setConseillers` → PUT `/api/sectors/{id}/conseillers` (remplacement complet, comptes actifs uniquement). Le formulaire conseiller (conseillers-view.tsx) n'expose PAS de secteur — l'invite intégrale renvoie vers Écoles > Secteurs d'écoles.
+
+### Réponse livrée (guide français)
+Chemin unique : **Utilisateurs > Conseillers** (créer le compte actif : nom + email ou téléphone + mot de passe) → **Écoles > bouton « Secteurs d'écoles »** → cliquer le secteur pour le déplier (pré-sélection de ses écoles et conseillers) → bloc « Conseillers affectés » : cocher/décocher (badge « autre secteur » = rattaché ailleurs) → **Enregistrer (N)** → toast « Conseillers du secteur enregistrés ». Déplacement = cocher dans le nouveau secteur (sector_id écrasé) ; retrait = décocher + Enregistrer. Vérification : œil « Voir son secteur » (onglet Conseillers) ou connexion conseiller → « Mon Secteur ». Affectation = remplacement complet à chaque enregistrement.
+
+### Stage Summary
+- Sessions 34/35/36 confirmées en production (rien à refaire) ; état 100 % sain (déploiements, base, données de démo).
+- Le guide d'affectation des conseillers (seule demande jamais restée sans réponse) est livré à l'utilisateur ; aucune migration, aucun push fonctionnel — commit docs(worklog) uniquement.
