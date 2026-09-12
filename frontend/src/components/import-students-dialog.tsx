@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X, UserPlus } from "lucide-react";
+import { Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, X, UserPlus, Users } from "lucide-react";
 import { studentsApi } from "@/lib/api";
 
 // === Types ===
@@ -426,18 +426,22 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported,
           <DialogDescription>
             Sélectionnez un fichier Excel (.xls ou .xlsx) contenant les colonnes :
             <span className="font-mono text-xs"> matricule, nom, prenoms, sexe, niveau</span>.
-            Colonnes facultatives reconnues (importées si présentes, puis pré-remplies
-            dans « Modifier l'élève ») :
+            Colonnes facultatives reconnues :
             <span className="font-mono text-xs"> jour, mois, annee</span> ou
             <span className="font-mono text-xs"> date de naissance</span>,
             <span className="font-mono text-xs"> nationalité, lieu de naissance, père, mère, n° acte, date acte, lieu acte</span>.
-            Les matricules existants seront ignorés (skip), les classes introuvables signalées.
+            <span className="block mt-1.5 font-medium text-orange-700">
+              Inscription automatique : appuyez sur le bouton orange en bas de l&apos;aperçu —
+              tous les élèves du fichier sont inscrits d&apos;un coup, jusqu&apos;à la dernière
+              ligne (matricule, classe auto-trouvée, naissance, père, mère, acte…).
+            </span>
             {onRegisterRow && (
-              <>
-                {' '}Astuce : le bouton <span className="font-semibold">« Inscrire »</span> d'une
-                ligne ouvre le formulaire « Inscrire un élève » pré-rempli avec les valeurs
-                du fichier — après validation, il passe automatiquement à la ligne suivante.
-              </>
+              <span className="block mt-1">
+                Pour vérifier élève par élève : le bouton
+                <span className="font-semibold"> « Inscrire » </span>d&apos;une ligne ouvre le
+                formulaire « Inscrire un élève » pré-rempli — après validation, il passe
+                automatiquement à la ligne suivante.
+              </span>
             )}
           </DialogDescription>
         </DialogHeader>
@@ -556,6 +560,7 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported,
                               className="h-6 px-2 text-[11px] gap-1"
                               title="Ouvrir le formulaire « Inscrire un élève » pré-rempli avec cette ligne (puis avance automatique ligne par ligne)"
                               onClick={() => onRegisterRow(parsed, i)}
+                              disabled={importing}
                             >
                               <UserPlus className="w-3 h-3" />
                               Inscrire
@@ -578,6 +583,42 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported,
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* INSCRIPTION AUTOMATIQUE (demande utilisateur : « l'inscription ne
+              doit pas se faire élève après élève mais appuyer directement sur
+              le bouton orange du bas pour que tout soit inscrit
+              automatiquement ») — un clic = POST /api/students/bulk avec TOUTES
+              les lignes : classes résolues par nom, matricules déjà en base
+              ignorés, état civil + naissance enregistrés, rapport détaillé. */}
+          {parsed && parsed.length > 0 && !result && (
+            <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-3 space-y-2">
+              <Button
+                type="button"
+                onClick={handleImport}
+                disabled={importing || !schoolId}
+                title={schoolId ? undefined : "Sélectionnez d'abord une école"}
+                className="w-full h-11 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold shadow-sm"
+              >
+                {importing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Inscription automatique en cours… ({parsed.length} élèves)
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-5 h-5 mr-2" />
+                    Inscrire automatiquement les {parsed.length} élèves
+                  </>
+                )}
+              </Button>
+              <p className="text-[11px] leading-snug text-orange-800/80 text-center">
+                Un seul clic : toutes les lignes du fichier sont inscrites jusqu&apos;à la
+                dernière — matricule, classe auto-trouvée, naissance, père, mère, acte…
+                Les matricules déjà en base sont ignorés ; le rapport détaillé
+                s&apos;affiche à la fin.
+              </p>
             </div>
           )}
 
@@ -643,16 +684,6 @@ export function ImportStudentsDialog({ open, onOpenChange, schoolId, onImported,
             <X className="w-4 h-4 mr-1.5" />
             Fermer
           </Button>
-          {!result && (
-            <Button onClick={handleImport} disabled={!parsed || parsed.length === 0 || importing || !schoolId}>
-              {importing ? (
-                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-              ) : (
-                <Upload className="w-4 h-4 mr-1.5" />
-              )}
-              {importing ? "Import en cours…" : `Importer ${parsed?.length ?? 0} élèves`}
-            </Button>
-          )}
           {result && (
             <Button onClick={() => { reset(); onOpenChange(false); }}>
               <CheckCircle2 className="w-4 h-4 mr-1.5" />
