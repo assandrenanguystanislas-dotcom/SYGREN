@@ -4289,3 +4289,25 @@ Chemin unique : **Utilisateurs > Conseillers** (créer le compte actif : nom + e
 ### Stage Summary
 - Sessions 34/35/36 confirmées en production (rien à refaire) ; état 100 % sain (déploiements, base, données de démo).
 - Le guide d'affectation des conseillers (seule demande jamais restée sans réponse) est livré à l'utilisateur ; aucune migration, aucun push fonctionnel — commit docs(worklog) uniquement.
+
+---
+## Task 38 — Saisie assistée : le fichier Excel importé pré-remplit « Inscrire un élève »
+
+**Date** : 2026-09-12 | **Commit** : `d3b8832` | **Déploiements** : Vercel READY (d3b8832) · Render LIVE (e1d5845, backend inchangé) · health 200
+
+### Demande (clarification de la Task 36)
+« vous ne m'avez pas bien compris. je dis lorsque j'importe un fichier d'excel tous les champs qui sont dans l'importation du fichier devait aider à remplir directement les champs existant dans le formulaire inscrire un élève. le fichier importé doit aider à le compléter » — ce n'est pas seulement « Modifier l'élève » : c'est le formulaire de CRÉATION qui doit être alimenté par le fichier.
+
+### Implémentation (frontend seul — CreateStudent acceptait déjà tous les champs)
+- **import-students-dialog.tsx** : export `ParsedStudent` + `convertGender` ; nouveau prop `onRegisterRow(rows, index)` ; colonne « Actions » dans le preview avec bouton « Inscrire » par ligne (UserPlus) ; bouton « Afficher plus de lignes (+50) » (previewLimit extensible, reset à 10) ; description documentant l'astuce.
+- **students-view.tsx** : `frToIsoDate` (jj/mm/aaaa → aaaa-mm-jj pour l'input date) ; `formFromParsed` (ligne → FormData : classe résolue par nom insensible casse/espaces, genre M/F, naissance, état civil complet ; introuvable → "" + mention dans le bandeau, submit bloqué tant que la classe n'est pas choisie) ; état `importQueue`/`queueIdx` ; `openCreateFromImport` (referme l'import, ouvre le formulaire pré-rempli) ; **avance automatique** dans onSubmit : après chaque inscription réussie, pré-remplissage de la ligne suivante, fermeture à épuisement ; bandeau ambre « ligne Excel X (N/M) » + « Quitter le mode fichier » ; titre dynamique « Inscrire un élève — fichier importé (N/M) » ; sortie du mode fichier à la fermeture du dialogue.
+
+### Vérifications
+- `tsc --noEmit` = 0 erreur ; `next build` OK (frontend seul — aucun fichier Go touché).
+- **Test navigateur RÉEL en production** (compte directeur TEMPORAIRE créé puis supprimé, école E015766) : fichier Excel 15 colonnes au format PNG officiel (jour/mois/annee + nacte/lieuacte collés, mois en lettres « MARS ») → aperçu 3 élèves + boutons « Inscrire » → clic ligne 1 → formulaire « (1/3) » ENTIÈREMENT pré-rempli (classe CP1 auto-résolue, MARS → Mars, MASCULIN → Masculin) → « Inscrire l'élève » → toast succès + avance auto (2/3 : CE2, Féminin, 14 Juillet) → (3/3 : CM1, 31 Décembre) → fermeture auto à épuisement → 3 élèves dans la liste.
+- **Neon après saisie assistée** : 14/14 champs × 3 élèves persistés à l'identique (mois 3/7/12, accents BOUAKÉ, père/mère, n°/lieu acte, classes CP1/CE2/CM1) ; « Modifier l'élève » relit tout (bouclage Task 36 confirmé sur les nouveaux élèves).
+- **Nettoyage vérifié** : 3 élèves test + compte directeur temporaire supprimés, 0 résidu, 209 élèves inchangés.
+- Push d3b8832 → Vercel READY (d3b8832) ; Render non concerné (aucun changement backend), LIVE (e1d5845) + health ok.
+
+### Résultat
+Deux chemins d'import cohabitent : BULK (tout le fichier d'un coup) et SAISIE ASSISTÉE (le fichier pré-remplit « Inscrire un élève » ligne par ligne — contrôle humain avant chaque inscription). Captures : download/sygren-38-formulaire-prerempli.png, sygren-38-avance-ligne2.png.
