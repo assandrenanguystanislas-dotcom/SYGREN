@@ -16,6 +16,19 @@
  * (classes, titulaires, effectifs G/F), filtre personnel par école,
  * recherche, contacts cliquables, libellés exacts de la spécification.
  *
+ * Session 42 — bouton « État nominatif » : demande utilisateur (« dans le
+ * module utilisateurs, le conseiller peut voir l'état nominatif mais ne
+ * peut pas l'imprimer »). À côté du filtre école du personnel, un bouton
+ * ouvre le document officiel « ÉTAT NOMINATIF DU PERSONNEL » de l'école
+ * sélectionnée (/personnel-doc) en CONSULTATION : la données est déjà
+ * autorisée au conseiller côté backend (GET /api/reports/personnel — case
+ * conseiller, bornée à SON secteur, liste blanche ConseillerScope v6) et
+ * l'IMPRESSION y reste verrouillée par print-guard.tsx (badge « Zone
+ * Imprimer / PDF verrouillée » + blocage @media print — seul l'Admin IEP
+ * et le Super Admin impriment), exactement comme les bulletins. Le bouton
+ * est aussi utile à la supervision (dialog admin/inspector) — le backend
+ * borne chaque rôle de toute façon.
+ *
  * Lecture seule : composant de CONSULTATION (autorité hiérarchique),
  * la gestion des comptes reste réservée à l'administration.
  */
@@ -33,6 +46,7 @@ import {
   Search,
   ChevronDown,
   BookOpen,
+  FileText,
 } from "lucide-react";
 
 import type {
@@ -42,6 +56,7 @@ import type {
 } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -347,6 +362,35 @@ export function SectorOverview({
                   ))}
                 </SelectContent>
               </Select>
+              {/* Session 42 — « État nominatif » : consultation du document
+                  officiel de l'école sélectionnée (impression verrouillée
+                  dans le document pour le conseiller — cf. print-guard). */}
+              {(() => {
+                const target =
+                  schoolFilter !== "all" ? schoolFilter : "";
+                return (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    disabled={!target}
+                    title={
+                      target
+                        ? "Consulter l'état nominatif du personnel de l'école sélectionnée (consultation — impression réservée à l'Admin IEP et au Super Admin)"
+                        : "Sélectionnez d'abord une école dans le filtre"
+                    }
+                    onClick={() =>
+                      window.open(
+                        `/personnel-doc?school=${target}`,
+                        "_blank",
+                      )
+                    }
+                  >
+                    <FileText className="w-4 h-4 mr-1.5" />
+                    État nominatif
+                  </Button>
+                );
+              })()}
             </div>
           )}
           {staff.length === 0 ? (
