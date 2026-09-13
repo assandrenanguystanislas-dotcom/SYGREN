@@ -31,9 +31,18 @@
 // /api/computation/session/{id}.
 
 import { useEffect, useState } from "react";
-import { Loader2, Printer, X, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, X, AlertCircle, RefreshCw } from "lucide-react";
 
 import { parentPortalApi, reportsApi, computationApi } from "@/lib/api";
+import {
+  DocExportButtons,
+  XLSX_MIME,
+  buildWordShell,
+  escHtml,
+  saveBlob,
+  saveWordDoc,
+  slugFile,
+} from "@/lib/doc-export";
 import {
   canPrintDocument,
   PrintLockBadge,
@@ -325,6 +334,571 @@ function PrintStyle({ b5 }: { b5?: boolean }) {
 
 // === Page ===
 
+// === MODÈLES WORD (.doc) et EXCEL (.xlsx) — bulletins PÉRIODIQUES ===
+// Extension des 3 modèles d'impression (demande utilisateur : « étendre
+// les 3 modèles PDF / Word / Excel à tous les documents, en respectant les
+// en-têtes d'origine ») au bulletin A5 du module Bulletins :
+//   WORD  : un SEUL fichier .doc contenant les bulletins de TOUS les
+//           élèves enchaînés, chaque bulletin séparé par un SAUT DE PAGE
+//           (mso-special-character:line-break) ; chaque bulletin
+//           reproduit le rendu du bulletin A5 (en-tête institutionnel,
+//           MOIS DE, tableau MATIÈRES | NOTES | VISA DU DIRECTEUR avec
+//           l'accolade du bloc « Éveil au Milieu », VISA DES PARENTS,
+//           RÉSULTATS, STATISTIQUES, APPRÉCIATION ET VISA DU MAÎTRE).
+//   EXCEL : un classeur avec UNE FEUILLE PAR ÉLÈVE (nom « Bulletin N —
+//           NOM » ≤ 31 caractères, caractères invalides remplacés) ; au-
+//           delà de 60 élèves, le classeur est limité à 60 feuilles et
+//           une note rouge est insérée en tête de la première feuille.
+// Rendus PDF inchangés ; Arial dans Word/Excel.
+
+const BULLETIN_EXPORT_MAX_SHEETS = 60;
+
+/** SAUT DE PAGE Word entre deux bulletins (fichier .doc unique). */
+const BULLETIN_PAGE_BREAK =
+  "<br clear=all style='mso-special-character:line-break;page-break-before:always'>";
+
+/** Nom de feuille Excel sûr : ≤ 31 caractères, sans \ / ? * [ ] : */
+function safeSheetName(base: string): string {
+  return base
+    .replace(/[\\/?*[\]:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 31);
+}
+
+/** Barème de la moyenne d'un bulletin (10 CP/CE, 20 CM — donnée backend
+ *  average_scale, fallback déduit du préfixe de la classe, comme le PDF). */
+function baremeOf(e: BulletinEleve): number {
+  return e.averageScale ?? (e.classe.toUpperCase().startsWith("CM") ? 20 : 10);
+}
+
+/** Ligne RANG du bulletin (« 1er / 25 » — même suffixe er/ème que le PDF,
+ *  pointillés si le rang n'est pas rapproché). */
+function rangLabelOf(e: BulletinEleve): string {
+  if (!e.rangNum) return "....../.....";
+  const s = String(e.rangNum);
+  return `${s}${s === "1" ? "er" : "ème"} / ${e.effectif}`;
+}
+
+// Couleurs du modèle A5 (drapeau CI — mêmes valeurs que le composant PDF).
+const BTX = "border:1.4px solid #009E60;";
+const GREEN_TXT_S = "#00734A";
+const NEGATIVE_S = "rgb(200,20,20)";
+const POSITIVE_S = "rgb(0,120,50)";
+
+/** Autres matières du tableau (même ordre que BulletinsA5Landscape). */
+const AUTRES_MATIERES: Array<[string, keyof BulletinEleve["notes"]]> = [
+  ["Mathématiques", "maths"],
+  ["Dictée", "dictee"],
+  ["EPS", "eps"],
+  ["Copie", "copie"],
+  ["Ecriture", "ecriture"],
+  ["Expression Écrite", "expressionEcrite"],
+  ["Dessin", "dessin"],
+  ["EDHC", "edhc"],
+  ["Lecture", "lecture"],
+  ["Poésie/ Chant", "poesieChant"],
+];
+
+/** UN bulletin périodique en HTML (modèle Word) — reproduction fidèle du
+ *  bulletin A5 : en-tête institutionnel, titre, infos élève, puis LE
+ *  tableau principal à 5 colonnes (matières / accolade / sous-lignes /
+ *  notes / colonne visas-résultats) avec l'accolade du bloc « Éveil au
+ *  Milieu », la zone « Visa du Directeur » (nom imprimé en bas), puis
+ *  VISA DES PARENTS, RÉSULTATS, STATISTIQUES et l'appréciation pleine
+ *  largeur. */
+function periodBulletinWordHtml(e: BulletinEleve, iepInfo?: IEPInfo): string {
+  const esc = escHtml;
+  const bareme = baremeOf(e);
+  const directeur = (iepInfo?.director_name || "").trim().toUpperCase();
+  const maitre = (e.maitreName || "").trim().toUpperCase();
+
+  // Ligne matière simple : libellé (vert gras, gauche) + note (noir gras).
+  const matRow = (label: string, note: string | number | undefined) =>
+    `<tr>` +
+    `<td colspan=3 style="${BTX} padding:1px 4px; text-align:left; font-weight:bold; color:#00734A; font-size:11px;">${esc(label)}</td>` +
+    `<td style="${BTX} padding:1px 2px; text-align:center; font-weight:bold; font-size:11px;">${esc(note == null ? "" : String(note))}</td>` +
+    `</tr>`;
+  // Lignes du bloc « Éveil au Milieu » : label vertical + accolade « { » en
+  // rowspan sur les 3 sous-lignes (Hist-Géo / EDHC / Sciences), note
+  // GLOBALE unique en rowspan sur la colonne NOTES.
+  const sousRow = (label: string, isFirst: boolean) =>
+    (isFirst
+      ? `<td rowspan=3 style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:10px;">Éveil<br>au<br>Milieu</td>` +
+        `<td rowspan=3 style="${BTX} text-align:center; color:#009E60; font-size:15px;">&#123;</td>`
+      : "") +
+    `<td style="${BTX} padding:1px 4px; text-align:left; font-weight:bold; color:#00734A; font-size:10px;">${esc(label)}</td>` +
+    (isFirst
+      ? `<td rowspan=3 style="${BTX} text-align:center; font-weight:bold; font-size:11px;">${esc(e.notes.eveilMilieu == null ? "" : String(e.notes.eveilMilieu))}</td>`
+      : "");
+
+  // 14 lignes de matières (Exploitation + Éveil (3) + 10 autres) — la
+  // zone « VISA DU DIRECTEUR » couvre TOUTES ces lignes (rowspan), nom du
+  // directeur imprimé EN BAS de la zone (comme le PDF).
+  const matieres =
+    // Exploitation de Texte — la cellule visa (rowspan=14) y est ancrée.
+    `<tr>` +
+    `<td colspan=3 style="${BTX} padding:1px 4px; text-align:left; font-weight:bold; color:#00734A; font-size:11px;">Exploitation de Texte</td>` +
+    `<td style="${BTX} padding:1px 2px; text-align:center; font-weight:bold; font-size:11px;">${esc(e.notes.explText == null ? "" : String(e.notes.explText))}</td>` +
+    `<td rowspan=14 style="${BTX} text-align:center; vertical-align:bottom; font-weight:bold; font-size:9px; letter-spacing:0.3px; height:96px;">${esc(directeur)}</td>` +
+    `</tr>` +
+    sousRow("Hist – Géo.", true) +
+    sousRow("EDHC", false) +
+    sousRow("Sciences", false) +
+    AUTRES_MATIERES.map(([label, key]) => matRow(label, e.notes[key])).join("");
+
+  // Bloc droit (sous les matières) : VISA DES PARENTS, RÉSULTATS,
+  // STATISTIQUES — la colonne gauche reste vide (rowspan calculé).
+  const droitRows: string[] = [];
+  const hasStats = !!(e.stats || e.evolution);
+  const nbDroit =
+    2 +
+    4 + // titre RÉSULTATS + TOTAL + MOYENNE + RANG
+    (hasStats ? 1 + (e.stats ? 3 : 0) + (e.evolution ? 1 : 0) : 0);
+  const libValeur = (
+    lib: string,
+    val: string,
+    valColor?: string,
+  ) =>
+    `<td style="${BTX} padding:1px 4px; font-weight:bold; color:#00734A; font-size:11px;">${esc(lib)}</td>` +
+    `<td style="${BTX} padding:1px 4px; text-align:right; font-weight:bold; font-size:11px;${valColor ? ` color:${valColor};` : ""}">${esc(val)}</td>`;
+  droitRows.push(
+    `<td colspan=3 rowspan=${nbDroit} style="${BTX}; padding:0;"></td>` +
+      `<td colspan=2 style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:10px;">VISA DES PARENTS</td>`,
+    `<td colspan=2 style="${BTX}; height:20mm;"></td>`,
+    `<td colspan=2 style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:10px;">RÉSULTATS</td>`,
+    libValeur("TOTAL :", e.total == null ? "......../........" : String(e.total)),
+    libValeur(
+      "MOYENNE :",
+      e.moyenne ? `${e.moyenne} /${bareme}` : `........ /${bareme}`,
+    ),
+    libValeur("RANG :", rangLabelOf(e)),
+  );
+  if (e.stats) {
+    droitRows.push(
+      `<td colspan=2 style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:10px;">STATISTIQUES</td>`,
+      libValeur("MOY. CLASSE :", fmtNum(e.stats.moyenneClasse)),
+      libValeur("PLUS FORTE :", fmtNum(e.stats.plusForte)),
+      libValeur("PLUS FAIBLE :", fmtNum(e.stats.plusFaible)),
+    );
+  }
+  if (e.evolution) {
+    droitRows.push(
+      libValeur(
+        e.evolution.delta > 0
+          ? "ÉLÈVE EN PROGRESSION :"
+          : e.evolution.delta < 0
+            ? "ÉLÈVE EN RÉGRESSION :"
+            : "ÉLÈVE STABLE :",
+        e.evolution.delta > 0
+          ? `▲ +${fmtNum(e.evolution.delta)}`
+          : e.evolution.delta < 0
+            ? `▼ ${fmtNum(e.evolution.delta)}`
+            : "= 0",
+        e.evolution.delta > 0
+          ? POSITIVE_S
+          : e.evolution.delta < 0
+            ? NEGATIVE_S
+            : undefined,
+      ),
+    );
+  }
+
+  return (
+    `<div>` +
+    // --- En-tête institutionnel (dynamique, comme le bulletin PDF) ---
+    `<table style="border-collapse:collapse; width:100%; table-layout:fixed;"><tr>` +
+    `<td style="border:none; width:62%; vertical-align:top; font-size:9px; line-height:1.35;">` +
+    `<p style="font-weight:600;">Ministère de l'Education Nationale Et de l'Alphabétisation</p>` +
+    `<p style="font-style:italic;">et de l'Enseignement Technique</p>` +
+    `<p style="font-style:italic;">Direction Régionale de ${esc((iepInfo?.region || ".........").toUpperCase())}</p>` +
+    `<p style="font-weight:bold;">Inspection de l'Enseignement Préscolaire et Primaire de ${esc((iepInfo?.name || ".........").toUpperCase())}</p>` +
+    `<p>BP : ${esc(iepInfo?.bp || ".....")} / Tel : ${esc(iepInfo?.inspector_phone || ".............")}</p>` +
+    `<p style="color:#1d4ed8; text-decoration:underline;">Courriel : ${esc(iepInfo?.inspector_email || "............")}</p>` +
+    `</td>` +
+    `<td style="border:none; width:38%; text-align:center; vertical-align:top;">` +
+    `<p style="font-weight:600; font-size:9px;">République de Côte d'Ivoire</p>` +
+    `<p style="font-style:italic; font-size:8px;">Union-Discipline-Travail</p>` +
+    `</td></tr></table>` +
+    // --- Titre + type d'examen ---
+    `<p style="text-align:center; font-weight:bold; font-size:14px; margin:4px 0 0;">BULLETIN DE NOTES</p>` +
+    `<p style="text-align:center; font-weight:600; font-size:12px; text-transform:uppercase;">${esc((e.typeExamen || "COMPOSITION N°1").toUpperCase())}</p>` +
+    // --- Infos élève (Élève/Classe/Sexe — Matricule/Effectif/Année) ---
+    `<table style="border-collapse:collapse; width:100%; table-layout:fixed; margin:2px 0 3px;">` +
+    `<colgroup><col style="width:52%"><col style="width:48%"></colgroup>` +
+    `<tr><td style="border:none; font-weight:bold; color:#00734A; font-size:10px;">Élève : <span style="font-weight:normal; color:#000;">${esc(e.nomPrenoms)}</span></td>` +
+    `<td style="border:none; font-weight:bold; color:#00734A; font-size:10px;">Matricule : <span style="font-weight:normal; color:#000;">${esc(e.matricule)}</span></td></tr>` +
+    `<tr><td style="border:none; font-weight:bold; color:#00734A; font-size:10px;">Classe : <span style="font-weight:normal; color:#000;">${esc(e.classe)}</span></td>` +
+    `<td style="border:none; font-weight:bold; color:#00734A; font-size:10px;">Effectif : <span style="font-weight:normal; color:#000;">${e.effectif}</span></td></tr>` +
+    `<tr><td style="border:none; font-weight:bold; color:#00734A; font-size:10px;">Sexe : <span style="font-weight:normal; color:#000;">${esc(e.sexe)}</span></td>` +
+    `<td style="border:none; font-weight:bold; color:#00734A; font-size:10px;">Année scolaire : <span style="font-weight:normal; color:#000;">${esc(e.anneeScolaire)}</span></td></tr>` +
+    `</table>` +
+    // --- Tableau principal (MOIS DE / matières / visas / résultats) ---
+    `<table style="border-collapse:collapse; width:100%; table-layout:fixed;">` +
+    `<colgroup><col style="width:32%"><col style="width:6%"><col style="width:14%"><col style="width:16%"><col style="width:32%"></colgroup>` +
+    `<tr><td colspan=5 style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:12px; padding:2px;">MOIS DE : ${esc(e.mois || "........................................................20......")}</td></tr>` +
+    `<tr>` +
+    `<td colspan=3 style="${BTX} text-align:left; padding:1px 4px; font-weight:bold; color:#00734A; font-size:11px;">MATIÈRES</td>` +
+    `<td style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:11px;">NOTES</td>` +
+    `<td style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:11px;">VISA DU DIRECTEUR</td>` +
+    `</tr>` +
+    matieres +
+    droitRows.join("") +
+    // --- Appréciation et Visa du Maître (pleine largeur) ---
+    `<tr><td colspan=5 style="${BTX} text-align:center; font-weight:bold; color:#00734A; font-size:10px; padding:1px;">APPRÉCIATION ET VISA DU MAÎTRE</td></tr>` +
+    `<tr><td colspan=5 style="${BTX} text-align:center; font-weight:bold; font-style:italic; font-size:10px; padding:1px 4px;${e.appreciationNegative ? ` color:${NEGATIVE_S};` : ""}">${esc(e.appreciation ?? "")}</td></tr>` +
+    `<tr><td colspan=5 style="${BTX} text-align:center; vertical-align:bottom; font-weight:bold; font-size:9px; letter-spacing:0.3px; height:12mm;">${esc(maitre)}</td></tr>` +
+    `</table>` +
+    `</div>`
+  );
+}
+
+/** Modèle WORD (.doc) du lot : un SEUL fichier, les bulletins de TOUS les
+ *  élèves enchaînés, séparés par un saut de page Word. */
+function buildBulletinsWordHtml(
+  eleves: BulletinEleve[],
+  iepInfo?: IEPInfo,
+): string {
+  return buildWordShell({
+    title: `Bulletins de notes — ${iepInfo?.school_name || "École"}`,
+    orientation: "portrait",
+    marginMm: 8,
+    styles: `p { margin:0; }`,
+    bodyHtml: eleves
+      .map((e) => periodBulletinWordHtml(e, iepInfo))
+      .join(BULLETIN_PAGE_BREAK),
+  });
+}
+
+/** Modèle EXCEL (.xlsx) du lot : UNE FEUILLE PAR ÉLÈVE (≤ 60 feuilles —
+ *  au-delà, note en tête de la première feuille). Chaque feuille
+ *  reproduit le bulletin : en-tête institutionnel fusionné, tableau
+ *  matières (accolade « Éveil au Milieu », notes, zone Visa du Directeur
+ *  avec nom en bas), VISA DES PARENTS, RÉSULTATS, STATISTIQUES,
+ *  appréciation et signatures. */
+async function exportBulletinsExcelAsync(
+  eleves: BulletinEleve[],
+  iepInfo: IEPInfo | undefined,
+  filename: string,
+): Promise<void> {
+  const { Workbook } = await import("exceljs");
+  const wb = new Workbook();
+  wb.creator = "SYGREN";
+
+  const limited = eleves.length > BULLETIN_EXPORT_MAX_SHEETS;
+  const list = limited ? eleves.slice(0, BULLETIN_EXPORT_MAX_SHEETS) : eleves;
+
+  // Couleurs du modèle (drapeau CI) + bordures vertes + police Arial.
+  const GREEN = { argb: "FF009E60" };
+  const GREEN_TXT = { argb: "FF00734A" };
+  const RED = { argb: "FFC00000" };
+  const POSITIVE = { argb: "FF007832" };
+  const NEGATIVE = { argb: "FFC81414" };
+  const BORDER = { style: "thin" as const, color: GREEN };
+  const BOX = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+  const font = (
+    size: number,
+    bold = false,
+    argb?: string,
+    italic = false,
+  ) => ({
+    name: "Arial",
+    size,
+    bold,
+    italic,
+    ...(argb ? { color: { argb } } : {}),
+  });
+  type RichPart = { font: ReturnType<typeof font>; text: string };
+
+  // Armoiries (meilleur effort — fetch unique, répétées sur chaque feuille).
+  let arm: Uint8Array | null = null;
+  try {
+    const res = await fetch("/ci-coat-of-arms.png");
+    if (res.ok) arm = new Uint8Array(await res.arrayBuffer());
+  } catch {
+    // armoiries omises — l'en-tête reste lisible
+  }
+
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    const bareme = baremeOf(e);
+    const directeur = (iepInfo?.director_name || "").trim().toUpperCase();
+    const maitre = (e.maitreName || "").trim().toUpperCase();
+    const ws = wb.addWorksheet(
+      safeSheetName(`Bulletin ${i + 1} — ${e.nomPrenoms}`),
+      {
+        views: [{ showGridLines: false }],
+        pageSetup: {
+          paperSize: 9,
+          orientation: "portrait",
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+        },
+      },
+    );
+    ws.columns = [30, 4, 13, 10, 15, 16].map((width) => ({ width }));
+
+    // Rangée de départ (décalée si la note de limitation est insérée).
+    let r = 1;
+    if (limited && i === 0) {
+      ws.mergeCells(1, 1, 1, 6);
+      const note = ws.getCell(1, 1);
+      note.value = `Note : le lot compte ${eleves.length} bulletins ; le classeur est limité à ${BULLETIN_EXPORT_MAX_SHEETS} feuilles — imprimer par classe pour les élèves restants.`;
+      note.font = font(11, true, RED.argb);
+      note.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+      ws.getRow(1).height = 28;
+      r = 3;
+    }
+
+    // Ligne fusionnée sur les 6 colonnes (en-tête institutionnel, titres).
+    const full = (
+      rr: number,
+      value: string | { richText: RichPart[] },
+      size: number,
+      bold = false,
+      opts?: { italic?: boolean; argb?: string; box?: boolean; h?: number; fill?: string },
+    ) => {
+      ws.mergeCells(rr, 1, rr, 6);
+      const c = ws.getCell(rr, 1);
+      c.value = value;
+      c.font = font(size, bold, opts?.argb, opts?.italic ?? false);
+      c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      if (opts?.fill) {
+        for (let col = 1; col <= 6; col++) {
+          ws.getCell(rr, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+        }
+      }
+      if (opts?.box) for (let col = 1; col <= 6; col++) ws.getCell(rr, col).border = BOX;
+      if (opts?.h) ws.getRow(rr).height = opts.h;
+    };
+
+    // --- En-tête institutionnel (fidèle au bulletin PDF) ---
+    full(r, "Ministère de l'Education Nationale Et de l'Alphabétisation — et de l'Enseignement Technique", 12, true);
+    full(r + 1, `Direction Régionale de ${(iepInfo?.region || ".........").toUpperCase()} — Inspection de l'Enseignement Préscolaire et Primaire de ${(iepInfo?.name || ".........").toUpperCase()}`, 11, true, { italic: true });
+    full(r + 2, `BP : ${iepInfo?.bp || "....."} / Tel : ${iepInfo?.inspector_phone || "............."} — Courriel : ${iepInfo?.inspector_email || "............"}`, 11);
+    full(r + 3, "République de Côte d'Ivoire — Union-Discipline-Travail", 11, true);
+    // --- Titre + type d'examen ---
+    full(r + 4, "BULLETIN DE NOTES", 14, true);
+    full(r + 5, (e.typeExamen || "COMPOSITION N°1").toUpperCase(), 12, true);
+    ws.getRow(r + 6).height = 4;
+
+    // --- Infos élève (2 colonnes de paires, comme le bulletin PDF) ---
+    const ident = (
+      rr: number,
+      leftLabel: string,
+      leftValue: string,
+      rightLabel: string,
+      rightValue: string,
+    ) => {
+      ws.mergeCells(rr, 1, rr, 3);
+      const lc = ws.getCell(rr, 1);
+      lc.value = {
+        richText: [
+          { font: font(10, true, GREEN_TXT.argb), text: leftLabel },
+          { font: font(10), text: leftValue },
+        ],
+      };
+      lc.alignment = { horizontal: "left", vertical: "middle" };
+      ws.mergeCells(rr, 4, rr, 6);
+      const rc = ws.getCell(rr, 4);
+      rc.value = {
+        richText: [
+          { font: font(10, true, GREEN_TXT.argb), text: rightLabel },
+          { font: font(10), text: rightValue },
+        ],
+      };
+      rc.alignment = { horizontal: "left", vertical: "middle" };
+      ws.getRow(rr).height = 15;
+    };
+    ident(r + 7, "Élève : ", e.nomPrenoms, "Matricule : ", e.matricule);
+    ident(r + 8, "Classe : ", e.classe, "Effectif : ", String(e.effectif));
+    ident(r + 9, "Sexe : ", e.sexe, "Année scolaire : ", e.anneeScolaire);
+
+    // --- Tableau principal (bordures vertes, comme le modèle) ---
+    const m0 = r + 10; // ligne MOIS DE
+    const box = (rr: number, c1: number, c2: number) => {
+      for (let col = c1; col <= c2; col++) ws.getCell(rr, col).border = BOX;
+    };
+    // MOIS DE (pleine largeur)
+    ws.mergeCells(m0, 1, m0, 6);
+    const mois = ws.getCell(m0, 1);
+    mois.value = `MOIS DE : ${e.mois || "........................................................20......"}`;
+    mois.font = font(11, true, GREEN_TXT.argb);
+    mois.alignment = { horizontal: "center", vertical: "middle" };
+    box(m0, 1, 6);
+    // Entêtes : MATIÈRES (1-3) | NOTES (4) | VISA DU DIRECTEUR (5-6)
+    const h0 = m0 + 1;
+    ws.mergeCells(h0, 1, h0, 3);
+    ws.mergeCells(h0, 5, h0, 6);
+    ws.getCell(h0, 1).value = "MATIÈRES";
+    ws.getCell(h0, 4).value = "NOTES";
+    ws.getCell(h0, 5).value = "VISA DU DIRECTEUR";
+    for (let col = 1; col <= 6; col++) {
+      const c = ws.getCell(h0, col);
+      c.font = font(11, true, GREEN_TXT.argb);
+      c.alignment = { horizontal: "center", vertical: "middle" };
+      c.border = BOX;
+    }
+    // Zone « Visa du Directeur » : fusion verticale sur les 14 lignes de
+    // matières, nom du directeur imprimé EN BAS (comme le bulletin PDF).
+    const matStart = h0 + 1;
+    const matEnd = matStart + 13; // 14 lignes : Exploitation + Éveil (3) + 10
+    ws.mergeCells(matStart, 5, matEnd, 6);
+    const visa = ws.getCell(matStart, 5);
+    if (directeur) visa.value = directeur; // caractère d'imprimerie
+    visa.font = font(9, true);
+    visa.alignment = { horizontal: "center", vertical: "bottom", wrapText: true };
+    // Lignes matières.
+    const matLabel = (rr: number, label: string, note: string | number | undefined) => {
+      ws.mergeCells(rr, 1, rr, 3);
+      const lc = ws.getCell(rr, 1);
+      lc.value = label;
+      lc.font = font(10, true, GREEN_TXT.argb);
+      lc.alignment = { horizontal: "left", vertical: "middle" };
+      const nc = ws.getCell(rr, 4);
+      nc.value = note == null ? "" : String(note);
+      nc.font = font(10, true);
+      nc.alignment = { horizontal: "center", vertical: "middle" };
+    };
+    matLabel(matStart, "Exploitation de Texte", e.notes.explText);
+    // Bloc « Éveil au Milieu » : label vertical + accolade + 3 sous-lignes,
+    // note globale unique fusionnée sur les 3 lignes (colonne NOTES).
+    ws.mergeCells(matStart + 1, 1, matStart + 3, 1);
+    const eveil = ws.getCell(matStart + 1, 1);
+    eveil.value = "Éveil au Milieu";
+    eveil.font = font(10, true, GREEN_TXT.argb);
+    eveil.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    ws.mergeCells(matStart + 1, 2, matStart + 3, 2);
+    const brace = ws.getCell(matStart + 1, 2);
+    brace.value = "{";
+    brace.font = font(14, false, GREEN.argb);
+    brace.alignment = { horizontal: "center", vertical: "middle" };
+    ["Hist – Géo.", "EDHC", "Sciences"].forEach((label, k) => {
+      const sc = ws.getCell(matStart + 1 + k, 3);
+      sc.value = label;
+      sc.font = font(9, true, GREEN_TXT.argb);
+      sc.alignment = { horizontal: "left", vertical: "middle" };
+    });
+    ws.mergeCells(matStart + 1, 4, matStart + 3, 4);
+    const eveilNote = ws.getCell(matStart + 1, 4);
+    eveilNote.value = e.notes.eveilMilieu == null ? "" : String(e.notes.eveilMilieu);
+    eveilNote.font = font(10, true);
+    eveilNote.alignment = { horizontal: "center", vertical: "middle" };
+    // Autres matières.
+    AUTRES_MATIERES.forEach(([label, key], k) => {
+      matLabel(matStart + 4 + k, label, e.notes[key]);
+    });
+    // Bordures de tout le bloc matières/visas.
+    for (let rr = matStart; rr <= matEnd; rr++) box(rr, 1, 6);
+
+    // --- Bloc droit : VISA DES PARENTS / RÉSULTATS / STATISTIQUES ---
+    const hasStats = !!(e.stats || e.evolution);
+    const nbDroit =
+      2 + 4 + (hasStats ? 1 + (e.stats ? 3 : 0) + (e.evolution ? 1 : 0) : 0);
+    const d0 = matEnd + 1;
+    ws.mergeCells(d0, 1, d0 + nbDroit - 1, 4); // colonne gauche vide
+    for (let rr = d0; rr <= d0 + nbDroit - 1; rr++) box(rr, 1, 4);
+    const pair = (rr: number, lib: string, val: string, valArgb?: string) => {
+      const lc = ws.getCell(rr, 5);
+      lc.value = lib;
+      lc.font = font(10, true, GREEN_TXT.argb);
+      lc.alignment = { horizontal: "left", vertical: "middle" };
+      const vc = ws.getCell(rr, 6);
+      vc.value = val;
+      vc.font = font(10, true, valArgb);
+      vc.alignment = { horizontal: "right", vertical: "middle" };
+      box(rr, 5, 6);
+    };
+    const zoneTitre = (rr: number, label: string) => {
+      ws.mergeCells(rr, 5, rr, 6);
+      const c = ws.getCell(rr, 5);
+      c.value = label;
+      c.font = font(10, true, GREEN_TXT.argb);
+      c.alignment = { horizontal: "center", vertical: "middle" };
+      box(rr, 5, 6);
+    };
+    zoneTitre(d0, "VISA DES PARENTS");
+    ws.mergeCells(d0 + 1, 5, d0 + 1, 6); // place signature parents
+    box(d0 + 1, 5, 6);
+    ws.getRow(d0 + 1).height = 26;
+    zoneTitre(d0 + 2, "RÉSULTATS");
+    pair(d0 + 3, "TOTAL :", e.total == null ? "......../........" : String(e.total));
+    pair(d0 + 4, "MOYENNE :", e.moyenne ? `${e.moyenne} /${bareme}` : `........ /${bareme}`);
+    pair(d0 + 5, "RANG :", rangLabelOf(e));
+    let dr = d0 + 6;
+    if (e.stats) {
+      zoneTitre(dr, "STATISTIQUES");
+      dr += 1;
+      pair(dr, "MOY. CLASSE :", fmtNum(e.stats.moyenneClasse));
+      pair(dr + 1, "PLUS FORTE :", fmtNum(e.stats.plusForte));
+      pair(dr + 2, "PLUS FAIBLE :", fmtNum(e.stats.plusFaible));
+      dr += 3;
+    }
+    if (e.evolution) {
+      pair(
+        dr,
+        e.evolution.delta > 0
+          ? "ÉLÈVE EN PROGRESSION :"
+          : e.evolution.delta < 0
+            ? "ÉLÈVE EN RÉGRESSION :"
+            : "ÉLÈVE STABLE :",
+        e.evolution.delta > 0
+          ? `▲ +${fmtNum(e.evolution.delta)}`
+          : e.evolution.delta < 0
+            ? `▼ ${fmtNum(e.evolution.delta)}`
+            : "= 0",
+        e.evolution.delta > 0
+          ? POSITIVE.argb
+          : e.evolution.delta < 0
+            ? NEGATIVE.argb
+            : undefined,
+      );
+      dr += 1;
+    }
+
+    // --- Appréciation et Visa du Maître (pleine largeur, 6 colonnes) ---
+    const a0 = d0 + nbDroit;
+    ws.mergeCells(a0, 1, a0, 6);
+    const apT = ws.getCell(a0, 1);
+    apT.value = "APPRÉCIATION ET VISA DU MAÎTRE";
+    apT.font = font(10, true, GREEN_TXT.argb);
+    apT.alignment = { horizontal: "center", vertical: "middle" };
+    box(a0, 1, 6);
+    ws.mergeCells(a0 + 1, 1, a0 + 1, 6);
+    const appr = ws.getCell(a0 + 1, 1);
+    appr.value = e.appreciation ?? "";
+    appr.font = font(10, true, e.appreciationNegative ? NEGATIVE.argb : undefined, true);
+    appr.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    box(a0 + 1, 1, 6);
+    ws.getRow(a0 + 1).height = 24;
+    ws.mergeCells(a0 + 2, 1, a0 + 2, 6);
+    const nm = ws.getCell(a0 + 2, 1);
+    if (maitre) nm.value = maitre; // caractère d'imprimerie
+    nm.font = font(9, true);
+    nm.alignment = { horizontal: "center", vertical: "bottom" };
+    box(a0 + 2, 1, 6);
+    ws.getRow(a0 + 2).height = 20;
+
+    // --- Armoiries en haut de feuille (meilleur effort) ---
+    if (arm) {
+      try {
+        const imgId = wb.addImage({
+          buffer: arm as unknown as Parameters<typeof wb.addImage>[0]["buffer"],
+          extension: "png",
+        });
+        ws.addImage(imgId, { tl: { col: 4.2, row: 0.2 }, ext: { width: 46, height: 46 } });
+      } catch {
+        // armoiries omises — l'en-tête reste lisible
+      }
+    }
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveBlob(new Blob([buf], { type: XLSX_MIME }), filename);
+}
+
 export default function BulletinsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -344,7 +918,13 @@ export default function BulletinsPage() {
   const [meta, setMeta] = useState<{
     schoolName: string;
     sessionLabel: string;
+    /** Nom de la classe (filtre class_id) ou « Toutes les classes » —
+        sert au nom des fichiers Word/Excel (bulletins-<classe>-<session>). */
+    className: string;
   } | null>(null);
+  // Modèles Word/Excel : état d'export (« doc » | « xlsx » | null) —
+  // useState PLACÉ AVANT LES RETOURS CONDITIONNELS (discipline React).
+  const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
 
   // Fetch au montage.
   useEffect(() => {
@@ -470,7 +1050,11 @@ export default function BulletinsPage() {
             director_name: releve.director_name,
           });
           const sessionLabel = `${releve.type_examen} — ${monthLabel(releve.month)} ${releve.year}`;
-          setMeta({ schoolName: releve.school_name, sessionLabel });
+          setMeta({
+            schoolName: releve.school_name,
+            sessionLabel,
+            className: releve.class_name,
+          });
           document.title = `Bulletin — ${child.last_name} ${child.first_name} — ${sessionLabel}`;
           setLoading(false);
         })
@@ -513,7 +1097,7 @@ export default function BulletinsPage() {
           .filter((c) => !classIdParam || c.id === classIdParam);
         if (classes.length === 0) {
           setEleves([]);
-          setMeta({ schoolName: "—", sessionLabel: "Session inconnue" });
+          setMeta({ schoolName: "—", sessionLabel: "Session inconnue", className: "" });
           setLoading(false);
           return;
         }
@@ -576,6 +1160,11 @@ export default function BulletinsPage() {
         setMeta({
           schoolName: first.school_name,
           sessionLabel,
+          // Nom de classe pour le fichier Word/Excel : la classe visée par
+          // class_id, sinon « Toutes les classes » (lot multi-classes).
+          className: classIdParam
+            ? (classes[0]?.name ?? "Classe")
+            : "Toutes les classes",
         });
 
         // Année scolaire : si month >= 9 (sept-déc), année scolaire commence
@@ -697,6 +1286,34 @@ export default function BulletinsPage() {
     );
   }
 
+  // === Modèles WORD / EXCEL (3 modèles d'impression) ===
+  // Noms de fichiers : bulletins-<slug classe>-<slug session>.doc/.xlsx.
+  const fileBase = `bulletins-${slugFile(meta?.className || "toutes-classes")}-${slugFile(
+    meta?.sessionLabel || "session",
+  )}`;
+
+  // Modèle WORD (.doc) — un SEUL fichier, un bulletin par élève, séparés
+  // par un saut de page Word (mêmes verrous que l'impression).
+  function handleWord() {
+    setExporting("doc");
+    try {
+      saveWordDoc(buildBulletinsWordHtml(eleves, iepInfo), `${fileBase}.doc`);
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  // Modèle EXCEL (.xlsx) — une feuille par élève (exceljs importé à la
+  // demande, comme la liste des candidats).
+  async function handleExcel() {
+    setExporting("xlsx");
+    try {
+      await exportBulletinsExcelAsync(eleves, iepInfo, `${fileBase}.xlsx`);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <>
       <PrintStyle b5={parentMode} />
@@ -716,13 +1333,16 @@ export default function BulletinsPage() {
           </div>
           <div className="flex items-center gap-2">
             {canPrint ? (
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 text-white rounded-md text-sm font-semibold hover:bg-blue-800 shadow-sm"
-              >
-                <Printer className="w-4 h-4" />
-                Imprimer / PDF
-              </button>
+              /* Barre uniforme des documents officiels : PDF (impression
+                 navigateur) + Word (.doc) + Excel (.xlsx) — verrous
+                 d'impression inchangés (canPrint / PrintLockBadge). */
+              <DocExportButtons
+                canPrint
+                exporting={exporting}
+                onPdf={() => window.print()}
+                onWord={handleWord}
+                onExcel={handleExcel}
+              />
             ) : (
               <PrintLockBadge />
             )}

@@ -39,10 +39,19 @@
 // serveur, discipline du projet).
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Printer, Scissors, X } from "lucide-react";
-import type { CSSProperties } from "react";
+import { Loader2, Scissors, X } from "lucide-react";
+import { useState, type CSSProperties } from "react";
 
 import { parentPortalApi, reportsApi } from "@/lib/api";
+import {
+  DocExportButtons,
+  XLSX_MIME,
+  buildWordShell,
+  escHtml,
+  saveBlob,
+  saveWordDoc,
+  slugFile,
+} from "@/lib/doc-export";
 import {
   canPrintDocument,
   PrintLockBadge,
@@ -651,6 +660,415 @@ function EmptyHalf() {
   );
 }
 
+// === MODÈLE WORD (.doc) — un SEUL fichier, UN bulletin par élève ===
+// Les bulletins de TOUS les élèves sont enchaînés dans le même document,
+// séparés par un SAUT DE PAGE Word (mso-special-character:line-break).
+// Chaque bulletin reproduit le rendu PDF de BulletinCopy : en-tête
+// institutionnel (Ministère / Direction Régionale / Inspection IEP / BP /
+// Courriel + République / Union-Discipline-Travail), bandeau vert du
+// titre + session, encadré d'identification, tableau des moyennes (fond
+// pastel sur la moyenne annuelle), « Rang », DÉCISION DU CONSEIL DES
+// MAÎTRES (bandeau orange, OUI entouré selon la décision A/R/ABD),
+// « Fait à … » et signatures « Le Maître chargé du cours » / « Le
+// Directeur » avec noms en caractère d'imprimerie (majuscules).
+const EOY_WORD_PAGE_BREAK =
+  "<br clear=all style='mso-special-character:line-break;page-break-before:always'>";
+
+function buildEofyBulletinsWordHtml(
+  data: EndOfYearSheet,
+  rows: EndOfYearRow[],
+  effectif: number,
+): string {
+  const esc = escHtml;
+  const iep = data.iep;
+  const annee = anneeScolaireBulletin(data);
+  // « Fait à … » : ville de la Direction Régionale (DABOU sur le modèle).
+  const faitA = (iep?.region || "DABOU").toUpperCase();
+
+  // Cadres du modèle (vert drapeau) + libellés verts gras.
+  const BO = "border:1.8px solid #009E60;";
+  const BT = "border:1.4px solid #009E60;";
+  const LBL = "font-weight:bold; color:#00734A;";
+
+  const bulletin = (row: EndOfYearRow, rang: number): string => {
+    const scale = scaleOf(data, row);
+    const isFille = row.gender === "F";
+    const nom = esc(row.full_name.toUpperCase());
+    const nomStyle = isFille ? "font-weight:600; color:#c00000;" : "font-weight:600;";
+
+    // Mention OUI / NON — l'ellipse du modèle est rendue par une bordure
+    // noire (Word HTML 2003 ne gère pas border-radius).
+    const ouiNon = (choice: "OUI" | "NON", circled: boolean) =>
+      `<span style="border:1.5px solid ${circled ? "#000000" : "transparent"}; padding:2px 9px; font-weight:bold;">${choice}</span>`;
+
+    const decisions = [
+      { key: "admis" as const, label: "ADMIS(E) EN CLASSE SUPÉRIEURE" },
+      { key: "redouble" as const, label: "REDOUBLE LE COURS" },
+      { key: "exclu" as const, label: "EXCLU(E)" },
+    ];
+
+    // Ligne « Moyenne … | ………/ 10 » (fond pastel sur la moyenne annuelle).
+    const moyRow = (label: string, value: string, highlight: boolean) =>
+      `<tr>` +
+      `<td style="${BT} padding:2.2mm 2.4mm; width:64%; ${highlight ? "font-weight:bold; font-size:13px; background:#E4F4ED;" : "font-size:12.5px;"}">${esc(label)}</td>` +
+      `<td style="${BT} padding:2.2mm 2.4mm; font-weight:bold; font-size:13px; white-space:nowrap; text-align:right;">${esc(value)}/ ${scale}</td>` +
+      `</tr>`;
+
+    // Case signature : table imbriquée — intitulé souligné EN HAUT, nom en
+    // CARACTÈRE D'IMPRIMERIE (majuscules) JUSTE AVANT LE TRAIT DU BAS
+    // (vertical-align:bottom, comme le modèle PDF, AUCUN trait discontinu).
+    const sigCell = (label: string, name: string) =>
+      `<td style="${BO} width:50%; vertical-align:top; padding:1.8mm 2.6mm;">` +
+      `<table style="border-collapse:collapse; width:100%; height:26.4mm;"><tr>` +
+      `<td style="border:none; text-align:center; font-size:12px; font-weight:bold; color:#00734A; text-decoration:underline;">${esc(label)}</td>` +
+      `</tr><tr>` +
+      `<td style="border:none; vertical-align:bottom; text-align:center; font-size:12px; font-weight:bold; letter-spacing:0.3px;">${name ? esc(name.toUpperCase()) : ""}</td>` +
+      `</tr></table></td>`;
+
+    return (
+      `<div>` +
+      // --- En-tête institutionnel (identique au tableau de classe) ---
+      `<table style="border-collapse:collapse; width:100%; table-layout:fixed;"><tr>` +
+      `<td style="border:none; width:62%; vertical-align:top; font-size:8.8px; line-height:1.35;">` +
+      `<p>Ministère de l'Education Nationale Et de l'Alphabétisation</p>` +
+      `<p>et de l'Enseignement Technique</p>` +
+      `<p style="font-style:italic;">Direction Régionale de ${esc((iep?.region || "…………").toUpperCase())}</p>` +
+      `<p style="font-weight:bold;">Inspection de l'Enseignement Préscolaire et Primaire de ${esc((iep?.name || "…………").toUpperCase())}</p>` +
+      `<p>BP : ${esc(iep?.bp || "……")} / Tel : ${esc(iep?.inspector_phone || "…………")}</p>` +
+      `<p>Courriel : ${esc(iep?.inspector_email || "…………")}</p>` +
+      `</td>` +
+      `<td style="border:none; width:38%; text-align:center; vertical-align:top;">` +
+      `<p style="font-size:9.6px;">République de Côte d'Ivoire</p>` +
+      `<p style="font-size:9px;">Union-Discipline-Travail</p>` +
+      `</td></tr></table>` +
+      // --- Bandeau du titre (vert drapeau) + session ---
+      `<table style="border-collapse:collapse; width:100%; margin-top:2mm;"><tr>` +
+      `<td style="border:none; background:#009E60; color:#ffffff; text-align:center; padding:2.4mm 2mm;">` +
+      `<p style="font-size:18px; font-weight:bold; letter-spacing:0.5px;">RESULTATS DE FIN D'ANNÉE</p>` +
+      `<p style="font-size:12.5px; font-weight:600; margin-top:1px;">${esc(sessionLabel(data))}</p>` +
+      `</td></tr></table>` +
+      // --- Identification de l'élève (modèle : 2 colonnes) ---
+      `<table style="border-collapse:collapse; width:100%; table-layout:fixed; margin-top:2.4mm;">` +
+      `<colgroup><col style="width:58%"><col style="width:42%"></colgroup>` +
+      `<tr><td style="${BO} padding:1.2mm 2.6mm;"><p><span style="${LBL}">Élève : </span><span style="${nomStyle} text-transform:uppercase;">${nom}</span></p></td>` +
+      `<td style="${BO} padding:1.2mm 2.6mm;"><p><span style="${LBL}">Matricule : </span><span style="font-weight:bold;">${esc(row.matricule)}</span></p></td></tr>` +
+      `<tr><td style="${BO} padding:1.2mm 2.6mm;"><p><span style="${LBL}">Classe : </span><span style="font-weight:bold;">${esc(data.class.name)}</span></p></td>` +
+      `<td style="${BO} padding:1.2mm 2.6mm;"><p><span style="${LBL}">Effectif : </span><span style="font-weight:bold;">${effectif}</span></p></td></tr>` +
+      `<tr><td style="${BO} padding:1.2mm 2.6mm;"><p><span style="${LBL}">Sexe : </span><span style="font-weight:bold;">${esc(row.gender)}</span></p></td>` +
+      `<td style="${BO} padding:1.2mm 2.6mm;"><p><span style="${LBL}">Année scolaire : </span><span style="font-weight:bold;">${esc(annee)}</span></p></td></tr>` +
+      `</table>` +
+      // --- RESULTATS DE FIN D'ANNEE (moyennes + rang) ---
+      `<table style="border-collapse:collapse; width:100%; table-layout:fixed; margin-top:2.4mm;">` +
+      moyRow("Moyenne de la composition de Passage", fmtMoy(row.moyenne_passage, row.has_moyenne_passage), false) +
+      moyRow("Moyenne des compositions Mensuelles", fmtMoy(row.moyenne_compositions, row.has_moyenne_compositions), false) +
+      moyRow("Moyenne Annuelle", fmtMoy(row.moyenne_annuelle, row.has_moyenne_annuelle), true) +
+      `<tr><td colspan=2 style="${BT} padding:2mm 2.4mm; font-size:13px;"><b>Rang :</b> ${rang} sur <b>${effectif}</b> élèves.</td></tr>` +
+      `</table>` +
+      // --- DÉCISION DU CONSEIL DES MAÎTRES (OUI entouré selon A/R/ABD) ---
+      `<table style="border-collapse:collapse; width:100%; table-layout:fixed;">` +
+      `<tr><td colspan=3 style="${BT} background:#F77F00; color:#ffffff; text-align:center; padding:2mm; font-size:13.5px; font-weight:bold; letter-spacing:0.3px;">DÉCISION DU CONSEIL DES MAÎTRES</td></tr>` +
+      decisions
+        .map(
+          (d) =>
+            `<tr>` +
+            `<td style="${BT} padding:1.8mm 2.2mm; width:58%; font-weight:bold; font-size:12px;">${esc(d.label)}</td>` +
+            `<td style="${BT} width:21%; text-align:center;">${ouiNon("OUI", isCircled(row.decision_conseil, d.key, "OUI"))}</td>` +
+            `<td style="${BT} width:21%; text-align:center;">${ouiNon("NON", isCircled(row.decision_conseil, d.key, "NON"))}</td>` +
+            `</tr>`,
+        )
+        .join("") +
+      `<tr><td colspan=3 style="${BT} text-align:center; font-size:10.6px; font-style:italic; padding:1.2mm 2mm;">(Rayer les mentions inutiles)</td></tr>` +
+      `<tr><td colspan=3 style="${BT} text-align:center; font-size:12.5px; padding:1.8mm 2mm;">Fait à ${esc(faitA)}, le <b>${todayFr()}</b></td></tr>` +
+      `</table>` +
+      // --- Signatures (noms écrits, place pour signature + cachet) ---
+      `<table style="border-collapse:collapse; width:100%; table-layout:fixed; margin-top:3mm;"><tr>` +
+      sigCell("Le Maître chargé du cours", data.class.teacher_name || "") +
+      sigCell("Le Directeur", data.directeur || "") +
+      `</tr></table>` +
+      `</div>`
+    );
+  };
+
+  return buildWordShell({
+    title: `Bulletins de fin d'année — ${data.class.name} — ${data.school.name} — ${data.year}`,
+    orientation: "portrait",
+    marginMm: 8,
+    styles: `p { margin:0; }`,
+    bodyHtml: rows
+      .map((row, i) => bulletin(row, i + 1))
+      .join(EOY_WORD_PAGE_BREAK),
+  });
+}
+
+// === MODÈLE EXCEL (.xlsx) — UNE FEUILLE PAR ÉLÈVE ===
+// Classeur exceljs : chaque feuille reproduit le bulletin (en-tête
+// institutionnel fusionné, bandeau vert, identification, moyennes bordées
+// vertes, décision avec OUI entouré, « Fait à … », signatures). Au-delà
+// de 60 élèves le classeur est LIMITÉ À 60 FEUILLES et une note rouge est
+// insérée en tête de la première feuille (éviter les classeurs
+// monstrueux). Nom de feuille « Bulletin N — NOM » tronqué à 31
+// caractères, caractères invalides Excel remplacés.
+const EOY_EXCEL_MAX_SHEETS = 60;
+
+/** Nom de feuille Excel sûr : ≤ 31 caractères, sans \ / ? * [ ] : */
+function safeSheetName(base: string): string {
+  return base
+    .replace(/[\\/?*[\]:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 31);
+}
+
+async function exportEofyBulletinsExcelAsync(
+  data: EndOfYearSheet,
+  rows: EndOfYearRow[],
+  effectif: number,
+  filename: string,
+): Promise<void> {
+  const { Workbook } = await import("exceljs");
+  const wb = new Workbook();
+  wb.creator = "SYGREN";
+
+  const limited = rows.length > EOY_EXCEL_MAX_SHEETS;
+  const list = limited ? rows.slice(0, EOY_EXCEL_MAX_SHEETS) : rows;
+
+  const iep = data.iep;
+  const annee = anneeScolaireBulletin(data);
+  const teacher = (data.class.teacher_name || "").trim();
+  const directeur = (data.directeur || "").trim();
+
+  // Couleurs du drapeau CI (mêmes que le PDF) + bordures vertes.
+  const GREEN = { argb: "FF009E60" };
+  const GREEN_TXT = { argb: "FF00734A" };
+  const RED = { argb: "FFC00000" };
+  const WHITE = "FFFFFFFF";
+  const BORDER = { style: "thin" as const, color: GREEN };
+  const BOX = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+  const BLACK_C = { style: "medium" as const, color: { argb: "FF000000" } };
+
+  // Police Arial (police des modèles Word/Excel du projet).
+  const font = (
+    size: number,
+    bold = false,
+    argb?: string,
+    italic = false,
+  ) => ({
+    name: "Arial",
+    size,
+    bold,
+    italic,
+    ...(argb ? { color: { argb } } : {}),
+  });
+  type RichPart = { font: ReturnType<typeof font>; text: string };
+
+  // Armoiries (meilleur effort — fetch unique, répétées sur chaque feuille).
+  let arm: Uint8Array | null = null;
+  try {
+    const res = await fetch("/ci-coat-of-arms.png");
+    if (res.ok) arm = new Uint8Array(await res.arrayBuffer());
+  } catch {
+    // armoiries omises — l'en-tête reste lisible
+  }
+
+  for (let i = 0; i < list.length; i++) {
+    const row = list[i];
+    const scale = scaleOf(data, row);
+    const ws = wb.addWorksheet(
+      safeSheetName(`Bulletin ${i + 1} — ${row.full_name}`),
+      {
+        views: [{ showGridLines: false }],
+        pageSetup: {
+          paperSize: 9,
+          orientation: "portrait",
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+        },
+      },
+    );
+    ws.columns = [30, 14, 14, 12, 15].map((width) => ({ width }));
+
+    // Rangée de départ (décalée si la note de limitation est insérée).
+    let r = 1;
+    if (limited && i === 0) {
+      ws.mergeCells(1, 1, 1, 5);
+      const note = ws.getCell(1, 1);
+      note.value = `Note : le lot compte ${rows.length} élèves ; le classeur est limité à ${EOY_EXCEL_MAX_SHEETS} feuilles — exporter les classes restantes une par une.`;
+      note.font = font(11, true, RED.argb);
+      note.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+      ws.getRow(1).height = 28;
+      r = 3;
+    }
+
+    // Ligne fusionnée sur les 5 colonnes (en-tête institutionnel, bandeaux).
+    const full = (
+      rr: number,
+      value: string | { richText: RichPart[] },
+      size: number,
+      bold = false,
+      opts?: { italic?: boolean; argb?: string; fill?: string; box?: boolean; h?: number },
+    ) => {
+      ws.mergeCells(rr, 1, rr, 5);
+      const c = ws.getCell(rr, 1);
+      c.value = value;
+      c.font = font(size, bold, opts?.argb, opts?.italic ?? false);
+      c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      if (opts?.fill) {
+        for (let col = 1; col <= 5; col++) {
+          ws.getCell(rr, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+        }
+      }
+      if (opts?.box) for (let col = 1; col <= 5; col++) ws.getCell(rr, col).border = BOX;
+      if (opts?.h) ws.getRow(rr).height = opts.h;
+    };
+
+    // --- En-tête institutionnel (fidèle au modèle PDF) ---
+    full(r, "Ministère de l'Education Nationale Et de l'Alphabétisation — et de l'Enseignement Technique", 12, true);
+    full(r + 1, `Direction Régionale de ${(iep?.region || "…………").toUpperCase()} — Inspection de l'Enseignement Préscolaire et Primaire de ${(iep?.name || "…………").toUpperCase()}`, 11, true, { italic: true });
+    full(r + 2, `BP : ${iep?.bp || "……"} / Tel : ${iep?.inspector_phone || "…………"} — Courriel : ${iep?.inspector_email || "…………"}`, 11);
+    full(r + 3, "République de Côte d'Ivoire — Union-Discipline-Travail", 11, true);
+    // --- Bandeau du titre (vert drapeau) + session ---
+    full(r + 4, "RESULTATS DE FIN D'ANNÉE", 14, true, { argb: WHITE, fill: "FF009E60", box: true });
+    full(r + 5, sessionLabel(data), 12, true, { argb: WHITE, fill: "FF009E60", box: true });
+    ws.getRow(r + 6).height = 4;
+
+    // --- Identification de l'élève (libellés verts gras + valeur, boîte) ---
+    const ident = (
+      rr: number,
+      leftLabel: string,
+      leftValue: string,
+      leftColor: string | undefined,
+      rightLabel: string,
+      rightValue: string,
+    ) => {
+      ws.mergeCells(rr, 1, rr, 3);
+      const lc = ws.getCell(rr, 1);
+      lc.value = {
+        richText: [
+          { font: font(11, true, GREEN_TXT.argb), text: leftLabel },
+          { font: font(11, true, leftColor), text: leftValue },
+        ],
+      };
+      lc.alignment = { horizontal: "left", vertical: "middle" };
+      ws.mergeCells(rr, 4, rr, 5);
+      const rc = ws.getCell(rr, 4);
+      rc.value = {
+        richText: [
+          { font: font(11, true, GREEN_TXT.argb), text: rightLabel },
+          { font: font(11, true), text: rightValue },
+        ],
+      };
+      rc.alignment = { horizontal: "left", vertical: "middle" };
+      for (let col = 1; col <= 5; col++) ws.getCell(rr, col).border = BOX;
+      ws.getRow(rr).height = 16;
+    };
+    ident(r + 7, "Élève : ", row.full_name.toUpperCase(), row.gender === "F" ? RED.argb : undefined, "Matricule : ", row.matricule);
+    ident(r + 8, "Classe : ", data.class.name, undefined, "Effectif : ", String(effectif));
+    ident(r + 9, "Sexe : ", row.gender, undefined, "Année scolaire : ", annee);
+    ws.getRow(r + 10).height = 4;
+
+    // --- Moyennes (fond pastel sur la moyenne annuelle) ---
+    const moy = (rr: number, label: string, value: string, highlight: boolean) => {
+      ws.mergeCells(rr, 1, rr, 3);
+      const lc = ws.getCell(rr, 1);
+      lc.value = label;
+      lc.font = font(11, highlight);
+      lc.alignment = { horizontal: "left", vertical: "middle" };
+      ws.mergeCells(rr, 4, rr, 5);
+      const vc = ws.getCell(rr, 4);
+      vc.value = `${value}/ ${scale}`;
+      vc.font = font(11, true);
+      vc.alignment = { horizontal: "right", vertical: "middle" };
+      for (let col = 1; col <= 5; col++) {
+        const c = ws.getCell(rr, col);
+        c.border = BOX;
+        if (highlight) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE4F4ED" } };
+      }
+      ws.getRow(rr).height = 16;
+    };
+    moy(r + 11, "Moyenne de la composition de Passage", fmtMoy(row.moyenne_passage, row.has_moyenne_passage), false);
+    moy(r + 12, "Moyenne des compositions Mensuelles", fmtMoy(row.moyenne_compositions, row.has_moyenne_compositions), false);
+    moy(r + 13, "Moyenne Annuelle", fmtMoy(row.moyenne_annuelle, row.has_moyenne_annuelle), true);
+    full(r + 14, `Rang : ${i + 1} sur ${effectif} élèves.`, 11, false, { box: true });
+    ws.getRow(r + 15).height = 4;
+
+    // --- DÉCISION DU CONSEIL DES MAÎTRES (bandeau orange, OUI entouré) ---
+    full(r + 16, "DÉCISION DU CONSEIL DES MAÎTRES", 12, true, { argb: WHITE, fill: "FFF77F00", box: true });
+    const decRows = [
+      { key: "admis" as const, label: "ADMIS(E) EN CLASSE SUPÉRIEURE" },
+      { key: "redouble" as const, label: "REDOUBLE LE COURS" },
+      { key: "exclu" as const, label: "EXCLU(E)" },
+    ];
+    decRows.forEach((d, k) => {
+      const rr = r + 17 + k;
+      ws.mergeCells(rr, 1, rr, 3);
+      const lc = ws.getCell(rr, 1);
+      lc.value = d.label;
+      lc.font = font(11, true);
+      lc.alignment = { horizontal: "left", vertical: "middle" };
+      const oui = ws.getCell(rr, 4);
+      oui.value = "OUI";
+      const non = ws.getCell(rr, 5);
+      non.value = "NON";
+      [oui, non].forEach((c) => {
+        c.font = font(11, true);
+        c.alignment = { horizontal: "center", vertical: "middle" };
+      });
+      for (let col = 1; col <= 5; col++) ws.getCell(rr, col).border = BOX;
+      // Ellipse du modèle → bordure noire épaisse sur le OUI entouré.
+      if (isCircled(row.decision_conseil, d.key, "OUI")) {
+        ws.getCell(rr, 4).border = { top: BLACK_C, left: BLACK_C, bottom: BLACK_C, right: BLACK_C };
+      }
+      ws.getRow(rr).height = 16;
+    });
+    full(r + 20, "(Rayer les mentions inutiles)", 10, false, { italic: true, box: true });
+    full(r + 21, `Fait à ${(iep?.region || "DABOU").toUpperCase()}, le ${todayFr()}`, 12, false, { box: true });
+    ws.getRow(r + 22).height = 6;
+
+    // --- Signatures (intitulé en haut, nom en bas de la case) ---
+    const rs = r + 23;
+    const sigZone = (colStart: number, colEnd: number, label: string, name: string) => {
+      ws.mergeCells(rs, colStart, rs, colEnd);
+      const lab = ws.getCell(rs, colStart);
+      lab.value = label;
+      lab.font = { name: "Arial", size: 12, bold: true, underline: true, color: { argb: GREEN_TXT.argb } };
+      lab.alignment = { horizontal: "center", vertical: "middle" };
+      ws.mergeCells(rs + 1, colStart, rs + 2, colEnd); // place signature + cachet
+      ws.mergeCells(rs + 3, colStart, rs + 3, colEnd);
+      const nm = ws.getCell(rs + 3, colStart);
+      if (name) nm.value = name.toUpperCase(); // caractère d'imprimerie
+      nm.font = font(12, true);
+      nm.alignment = { horizontal: "center", vertical: "bottom" };
+      for (let rr = rs; rr <= rs + 3; rr++) {
+        for (let col = colStart; col <= colEnd; col++) ws.getCell(rr, col).border = BOX;
+      }
+    };
+    sigZone(1, 2, "Le Maître chargé du cours", teacher);
+    sigZone(4, 5, "Le Directeur", directeur);
+    ws.getRow(rs).height = 15;
+    ws.getRow(rs + 1).height = 14;
+    ws.getRow(rs + 2).height = 14;
+    ws.getRow(rs + 3).height = 15;
+
+    // --- Armoiries en haut de feuille (meilleur effort) ---
+    if (arm) {
+      try {
+        const imgId = wb.addImage({
+          buffer: arm as unknown as Parameters<typeof wb.addImage>[0]["buffer"],
+          extension: "png",
+        });
+        ws.addImage(imgId, { tl: { col: 3.5, row: 0.2 }, ext: { width: 46, height: 46 } });
+      } catch {
+        // armoiries omises — l'en-tête reste lisible
+      }
+    }
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveBlob(new Blob([buf], { type: XLSX_MIME }), filename);
+}
+
 /** Page complète : barre d'outils + les feuilles (2 élèves DIFFÉRENTS par
  *  feuille A4 paysage, appariés dans l'ordre de mérite). */
 export function EndOfYearBulletin({
@@ -675,6 +1093,9 @@ export function EndOfYearBulletin({
   // portail parent (bulletin individuel de son enfant uniquement).
   const canPrint = canPrintDocument(role, !!matricule);
   const parentMode = !!matricule;
+  // Modèles Word/Excel : état d'export (« doc » | « xlsx » | null) —
+  // useState PLACÉ AVANT LES RETOURS CONDITIONNELS (discipline React).
+  const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: [
       "end-of-year",
@@ -732,6 +1153,38 @@ export function EndOfYearBulletin({
   const childRang =
     data.rows.findIndex((r) => r.student_id === data.student_id) + 1;
 
+  // Nom de base des fichiers Word/Excel : bulletins-fin-annee-<slug classe>
+  // (slugFile — même convention que les autres documents du projet).
+  const fileBase = `bulletins-fin-annee-${slugFile(data.class.name)}`;
+  // data est non-nulle ici (retours conditionnels ci-dessus) — const locale
+  // pour que la réduction de type traverse les closures des handlers.
+  const sheet: EndOfYearSheet = data;
+
+  // Modèle WORD (.doc) — un SEUL fichier, un bulletin par élève, séparés
+  // par un saut de page Word (mêmes verrous que l'impression).
+  function handleWord() {
+    setExporting("doc");
+    try {
+      saveWordDoc(
+        buildEofyBulletinsWordHtml(sheet, rows, effectif),
+        `${fileBase}.doc`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  // Modèle EXCEL (.xlsx) — une feuille par élève (exceljs importé à la
+  // demande, comme la liste des candidats).
+  async function handleExcel() {
+    setExporting("xlsx");
+    try {
+      await exportEofyBulletinsExcelAsync(sheet, rows, effectif, `${fileBase}.xlsx`);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   // Appariement des élèves (ordre de mérite — les rows arrivent triés) :
   // 1er + 2e sur la première feuille, 3e + 4e sur la suivante, etc.
   // (nombre impair → le dernier bulletin est seul sur sa feuille).
@@ -760,13 +1213,16 @@ export function EndOfYearBulletin({
               : "Format : A4 paysage — 2 bulletins par feuille (2 élèves différents, à découper)"}
           </span>
           {canPrint ? (
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimer / PDF
-            </button>
+            /* Barre uniforme des documents officiels : PDF (impression
+               navigateur) + Word (.doc) + Excel (.xlsx) — verrous
+               d'impression inchangés (canPrint / PrintLockBadge). */
+            <DocExportButtons
+              canPrint
+              exporting={exporting}
+              onPdf={() => window.print()}
+              onWord={handleWord}
+              onExcel={handleExcel}
+            />
           ) : (
             <PrintLockBadge />
           )}

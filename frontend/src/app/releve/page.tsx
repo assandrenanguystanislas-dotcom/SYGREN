@@ -6,10 +6,29 @@
 // bandeau ORANGE DRAPEAU pour le type d'examen, blocs statistiques et
 // signatures bordés de vert ; armoiries en filigrane (rubans tricolores
 // haut/bas RETIRÉS — aucune bordure drapeau sur les feuilles imprimables).
+//
+// v4 — EXTENSION DES 3 MODÈLES D'IMPRESSION : en plus du PDF (window.print),
+// le relevé propose désormais les modèles Word (.doc, HTML MSO via la lib
+// partagée buildWordShell) et Excel (.xlsx, exceljs importé à la demande) —
+// en-tête institutionnel reproduit fidèlement depuis le rendu PDF
+// (bloc ministériel + République + boîte du titre + bandeau orange +
+// école/code + G/F/T + date), tableau élèves × matières avec les mêmes
+// valeurs formatées (fmt : « — » si pas de note, virgule française,
+// zéros décimaux trimés), statistiques du bas et signatures avec les
+// mêmes libellés et le même repli en pointillés que le PDF.
 import { useState, useEffect } from "react";
-import { Printer, X, Loader2, User, Users, CheckCircle2, Award, TrendingUp } from "lucide-react";
+import { X, Loader2, User, Users, CheckCircle2, Award, TrendingUp } from "lucide-react";
 import { CIArmoiriesWatermark } from "@/components/ci-decor";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
+import {
+  DocExportButtons,
+  XLSX_MIME,
+  buildWordShell,
+  escHtml,
+  saveBlob,
+  saveWordDoc,
+  slugFile,
+} from "@/lib/doc-export";
 
 // === Types ===
 interface ReleveSubjectGrade {
@@ -209,6 +228,485 @@ function fmt(v: number, hasGrade: boolean): string {
   return r.toFixed(2).replace(/\.?0+$/, "").replace(".", ",");
 }
 
+// === EXTENSION DES MODÈLES WORD / EXCEL DU RELEVÉ DE NOTES =================
+//
+// ORIENTATION : A4 PORTRAIT — le @page appliqué au module /releve
+// (globals.css) est « size: A4 portrait; margin: 8mm » et le conteneur des
+// pages du PDF fait 210mm de large → portrait, marge 8mm.
+const RELEVE_ORIENTATION = "portrait" as const;
+const RELEVE_MARGIN_MM = 8;
+
+// Couleurs du rendu PDF (valeurs Tailwind reprises telles quelles) :
+const GREEN = "#009E60"; // bordures + entêtes du tableau (fond vert)
+const TITLE_BG = "#FDEBDA"; // fond pastel orange de la boîte du titre
+const BAND_BG = "#F77F00"; // bandeau orange du type d'examen
+const EPS_HEAD_BG = "#FDE047"; // bg-yellow-300 — entête de la colonne EPS
+const EPS_CELL_BG = "#FEF08A"; // bg-yellow-200 — cellules de notes EPS
+const GIRL_RED = "#DC2626"; // text-red-600 — NOM et Prénoms des filles
+const BOY_BLUE = "#1D4ED8"; // text-blue-700 — valeurs de la colonne G
+const ADMIS_GREEN = "#047857"; // text-emerald-700 — ligne Admis
+const GRAY_600 = "#4B5563"; // text-gray-600 — entête de la colonne T
+const EMAIL_BLUE = "#1d4ed8"; // lien Courriel de l'en-tête
+
+// Replis en pointillés — chaînes EXACTES affichées par le PDF :
+const DOTS_BP = "........."; // BP absent
+const DOTS_TEL = "............."; // téléphone absent
+const DOTS_MAIL = "............"; // courriel absent
+const DOTS_SIG = "................................"; // nom de signature absent
+
+// === MODÈLE WORD (.doc) — HTML MSO A4 PORTRAIT fidèle au rendu PDF ===
+// En-tête institutionnel COPIÉ du rendu JSX (bloc ministériel + République
+// + boîte du titre + bandeau orange + école/code + G/F/T + date), tableau
+// élèves × matières (thead répété à chaque page par Word via
+// display:table-header-group), statistiques du bas et signatures.
+function buildReleveWordHtml(data: ReleveData): string {
+  const esc = escHtml;
+  // Matières (libellés abrégés, comme les entêtes du PDF)
+  const subjects: { name: string; display_name: string }[] =
+    data.students[0]?.grades?.map((g) => ({
+      name: g.subject_name,
+      display_name: abbreviateSubject(g.subject_name),
+    })) ?? [];
+  const stats = data.stats;
+  const compact = subjects.length > 6;
+
+  // Largeurs de colonnes en % (table-layout:fixed) — mêmes proportions que
+  // le PDF (N° étroit, Matricule/Nom moyens, Prénoms extensibles).
+  const wNum = 3.5, wMat = 11, wNom = 11, wTotal = 5, wMoy = 4.5, wObs = 4.5;
+  const wSubj = compact ? 3.4 : 6;
+  const wPrenoms = Math.max(
+    100 - wNum - wMat - wNom - wTotal - wMoy - wObs - subjects.length * wSubj,
+    8,
+  );
+
+  // Styles de cellules du tableau principal
+  const th = `border:1px solid ${GREEN}; padding:1px; font-weight:bold; text-align:center; vertical-align:middle; color:#fff; background:${GREEN};`;
+  const td = `border:1px solid ${GREEN}; padding:0 1px; font-size:11px; text-align:center; vertical-align:middle;`;
+  const tdL = `border:1px solid ${GREEN}; padding:0 2px; font-size:11px; text-align:left; vertical-align:middle;`;
+
+  // Entêtes : libellés principaux en 11px, matières en 9px (comme le PDF) ;
+  // la colonne EPS garde son entête JAUNE (fidèle au rendu imprimé).
+  const headCells =
+    `<th style="${th}; font-size:11px;">N&deg;</th>` +
+    `<th style="${th}; font-size:11px;">Matricule</th>` +
+    `<th style="${th}; font-size:11px;">Nom</th>` +
+    `<th style="${th}; font-size:11px;">Pr&eacute;noms</th>` +
+    subjects
+      .map(
+        (s) =>
+          `<th style="${th}; font-size:9px;${
+            isEPS(s.name) ? ` background:${EPS_HEAD_BG};` : ""
+          }">${esc(s.display_name)}</th>`,
+      )
+      .join("") +
+    `<th style="${th}; font-size:11px;">Total</th>` +
+    `<th style="${th}; font-size:11px;">Moy.</th>` +
+    `<th style="${th}; font-size:11px;">Obs.</th>`;
+
+  // Lignes élèves — numérotation continue, noms en MAJUSCULES, filles en
+  // rouge, notes formatées par fmt (mêmes valeurs que le PDF), EPS surlignée.
+  const body = data.students
+    .map((e, i) => {
+      const fille = e.gender === "F";
+      const red = fille ? ` color:${GIRL_RED};` : "";
+      const notes = subjects
+        .map((s, idx) => {
+          const g = e.grades[idx];
+          const val = g ? fmt(g.value, g.has_grade) : "—";
+          const eps = isEPS(s.name);
+          return `<td style="${td}${eps ? ` background:${EPS_CELL_BG}; font-weight:bold;` : ""}">${esc(val)}</td>`;
+        })
+        .join("");
+      return (
+        `<tr>` +
+        `<td style="${td}; font-weight:bold;">${i + 1}</td>` +
+        `<td style="${td}; font-weight:bold;">${esc(e.matricule)}</td>` +
+        `<td style="${tdL}; font-weight:bold;${red}">${esc(e.last_name.toUpperCase())}</td>` +
+        `<td style="${tdL}; font-weight:bold;${red}">${esc(e.first_name.toUpperCase())}</td>` +
+        notes +
+        `<td style="${td}; font-weight:bold;">${esc(e.has_average ? fmt(e.total, true) : "—")}</td>` +
+        `<td style="${td}; font-weight:bold;">${esc(e.has_average ? fmt(e.average, true) : "—")}</td>` +
+        `<td style="${td}; font-weight:bold;">${esc(e.observation)}</td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+
+  // Bloc statistiques (mêmes lignes et couleurs que le bloc du PDF :
+  // G bleu / F rouge / T noir, Admis en vert, % avec le fmt du PDF).
+  const stB = `border:1px solid ${GREEN}; padding:1px 3px; font-size:10px;`;
+  const stRow = (
+    label: string,
+    g: string,
+    f: string,
+    t: string,
+    colorG: string,
+    colorF: string,
+    colorT = "#000000",
+  ) =>
+    `<tr>` +
+    `<td style="${stB}; font-weight:bold;">${label}</td>` +
+    `<td style="${stB}; text-align:center; font-weight:bold; color:${colorG};">${g}</td>` +
+    `<td style="${stB}; text-align:center; font-weight:bold; color:${colorF};">${f}</td>` +
+    `<td style="${stB}; text-align:center; font-weight:bold; color:${colorT};">${t}</td>` +
+    `</tr>`;
+  const statsTable =
+    `<table class="stat">` +
+    `<tr>` +
+    `<td style="${stB}; width:34%;">&nbsp;</td>` +
+    `<td style="${stB}; text-align:center; font-weight:bold; color:${BOY_BLUE};">G</td>` +
+    `<td style="${stB}; text-align:center; font-weight:bold; color:${GIRL_RED};">F</td>` +
+    `<td style="${stB}; text-align:center; font-weight:bold; color:${GRAY_600};">T</td>` +
+    `</tr>` +
+    stRow("Inscrits", `${stats.inscrits_g}`, `${stats.inscrits_f}`, `${stats.inscrits_t}`, BOY_BLUE, GIRL_RED) +
+    stRow("Pr&eacute;sents", `${stats.presents_g}`, `${stats.presents_f}`, `${stats.presents_t}`, BOY_BLUE, GIRL_RED) +
+    stRow("Admis", `${stats.admis_g}`, `${stats.admis_f}`, `${stats.admis_t}`, ADMIS_GREEN, ADMIS_GREEN, ADMIS_GREEN) +
+    stRow(
+      "% Admis",
+      `${esc(fmt(stats.pct_g, true))}%`,
+      `${esc(fmt(stats.pct_f, true))}%`,
+      `${esc(fmt(stats.pct_t, true))}%`,
+      BOY_BLUE,
+      GIRL_RED,
+    ) +
+    `<tr><td colspan=4 style="${stB}; text-align:center; font-weight:bold;">Taux de R&eacute;ussite : ${esc(fmt(stats.pct_t, true))}%</td></tr>` +
+    `</table>`;
+
+  // Signatures — libellés soulignés MAJUSCULES + noms affichés par le PDF
+  // (CSS uppercase) ou pointillés identiques quand le nom est absent.
+  const sigCell = (label: string, name: string) =>
+    `<td style="border:2px solid ${GREEN}; padding:6px; vertical-align:bottom; width:27%;">` +
+    `<p style="text-decoration:underline; text-transform:uppercase; font-size:11px; font-weight:bold;">${label}</p>` +
+    `<p style="margin-top:26px; text-transform:uppercase; font-size:11px; font-weight:bold; letter-spacing:0.5px;">${esc(name)}</p>` +
+    `</td>`;
+  const directeur = (data.director_name || "").trim().toUpperCase() || DOTS_SIG;
+  const inspecteur = (data.inspector_name || "").trim().toUpperCase() || DOTS_SIG;
+
+  return buildWordShell({
+    title: `Relevé de notes ${data.class_name} — ${data.school_name}`,
+    orientation: RELEVE_ORIENTATION,
+    marginMm: RELEVE_MARGIN_MM,
+    styles: `
+table.hdr { border-collapse:collapse; width:100%; }
+table.hdr td { border:none; vertical-align:top; font-size:11px; line-height:1.35; }
+.titre { display:inline-block; border:2px solid ${GREEN}; background:${TITLE_BG}; border-radius:16px; padding:5px 22px 6px; font-size:13px; font-weight:bold; letter-spacing:0.5px; }
+.bandeau { display:inline-block; background:${BAND_BG}; color:#fff; font-weight:bold; font-size:14px; letter-spacing:2px; padding:2px 22px 3px; margin-top:10px; text-transform:uppercase; }
+table.doc { border-collapse:collapse; width:100%; table-layout:fixed; }
+table.doc th, table.doc td { overflow-wrap:break-word; }
+thead.rep { display:table-header-group; }
+table.stat { border-collapse:collapse; width:100%; }
+table.final { border-collapse:collapse; width:100%; margin-top:8px; }
+table.final td { border:none; vertical-align:top; }
+`,
+    bodyHtml: `
+<table class=hdr><tr>
+<td style="width:34%">
+<p><b>Minist&egrave;re de l'Education Nationale</b></p>
+<p><b>Et de l'Alphab&eacute;tisation</b></p>
+<p><i>Direction R&eacute;gionale de ${esc(data.iep_region)}</i></p>
+<p><b>Inspection de l'Enseignement</b></p>
+<p><b>Pr&eacute;scolaire et Primaire de ${esc(data.iep_name)}</b></p>
+<p>BP : ${esc(data.iep_bp || DOTS_BP)} / Tel : ${esc(data.inspector_phone || DOTS_TEL)}</p>
+<p>Courriel : <span style="color:${EMAIL_BLUE}; text-decoration:underline;">${esc(data.inspector_email || DOTS_MAIL)}</span></p>
+</td>
+<td style="width:32%; text-align:center;">
+<p><span class=titre>${esc(data.title)}</span></p>
+<p><span class=bandeau>${esc(data.type_examen)}</span></p>
+</td>
+<td style="width:34%; text-align:center;">
+<p><b>R&eacute;publique de C&ocirc;te d'Ivoire</b></p>
+<p><i>Union-Discipline-Travail</i></p>
+</td>
+</tr></table>
+<table class=hdr><tr>
+<td style="width:55%"><p style="font-size:12px; font-weight:bold; text-transform:uppercase;">ECOLE : ${esc(data.school_name)}</p>
+<p style="font-size:12px; font-weight:bold; text-transform:uppercase;">CODE : ${esc(data.school_code)}</p></td>
+<td style="width:45%; text-align:right;"><p style="font-size:11px; font-weight:bold; letter-spacing:1px;">G ${data.total_g} &nbsp; F ${data.total_f} &nbsp; T ${data.total_t}</p>
+<p style="font-size:11px; font-weight:bold;">Date: ${esc(data.date)}</p></td>
+</tr></table>
+<table class=doc>
+<colgroup>
+<col style="width:${wNum}%">
+<col style="width:${wMat}%">
+<col style="width:${wNom}%">
+<col style="width:${wPrenoms}%">
+${subjects.map(() => `<col style="width:${wSubj}%">`).join("")}
+<col style="width:${wTotal}%">
+<col style="width:${wMoy}%">
+<col style="width:${wObs}%">
+</colgroup>
+<thead class=rep><tr>${headCells}</tr></thead>
+<tbody>${body}</tbody>
+</table>
+<table class=final><tr>
+<td style="width:46%">${statsTable}</td>
+${sigCell("Le Directeur", directeur)}
+${sigCell("L'Inspecteur", inspecteur)}
+</tr></table>
+`,
+  });
+}
+
+// === MODÈLE EXCEL (.xlsx) — classeur mis en page (exceljs) ===
+// En-tête institutionnel fusionné (ministère, République, boîte du titre
+// sur fond pastel orange, bandeau orange du type d'examen, école/code +
+// G/F/T + date), entêtes du tableau sur FOND VERT texte blanc (EPS sur
+// jaune, comme le PDF), données avec les mêmes valeurs formatées, stats
+// du bas, signatures ; impression portrait ajustée à 1 page de large,
+// ligne d'entêtes répétée à chaque page.
+async function exportReleveExcelAsync(data: ReleveData): Promise<void> {
+  const { Workbook } = await import("exceljs");
+  const wb = new Workbook();
+  wb.creator = "SYGREN";
+
+  // Matières (libellés abrégés, comme les entêtes du PDF)
+  const subjects: { name: string; display_name: string }[] =
+    data.students[0]?.grades?.map((g) => ({
+      name: g.subject_name,
+      display_name: abbreviateSubject(g.subject_name),
+    })) ?? [];
+  const stats = data.stats;
+  const compact = subjects.length > 6;
+  const nCols = 8 + subjects.length; // N° Mat Nom Pré + matières + Total Moy Obs
+
+  const ws = wb.addWorksheet("Releve Notes", {
+    views: [{ state: "frozen", ySplit: 8, showGridLines: false }],
+    pageSetup: {
+      paperSize: 9, // A4
+      orientation: "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+      printTitlesRow: "8:8", // la ligne d'entêtes du tableau se répète
+    },
+  });
+  ws.columns = [
+    4.5, 14, 16, 24,
+    ...subjects.map(() => (compact ? 4.5 : 7)),
+    7, 7, 8,
+  ].map((width) => ({ width }));
+
+  // Police Arial partout (demande utilisateur)
+  const font = (size: number, bold = false, color?: string, italic = false, underline = false) => ({
+    name: "Arial",
+    size,
+    bold,
+    italic,
+    underline,
+    ...(color ? { color: { argb: color } } : {}),
+  });
+  const GREEN_X = { argb: "FF009E60" };
+  const TITLE_BG_X = { argb: "FFFDEBDA" };
+  const BAND_BG_X = { argb: "FFF77F00" };
+  const EPS_HEAD_X = { argb: "FFFDE047" }; // bg-yellow-300 (entête EPS du PDF)
+  const EPS_CELL_X = { argb: "FFFEF08A" }; // bg-yellow-200 (cellules EPS)
+  const RED_X = "FFDC2626"; // text-red-600 (filles)
+  const BLUE_X = "FF1D4ED8"; // text-blue-700 (valeurs G)
+  const ADMIS_X = "FF047857"; // text-emerald-700 (ligne Admis)
+  const GRAY_X = "FF4B5563"; // text-gray-600 (entête T)
+  const border = { style: "thin" as const, color: GREEN_X };
+  const BOX = { top: border, left: border, bottom: border, right: border };
+  const fill = (argb: { argb: string }) => ({
+    type: "pattern" as const,
+    pattern: "solid" as const,
+    fgColor: argb,
+  });
+
+  const merged = (
+    row: number,
+    c1: number,
+    c2: number,
+    text: string,
+    f: ReturnType<typeof font>,
+    align: "left" | "center" | "right" = "center",
+  ) => {
+    ws.mergeCells(row, c1, row, c2);
+    const c = ws.getCell(row, c1);
+    c.value = text;
+    c.font = f;
+    c.alignment = { horizontal: align, vertical: "middle", wrapText: true };
+    return c;
+  };
+
+  // --- En-tête institutionnel (fidèle au rendu PDF) ---
+  merged(1, 1, nCols, "Ministère de l'Education Nationale Et de l'Alphabétisation", font(12, true));
+  merged(
+    2,
+    1,
+    nCols,
+    `Direction Régionale de ${data.iep_region} — Inspection de l'Enseignement Préscolaire et Primaire de ${data.iep_name}`,
+    font(11, true, undefined, true),
+  );
+  merged(3, 1, nCols, `BP : ${data.iep_bp || DOTS_BP} / Tel : ${data.inspector_phone || DOTS_TEL} — Courriel : ${data.inspector_email || DOTS_MAIL}`, font(10));
+  merged(4, 1, nCols, "République de Côte d'Ivoire — Union-Discipline-Travail", font(11, true));
+  // Boîte du titre : fond pastel orange bordé de vert (comme le PDF)
+  const titreCell = merged(5, 1, nCols, data.title, font(13, true));
+  titreCell.border = BOX;
+  titreCell.fill = fill(TITLE_BG_X);
+  // Bandeau orange du type d'examen (texte blanc, majuscules)
+  const bandeau = merged(6, 1, nCols, (data.type_examen || "").toUpperCase(), font(12, true, "FFFFFFFF"));
+  bandeau.fill = fill(BAND_BG_X);
+  // Ligne école / code + G F T + date
+  merged(7, 1, 5, `ECOLE : ${data.school_name} — CODE : ${data.school_code}`, font(11, true), "left");
+  merged(7, 6, nCols - 2, `G ${data.total_g}   F ${data.total_f}   T ${data.total_t}`, font(10, true), "right");
+  merged(7, nCols - 1, nCols, `Date: ${data.date}`, font(10, true), "right");
+
+  // --- Entêtes du tableau (fond vert, texte blanc — EPS sur jaune) ---
+  const headLabels = [
+    "N°",
+    "Matricule",
+    "Nom",
+    "Prénoms",
+    ...subjects.map((s) => s.display_name),
+    "Total",
+    "Moy.",
+    "Obs.",
+  ];
+  const headRow = ws.getRow(8);
+  headRow.values = headLabels;
+  headRow.height = compact ? 34 : 22;
+  // Boucle explicite sur TOUTES les colonnes (getCell matérialise chaque
+  // cellule → bordures garanties même si une valeur est vide).
+  for (let col = 1; col <= nCols; col++) {
+    const c = headRow.getCell(col);
+    c.border = BOX;
+    c.font = font(9, true, "FFFFFFFF");
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    c.fill = fill(GREEN_X);
+    // Fidèle au PDF : l'entête de la colonne EPS est JAUNE (texte blanc)
+    const subjIdx = col - 5;
+    if (subjIdx >= 0 && subjIdx < subjects.length && isEPS(subjects[subjIdx].name)) {
+      c.fill = fill(EPS_HEAD_X);
+    }
+  }
+
+  // --- Lignes élèves (numérotation continue, filles en rouge, EPS surlignée) ---
+  data.students.forEach((e, i) => {
+    const fille = e.gender === "F";
+    const r = 9 + i;
+    const values: Array<string | number> = [
+      i + 1,
+      e.matricule,
+      e.last_name.toUpperCase(),
+      e.first_name.toUpperCase(),
+      ...subjects.map((_s, idx) => {
+        const g = e.grades[idx];
+        return g ? fmt(g.value, g.has_grade) : "—";
+      }),
+      e.has_average ? fmt(e.total, true) : "—",
+      e.has_average ? fmt(e.average, true) : "—",
+      e.observation,
+    ];
+    const row = ws.getRow(r);
+    row.values = values;
+    row.height = 15;
+    // Boucle explicite sur TOUTES les colonnes (observation peut être vide).
+    for (let col = 1; col <= nCols; col++) {
+      const c = row.getCell(col);
+      c.border = BOX;
+      const bold = col <= 4 || col >= nCols - 2; // N° Mat Nom Pré + Total Moy Obs
+      c.font = font(10, bold, fille && (col === 3 || col === 4) ? RED_X : undefined);
+      c.alignment =
+        col === 3 || col === 4
+          ? { horizontal: "left", vertical: "middle", wrapText: true }
+          : { horizontal: "center", vertical: "middle", wrapText: true };
+      // Cellules EPS surlignées en jaune et en gras (comme le PDF)
+      const subjIdx = col - 5;
+      if (subjIdx >= 0 && subjIdx < subjects.length && isEPS(subjects[subjIdx].name)) {
+        c.fill = fill(EPS_CELL_X);
+        c.font = font(10, true);
+      }
+    }
+  });
+
+  // --- Bloc statistiques (mêmes lignes/couleurs que le bloc du PDF) ---
+  const rStat = 9 + data.students.length + 1; // 1 rangée d'aération
+  const statHead = ws.getRow(rStat);
+  statHead.values = ["", "G", "F", "T"];
+  const statRows: Array<[string, string, string, string, string | undefined, string | undefined, string | undefined]> = [
+    ["Inscrits", `${stats.inscrits_g}`, `${stats.inscrits_f}`, `${stats.inscrits_t}`, BLUE_X, RED_X, undefined],
+    ["Présents", `${stats.presents_g}`, `${stats.presents_f}`, `${stats.presents_t}`, BLUE_X, RED_X, undefined],
+    ["Admis", `${stats.admis_g}`, `${stats.admis_f}`, `${stats.admis_t}`, ADMIS_X, ADMIS_X, ADMIS_X],
+    [
+      "% Admis",
+      `${fmt(stats.pct_g, true)}%`,
+      `${fmt(stats.pct_f, true)}%`,
+      `${fmt(stats.pct_t, true)}%`,
+      BLUE_X,
+      RED_X,
+      undefined,
+    ],
+  ];
+  statRows.forEach(([label, g, f, t, cg, cf, ct], k) => {
+    const r = rStat + 1 + k;
+    const row = ws.getRow(r);
+    row.values = [label, g, f, t];
+    row.height = 14;
+    for (let col = 1; col <= 4; col++) {
+      const c = row.getCell(col);
+      c.border = BOX;
+      if (col === 1) {
+        c.font = font(10, true);
+        c.alignment = { horizontal: "left", vertical: "middle" };
+      } else {
+        const color = col === 2 ? cg : col === 3 ? cf : ct;
+        c.font = font(10, true, color);
+        c.alignment = { horizontal: "center", vertical: "middle" };
+      }
+    }
+  });
+  // Entête G/F/T du bloc stats (couleurs des libellés du PDF)
+  ws.getCell(rStat, 2).font = font(10, true, BLUE_X);
+  ws.getCell(rStat, 3).font = font(10, true, RED_X);
+  ws.getCell(rStat, 4).font = font(10, true, GRAY_X);
+  for (let col = 1; col <= 4; col++) {
+    ws.getCell(rStat, col).border = BOX;
+    ws.getCell(rStat, col).alignment = { horizontal: col === 1 ? "left" : "center", vertical: "middle" };
+  }
+  // Taux de réussite (valeur en vert, comme le % géant du PDF)
+  const rTaux = rStat + 1 + statRows.length;
+  const taux = merged(rTaux, 1, 4, `Taux de Réussite : ${fmt(stats.pct_t, true)}%`, font(10, true, ADMIS_X), "left");
+  taux.border = BOX;
+
+  // --- Signatures (mêmes libellés et repli en pointillés que le PDF) ---
+  const rSig = rTaux + 2;
+  const sigCols: Array<[number, string, string]> = [
+    [2, "Le Directeur", (data.director_name || "").trim().toUpperCase() || DOTS_SIG],
+    [Math.min(nCols - 2, 8), "L'Inspecteur", (data.inspector_name || "").trim().toUpperCase() || DOTS_SIG],
+  ];
+  for (const [col, label, name] of sigCols) {
+    const lab = ws.getCell(rSig, col);
+    lab.value = label;
+    lab.font = font(11, true, undefined, false, true);
+    const nm = ws.getCell(rSig + 2, col);
+    nm.value = name;
+    nm.font = font(10, true);
+  }
+
+  // --- Armoiries (meilleur effort — omises si indisponibles) ---
+  try {
+    const res = await fetch("/ci-coat-of-arms.png");
+    if (res.ok) {
+      const u8 = new Uint8Array(await res.arrayBuffer());
+      const imgId = wb.addImage({
+        buffer: u8 as unknown as Parameters<typeof wb.addImage>[0]["buffer"],
+        extension: "png",
+      });
+      ws.addImage(imgId, { tl: { col: nCols - 1.6, row: 0.2 }, ext: { width: 46, height: 46 } });
+    }
+  } catch {
+    // armoiries omises — l'en-tête reste lisible
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  // Nom de fichier : releve-notes-<slug classe>-<slug session>.xlsx
+  saveBlob(
+    new Blob([buf], { type: XLSX_MIME }),
+    `releve-notes-${slugFile(data.class_name)}-${slugFile(`${data.type_examen} — ${data.month}-${data.year}`)}.xlsx`,
+  );
+}
+
 export default function RelevePage() {
   // v2 — VERROU D'IMPRESSION : réservé à l'Admin IEP + Super Admin
   // (consultation écran pour le directeur) — hook AVANT tout early return.
@@ -218,6 +716,9 @@ export default function RelevePage() {
   const [data, setData] = useState<ReleveData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Export Word/Excel en cours (« doc » | « xlsx » | null) — hook placé
+  // AVANT tout retour conditionnel (règle des Hooks).
+  const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -326,6 +827,35 @@ export default function RelevePage() {
     studentAcc += p.length;
   }
 
+  // Étiquette « session » pour les noms de fichiers : type d'examen +
+  // mois-année (même convention que le nom de PDF dynamique du document).
+  const fileBase = `releve-notes-${slugFile(data.class_name)}-${slugFile(
+    `${data.type_examen} — ${data.month}-${data.year}`,
+  )}`;
+  // Alias const typé ReleveData (data est non-null après le retour
+  // conditionnel) — les handlers ci-dessous captent ce type étroit.
+  const releveData = data;
+
+  // Modèle WORD (.doc) — HTML MSO A4 portrait fidèle au rendu PDF.
+  function handleWord() {
+    setExporting("doc");
+    try {
+      saveWordDoc(buildReleveWordHtml(releveData), `${fileBase}.doc`);
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  // Modèle EXCEL (.xlsx) — classeur mis en page (exceljs importé à la demande).
+  async function handleExcel() {
+    setExporting("xlsx");
+    try {
+      await exportReleveExcelAsync(releveData);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <div className="bg-gray-100 min-h-screen py-8 print:bg-white print:p-0 print:py-0">
       {/* Barre d'outils — cachée à l'impression */}
@@ -335,13 +865,14 @@ export default function RelevePage() {
         </h3>
         <div className="flex items-center gap-2">
           {canPrint ? (
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-800"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimer / PDF
-            </button>
+            <DocExportButtons
+              canPrint
+              exporting={exporting}
+              onPdf={() => window.print()}
+              onWord={handleWord}
+              onExcel={handleExcel}
+              formatHint="Format : A4 portrait"
+            />
           ) : (
             <PrintLockBadge />
           )}

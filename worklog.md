@@ -4526,3 +4526,10 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 
 ### Vérifications
 - `tsc --noEmit` = 0 erreur ; `next build` OK (16 routes) ; `go build ./...` OK.
+
+### Task 26 (suite) — documents PAR ÉLÈVE : relevé + bulletins périodiques + bulletins fin d'année
+- **Relevé de notes** (`app/releve/page.tsx`) : Word (.doc A4 portrait, en-tête institutionnel copié du JSX, thead répété, stats, signatures director_name/inspector_name) + Excel (.xlsx exceljs, entêtes fond vert, printTitlesRow 8:8, portrait fitToWidth) — filles en rouge, EPS jaune, mêmes règles vides/zéros que le PDF.
+- **Bulletin individuel fin d'année** (`end-of-year-bulletin.tsx`) : Word = UN .doc par lot, bulletins enchaînés avec saut de page MSO (en-tête, moyennes, rang, décision entourée, signatures avec nom du directeur) ; Excel = 1 feuille par élève (≤60 feuilles, note au-delà), richText, OUI entouré (bordure épaisse).
+- **Bulletins périodiques** (`app/bulletins/page.tsx` — le document imprimé par lot ; `bulletins-view.tsx` n'est que le sélecteur et n'a PAS été touché) : Word un bulletin/page (accolade Éveil au Milieu, visa directeur, résultats, statistiques avec progression ▲▼, appréciation) + Excel 1 feuille par élève (≤60).
+- Toolbars DocExportButtons (PDF/Word/Excel) sous verrou d'impression existant ; useState avant retours conditionnels ; fichiers `releve-notes-*`, `bulletins-fin-annee-*`, `bulletins-*` (slugFile).
+- tsc 0 erreur ; next build OK.
