@@ -4467,3 +4467,29 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 ### QA
 - Pipeline skill xlsx : recalc **0 erreur** (29 formules) → audit **0 erreur** (12 zéros légitimes : secteurs sans classe résolue) → validate **exit 0** ; contrôle sémantique Python **49/49 PASS** (totaux, par secteur, comptages de lignes, spot-checks alignés sur le tri du build).
 - Doublon de nom toujours présent : « EPP COTIERE PALMERAIE » × 2 (BADIA) — rappelé en note du classeur.
+
+---
+## Module Élèves — Liste des candidats : mise en page corrigée + 3 modèles (PDF / Word / Excel)
+
+**Date** : 2026-09-13 | **Commit** : `94ed81c` | Frontend seul (aucun fichier Go)
+
+### Demande
+« Dans le module élèves liste des candidats, la mise en page est mal faite. Le pied de page est utilisé de sorte que les élèves prennent toute la page et il n'y a pas de place pour le directeur en bas pour les classes ayant un effectif allant jusqu'à 50. Pour l'impression il faut les 3 modèles (PDF, Word et Excel). »
+
+### Diagnostic
+- `candidates-list-document.tsx` paginait avec des capacités FIXES [17, 24, 22] lignes de 7mm. Or `overflowWrap: break-word` fait passer les noms/prénoms/père/mère/lieu-acte longs à la ligne (7mm → 10,5/14mm) : le tableau dépassait le budget vertical de la dernière page, la signature « LE DIRECTEUR » (en flux, marginTop 5mm) était poussée hors de la boîte 192mm (`overflow: hidden`) → INVISIBLE ; le pied « ELEVES (n) » (absolu, bottom 2mm) donnait l'impression que « les élèves prennent toute la page ».
+
+### Correctif mise en page (même fichier)
+- **Pagination à BUDGET DE HAUTEUR** : chaque ligne est estimée (majoration Arial 12 : +3,5mm par ligne supplémentaire, cap 4 lignes, capacités en caractères déduites des largeurs % des 12 colonnes) ; remplissage par budgets — page 1 : 180−52(en-tête)−3−8 = 117mm ; pages intermédiaires : 168mm ; **dernière page : 154mm = 168−14mm de ZONE SIGNATURE réservée**.
+- **Signature ancrée** en absolu (left 7mm / bottom 13mm, au-dessus du pied) : « LE DIRECTEUR » est TOUJOURS visible, les lignes vides de complétion s'arrêtent avant la zone réservée.
+- `idxOffset` compte désormais les ÉLÈVES réels (hors lignes vides) — numérotation 1..n continue.
+- Tests Node (scripts/test_pagination_50.js côté assistant) : 50 élèves dont 7 à textes longs → 4 pages équilibrées, chaque page ≤ budget, zone signature préservée, cas limites 0/1 élève → TOUS PASS.
+
+### 3 modèles d'impression (barre d'outils)
+- **PDF** : `window.print()` (boîte d'impression navigateur → enregistrer en PDF) — inchangé.
+- **Word (.doc)** : HTML MSO A4 paysage (281mm, marge 8mm) généré côté client — en-tête institutionnel complet (tableau 3 colonnes sans bordures, armoiries en base64), titre encadré, tableau 12 colonnes bordé avec `thead` répété à chaque page, filles en rouge, signature + « ELEVES (n) » en pied. Téléchargé via Blob `application/msword` (BOM UTF-8).
+- **Excel (.xlsx)** : **exceljs 4.4.0 (nouvelle dépendance, import dynamique)** — en-tête officiel fusionné (A1:L5 encadré) + armoiries, école/code/centre/classe/effectifs/date, ligne d'en-têtes répétée à l'impression (`printTitlesRow 9:9`), 12 colonnes bordées (filles en rouge), volet figé, **impression paysage fitToWidth**. Validé openpyxl (orientation, fusions, bordures, valeurs).
+- Boutons PDF / Word / Excel (Loader2 pendant génération, désactivés pendant l'export) — verrou d'impression intact (admin + Admin IEP uniquement).
+
+### Vérifications
+- `tsc --noEmit` = 0 erreur ; `next build` OK ; push `94ed81c` → Vercel READY (94ed81c) ; Render inchangé (aucun Go), `/api/health` 200.
