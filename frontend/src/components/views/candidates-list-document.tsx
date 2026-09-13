@@ -76,7 +76,7 @@ const HEADER_MM = 52;    // en-tête institutionnel page 1 (majoré)
 const THEAD_MM = 8;      // ligne d'en-têtes du tableau
 const GAP_FIRST_MM = 3;  // espace en-tête → tableau (page 1)
 const GAP_MM = 4;        // espace → tableau (pages suivantes)
-const SIGN_ZONE_MM = 14; // zone réservée à la signature (dernière page)
+const SIGN_ZONE_MM = 16; // zone réservée à la signature + nom (dernière page)
 const ROW_MM = 7;        // hauteur d'une ligne simple (Arial 12)
 const LINE_MM = 3.5;     // mm par ligne supplémentaire (texte qui revient)
 
@@ -292,6 +292,9 @@ interface CandidatsExportData {
   examCenter: string;
   iep?: ClassCandidatesPayload["iep"];
   annee: number;
+  // Nom du directeur signataire (demande utilisateur : inscrit sous
+  // « LE DIRECTEUR » dans les 3 modèles).
+  directeur: string;
 }
 
 function escHtml(v: string): string {
@@ -383,6 +386,7 @@ table.doc td { height:7mm; }
 thead.rep { display:table-header-group; }
 .titre { display:inline-block; border:2px solid #000; padding:7px 20px 8px; font-size:16px; font-weight:bold; text-align:center; line-height:1.35; }
 .sig { font-weight:bold; text-decoration:underline; margin-top:24pt; }
+.signame { font-weight:bold; text-transform:uppercase; letter-spacing:0.3px; margin-top:6pt; }
 .pied { text-align:center; margin-top:18pt; }
 </style>
 </head>
@@ -418,6 +422,7 @@ ${armoiries ? `<p><img src="${armoiries}" width="56" height="56" alt=""></p>` : 
 <tbody>${body}</tbody>
 </table>
 <p class=sig>LE DIRECTEUR</p>
+${o.directeur.trim() ? `<p class=signame>${escHtml(o.directeur.trim().toUpperCase())}</p>` : ""}
 <p class=pied>ELEVES (${o.total})</p>
 </div>
 </body>
@@ -542,6 +547,12 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
   const dir = ws.getCell(rEnd + 3, 1);
   dir.value = "LE DIRECTEUR";
   dir.font = { name: "Arial", size: 11, bold: true, underline: true };
+  // Nom du directeur signataire SOUS « LE DIRECTEUR » (demande utilisateur).
+  if (o.directeur.trim()) {
+    const dirName = ws.getCell(rEnd + 4, 1);
+    dirName.value = o.directeur.trim().toUpperCase();
+    dirName.font = { name: "Arial", size: 10, bold: true };
+  }
 
   try {
     const res = await fetch("/ci-coat-of-arms.png");
@@ -642,6 +653,7 @@ export function CandidatesListDocument({
     examCenter: data.exam_center ?? "",
     iep,
     annee,
+    directeur: data.directeur ?? "",
   };
 
   // Modèle WORD (.doc) — HTML MSO A4 paysage fidèle au document imprimé.
@@ -935,25 +947,36 @@ export function CandidatesListDocument({
                 </tbody>
               </table>
 
-              {/* Signature « LE DIRECTEUR » — ANCRÉE en bas gauche de la
+              {/* Signature « LE DIRECTEUR » + NOM du directeur signataire
+                  (demande utilisateur) — ANCRÉS en bas gauche de la
                   DERNIÈRE page (position absolue au-dessus du pied « ELEVES
-                  (n) ») : visible quelle que soit la hauteur réelle des
+                  (n) ») : visibles quelle que soit la hauteur réelle des
                   lignes ; les lignes vides de complétion s'arrêtent avant la
-                  zone réservée (14mm). */}
+                  zone réservée (16mm). */}
               {isLast && (
                 <div
                   style={{
                     position: "absolute",
                     left: "7mm",
-                    bottom: "13mm",
+                    bottom: "8mm",
                     fontWeight: 700,
                     fontSize: "12px",
-                    textDecoration: "underline",
                     color: INK,
                     ...PRINT_COLOR_STYLE,
                   }}
                 >
-                  LE DIRECTEUR
+                  <div style={{ textDecoration: "underline" }}>LE DIRECTEUR</div>
+                  {data.directeur ? (
+                    <div
+                      style={{
+                        marginTop: "2px",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.3px",
+                      }}
+                    >
+                      {data.directeur}
+                    </div>
+                  ) : null}
                 </div>
               )}
 

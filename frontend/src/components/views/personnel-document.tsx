@@ -47,16 +47,42 @@
 //     (+2250101263515 → 0101263515) ; les numéros saisis sans indicatif
 //     passent inchangés.
 //
+// v6 — NOM DU DIRECTEUR + 3 MODÈLES D'IMPRESSION (demande utilisateur :
+// « étendre les 3 modèles PDF / Word / Excel à tous les documents ») :
+//   - Le nom du DIRECTEUR (agent dont role === "director", dérivé de la
+//     liste du personnel) s'affiche SOUS « Le Directeur » en caractère
+//     d'imprimerie (majuscules, gras) — même style que les autres
+//     documents officiels ;
+//   - Le bouton unique « Imprimer / PDF » devient la barre uniforme
+//     PDF / Word / Excel (lib partagée doc-export.tsx, état exporting) :
+//       · Word (.doc) : HTML MSO A4 PAYSAGE fidèle au PDF (en-tête
+//         institutionnel, tableau 20 colonnes — entêtes CLASSE /
+//         ÉCHELON / COURS remis à l'horizontale —, TOTAL, signature +
+//         NOM, N.B et mention « A RETOURNER EN 03 EXEMPLAIRES ») ;
+//       · Excel (.xlsx) : classeur exceljs PAYSAGE ajusté à 1 page de
+//         large (en-tête institutionnel fusionné, tableau bordé vert,
+//         femmes en rouge, TOTAL en gras, signature + NOM).
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
 // isolement #personnel-doc, lignes insécables).
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Printer, X } from "lucide-react";
-import type { CSSProperties } from "react";
+import { Loader2, X } from "lucide-react";
+import { useState, type CSSProperties } from "react";
 
 import { reportsApi } from "@/lib/api";
+import {
+  DocExportButtons,
+  XLSX_MIME,
+  armoiriesBase64,
+  buildWordShell,
+  escHtml,
+  saveBlob,
+  saveWordDoc,
+  slugFile,
+} from "@/lib/doc-export";
 import {
   canPrintDocument,
   PrintLockBadge,
@@ -190,6 +216,10 @@ export function PersonnelDocument({
   const printRole = usePrintRole();
   const canPrint = canPrintDocument(printRole, false);
 
+  // v6 — 3 modèles d'impression : état du modèle en cours de génération
+  // (spinner sur le bouton Word ou Excel pendant le téléchargement).
+  const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -223,12 +253,55 @@ export function PersonnelDocument({
   }
 
   const staff = data.staff;
+  // v6 — nom du directeur signataire : l'agent dont le rôle vaut
+  // « director » (le serveur le place toujours en tête de liste) —
+  // affiché SOUS « Le Directeur » et repris par les modèles Word / Excel.
+  const directeurName =
+    data.staff.find((r) => r.role === "director")?.full_name ?? "";
   const totalEffF = sumCol(staff.map((s) => s.effectif_f));
   const totalEffG = sumCol(staff.map((s) => s.effectif_g));
   const totalEffT = sumCol(staff.map((s) => s.effectif_t));
   const totalRedF = sumCol(staff.map((s) => s.redoublant_f));
   const totalRedG = sumCol(staff.map((s) => s.redoublant_g));
   const totalRedT = sumCol(staff.map((s) => s.redoublant_t));
+
+  // v6 — données partagées par les modèles Word / Excel (mêmes en-têtes
+  // d'origine que le PDF : école, IEP, année scolaire, directeur).
+  const exportData: ExportData = {
+    staff,
+    schoolName: data.school.name,
+    anneeScolaire: data.annee_scolaire,
+    iepRegion: data.iep?.region ?? "",
+    iepName: data.iep?.name ?? "",
+    iepBp: data.iep?.bp ?? "",
+    iepPhone: data.iep?.inspector_phone ?? "",
+    iepEmail: data.iep?.inspector_email ?? "",
+    directeur: directeurName,
+  };
+
+  // Modèle WORD (.doc) — HTML MSO A4 paysage fidèle au document imprimé
+  // (armoiries récupérées au passage — meilleur effort).
+  async function handleWord() {
+    setExporting("doc");
+    try {
+      saveWordDoc(
+        await buildWordHtml(exportData),
+        `etat-nominatif-personnel-${slugFile(exportData.schoolName)}-${slugFile(exportData.anneeScolaire)}.doc`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  // Modèle EXCEL (.xlsx) — classeur mis en page (exceljs importé à la demande).
+  async function handleExcel() {
+    setExporting("xlsx");
+    try {
+      await exportExcelAsync(exportData);
+    } finally {
+      setExporting(null);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
@@ -240,13 +313,16 @@ export function PersonnelDocument({
         </h3>
         <div className="flex items-center gap-2">
           {canPrint ? (
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimer / PDF
-            </button>
+            // v6 — barre uniforme des 3 modèles (PDF = impression
+            // navigateur, Word .doc, Excel .xlsx).
+            <DocExportButtons
+              canPrint
+              exporting={exporting}
+              onPdf={() => window.print()}
+              onWord={handleWord}
+              onExcel={handleExcel}
+              formatHint="Format : A4 paysage"
+            />
           ) : (
             <PrintLockBadge />
           )}
@@ -500,6 +576,22 @@ export function PersonnelDocument({
           >
             Le Directeur
           </div>
+          {/* v6 — NOM du directeur en caractère d'imprimerie (majuscules,
+              gras) SOUS « Le Directeur » — même style que les autres
+              documents officiels ; masqué si le personnel est vide. */}
+          {directeurName ? (
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.3px",
+                margin: "0 0 6px 12px",
+              }}
+            >
+              {directeurName}
+            </div>
+          ) : null}
           <div
             style={{
               fontSize: "12px",
@@ -607,5 +699,501 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
       <td style={tdContact}>{fmtContact(s.phone)}</td>
       <td style={tdc}>&nbsp;</td>
     </tr>
+  );
+}
+
+// ============================================================ 3 MODÈLES ===
+// v6 — Word (.doc) + Excel (.xlsx) en plus de l'impression PDF navigateur
+// (lib partagée doc-export.tsx) : mêmes en-têtes d'origine, même tableau
+// (20 colonnes, femmes en rouge, TOTAL calculé) et même signature
+// « Le Directeur » + NOM que le document PDF ci-dessus.
+
+/** Données transmises aux modèles Word / Excel : personnel complet, école,
+ *  IEP (en-tête institutionnel), directeur signataire et année scolaire. */
+interface ExportData {
+  staff: PersonnelStaffRow[];
+  schoolName: string;
+  anneeScolaire: string; // « 2025 2026 » (rentrée en cours)
+  iepRegion: string;
+  iepName: string;
+  iepBp: string;
+  iepPhone: string;
+  iepEmail: string;
+  directeur: string;
+}
+
+/** « 12/05/1980 à DABOU » — même logique que la cellule PDF (date seule,
+ *  lieu seul, ou les deux). */
+function birthCellText(s: PersonnelStaffRow): string {
+  const birth = formatDossierDate(s.date_naissance);
+  return birth
+    ? s.lieu_naissance
+      ? `${birth} à ${s.lieu_naissance}`
+      : birth
+    : (s.lieu_naissance ?? "");
+}
+
+/** CLASSE : notation administrative courte (1 · 2 · E · P) — mêmes items
+ *  que la liste déroulante du dossier personnel (colonne du PDF). */
+function classeCellText(s: PersonnelStaffRow): string {
+  return s.classe_grade != null
+    ? (CLASSE_GRADE_LABELS[s.classe_grade] ?? String(s.classe_grade))
+    : "";
+}
+
+// Largeurs des 20 colonnes (mêmes proportions que le colgroup du PDF :
+// NOM ET PRÉNOMS élargie, dates calibrées jj/mm/aaaa).
+const EXPORT_COL_WIDTHS = [
+  "2.4%", // N°
+  "15.6%", // Nom et prénoms
+  "5.4%", // Matricule
+  "10%", // Date et lieu de naissance
+  "2.7%", // IO IA IS IAS
+  "2.4%", // Classe
+  "2.4%", // Échelon
+  "6.8%", // Date entrée F.P
+  "5.4%", // Fonction
+  "6.8%", // Entrée DREN
+  "6.8%", // Entrée IEP
+  "3.1%", // Cours
+  "2.8%", // Effectif F
+  "2.8%", // Effectif G
+  "2.8%", // Effectif T
+  "2.8%", // Redoublants F
+  "2.8%", // Redoublants G
+  "2.8%", // Redoublants T
+  "6.4%", // Contact
+  "7%", // Emargement
+];
+
+// === MODÈLE WORD (.doc) — HTML MSO A4 PAYSAGE fidèle au document PDF ===
+// En-tête institutionnel (copie HTML du composant OfficialDocHeader,
+// variante « plan » : République / Union-Discipline-Travail / armoiries),
+// boîte du titre, tableau 20 colonnes (entêtes CLASSE / ÉCHELON / COURS
+// remis à l'HORIZONTALE, texte court — Word ne rend pas l'écriture
+// verticale ; thead répété à chaque page via display:table-header-group),
+// ligne vierge du modèle, TOTAL calculé, signature « Le Directeur » + NOM,
+// N.B (femmes en rouge) et mention « (A RETOURNER EN 03 EXEMPLAIRES) ».
+async function buildWordHtml(o: ExportData): Promise<string> {
+  const armoiries = await armoiriesBase64();
+  const esc = escHtml;
+
+  // Cellules du tableau (styles EN LIGNE — le convertisseur Word ignore
+  // une partie des classes CSS) ; bordures vert drapeau comme le PDF.
+  const th =
+    "border:1px solid #009E60; padding:2px 3px; font-size:12px; font-weight:bold; text-align:center; vertical-align:middle; color:#ffffff; background:#009E60;";
+  const td =
+    "border:1px solid #009E60; padding:1px 3px; font-size:12px; line-height:1.25; text-align:center; vertical-align:middle; height:18px;";
+  const tdL = td.replace("text-align:center", "text-align:left");
+
+  // Entêtes sur 2 rangées (fusions identiques au PDF).
+  const headTop =
+    `<th style="${th}" rowspan=2>N&deg;</th>` +
+    `<th style="${th}" rowspan=2>Nom et pr&eacute;noms</th>` +
+    `<th style="${th}" rowspan=2>Matricule</th>` +
+    `<th style="${th}" rowspan=2>Date et lieu de naissance</th>` +
+    `<th style="${th}" rowspan=2>IO IA<br>IS IAS</th>` +
+    // CLASSE / ÉCHELON écrits VERTICALEMENT dans le PDF passent à
+    // l'horizontale en Word (libellés courts).
+    `<th style="${th}" rowspan=2>CLASSE</th>` +
+    `<th style="${th}" rowspan=2>&Eacute;CHELON</th>` +
+    `<th style="${th}" rowspan=2>Date entr&eacute;e F.P</th>` +
+    `<th style="${th}" rowspan=2>Fonction</th>` +
+    `<th style="${th}" colspan=2>Dates</th>` +
+    `<th style="${th}" rowspan=2>COURS</th>` +
+    `<th style="${th}" colspan=3>Effectif</th>` +
+    `<th style="${th}" colspan=3>Redoublants</th>` +
+    `<th style="${th}" rowspan=2>Contact</th>` +
+    `<th style="${th}" rowspan=2>Emargement</th>`;
+  const headSub =
+    `<tr>` +
+    `<th style="${th}">Entr&eacute;e DREN</th><th style="${th}">Entr&eacute;e IEP</th>` +
+    `<th style="${th}">F</th><th style="${th}">G</th><th style="${th}">T</th>` +
+    `<th style="${th}">F</th><th style="${th}">G</th><th style="${th}">T</th>` +
+    `</tr>`;
+
+  // Une ligne agent (20 cellules) — NOM en caractère d'imprimerie,
+  // femmes EN ROUGE (N.B du modèle), lignes DIRECTEUR / ADJOINT(E) en
+  // 10px et CONTACT en 10px sans « +225 » (mêmes règles que le PDF).
+  const body = o.staff
+    .map((s, i) => {
+      const official = /direct|adjoint/i.test(s.fonction ?? "");
+      const sz = official ? " font-size:10px;" : "";
+      const nomColor = s.sexe === "F" ? "#e00000" : "#000000";
+      return (
+        `<tr>` +
+        `<td style="${td}${sz}">${i + 1}</td>` +
+        `<td style="${tdL}${sz}; font-weight:600; color:${nomColor};">${esc(s.full_name.toUpperCase())}</td>` +
+        `<td style="${td}${sz}">${esc(s.matricule ?? "")}</td>` +
+        `<td style="${tdL}${sz}">${esc(birthCellText(s))}</td>` +
+        `<td style="${td}${sz}">${esc(s.categorie ?? "")}</td>` +
+        `<td style="${td}${sz}">${esc(classeCellText(s))}</td>` +
+        `<td style="${td}${sz}">${esc(s.echelon != null ? String(s.echelon) : "")}</td>` +
+        `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_fp))}</td>` +
+        `<td style="${td}${sz}">${esc(s.fonction ?? "")}</td>` +
+        `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_dren))}</td>` +
+        `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_iep))}</td>` +
+        `<td style="${td}${sz}">${esc(s.cours ?? s.class_name ?? "")}</td>` +
+        `<td style="${td}${sz}">${esc(fmtNum(s.effectif_f))}</td>` +
+        `<td style="${td}${sz}">${esc(fmtNum(s.effectif_g))}</td>` +
+        `<td style="${td}${sz}">${esc(fmtNum(s.effectif_t))}</td>` +
+        `<td style="${td}${sz}">${esc(fmtNum(s.redoublant_f))}</td>` +
+        `<td style="${td}${sz}">${esc(fmtNum(s.redoublant_g))}</td>` +
+        `<td style="${td}${sz}">${esc(fmtNum(s.redoublant_t))}</td>` +
+        `<td style="${tdL}; font-size:10px; white-space:nowrap;">${esc(fmtContact(s.phone))}</td>` +
+        `<td style="${td}${sz}">&nbsp;</td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+
+  // Ligne supplémentaire vierge (le modèle garde une ligne libre).
+  const emptyRow =
+    `<tr>` +
+    `<td style="${td}">${o.staff.length + 1}</td>` +
+    `<td style="${tdL}">&nbsp;</td>` +
+    Array.from({ length: 18 }, () => `<td style="${td}">&nbsp;</td>`).join("") +
+    `</tr>`;
+
+  // Ligne TOTAL calculée — même structure que le PDF : libellé sous les
+  // colonnes DATES, effectifs puis redoublants F/G/T, fond pastel vert.
+  const totalCell = (v: number | null) =>
+    `<td style="${td}; background:#E4F4ED; color:#00734A; font-weight:bold;">${esc(fmtNum(v))}</td>`;
+  const totalRow =
+    `<tr>` +
+    `<td colspan=9 style="border:none;"></td>` +
+    `<td colspan=2 style="${th}; background:#E4F4ED; color:#00734A;">TOTAL</td>` +
+    `<td style="border:none;"></td>` +
+    totalCell(sumCol(o.staff.map((s) => s.effectif_f))) +
+    totalCell(sumCol(o.staff.map((s) => s.effectif_g))) +
+    totalCell(sumCol(o.staff.map((s) => s.effectif_t))) +
+    totalCell(sumCol(o.staff.map((s) => s.redoublant_f))) +
+    totalCell(sumCol(o.staff.map((s) => s.redoublant_g))) +
+    totalCell(sumCol(o.staff.map((s) => s.redoublant_t))) +
+    `</tr>`;
+
+  // En-tête institutionnel — copie HTML de OfficialDocHeader (variante
+  // « plan » : devise au-dessus des armoiries ; taille « sm »).
+  const region = (o.iepRegion || o.iepName || "…………").toUpperCase();
+  const iepName = (o.iepName || "…………").toUpperCase();
+  const annee = o.anneeScolaire.split(" ");
+  const header = `
+<table class=hdr><tr>
+<td style="width:64%">
+<p>MINISTERE DE L'EDUCATION NATIONALE ET</p>
+<p style="padding-left:6px;">DE L'ALPHABETISATION</p>
+<p>DIRECTION REGIONALE DE ${esc(region)}</p>
+<p style="letter-spacing:2px; margin-left:56px;">........................</p>
+<p>INSPECTION DE L'ENSEIGNEMENT</p>
+<p>PRESCOLAIRE ET PRIMAIRE DE ${esc(iepName)}</p>
+<p>BP ${esc(o.iepBp || "……")}&nbsp;&nbsp;&nbsp;T&eacute;l ${esc(o.iepPhone || "…………")}</p>
+<p>Courriel : <span style="color:#0563C1; text-decoration:underline;">${esc(o.iepEmail || "…………")}</span></p>
+</td>
+<td style="width:36%; text-align:center;">
+<p style="font-size:12px;">REPUBLIQUE DE C&Ocirc;TE D'IVOIRE</p>
+<p style="padding:1px 0;">Union-Discipline-Travail</p>
+${armoiries ? `<img src="${armoiries}" width="50" height="50" alt="">` : ""}
+</td>
+</tr></table>`;
+
+  return buildWordShell({
+    title: `Etat nominatif du personnel ${o.anneeScolaire} — ${o.schoolName}`,
+    orientation: "landscape", // A4 PAYSAGE (modèle reçu)
+    marginMm: 8,
+    styles: `
+table.hdr { border-collapse:collapse; width:100%; }
+table.hdr td { border:none; vertical-align:top; font-size:11px; line-height:1.32; }
+.titre { display:inline-block; border:2.2px solid #009E60; background:#FDEBDA; border-radius:14px; padding:6px 30px 7px; font-size:19px; font-weight:bold; letter-spacing:1.5px; line-height:1.25; text-align:center; }
+table.doc { border-collapse:collapse; width:100%; table-layout:fixed; }
+table.doc td, table.doc th { overflow-wrap:break-word; }
+thead.rep { display:table-header-group; }
+`,
+    bodyHtml: `
+${header}
+<p style="text-align:center; margin:2px 0 6px;"><span class=titre>ETAT NOMINATIF DU<br>PERSONNEL</span></p>
+<table class=hdr><tr>
+<td style="font-size:12px;"><span style="color:#00734A;">Ecole</span>: ${esc(o.schoolName)}</td>
+<td style="font-size:12px; text-align:right; white-space:nowrap;"><span style="color:#00734A;">Ann&eacute;e scolaire</span>: ${esc(annee[0] ?? "")}&nbsp;&nbsp;${esc(annee[1] ?? "")}</td>
+</tr></table>
+<table class=doc>
+<colgroup>${EXPORT_COL_WIDTHS.map((w) => `<col style="width:${w}">`).join("")}</colgroup>
+<thead class=rep><tr>${headTop}</tr>${headSub}</thead>
+<tbody>
+${body}
+${emptyRow}
+${totalRow}
+</tbody>
+</table>
+<div style="margin-top:10px;">
+<p style="font-size:12px; font-weight:bold; text-decoration:underline; margin-left:12px;">Le Directeur</p>
+${o.directeur.trim() ? `<p style="font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:0.3px; margin-left:12px;">${esc(o.directeur.trim().toUpperCase())}</p>` : ""}
+<div style="font-size:12px; font-weight:bold; margin-left:18%; line-height:1.45;">
+<p>N.B: Ecrire le nom des <span style="color:#e00000;">femmes</span> en rouge.</p>
+<p>Pr&eacute;ciser les RPL (Rempla&ccedil;ants) , MAC (Malade Avec Certificat),</p>
+<p>MSC (Malade Sans Certificat)</p>
+</div>
+<p style="font-size:12px; font-weight:bold; margin:8px 0 0 18%; letter-spacing:0.4px; color:#00734A;">(A RETOURNER EN <u>03 EXEMPLAIRES</u>&nbsp;)</p>
+</div>
+`,
+  });
+}
+
+// === MODÈLE EXCEL (.xlsx) — classeur mis en page (exceljs, import
+// dynamique) : en-tête institutionnel fusionné, tableau 20 colonnes bordé
+// vert (femmes en rouge), TOTAL en gras, signature « Le Directeur » + NOM ;
+// impression PAYSAGE ajustée à 1 page de large, entêtes répétés.
+async function exportExcelAsync(o: ExportData): Promise<void> {
+  const { Workbook } = await import("exceljs");
+  const wb = new Workbook();
+  wb.creator = "SYGREN";
+
+  // Rangées d'entêtes du tableau (répétées à l'impression sur chaque page).
+  const HEAD_START = 8;
+  const HEAD_END = 9;
+
+  const ws = wb.addWorksheet("Personnel", {
+    views: [{ state: "frozen", ySplit: HEAD_END, showGridLines: false }],
+    pageSetup: {
+      paperSize: 9, // A4
+      orientation: "landscape", // PAYSAGE (modèle reçu)
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 },
+      printTitlesRow: `${HEAD_START}:${HEAD_END}`,
+    },
+  });
+  // Largeurs raisonnables des 20 colonnes.
+  ws.columns = [
+    4.5, // N°
+    30, // Nom et prénoms
+    10, // Matricule
+    22, // Date et lieu de naissance
+    6, // IO IA IS IAS
+    6.5, // Classe
+    7, // Échelon
+    11, // Date entrée F.P
+    11, // Fonction
+    11, // Entrée DREN
+    11, // Entrée IEP
+    7, // Cours
+    5.5, 5.5, 5.5, // Effectif F G T
+    5.5, 5.5, 5.5, // Redoublants F G T
+    13, // Contact
+    12, // Emargement
+  ].map((width) => ({ width }));
+
+  const font = (size: number, bold = false, argb?: string) => ({
+    name: "Arial",
+    size,
+    bold,
+    ...(argb ? { color: { argb } } : {}),
+  });
+  const GREEN = { argb: "FF009E60" };
+  const GREEN_TXT = { argb: "FF00734A" };
+  const GREEN_BG = { argb: "FFE4F4ED" };
+  const RED = { argb: "FFE00000" };
+  const border = { style: "thin" as const, color: GREEN };
+  const BOX = { top: border, left: border, bottom: border, right: border };
+
+  // Ligne fusionnée sur les 20 colonnes (en-tête institutionnel).
+  const merged = (
+    row: number,
+    text: string,
+    size: number,
+    bold = false,
+    italic = false,
+  ) => {
+    ws.mergeCells(row, 1, row, 20);
+    const c = ws.getCell(row, 1);
+    c.value = text;
+    c.font = { name: "Arial", size, bold, italic };
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  };
+
+  // --- En-tête institutionnel (fidèle au modèle PDF) ---
+  merged(1, "Ministère de l'Education Nationale et de l'Alphabétisation", 12, true);
+  merged(
+    2,
+    `Direction Régionale de ${(o.iepRegion || o.iepName || "…………").toUpperCase()} — Inspection de l'Enseignement Préscolaire et Primaire de ${(o.iepName || "…………").toUpperCase()}`,
+    11,
+    true,
+    true,
+  );
+  merged(
+    3,
+    `BP : ${o.iepBp || "……"} / Tél : ${o.iepPhone || "…………"} — Courriel : ${o.iepEmail || "…………"}`,
+    11,
+  );
+  merged(4, "République de Côte d'Ivoire — Union-Discipline-Travail", 11, true);
+  merged(5, "ETAT NOMINATIF DU PERSONNEL", 14, true);
+  for (let col = 1; col <= 20; col++) ws.getCell(5, col).border = BOX;
+
+  // Ligne Ecole (gauche) / Année scolaire (droite).
+  ws.mergeCells(6, 1, 6, 9);
+  const ecole = ws.getCell(6, 1);
+  ecole.value = `Ecole : ${o.schoolName}`;
+  ecole.font = font(11, true, GREEN_TXT.argb);
+  ecole.alignment = { horizontal: "left", vertical: "middle" };
+  ws.mergeCells(6, 10, 6, 20);
+  const annee = ws.getCell(6, 10);
+  annee.value = `Année scolaire : ${(o.anneeScolaire || "").split(" ").join("  ")}`;
+  annee.font = font(11, true, GREEN_TXT.argb);
+  annee.alignment = { horizontal: "right", vertical: "middle" };
+  ws.getRow(7).height = 4;
+
+  // --- Entêtes du tableau (2 rangées, fusions comme le PDF) ---
+  // Entêtes fusionnés verticalement (N° → Fonction, Cours, Contact,
+  // Emargement) ; CLASSE / ÉCHELON / COURS remis à l'horizontale.
+  const headTopLabels: Array<[number, string]> = [
+    [1, "N°"],
+    [2, "Nom et prénoms"],
+    [3, "Matricule"],
+    [4, "Date et lieu de naissance"],
+    [5, "IO IA IS IAS"],
+    [6, "CLASSE"],
+    [7, "ÉCHELON"],
+    [8, "Date entrée F.P"],
+    [9, "Fonction"],
+    [12, "COURS"],
+    [19, "Contact"],
+    [20, "Emargement"],
+  ];
+  for (const [col, label] of headTopLabels) {
+    ws.mergeCells(HEAD_START, col, HEAD_END, col);
+    ws.getCell(HEAD_START, col).value = label;
+  }
+  ws.mergeCells(HEAD_START, 10, HEAD_START, 11);
+  ws.getCell(HEAD_START, 10).value = "Dates";
+  ws.mergeCells(HEAD_START, 13, HEAD_START, 15);
+  ws.getCell(HEAD_START, 13).value = "Effectif";
+  ws.mergeCells(HEAD_START, 16, HEAD_START, 18);
+  ws.getCell(HEAD_START, 16).value = "Redoublants";
+  ["Entrée DREN", "Entrée IEP"].forEach((label, k) => {
+    ws.getCell(HEAD_END, 10 + k).value = label;
+  });
+  ["F", "G", "T", "F", "G", "T"].forEach((label, k) => {
+    ws.getCell(HEAD_END, 13 + k).value = label;
+  });
+  for (let r = HEAD_START; r <= HEAD_END; r++) {
+    const row = ws.getRow(r);
+    row.height = r === HEAD_START ? 26 : 16;
+    row.eachCell({ includeEmpty: true }, (c) => {
+      c.font = font(9, true, "FFFFFFFF");
+      c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      c.border = BOX;
+      c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN };
+    });
+  }
+
+  // --- Lignes agents (une ligne par agent, femmes en rouge) ---
+  o.staff.forEach((s, i) => {
+    const r = HEAD_END + 1 + i;
+    const row = ws.getRow(r);
+    row.values = [
+      i + 1,
+      s.full_name.toUpperCase(), // caractère d'imprimerie (comme le PDF)
+      s.matricule ?? "",
+      birthCellText(s),
+      s.categorie ?? "",
+      classeCellText(s),
+      s.echelon != null ? String(s.echelon) : "",
+      formatDossierDate(s.date_entree_fp),
+      s.fonction ?? "",
+      formatDossierDate(s.date_entree_dren),
+      formatDossierDate(s.date_entree_iep),
+      s.cours ?? s.class_name ?? "",
+      fmtNum(s.effectif_f),
+      fmtNum(s.effectif_g),
+      fmtNum(s.effectif_t),
+      fmtNum(s.redoublant_f),
+      fmtNum(s.redoublant_g),
+      fmtNum(s.redoublant_t),
+      fmtContact(s.phone),
+      "",
+    ];
+    row.height = 16;
+    row.eachCell({ includeEmpty: true }, (c, col) => {
+      c.border = BOX;
+      // Femmes EN ROUGE sur la colonne NOM (N.B du modèle).
+      c.font = font(10, col === 2, s.sexe === "F" && col === 2 ? RED.argb : undefined);
+      c.alignment = {
+        horizontal: col === 2 || col === 4 || col === 19 ? "left" : "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+    });
+  });
+
+  // --- Ligne vierge du modèle (une ligne libre numérotée) ---
+  const rEmpty = HEAD_END + 1 + o.staff.length;
+  const emptyRow = ws.getRow(rEmpty);
+  emptyRow.values = [o.staff.length + 1, ...Array<string>(19).fill("")];
+  emptyRow.height = 16;
+  emptyRow.eachCell({ includeEmpty: true }, (c) => {
+    c.border = BOX;
+    c.font = font(10);
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  });
+
+  // --- TOTAL calculé (fond pastel vert, gras — comme le PDF) ---
+  const rTotal = rEmpty + 1;
+  const totals: Array<number | null> = [
+    sumCol(o.staff.map((s) => s.effectif_f)),
+    sumCol(o.staff.map((s) => s.effectif_g)),
+    sumCol(o.staff.map((s) => s.effectif_t)),
+    sumCol(o.staff.map((s) => s.redoublant_f)),
+    sumCol(o.staff.map((s) => s.redoublant_g)),
+    sumCol(o.staff.map((s) => s.redoublant_t)),
+  ];
+  // Libellé TOTAL sous les colonnes DATES (10-11), valeurs F→T (13-18) ;
+  // les cellules N°→Fonction et Cours restent vides SANS bordure.
+  ws.mergeCells(rTotal, 1, rTotal, 9);
+  ws.mergeCells(rTotal, 10, rTotal, 11);
+  const totalLabel = ws.getCell(rTotal, 10);
+  totalLabel.value = "TOTAL";
+  totals.forEach((v, k) => {
+    ws.getCell(rTotal, 13 + k).value = v == null ? "" : fmtNum(v);
+  });
+  for (let col = 10; col <= 18; col++) {
+    const c = ws.getCell(rTotal, col);
+    c.border = BOX;
+    c.font = font(10, true, GREEN_TXT.argb);
+    c.alignment = { horizontal: "center", vertical: "middle" };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN_BG };
+  }
+
+  // --- Signature « Le Directeur » + NOM (caractère d'imprimerie) ---
+  const rSig = rTotal + 2;
+  const sigLabel = ws.getCell(rSig, 3);
+  sigLabel.value = "Le Directeur";
+  sigLabel.font = { ...font(11, true), underline: true };
+  sigLabel.alignment = { horizontal: "left", vertical: "middle" };
+  if (o.directeur.trim()) {
+    const sigName = ws.getCell(rSig + 2, 3);
+    sigName.value = o.directeur.trim().toUpperCase();
+    sigName.font = font(10, true);
+    sigName.alignment = { horizontal: "left", vertical: "middle" };
+  }
+
+  // --- Armoiries (meilleur effort — omises si indisponibles) ---
+  try {
+    const res = await fetch("/ci-coat-of-arms.png");
+    if (res.ok) {
+      const u8 = new Uint8Array(await res.arrayBuffer());
+      const imgId = wb.addImage({
+        buffer: u8 as unknown as Parameters<typeof wb.addImage>[0]["buffer"],
+        extension: "png",
+      });
+      ws.addImage(imgId, { tl: { col: 19, row: 0.2 }, ext: { width: 46, height: 46 } });
+    }
+  } catch {
+    // armoiries omises — l'en-tête reste lisible
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveBlob(
+    new Blob([buf], { type: XLSX_MIME }),
+    `etat-nominatif-personnel-${slugFile(o.schoolName)}-${slugFile(o.anneeScolaire)}.xlsx`,
   );
 }

@@ -1607,6 +1607,17 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Nom du directeur de l'école (document pluriannuel : signature
+	// « Le Directeur » au même niveau que l'inspecteur — premier directeur
+	// actif de l'école, même convention que GetPDASummary).
+	directeurName := ""
+	var dir models.User
+	if err := database.DB.Select("full_name").
+		Where("school_id = ? AND role = ? AND active = ?", school.ID, models.RoleDirector, true).
+		Order("created_at ASC").First(&dir).Error; err == nil {
+		directeurName = dir.FullName
+	}
+
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"class":       map[string]interface{}{"id": cls.ID, "name": cls.Name, "level": cls.Level},
 		"year":        year,
@@ -1616,6 +1627,7 @@ func GetPDATimeline(w http.ResponseWriter, r *http.Request) {
 		"warnings":    warnings,
 		"school":      map[string]interface{}{"id": school.ID, "name": school.Name, "code": school.Code},
 		"iep":         iep,
+		"directeur":   directeurName,
 		"count":       len(studentsOut),
 	})
 }

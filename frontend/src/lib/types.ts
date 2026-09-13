@@ -1138,6 +1138,9 @@ export interface PdaTimelineResponse {
   // École + IEP pour l'en-tête officiel du document imprimable.
   school?: { id: string; name: string; code: string };
   iep?: PdaIepInfo | null;
+  // Nom du directeur de l'école (signature « Le Directeur » du document,
+  // au même niveau que l'inspecteur — même convention que GetPDASummary).
+  directeur?: string | null;
   count: number;
 }
 

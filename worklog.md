@@ -4493,3 +4493,36 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 
 ### Vérifications
 - `tsc --noEmit` = 0 erreur ; `next build` OK ; push `94ed81c` → Vercel READY (94ed81c) ; Render inchangé (aucun Go), `/api/health` 200.
+
+---
+
+## Task 26 — 3 modèles d'impression (PDF/Word/Excel) sur TOUS les documents + pagination fin d'année adaptée à l'effectif
+
+**Demandes utilisateur** : ① « étendre les 3 modèles d'impression à tous les documents à imprimer (PDF, Word, Excel), respecter les en-têtes d'origine (celles du PDF), ajouter le nom du directeur signataire sous LE DIRECTEUR » ; ② « module Résultats → Fin d'année → Document officiel → Résultat de fin d'année : adapter les pages à imprimer par rapport aux nombres d'élèves ».
+
+### Infrastructure partagée — `frontend/src/lib/doc-export.tsx` (NOUVEAU)
+- `escHtml`, `slugFile`, `saveBlob`, `armoiriesBase64` (utilitaires extraits du motif liste des candidats), `XLSX_MIME`.
+- `buildWordShell({title, orientation, marginMm, styles, bodyHtml})` : enveloppe HTML MSO A4 portrait/paysage (@page WordSection1, mso-page-orientation, BOM via `saveWordDoc`).
+- `DocExportButtons` : barre uniforme PDF (window.print) / Word (.doc) / Excel (.xlsx) avec état exporting et Loader2.
+- Convention : chaque document reste maître de son rendu — il fournit le corps HTML (en-tête institutionnel FIDÈLE au modèle PDF) ; Word pagine naturellement (thead `display:table-header-group`).
+
+### ② « RESULTATS DE FIN D'ANNEE » (`end-of-year-document.tsx`, v6) — CŒUR DE LA DEMANDE
+- **PAGINATION ADAPTÉE À L'EFFECTIF** (remplace les 72 lignes fixes du modèle papier) : pages à BUDGET DE HAUTEUR A4 portrait (boîte 279mm, contenu 269mm) — page 1 : en-tête institutionnel + boîte titre + ECOLE/Cours/Date déduits (BUDGET_FIRST 183mm) ; pages intermédiaires : entêtes du tableau RÉPÉTÉS (BUDGET_MID 246mm) ; DERNIÈRE page : zone récapitulatif + « Fait à DABOU » + signatures RÉSERVÉE (BOTTOM_MM 76mm, BUDGET_LAST 170mm) ; page unique possible (BUDGET_FIRST_LAST 107mm). Lignes vides de complétion numérotées UNIQUEMENT en fin de dernière page (hauteur estimée/majorée : ROW 4,6mm, +3,9mm par ligne de nom qui revient). Algorithme corrigé : la dernière page reçoit TOUJOURS ≥1 ligne (garde-fous). Classe vide → page de lignes vides + récap « 00 ».
+- **3 modèles** : PDF inchangé visuellement (mis à part les sauts de page contrôlés) ; Word (.doc) A4 portrait (entêtes répétés, récap, signatures avec noms) ; Excel (.xlsx exceljs, portrait fitToWidth, en-tête fusionné, thead 2 rangées fusionnées répété `printTitlesRow 8:9`, filles en rouge, récap, « Fait à », signatures).
+- Le nom du directeur (déjà affiché Task 37) figure dans Word/Excel au même niveau que le tenant du cours et l'inspecteur.
+
+### ① Nom du directeur signataire sous « LE DIRECTEUR » (+ Word/Excel des documents restants)
+- **Liste des candidats** (`candidates-list-document.tsx`) : nom sous « LE DIRECTEUR » (PDF ancré bottom 8mm, zone signature 14→16mm ; Word `.signame` ; Excel cellule dédiée) — champ `directeur` déjà fourni par l'API.
+- **Backend Go** (`handlers/pda.go` GetPDATimeline) : champ `directeur` ajouté à la réponse (1er directeur actif de l'école, même convention que GetPDASummary) — `go build ./...` OK (Go 1.23 + toolchain 1.25 téléchargée).
+- **Suivi pluriannuel** (`pda-timeline-document.tsx`, v4) : nom sous « Le Directeur » (PDF) + Word (.doc paysage) + Excel (paysage) — matrice élève × évaluations reproduite (cellules « ✓ ✕ – / abs »), totaux ADMIS/NON ADMIS, légende ; types.ts : `PdaTimelineResponse.directeur`.
+- **État nominatif du personnel** (`personnel-document.tsx`, v6) : nom dérivé du staff (`role === "director"`) sous « Le Directeur » (PDF) + Word paysage 20 colonnes (entêtes verticaux remis à l'horizontale, femmes en rouge, N.B RPL/MAC/MSC, 03 EXEMPLAIRES) + Excel paysage.
+- **Synthèse** (`synthese-document.tsx`) : Word + Excel paysage (noms directeur/inspecteur déjà affichés, repris dans les exports).
+- **Fiche PDA** (`pda-document.tsx`, v4) : Word + Excel portrait — les 3 tableaux (T1 70%, T2 9 colonnes, T3 remédiation avec l'état local saisi), signatures avec noms.
+- **Plan d'action réseau** (`pda-plan-document.tsx`, v4) : Word + Excel paysage — sections A (16 colonnes, groupes centres avec rowspan) et B séparées par saut de page, TOTAL pastel vert ; aucune signature (modèle reçu).
+
+### Règles respectées
+- En-têtes d'origine (celles du PDF) reproduites dans CHAQUE Word/Excel (bloc ministériel + République, titres, bordures vert drapeau #009E60, filles en rouge).
+- Verrou d'impression intact (admin + Admin IEP) ; hooks React (useState exporting) placés AVANT les retours conditionnels ; aucun changement de police ; PDFs inchangés hors ajouts demandés.
+
+### Vérifications
+- `tsc --noEmit` = 0 erreur ; `next build` OK (16 routes) ; `go build ./...` OK.

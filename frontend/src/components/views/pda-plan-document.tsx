@@ -58,12 +58,29 @@
 // Toutes les données viennent de /api/pda/plan-action (source unique de
 // vérité — le document ne recalcule rien). Impression 100 % navigateur
 // A4 paysage (isolement #pda-plan-doc, page nommée pda-plan).
+//
+// v4 — 3 MODÈLES D'IMPRESSION (demande utilisateur : « étendre les 3
+// modèles PDF / Word / Excel à tous les documents, en respectant les
+// en-têtes d'origine ») : modèle WORD (.doc HTML MSO A4 paysage, sections
+// A et B séparées par un saut de page) et modèle EXCEL (.xlsx exceljs)
+// reproduisant l'en-tête institutionnel, les 2 sections et la ligne
+// TOTAL. Aucune signature sur ce document (le modèle reçu s'achève sur
+// le TOTAL).
 
-import { Fragment, type CSSProperties } from "react";
+import { Fragment, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Printer, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 import { pdaApi } from "@/lib/api";
+import {
+  DocExportButtons,
+  XLSX_MIME,
+  buildWordShell,
+  escHtml,
+  saveBlob,
+  saveWordDoc,
+  slugFile,
+} from "@/lib/doc-export";
 import {
   canPrintDocument,
   PrintLockBadge,
@@ -236,6 +253,403 @@ function TotalRowCells({ row }: { row: PdaPlanSchoolRow }) {
   );
 }
 
+// ============================================================ 3 MODÈLES ===
+
+interface PlanExportData {
+  evalTitle: string;
+  iepName: string;
+  iepRegion: string;
+  iepBp: string;
+  iepPhone: string;
+  iepEmail: string;
+  centers: PdaPlanCenterGroup[];
+  grandTotal: PdaPlanSchoolRow;
+  year: number;
+  number: number;
+  kind: string;
+}
+
+/** Les 7 valeurs formatées d'un groupe discipline (section A), dans
+ *  l'ordre du modèle : Total | Filles | Présents | Admis | % Admis |
+ *  Admis (Filles) | % Admis (Filles) — mêmes règles que DisciplineCells. */
+function planDiscCells(
+  row: PdaPlanSchoolRow,
+  discipline: "exploitation" | "math",
+): string[] {
+  const d: PdaPlanDisciplineStats | undefined = row.disciplines?.[discipline];
+  const assessed = (d?.presents?.total ?? 0) > 0;
+  const inscrits = row.inscrits?.total ?? 0;
+  const filles = row.inscrits?.filles ?? 0;
+  return [
+    fmtDocNum(inscrits),
+    fmtDocNum(filles),
+    assessed ? fmtNum0(d?.presents?.total) : "",
+    assessed ? fmtNum0(d?.admis?.total) : "",
+    assessed && inscrits > 0 ? fmtPct0(d?.pct_admis) : "",
+    assessed ? fmtNum0(d?.admis?.filles) : "",
+    assessed && filles > 0 ? fmtPct0(d?.pct_admis_filles) : "",
+  ];
+}
+
+/** Les 6 valeurs formatées de la section B pour une ligne école :
+ *  difficultés / mise à niveau / remédiation × (Total | Filles). */
+function planSectionBCells(row: PdaPlanSchoolRow): string[] {
+  const rem = (v: number | undefined) =>
+    row.has_remediation ? fmtNum0(v) : fmtDocNum(v);
+  return [
+    row.has_data ? fmtNum0(row.difficultes?.total) : "",
+    row.has_data ? fmtNum0(row.difficultes?.filles) : "",
+    rem(row.mise_a_niveau?.total),
+    rem(row.mise_a_niveau?.filles),
+    rem(row.remediation?.total),
+    rem(row.remediation?.filles),
+  ];
+}
+
+/** Modèle WORD (.doc) — HTML MSO A4 PAYSAGE fidèle au document PDF :
+ *  en-tête institutionnel, boîte de l'évaluation, bandeau titre, section
+ *  A (tableau 16 colonnes groupé par centre), saut de page, section B,
+ *  ligne TOTAL. Aucune signature (modèle reçu). */
+function buildPlanWordHtml(o: PlanExportData): string {
+  const esc = escHtml;
+  const th =
+    "border:1px solid #009E60; padding:1px 3px; font-size:11px; text-align:center; color:#fff; background:#009E60; line-height:1.15;";
+  const thB =
+    "border:2px solid #009E60; padding:1px 3px; font-size:11px; font-weight:bold; text-align:center; color:#fff; background:#009E60;";
+  const td =
+    "border:1px solid #009E60; padding:0.5px 3px; font-size:11px; text-align:center; line-height:1.15;";
+  const tdc =
+    `${td}; text-align:left; font-weight:bold; border-right:2px solid #009E60;`;
+  const tds =
+    `${td}; text-align:left; font-weight:bold; border-right:2px solid #009E60; white-space:nowrap;`;
+  const tsum =
+    `${td}; font-weight:bold; background:#E4F4ED; color:#00734A;`;
+
+  // Section A : lignes écoles groupées par centre + TOTAL
+  const rowsA = o.centers
+    .map(
+      (c) =>
+        c.schools
+          .map(
+            (s, i) =>
+              `<tr>` +
+              (i === 0
+                ? `<td style="${tdc}" rowspan=${c.schools.length}>${esc(c.name)}</td>`
+                : "") +
+              `<td style="${tds}">${esc(s.school_name)}</td>` +
+              planDiscCells(s, "exploitation")
+                .map((v) => `<td style="${td}">${v}</td>`)
+                .join("") +
+              planDiscCells(s, "math")
+                .map((v) => `<td style="${td}">${v}</td>`)
+                .join("") +
+              `</tr>`,
+          )
+          .join(""),
+    )
+    .join("");
+  const gtA = [
+    ...planDiscCells(o.grandTotal, "exploitation"),
+    ...planDiscCells(o.grandTotal, "math"),
+  ]
+    .map((v) => `<td style="${tsum}">${v}</td>`)
+    .join("");
+
+  // Section B : 3 indicateurs × (Total | Filles)
+  const rowsB = o.centers
+    .map(
+      (c) =>
+        c.schools
+          .map(
+            (s, i) =>
+              `<tr>` +
+              (i === 0
+                ? `<td style="${tdc}" rowspan=${c.schools.length}>${esc(c.name)}</td>`
+                : "") +
+              `<td style="${tds}">${esc(s.school_name)}</td>` +
+              planSectionBCells(s)
+                .map((v) => `<td style="${td}">${v}</td>`)
+                .join("") +
+              `</tr>`,
+          )
+          .join(""),
+    )
+    .join("");
+  const gtB = planSectionBCells(o.grandTotal)
+    .map((v) => `<td style="${tsum}">${v}</td>`)
+    .join("");
+
+  const discSubHeaders = ["exploitation", "math"]
+    .map((d, di) =>
+      [
+        `Total`,
+        `Filles`,
+        `Pr&eacute;sents`,
+        `Admis`,
+        `% Admis`,
+        `Admis<br>(Filles)`,
+        `% Admis (Filles)`,
+      ]
+        .map(
+          (label, k) =>
+            `<th style="${k === 0 && di === 1 ? thB.replace("border:1px", "border-left:2px solid #009E60; border-top:1px solid #009E60; border-right:1px solid #009E60; border-bottom:1px solid #009E60;") : thB}">${label}</th>`,
+        )
+        .join(""),
+    )
+    .join("");
+
+  return buildWordShell({
+    title: `Plan d'action pluriannuel ${o.year} N°${o.number}`,
+    orientation: "landscape",
+    marginMm: 6,
+    styles: `
+table.doc { border-collapse:collapse; width:100%; }
+.titre-ev { display:inline-block; background:#F77F00; color:#fff; padding:3px 22px; font-size:12.5px; font-weight:bold; }
+.bandeau { background:#009E60; color:#fff; text-align:center; padding:4px 8px; font-size:15px; font-weight:bold; width:82%; margin:0 auto 6px; }
+p.section { font-size:12px; margin:4px 0 3px; font-weight:bold; color:#00734A; }
+.sautpage { page-break-before:always; }
+`,
+    bodyHtml: `
+<table style="border-collapse:collapse; width:100%;"><tr>
+<td style="border:none; vertical-align:top; font-size:9.5px; line-height:1.32;">
+<p>MINISTERE DE L'EDUCATION NATIONALE ET</p>
+<p style="padding-left:6px;">DE L'ALPHABETISATION</p>
+<p>DIRECTION REGIONALE DE ${esc((o.iepRegion || "…………").toUpperCase())}</p>
+<p>INSPECTION DE L'ENSEIGNEMENT</p>
+<p>PRESCOLAIRE ET PRIMAIRE DE ${esc((o.iepName || "…………").toUpperCase())}</p>
+<p>BP ${esc(o.iepBp || "……")}&nbsp;&nbsp;&nbsp;T&eacute;l ${esc(o.iepPhone || "…………")}</p>
+<p>Courriel : ${esc(o.iepEmail || "…………")}</p>
+</td>
+<td style="border:none; text-align:center; vertical-align:top; font-size:9.5px;">
+<p>REPUBLIQUE DE C&Ocirc;TE D'IVOIRE</p>
+<p>Union-Discipline-Travail</p>
+</td>
+</tr></table>
+<p style="text-align:center; margin:1px 0 5px;"><span class=titre-ev>${esc(o.evalTitle)}</span></p>
+<div class=bandeau>PLAN D'ACTION PLURIANNUEL DE L'IEPP ${esc((o.iepName || "…………").toUpperCase())}</div>
+<p class=section>A) NOMBRE D'ELEVES DU CM2 AYANT ATTEINT LE SEUIL SUFFISANT DE MA&Icirc;TRISE EN LECTURE (EXPLOITATION DE TEXTE), MATHEMATIQUES.</p>
+<table class=doc>
+<tr><th style="${thB}; border-right:2px solid #009E60;" rowspan=3>CENTRES<br>D'EXAMENS</th><th style="${thB}; border-right:2px solid #009E60;" rowspan=3>ECOLES</th><th style="${thB}; border-bottom:2px solid #009E60;" colspan=14>DISCIPLINES</th></tr>
+<tr><th style="${thB}; border-bottom:1px solid #009E60;" colspan=7>EXPLOITATION DE TEXTE</th><th style="${thB}; border-bottom:1px solid #009E60; border-left:2px solid #009E60;" colspan=7>MATHEMATIQUES</th></tr>
+<tr>${discSubHeaders}</tr>
+${rowsA}
+<tr><td style="${tsum}; text-align:center;" colspan=2>TOTAL</td>${gtA}</tr>
+</table>
+<div class=sautpage></div>
+<p class=section>B) ACCRO&Icirc;TRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX EXAMENS DES ELEVES DE TOUS LES NIVEAUX.</p>
+<table class=doc>
+<tr><th style="${thB};" colspan=2 rowspan=2></th><th style="${thB}" colspan=2>LE NOMBRE D'ELEVES EN DIFFICULTES D'APPRENTISSAGE</th><th style="${thB}; border-left:2px solid #009E60;" colspan=2>LE NOMBRE D'ELEVES AYANT BENEFICIE DES COURS DE MISE A NIVEAU</th><th style="${thB}; border-left:2px solid #009E60;" colspan=2>LE NOMBRE D'ELEVES AYANT BENEFICIE DES MECANISMES DE REMEDIATION PAR MATIERE</th></tr>
+<tr>${["difficultes", "mise", "rem"].map((k, ki) => `<th style="${thB}">TOTAL</th><th style="${thB}">FILLES</th>`).join("")}</tr>
+<tr><th style="${thB}; border-right:2px solid #009E60;">CENTRE</th><th style="${thB}; border-right:2px solid #009E60;">ECOLES</th><th style="${thB}" colspan=6>&nbsp;</th></tr>
+${rowsB}
+<tr><td style="${tsum}; text-align:center;" colspan=2>TOTAL</td>${gtB}</tr>
+</table>
+`,
+  });
+}
+
+/** Modèle EXCEL (.xlsx) — classeur paysage (exceljs) : en-tête fusionné,
+ *  section A (16 colonnes) puis section B (8 colonnes), TOTAL en gras. */
+async function exportPlanExcelAsync(o: PlanExportData): Promise<void> {
+  const { Workbook } = await import("exceljs");
+  const wb = new Workbook();
+  wb.creator = "SYGREN";
+  const ws = wb.addWorksheet("Plan d'action", {
+    views: [{ showGridLines: false }],
+    pageSetup: {
+      paperSize: 9,
+      orientation: "landscape",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 },
+    },
+  });
+  ws.columns = [22, 30, ...Array.from({ length: 14 }, () => 8)].map((width) => ({ width }));
+  const font = (size: number, bold = false, argb?: string, italic = false) => ({
+    name: "Arial",
+    size,
+    bold,
+    italic,
+    ...(argb ? { color: { argb } } : {}),
+  });
+  const GREEN = { argb: "FF009E60" };
+  const PASTEL = { argb: "FFE4F4ED" };
+  const GREEN_TXT = { argb: "FF00734A" };
+  const thin = { style: "thin" as const, color: { argb: "FF009E60" } };
+  const thick = { style: "medium" as const, color: { argb: "FF009E60" } };
+  const BOX = { top: thin, left: thin, bottom: thin, right: thin };
+  const merged = (row: number, text: string, size: number, bold = false, italic = false) => {
+    ws.mergeCells(row, 1, row, 16);
+    const c = ws.getCell(row, 1);
+    c.value = text;
+    c.font = font(size, bold, undefined, italic);
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  };
+
+  merged(1, "MINISTERE DE L'EDUCATION NATIONALE ET DE L'ALPHABETISATION", 11, true);
+  merged(2, `DIRECTION REGIONALE DE ${(o.iepRegion || "…………").toUpperCase()} — INSPECTION DE L'ENSEIGNEMENT PRESCOLAIRE ET PRIMAIRE DE ${(o.iepName || "…………").toUpperCase()}`, 10, true, true);
+  merged(3, `BP ${o.iepBp || "……"}   Tél ${o.iepPhone || "…………"}   Courriel : ${o.iepEmail || "…………"}`, 10);
+  merged(4, "REPUBLIQUE DE CÔTE D'IVOIRE — Union-Discipline-Travail", 10, true);
+  merged(5, o.evalTitle, 12, true);
+  merged(6, `PLAN D'ACTION PLURIANNUEL DE L'IEPP ${(o.iepName || "…………").toUpperCase()}`, 13, true);
+  merged(7, "A) NOMBRE D'ELEVES DU CM2 AYANT ATTEINT LE SEUIL SUFFISANT DE MAÎTRISE EN LECTURE (EXPLOITATION DE TEXTE), MATHEMATIQUES.", 10, true, false);
+  ws.getRow(7).alignment = { horizontal: "left", vertical: "middle" };
+
+  // Entêtes section A (rangées 8-10)
+  ws.mergeCells(8, 1, 10, 1);
+  ws.getCell(8, 1).value = "CENTRES D'EXAMENS";
+  ws.mergeCells(8, 2, 10, 2);
+  ws.getCell(8, 2).value = "ECOLES";
+  ws.mergeCells(8, 3, 8, 16);
+  ws.getCell(8, 3).value = "DISCIPLINES";
+  ws.mergeCells(9, 3, 9, 9);
+  ws.getCell(9, 3).value = "EXPLOITATION DE TEXTE";
+  ws.mergeCells(9, 10, 9, 16);
+  ws.getCell(9, 10).value = "MATHEMATIQUES";
+  const subHeads = ["Total", "Filles", "Présents", "Admis", "% Admis", "Admis (Filles)", "% Admis (Filles)"];
+  subHeads.forEach((label, k) => {
+    ws.getCell(10, 3 + k).value = label;
+    ws.getCell(10, 10 + k).value = label;
+  });
+  for (let r = 8; r <= 10; r++) {
+    const row = ws.getRow(r);
+    row.height = r === 10 ? 24 : 16;
+    row.eachCell({ includeEmpty: true }, (c) => {
+      c.font = font(9, r < 10, "FFFFFFFF");
+      c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      c.border = BOX;
+      c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN };
+    });
+  }
+
+  // Lignes écoles + TOTAL (section A)
+  let r = 11;
+  for (const c of o.centers) {
+    for (let i = 0; i < c.schools.length; i++) {
+      const s = c.schools[i];
+      const row = ws.getRow(r);
+      row.height = 15;
+      if (i === 0) {
+        ws.mergeCells(r, 1, r + c.schools.length - 1, 1);
+        const cc = ws.getCell(r, 1);
+        cc.value = c.name;
+        cc.font = font(9, true);
+        cc.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cc.border = BOX;
+      }
+      const ecole = ws.getCell(r, 2);
+      ecole.value = s.school_name;
+      ecole.font = font(9, true);
+      ecole.alignment = { horizontal: "left", vertical: "middle" };
+      ecole.border = BOX;
+      const cells = [...planDiscCells(s, "exploitation"), ...planDiscCells(s, "math")];
+      cells.forEach((v, k) => {
+        const cell = ws.getCell(r, 3 + k);
+        cell.value = v === "" ? "" : v;
+        cell.font = font(9);
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = BOX;
+      });
+      r++;
+    }
+  }
+  // TOTAL section A
+  const gtRow = ws.getRow(r);
+  ws.mergeCells(r, 1, r, 2);
+  const gt = ws.getCell(r, 1);
+  gt.value = "TOTAL";
+  const gtCells = [...planDiscCells(o.grandTotal, "exploitation"), ...planDiscCells(o.grandTotal, "math")];
+  gtCells.forEach((v, k) => {
+    const cell = ws.getCell(r, 3 + k);
+    cell.value = v;
+  });
+  gtRow.eachCell({ includeEmpty: true }, (c) => {
+    c.font = font(9, true, "FF00734A");
+    c.alignment = { horizontal: "center", vertical: "middle" };
+    c.border = BOX;
+    c.fill = { type: "pattern", pattern: "solid", fgColor: PASTEL };
+  });
+  ws.getCell(r, 1).alignment = { horizontal: "center", vertical: "middle" };
+  r += 2;
+
+  // Section B (rangées suivantes)
+  merged(r, "B) ACCROÎTRE LES ACQUIS SCOLAIRES ET LA PERFORMANCE AUX EXAMENS DES ELEVES DE TOUS LES NIVEAUX.", 10, true);
+  ws.getRow(r).alignment = { horizontal: "left", vertical: "middle" };
+  r += 1;
+  const bHead = r;
+  ws.mergeCells(bHead, 1, bHead + 1, 2);
+  ws.getCell(bHead, 1).value = "CENTRE / ECOLES";
+  const bLabels = [
+    ["LE NOMBRE D'ELEVES EN DIFFICULTES D'APPRENTISSAGE", "difficultés"],
+    ["COURS DE MISE A NIVEAU", "mise"],
+    ["MECANISMES DE REMEDIATION", "remédiation"],
+  ] as const;
+  bLabels.forEach(([, label], k) => {
+    ws.mergeCells(bHead, 3 + k * 2, bHead, 4 + k * 2);
+    ws.getCell(bHead, 3 + k * 2).value = label;
+    ws.getCell(bHead + 1, 3 + k * 2).value = "TOTAL";
+    ws.getCell(bHead + 1, 4 + k * 2).value = "FILLES";
+  });
+  for (let rr = bHead; rr <= bHead + 1; rr++) {
+    const row = ws.getRow(rr);
+    row.height = rr === bHead ? 26 : 15;
+    row.eachCell({ includeEmpty: true }, (c) => {
+      c.font = font(9, rr === bHead, "FFFFFFFF");
+      c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      c.border = BOX;
+      c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN };
+    });
+  }
+  r = bHead + 2;
+  for (const c of o.centers) {
+    for (let i = 0; i < c.schools.length; i++) {
+      const s = c.schools[i];
+      if (i === 0) {
+        ws.mergeCells(r, 1, r + c.schools.length - 1, 1);
+        const cc = ws.getCell(r, 1);
+        cc.value = c.name;
+        cc.font = font(9, true);
+        cc.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cc.border = BOX;
+      }
+      const ecole = ws.getCell(r, 2);
+      ecole.value = s.school_name;
+      ecole.font = font(9, true);
+      ecole.alignment = { horizontal: "left", vertical: "middle" };
+      ecole.border = BOX;
+      planSectionBCells(s).forEach((v, k) => {
+        const cell = ws.getCell(r, 3 + k);
+        cell.value = v;
+        cell.font = font(9);
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = BOX;
+      });
+      r++;
+    }
+  }
+  // TOTAL section B
+  ws.mergeCells(r, 1, r, 2);
+  const gtB = ws.getCell(r, 1);
+  gtB.value = "TOTAL";
+  planSectionBCells(o.grandTotal).forEach((v, k) => {
+    ws.getCell(r, 3 + k).value = v;
+  });
+  for (let col = 1; col <= 8; col++) {
+    const cell = ws.getCell(r, col);
+    cell.font = font(9, true, "FF00734A");
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = BOX;
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: PASTEL };
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveBlob(
+    new Blob([buf], { type: XLSX_MIME }),
+    `plan-action-${slugFile(o.iepName)}-${o.year}-n${o.number}.xlsx`,
+  );
+}
+
 export function PdaPlanDocument({
   year,
   number,
@@ -257,6 +671,9 @@ export function PdaPlanDocument({
   // GRISÉE (l'impression reste réservée à l'Admin IEP et au Super Admin).
   const printRole = usePrintRole();
   const canPrint = canPrintDocument(printRole, false);
+  // État des exports Word/Excel (DOIT rester avant les retours conditionnels
+  // — règles des Hooks React).
+  const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
 
   if (isLoading) {
     return (
@@ -308,6 +725,42 @@ export function PdaPlanDocument({
 
   const totalSchoolCount = centers.reduce((acc, c) => acc + c.schools.length, 0);
 
+  // === 3 MODÈLES : données partagées Word/Excel ===
+  const exportData: PlanExportData = {
+    evalTitle,
+    iepName: iep?.name ?? "",
+    iepRegion: iep?.region ?? "",
+    iepBp: iep?.bp ?? "",
+    iepPhone: iep?.inspector_phone ?? "",
+    iepEmail: iep?.inspector_email ?? "",
+    centers,
+    grandTotal: plan.grand_total,
+    year: plan.year,
+    number: plan.number,
+    kind: plan.kind,
+  };
+
+  function handleWord() {
+    setExporting("doc");
+    try {
+      saveWordDoc(
+        buildPlanWordHtml(exportData),
+        `plan-action-${slugFile(exportData.iepName)}-${exportData.year}-n${exportData.number}.doc`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function handleExcel() {
+    setExporting("xlsx");
+    try {
+      await exportPlanExcelAsync(exportData);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white print:min-h-0">
       {/* Barre d'outils (masquée à l'impression) */}
@@ -318,13 +771,14 @@ export function PdaPlanDocument({
         </h3>
         <div className="flex items-center gap-2">
           {canPrint ? (
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimer / PDF
-            </button>
+            <DocExportButtons
+              canPrint
+              exporting={exporting}
+              onPdf={() => window.print()}
+              onWord={handleWord}
+              onExcel={handleExcel}
+              formatHint="Format : A4 paysage"
+            />
           ) : (
             <PrintLockBadge />
           )}

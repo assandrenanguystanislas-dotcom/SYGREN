@@ -17,19 +17,36 @@
 // sur fond vert drapeau, bordures vertes, totaux sur fond pastel vert,
 // ARMOIRIES en filigrane (répétées à chaque page imprimée) + rubans
 // tricolores haut/bas de chaque page.
+//
+// v4 — NOM DU DIRECTEUR + 3 MODÈLES D'IMPRESSION (demande utilisateur :
+// « étendre les 3 modèles PDF / Word / Excel à tous les documents, en
+// respectant les en-têtes d'origine » + « ajouter le nom du directeur
+// signataire sous LE DIRECTEUR ») : nom affiché sous la signature (PDF),
+// modèle WORD (.doc HTML MSO A4 paysage) et modèle EXCEL (.xlsx exceljs)
+// reproduisant l'en-tête institutionnel et la matrice. Le champ
+// `directeur` est fourni par le backend (GetPDATimeline — v4).
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Printer, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 import { pdaApi } from "@/lib/api";
+import {
+  DocExportButtons,
+  XLSX_MIME,
+  buildWordShell,
+  escHtml,
+  saveBlob,
+  saveWordDoc,
+  slugFile,
+} from "@/lib/doc-export";
 import {
   canPrintDocument,
   PrintLockBadge,
   PrintLockDocumentMessage,
   usePrintRole,
 } from "@/lib/print-guard";
-import type { PdaTimelineResponse } from "@/lib/types";
+import type { PdaTimelineCell, PdaTimelineResponse } from "@/lib/types";
 
 import {
   INK,
@@ -103,6 +120,270 @@ function DocCell({ present, marks }: { present: boolean; marks: [string, boolean
   );
 }
 
+// ============================================================ 3 MODÈLES ===
+
+interface TlExportData {
+  evaluations: PdaTimelineResponse["evaluations"];
+  students: PdaTimelineResponse["students"];
+  schoolName: string;
+  className: string;
+  year: number;
+  iepRegion: string;
+  iepName: string;
+  iepBp: string;
+  iepPhone: string;
+  iepEmail: string;
+  inspectorName: string;
+  directeur: string;
+  threshold: number;
+}
+
+/** Cellule matrice en TEXTE compact (Word/Excel) : « ✓ ✕ – » ou « abs ». */
+function tlCellText(cell: PdaTimelineCell | undefined): string {
+  if (!cell || !cell.present) return "abs";
+  return [0, 1, 2]
+    .map((i) => {
+      if (cell.notes[i] == null) return "–";
+      return cell.admis[i] ? "✓" : "✕";
+    })
+    .join(" ");
+}
+
+/** Modèle WORD (.doc) — HTML MSO A4 PAYSAGE fidèle au document PDF :
+ *  en-tête institutionnel, bandeau titre, matrice (thead répété), totaux,
+ *  légende et signatures avec noms. */
+function buildTlWordHtml(o: TlExportData): string {
+  const esc = escHtml;
+  const th =
+    "border:1px solid #009E60; padding:3px 4px; font-size:9px; font-weight:bold; text-align:center; color:#fff; background:#009E60;";
+  const td =
+    "border:1px solid #009E60; padding:2px 4px; font-size:9px; text-align:center;";
+  const tdl = td.replace("text-align:center", "text-align:left; font-weight:bold;");
+  const tsum =
+    "border:1px solid #009E60; padding:2px 4px; font-size:9px; text-align:center; font-weight:bold; background:#E4F4ED; color:#00734A;";
+
+  const head = [
+    `<th style="${th}">N&deg;</th>`,
+    `<th style="${th}; text-align:left;">&Eacute;L&Egrave;VE (E = Exploitation &middot; M = Math&eacute;matiques &middot; D = Dict&eacute;e)</th>`,
+    ...o.evaluations.map((e) => `<th style="${th}">${esc(e.short_label)}<br>E M D</th>`),
+    `<th style="${th}">% ADMIS</th>`,
+  ].join("");
+
+  const body = o.students
+    .map((st, idx) => {
+      const red = st.gender === "F" ? " color:#c00000;" : "";
+      return (
+        `<tr>` +
+        `<td style="${td}">${idx + 1}</td>` +
+        `<td style="${tdl}${red}">${esc(st.last_name.toUpperCase())} ${esc(st.first_name)} <span style="font-weight:normal;">(${esc(st.matricule)} &middot; ${st.gender === "F" ? "Fille" : "Garçon"})</span></td>` +
+        o.evaluations
+          .map((e) => `<td style="${td}">${esc(tlCellText(st.cells[e.id]))}</td>`)
+          .join("") +
+        `<td style="${td}">${st.pct_admis > 0 ? `${st.pct_admis} %` : "—"}</td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+
+  const totalAdmis = o.evaluations.reduce((acc, e) => acc + (e.admis ?? 0), 0);
+  const totalNonAdmis = o.evaluations.reduce((acc, e) => acc + (e.non_admis ?? 0), 0);
+  const totalPresents = o.evaluations.reduce((acc, e) => acc + (e.presents ?? 0), 0);
+  const fmtTl = (n: number) => (n <= 0 ? "00" : n < 10 ? `0${n}` : `${n}`);
+  const tsumCell = (v: string) => `<td style="${tsum}">${v}</td>`;
+  const sumRow = (label: string, cellsHtml: string) =>
+    `<tr><td style="${tsum}; text-align:left;" colspan=2>${label}</td>${cellsHtml}</tr>`;
+
+  return buildWordShell({
+    title: `Suivi pluriannuel ${o.className} ${o.year}`,
+    orientation: "landscape",
+    marginMm: 8,
+    styles: `
+table.doc { border-collapse:collapse; width:100%; }
+table.doc thead { display:table-header-group; }
+.titre { display:inline-block; background:#009E60; color:#fff; padding:6px 24px; font-size:13.5px; font-weight:bold; }
+p.legende { font-size:8px; margin-top:8px; line-height:1.5; }
+table.sig { border-collapse:collapse; width:100%; margin-top:20px; font-size:12px; }
+`,
+    bodyHtml: `
+<table style="border-collapse:collapse; width:100%;"><tr>
+<td style="border:none; vertical-align:top; font-size:11px; line-height:1.32;">
+<p>MINISTERE DE L'EDUCATION NATIONALE ET</p>
+<p style="padding-left:6px;">DE L'ALPHABETISATION</p>
+<p>DIRECTION REGIONALE DE ${esc((o.iepRegion || "…………").toUpperCase())}</p>
+<p>INSPECTION DE L'ENSEIGNEMENT</p>
+<p>PRESCOLAIRE ET PRIMAIRE DE ${esc((o.iepName || "…………").toUpperCase())}</p>
+<p>BP ${esc(o.iepBp || "……")}&nbsp;&nbsp;&nbsp;T&eacute;l ${esc(o.iepPhone || "…………")}</p>
+<p>Courriel : ${esc(o.iepEmail || "…………")}</p>
+</td>
+<td style="border:none; text-align:center; vertical-align:top; font-size:12px;">
+<p>REPUBLIQUE DE C&Ocirc;TE D'IVOIRE</p>
+<p>Union-Discipline-Travail</p>
+</td>
+</tr></table>
+<p style="text-align:center; margin:4px 0 10px;"><span class=titre>SUIVI DU PLAN D'ACTION PLURIANNUEL DE L'IEPP</span></p>
+<p style="text-align:center; font-size:12.5px; font-weight:bold; text-decoration:underline; margin-bottom:8px;">SUIVI PLURIANNUEL DES NIVEAUX — CLASSE ${esc(o.className.toUpperCase())} — ANNEE ${o.year}</p>
+<p style="font-size:11.5px; margin-bottom:8px;"><b>ECOLE : ${esc(o.schoolName)}</b>&nbsp;&nbsp;&nbsp;&nbsp;<b>CLASSE : ${esc(o.className)}</b>&nbsp;&nbsp;&nbsp;&nbsp;${o.students.length} &eacute;l&egrave;ve(s) &middot; ${o.evaluations.length} &eacute;valuation(s)</p>
+<table class=doc>
+<thead><tr>${head}</tr></thead>
+<tbody>${body}</tbody>
+<tbody>
+${sumRow(
+      "ADMIS",
+      o.evaluations
+        .map((e) => tsumCell((e.presents ?? 0) > 0 ? fmtTl(e.admis ?? 0) : ""))
+        .join("") + tsumCell(totalPresents > 0 ? fmtTl(totalAdmis) : ""),
+    )}
+${sumRow(
+      "NON ADMIS",
+      o.evaluations
+        .map((e) => tsumCell((e.presents ?? 0) > 0 ? fmtTl(e.non_admis ?? 0) : ""))
+        .join("") + tsumCell(totalPresents > 0 ? fmtTl(totalNonAdmis) : ""),
+    )}
+</tbody>
+</table>
+<p class=legende>&#10003; Admis (note &ge; seuil ${o.threshold} %) &middot; &#10005; Non admis &middot; – note absente &middot; abs absent. ADMIS = &eacute;l&egrave;ves pr&eacute;sents atteignant le seuil dans les 3 mati&egrave;res.</p>
+<table class=sig><tr>
+<td style="border:none; text-align:left;"><span style="text-decoration:underline;">Le Directeur</span>${o.directeur.trim() ? `<p style="margin-top:24px; font-weight:bold; text-transform:uppercase; letter-spacing:0.3px;">${esc(o.directeur.trim().toUpperCase())}</p>` : ""}</td>
+<td style="border:none; text-align:center;"><span style="text-decoration:underline;">L'Inspecteur</span>${o.inspectorName.trim() ? `<p style="margin-top:24px;">${esc(o.inspectorName.trim().toUpperCase())}</p>` : ""}</td>
+</tr></table>
+`,
+  });
+}
+
+/** Modèle EXCEL (.xlsx) — classeur paysage (exceljs) fidèle au PDF. */
+async function exportTlExcelAsync(o: TlExportData): Promise<void> {
+  const { Workbook } = await import("exceljs");
+  const wb = new Workbook();
+  wb.creator = "SYGREN";
+  const ws = wb.addWorksheet("Suivi pluriannuel", {
+    views: [{ state: "frozen", ySplit: 8, showGridLines: false }],
+    pageSetup: {
+      paperSize: 9,
+      orientation: "landscape",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 },
+      printTitlesRow: "8:8",
+    },
+  });
+  const nCols = 3 + o.evaluations.length;
+  ws.columns = [4, 34, ...o.evaluations.map(() => 9), 10].map((width) => ({ width }));
+  const font = (size: number, bold = false, argb?: string) => ({
+    name: "Arial",
+    size,
+    bold,
+    ...(argb ? { color: { argb } } : {}),
+  });
+  const GREEN = { argb: "FF009E60" };
+  const border = { style: "thin" as const, color: { argb: "FF009E60" } };
+  const BOX = { top: border, left: border, bottom: border, right: border };
+  const merged = (row: number, text: string, size: number, bold = false, italic = false) => {
+    ws.mergeCells(row, 1, row, nCols);
+    const c = ws.getCell(row, 1);
+    c.value = text;
+    c.font = { name: "Arial", size, bold, italic };
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  };
+
+  merged(1, "MINISTERE DE L'EDUCATION NATIONALE ET DE L'ALPHABETISATION", 11, true);
+  merged(2, `DIRECTION REGIONALE DE ${(o.iepRegion || "…………").toUpperCase()} — INSPECTION DE L'ENSEIGNEMENT PRESCOLAIRE ET PRIMAIRE DE ${(o.iepName || "…………").toUpperCase()}`, 10, true, true);
+  merged(3, `BP ${o.iepBp || "……"}   Tél ${o.iepPhone || "…………"}   Courriel : ${o.iepEmail || "…………"}`, 10);
+  merged(4, "REPUBLIQUE DE CÔTE D'IVOIRE — Union-Discipline-Travail", 10, true);
+  merged(5, "SUIVI DU PLAN D'ACTION PLURIANNUEL DE L'IEPP", 13, true);
+  merged(6, `SUIVI PLURIANNUEL DES NIVEAUX — CLASSE ${o.className.toUpperCase()} — ANNEE ${o.year}`, 11, true);
+  merged(7, `ECOLE : ${o.schoolName}    CLASSE : ${o.className}    ${o.students.length} élève(s) · ${o.evaluations.length} évaluation(s)`, 10, true);
+
+  // Entêtes de la matrice (rangée 8, répétée à l'impression)
+  const head = ws.getRow(8);
+  head.height = 30;
+  const headValues: Array<string> = ["N°", "ÉLÈVE (E M D)"];
+  o.evaluations.forEach((e) => headValues.push(e.short_label));
+  headValues.push("% ADMIS");
+  head.values = headValues;
+  head.eachCell({ includeEmpty: true }, (c) => {
+    c.font = font(9, true, "FFFFFFFF");
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    c.border = BOX;
+    c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN };
+  });
+
+  o.students.forEach((st, idx) => {
+    const r = 9 + idx;
+    const row = ws.getRow(r);
+    const values: Array<string | number> = [
+      idx + 1,
+      `${st.last_name.toUpperCase()} ${st.first_name} (${st.matricule} · ${st.gender === "F" ? "Fille" : "Garçon"})`,
+    ];
+    o.evaluations.forEach((e) => values.push(tlCellText(st.cells[e.id])));
+    values.push(st.pct_admis > 0 ? `${st.pct_admis} %` : "—");
+    row.values = values;
+    row.height = 16;
+    row.eachCell({ includeEmpty: true }, (c, col) => {
+      c.border = BOX;
+      c.font = font(9, false, st.gender === "F" && col === 2 ? "FFC00000" : undefined);
+      c.alignment = { horizontal: col === 2 ? "left" : "center", vertical: "middle", wrapText: true };
+    });
+  });
+
+  // Totaux ADMIS / NON ADMIS (fond pastel vert)
+  const totalAdmis = o.evaluations.reduce((acc, e) => acc + (e.admis ?? 0), 0);
+  const totalNonAdmis = o.evaluations.reduce((acc, e) => acc + (e.non_admis ?? 0), 0);
+  const totalPresents = o.evaluations.reduce((acc, e) => acc + (e.presents ?? 0), 0);
+  const fmtTl = (n: number) => (n <= 0 ? "00" : n < 10 ? `0${n}` : `${n}`);
+  const sumRows: Array<[string, Array<string>, string]> = [
+    [
+      "ADMIS",
+      o.evaluations.map((e) => ((e.presents ?? 0) > 0 ? fmtTl(e.admis ?? 0) : "")),
+      totalPresents > 0 ? fmtTl(totalAdmis) : "",
+    ],
+    [
+      "NON ADMIS",
+      o.evaluations.map((e) => ((e.presents ?? 0) > 0 ? fmtTl(e.non_admis ?? 0) : "")),
+      totalPresents > 0 ? fmtTl(totalNonAdmis) : "",
+    ],
+  ];
+  sumRows.forEach(([label, vals, total], k) => {
+    const r = 9 + o.students.length + k;
+    const row = ws.getRow(r);
+    row.values = [null, label, ...vals, total];
+    row.height = 15;
+    row.eachCell({ includeEmpty: true }, (c) => {
+      c.border = BOX;
+      c.font = font(9, true, "FF00734A");
+      c.alignment = { horizontal: "center", vertical: "middle" };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE4F4ED" } };
+    });
+    ws.getCell(r, 2).alignment = { horizontal: "left", vertical: "middle" };
+  });
+
+  // Signatures
+  const rSig = 9 + o.students.length + sumRows.length + 2;
+  const dir = ws.getCell(rSig, 2);
+  dir.value = "Le Directeur";
+  dir.font = font(11, true);
+  if (o.directeur.trim()) {
+    const dirName = ws.getCell(rSig + 2, 2);
+    dirName.value = o.directeur.trim().toUpperCase();
+    dirName.font = font(10, true);
+  }
+  const sigCol = Math.max(4, nCols - 2);
+  const insp = ws.getCell(rSig, sigCol);
+  insp.value = "L'Inspecteur";
+  insp.font = font(11, true, "FF00734A");
+  if (o.inspectorName.trim()) {
+    const inspName = ws.getCell(rSig + 2, sigCol);
+    inspName.value = o.inspectorName.trim().toUpperCase();
+    inspName.font = font(10, true);
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveBlob(
+    new Blob([buf], { type: XLSX_MIME }),
+    `suivi-pluriannuel-${slugFile(o.className)}-${o.year}.xlsx`,
+  );
+}
+
 export function PdaTimelineDocument({
   classId,
   year,
@@ -122,6 +403,9 @@ export function PdaTimelineDocument({
   // GRISÉE (l'impression reste réservée à l'Admin IEP et au Super Admin).
   const printRole = usePrintRole();
   const canPrint = canPrintDocument(printRole, false);
+  // État des exports Word/Excel (DOIT rester avant les retours conditionnels
+  // — règles des Hooks React).
+  const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
 
   if (isLoading) {
     return (
@@ -154,6 +438,47 @@ export function PdaTimelineDocument({
   const subjects = tl.subjects ?? [];
   const iep = tl.iep;
   const schoolName = tl.school?.name || "…………";
+  // Nom du directeur signataire (fourni par le backend — GetPDATimeline v4).
+  const directeur = tl.directeur ?? "";
+
+  const exportData: TlExportData = {
+    evaluations,
+    students,
+    schoolName,
+    className: tl.class.name,
+    year: tl.year,
+    iepRegion: iep?.region ?? "",
+    iepName: iep?.name ?? "",
+    iepBp: iep?.bp ?? "",
+    iepPhone: iep?.inspector_phone ?? "",
+    iepEmail: iep?.inspector_email ?? "",
+    inspectorName: iep?.inspector_name ?? "",
+    directeur,
+    threshold: evaluations[0]?.threshold ?? 50,
+  };
+
+  // Modèle WORD (.doc) — HTML MSO A4 paysage fidèle au document imprimé.
+  function handleWord() {
+    setExporting("doc");
+    try {
+      saveWordDoc(
+        buildTlWordHtml(exportData),
+        `suivi-pluriannuel-${slugFile(exportData.className)}-${exportData.year}.doc`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  // Modèle EXCEL (.xlsx) — classeur paysage (exceljs importé à la demande).
+  async function handleExcel() {
+    setExporting("xlsx");
+    try {
+      await exportTlExcelAsync(exportData);
+    } finally {
+      setExporting(null);
+    }
+  }
 
   // Totaux de colonne (API) : lignes ADMIS / NON ADMIS de la matrice —
   // la dernière colonne porte les totaux sur toutes les évaluations.
@@ -186,13 +511,14 @@ export function PdaTimelineDocument({
         </h3>
         <div className="flex items-center gap-2">
           {canPrint ? (
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimer / PDF
-            </button>
+            <DocExportButtons
+              canPrint
+              exporting={exporting}
+              onPdf={() => window.print()}
+              onWord={handleWord}
+              onExcel={handleExcel}
+              formatHint="Format : A4 paysage"
+            />
           ) : (
             <PrintLockBadge />
           )}
@@ -410,7 +736,24 @@ export function PdaTimelineDocument({
             marginTop: "20px",
           }}
         >
-          <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+          <div style={{ textAlign: "left" }}>
+            <span style={{ textDecoration: "underline" }}>Le Directeur</span>
+            {/* v4 — NOM du directeur signataire SOUS « Le Directeur », au
+                même niveau que le nom de l'inspecteur (demande utilisateur). */}
+            {directeur ? (
+              <div
+                style={{
+                  fontSize: "11px",
+                  marginTop: "24px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.3px",
+                }}
+              >
+                {directeur.toUpperCase()}
+              </div>
+            ) : null}
+          </div>
           <div style={{ textAlign: "center" }}>
             <span style={{ textDecoration: "underline", color: CI_GREEN_TEXT }}>L&apos;Inspecteur</span>
             {iep?.inspector_name ? (
