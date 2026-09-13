@@ -4443,3 +4443,27 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 ### QA
 - Pipeline skill xlsx : recalc 0 erreur (37 formules) → audit 0 erreur → validate exit 0 ; contrôle sémantique Python (97/582/4/578) OK.
 - Scripts : extract_etat_25.py, build_etat_25.py (réutilisables pour regénérer l'état après saisie).
+
+---
+## Task 25 (régénération) — État de saisie des titulaires reconstruit depuis Neon live
+
+**Date** : 2026-09-13 | **Livrable** : `download/Etat-saisie-titulaires-classes-SYGREN.xlsx` (regénéré) | Aucun code/déploiement
+
+### Contexte
+- Environnement de travail réinitialisé (clone + scripts perdus) ; le classeur livré en session précédente a été **reconstruit à l'identique** à partir des scripts recréés (`extract_etat_25.py`, `build_etat_25.py`, `verify_etat_25.py`).
+- Résolution répliquée exactement depuis `helpers.go resolveClassTeacherName` (soft-delete GORM confirmé : `deleted_at IS NULL` implicite ; repli limité à `role='teacher' AND active=true` de la MÊME école, `UPPER(TRIM(cours)) = UPPER(TRIM(classe))`, created_at ASC).
+
+### Chiffres live (inchangés sur l'essentiel)
+- **97 écoles / 582 classes actives / 4 avec nom résolu / 578 à saisir** — identique à la livraison précédente.
+- Évolutions de saisie depuis la dernière extraction : écoles sans secteur **64 → 16** (secteurs bien mieux renseignés) ; **1 COURS tenu désormais renseigné** mais par un compte `director` (Kouamé kouamé Frédéric, EPP TIAHA 1, CE2) → **ne s'affichera pas sur les bulletins** tant que le rôle reste « director » (le repli backend n'accepte que role='teacher') — signalé dans le classeur.
+- 12 classes à saisir ont un effectif enregistré (> 0 élèves) → marquées prioritaires (gras ambre). Médiane : 1 agent SYGREN par école (24 écoles avec agents).
+
+### Structure du classeur (inchangée)
+- **Récapitulatif** : couverture par secteur, COUNTIF vivantes sur les feuilles de détail + TOTAL (97/582/4/578).
+- **Classes à saisir** (578 lignes) : N°, école, secteur, classe, élèves (priorité ambre), agents SYGREN de l'école, colonne vide « Titulaire à affecter (en MAJUSCULES) » ; filtres + volets figés + impression paysage.
+- **Classes déjà OK** (4) : référence (3 × EPP COTIERE PALMERAIE, CM2 EPP COSROU LEKR — DIDJA KOUADIO BLA ÉMELINE).
+- **Personnel & cours tenu** (35 agents) : liste déroulante CP1..CM2 sur les lignes « teacher » uniquement + note du cas director/CE2.
+
+### QA
+- Pipeline skill xlsx : recalc **0 erreur** (29 formules) → audit **0 erreur** (12 zéros légitimes : secteurs sans classe résolue) → validate **exit 0** ; contrôle sémantique Python **49/49 PASS** (totaux, par secteur, comptages de lignes, spot-checks alignés sur le tri du build).
+- Doublon de nom toujours présent : « EPP COTIERE PALMERAIE » × 2 (BADIA) — rappelé en note du classeur.
