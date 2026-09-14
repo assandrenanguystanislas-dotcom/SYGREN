@@ -81,17 +81,34 @@ func classRank(name string) int {
 	return 0
 }
 
-// parseDossierDate convertit une date ISO "YYYY-MM-DD" (peut être nil ou
-// vide) en *time.Time (minuit UTC). Erreur si le format est invalide.
+// parseDossierDate convertit une date du dossier (peut être nil ou
+// vide) en *time.Time (minuit UTC). Deux formats acceptés :
+//   - "YYYY-MM-DD" — émis par les listes déroulantes Jour/Mois/Année ;
+//   - horodatage RFC3339 ("1996-03-16T00:00:00Z") — l'API sérialise
+//     les dates (time.Time) sous cette forme : un client qui échoit la
+//     valeur reçue sans la retoucher (dossier pré-rempli à l'édition)
+//     ne doit PAS voir sa sauvegarde rejetée en bloc.
+//
+// La valeur est tronquée au jour (minuit UTC) avant stockage.
+// Erreur si aucun format ne correspond.
 func parseDossierDate(s *string) (*time.Time, error) {
 	if s == nil || *s == "" {
 		return nil, nil
 	}
-	t, err := time.Parse("2006-01-02", strings.TrimSpace(*s))
-	if err != nil {
-		return nil, fmt.Errorf("date invalide (%q) — utilisez les listes déroulantes Jour/Mois/Année", *s)
+	v := strings.TrimSpace(*s)
+	if t, err := time.Parse("2006-01-02", v); err == nil {
+		return &t, nil
 	}
-	return &t, nil
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		u := t.UTC()
+		day := time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+		return &day, nil
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05", v); err == nil {
+		day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+		return &day, nil
+	}
+	return nil, fmt.Errorf("date invalide (%q) — utilisez les listes déroulantes Jour/Mois/Année", *s)
 }
 
 // cleanDossierStr : chaîne du dossier → pointeur (vide = nil, trim).

@@ -609,16 +609,16 @@ export function personnelOf(u: {
   return {
     matricule: u.matricule ?? null,
     sexe: u.sexe ?? null,
-    date_naissance: u.date_naissance ?? null,
+    date_naissance: isoDate(u.date_naissance),
     lieu_naissance: u.lieu_naissance ?? null,
     categorie: u.categorie ?? null,
     classe_grade: u.classe_grade ?? null,
     echelon: u.echelon ?? null,
-    date_entree_fp: u.date_entree_fp ?? null,
+    date_entree_fp: isoDate(u.date_entree_fp),
     fonction: u.fonction ?? null,
     cours: u.cours ?? null,
-    date_entree_dren: u.date_entree_dren ?? null,
-    date_entree_iep: u.date_entree_iep ?? null,
+    date_entree_dren: isoDate(u.date_entree_dren),
+    date_entree_iep: isoDate(u.date_entree_iep),
     effectif_f: u.effectif_f ?? null,
     effectif_g: u.effectif_g ?? null,
     effectif_t: u.effectif_t ?? null,
@@ -626,6 +626,18 @@ export function personnelOf(u: {
     redoublant_g: u.redoublant_g ?? null,
     redoublant_t: u.redoublant_t ?? null,
   };
+}
+
+/** Normalise une date renvoyée par l'API vers "YYYY-MM-DD".
+ *  L'API sérialise les dates (time.Time) en horodatage RFC3339
+ *  ("1996-03-16T00:00:00Z") : recopié tel quel dans le dossier, il
+ *  repartait à la sauvegarde SANS être retouché par les listes
+ *  Jour/Mois/Année et le backend le rejetait (« date invalide »).
+ *  Le dossier ne porte donc QUE le format court — l'édition d'un
+ *  agent existant enregistre sans toucher aux dates. */
+function isoDate(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return v.length > 10 ? v.slice(0, 10) : v;
 }
 
 /** Le dossier contient-il au moins un champ renseigné ? */
