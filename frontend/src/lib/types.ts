@@ -34,10 +34,15 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
 export type SexeCode = "F" | "G";
 export type CategorieCode = "IO" | "IA" | "IS" | "IAS";
 export type FonctionCode = "DIRECTEUR" | "ADJOINT(E)";
-/** Cours tenus de l'école primaire (bande déroulante du dossier personnel) :
- *  les 6 classes CP1 → CM2 + les deux affectations particulières RPL et
- *  MAC (demande utilisateur — plage COURS à 8 items, dans cet ordre). */
+/** Cours tenus de l'agent (bande déroulante du dossier personnel) :
+ *  les 3 sections de la maternelle PS · MS · GS (demande utilisateur —
+ *  directeurs et adjoints au directeur des écoles maternelles), les
+ *  6 classes CP1 → CM2 puis les deux affectations particulières RPL et
+ *  MAC (plage COURS complète, ordre pédagogique). */
 export type CoursCode =
+  | "PS"
+  | "MS"
+  | "GS"
   | "CP1"
   | "CP2"
   | "CE1"
@@ -60,9 +65,10 @@ export interface PersonnelDossier {
   echelon?: number | null; // échelon 1..4
   date_entree_fp?: string | null; // entrée à la Fonction Publique
   fonction?: FonctionCode | null;
-  // Cours tenu — bande déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2 |
-  // RPL | MAC du dossier personnel (plage « COURS » à 8 items). Prime
-  // sur la classe affectée dans la colonne COURS de l'état nominatif.
+  // Cours tenu — bande déroulante PS | MS | GS | CP1 | CP2 | CE1 | CE2 |
+  // CM1 | CM2 | RPL | MAC du dossier personnel (plage « COURS » à 11
+  // items). Prime sur la classe affectée dans la colonne COURS de
+  // l'état nominatif.
   cours?: CoursCode | null;
   date_entree_dren?: string | null;
   date_entree_iep?: string | null;

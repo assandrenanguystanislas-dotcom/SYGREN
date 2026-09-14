@@ -17,21 +17,30 @@
 //     via CLASSE_GRADE_LABELS.
 //   - Date d'entrée à la F.P — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Fonction — liste déroulante DIRECTEUR | ADJOINT(E)
-//   - COURS — liste déroulante CP1 | CP2 | CE1 | CE2 | CM1 | CM2 |
-//     RPL | MAC (plage « COURS » à 8 items demandée — cours tenu par
-//     l'agent ; prime sur la classe affectée du module Classes dans la
-//     colonne COURS de l'État nominatif)
+//   - COURS — liste déroulante PS | MS | GS | CP1 | CP2 | CE1 | CE2 |
+//     CM1 | CM2 | RPL | MAC (plage « COURS » à 11 items demandée —
+//     maternelle ajoutée à la demande utilisateur pour les directeurs
+//     et adjoints des écoles maternelles ; prime sur la classe affectée
+//     du module Classes dans la colonne COURS de l'État nominatif)
 //   - Date d'entrée DREN — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Entrée à l'IEP — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Effectif — F | G | T (saisies numériques, comme les colonnes du document)
 //   - Redoublants — F | G | T
 //   - Sexe — liste déroulante F | G
 //
+// CONFUSION DES DATES (demande utilisateur) : la date de NAISSANCE et
+// les dates D'ENTRÉE (F.P / DREN / IEP) sont des dates DIFFÉRENTES —
+// le formulaire les isole visuellement en DEUX groupes titrés (boxed),
+// chacun des 4 sélecteurs restant explicitement libellé, avec la plage
+// d'années en précision sous le trio. Un duo jour/mois impossible
+// (ex : 31/02) n'est jamais émis — un message local le signale au lieu
+// de laisser le backend rejeter la sauvegarde entière (« date invalide »).
+//
 // Le dossier part entier à chaque enregistrement (sémantique « mise à
 // jour complète » du backend — un champ vide efface la valeur stockée).
 
 import { useState } from "react";
-import { type LucideIcon, IdCard } from "lucide-react";
+import { type LucideIcon, Cake, CalendarDays, IdCard } from "lucide-react";
 
 import type { PersonnelDossier } from "@/lib/types";
 import type { CoursCode } from "@/lib/types";
@@ -75,11 +84,12 @@ export const CLASSE_GRADE_LABELS: Record<number, string> = {
   4: "P",
 };
 
-/** Les 8 items de la plage « COURS » (bande déroulante demandée —
- *  dans l'ordre pédagogique : classes CP1 → CM2 puis RPL et MAC).
+/** Les 11 items de la plage « COURS » (bande déroulante demandée —
+ *  ordre pédagogique : maternelle PS · MS · GS puis classes CP1 → CM2
+ *  et les deux affectations particulières RPL et MAC).
  *  Clé = valeur stockée en base. */
 export const COURS_OPTIONS: CoursCode[] = [
-  "CP1", "CP2", "CE1", "CE2", "CM1", "CM2", "RPL", "MAC",
+  "PS", "MS", "GS", "CP1", "CP2", "CE1", "CE2", "CM1", "CM2", "RPL", "MAC",
 ];
 
 /** Bornes d'années des listes :
@@ -103,29 +113,47 @@ function parseIsoParts(iso: string | null | undefined): IsoParts {
   return { y: y || "", m: unpad(m), d: unpad(d) };
 }
 
+/** Nombre de jours d'un mois (m : 1..12, y : année — bissextile gérée).
+ *  Sert à refuser les dates inexistantes (ex : 31/02) que le backend
+ *  rejetterait en bloc (« date invalide »). */
+function daysInMonth(m: number, y: number): number {
+  return new Date(y, m, 0).getDate();
+}
+
 /** Sélecteur de date en 3 listes déroulantes (Jour / Mois / Année).
  *  ISO vaut "YYYY-MM-DD…" (API) ou null ; la date n'est posée que si les
- *  3 parties sont choisies.
+ *  3 parties sont choisies ET forment une date réelle — un duo
+ *  jour/mois impossible (ex : 31/02) n'est JAMAIS émis : un message
+ *  local le signale et la valeur du dossier reste inchangée, au lieu de
+ *  voir la sauvegarde entière rejetée par le backend « date invalide ».
  *
  *  ⚠ Les 3 parties vivent dans un ÉTAT LOCAL initialisé depuis l'ISO :
  *  chaque liste garde sa sélection pendant qu'on complète les deux autres.
  *  (Version initiale : les parties dérivées directement de la prop iso —
  *  la sélection partielle était écrasée par le re-render parent dès la
  *  première liste choisie, les listes semblaient « ne pas fonctionner ».)
- *  L'ISO n'est émis au dossier que lorsque les 3 parties sont réunies.
- *  Le dialog démonte son contenu à la fermeture : chaque ouverture
- *  réinitialise proprement les parties depuis la valeur enregistrée. */
+ *  L'ISO n'est émis au dossier que lorsque les 3 parties sont réunies et
+ *  valides. Le dialog démonte son contenu à la fermeture : chaque
+ *  ouverture réinitialise proprement les parties depuis la valeur
+ *  enregistrée.
+ *
+ *  `hint` — précision affichée sous le trio (plage d'années, sens de la
+ *  date). Naissance et dates d'entrée (F.P / DREN / IEP) étant DES
+ *  DATES DIFFÉRENTES (demande utilisateur), chaque sélecteur reste
+ *  explicitement libellé et regroupé dans sa section titrée. */
 function DateSelects({
   id,
   label,
   iso,
   years,
+  hint,
   onChange,
 }: {
   id: string;
   label: string;
   iso: string | null | undefined;
   years: number[];
+  hint?: string;
   onChange: (iso: string | null) => void;
 }) {
   const [parts, setParts] = useState<IsoParts>(() => parseIsoParts(iso));
@@ -134,13 +162,22 @@ function DateSelects({
     const v = raw === UNSET ? "" : raw;
     const next = { ...parts, [part]: v };
     setParts(next);
+    // La date n'est émise que si les 3 parties sont réunies ET
+    // cohérentes : le jour doit exister dans le mois choisi (février
+    // 29/30/31, mois à 30 jours…). Sinon → null (valeur non posée).
+    const complete = next.y && next.m && next.d;
+    const validDay =
+      complete && Number(next.d) <= daysInMonth(Number(next.m), Number(next.y));
     onChange(
-      next.y && next.m && next.d
+      complete && validDay
         ? `${next.y}-${next.m.padStart(2, "0")}-${next.d.padStart(2, "0")}`
         : null,
     );
   };
   const trigger = "h-8 w-full text-xs px-2";
+  const maxDay =
+    parts.m && parts.y ? daysInMonth(Number(parts.m), Number(parts.y)) : null;
+  const invalidDay = maxDay != null && parts.d !== "" && Number(parts.d) > maxDay;
   return (
     <div className="space-y-1 min-w-0">
       <Label htmlFor={id} className="text-[11px] leading-tight block">
@@ -196,6 +233,13 @@ function DateSelects({
           </SelectContent>
         </Select>
       </div>
+      {invalidDay ? (
+        <p className="text-[10px] text-destructive leading-tight">
+          Ce jour n&apos;existe pas pour ce mois — corrigez le jour ou le mois.
+        </p>
+      ) : hint ? (
+        <p className="text-[10px] text-muted-foreground leading-tight">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -331,26 +375,35 @@ export function PersonnelDossierFields({
         </div>
       </div>
 
-      {/* Date et lieu de naissance */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        <DateSelects
-          id="pers-naissance"
-          label="Date de naissance (Jour · Mois · Année)"
-          iso={value.date_naissance}
-          years={birthYears}
-          onChange={(iso) => onChange({ ...value, date_naissance: iso })}
-        />
-        <div className={field}>
-          <Label htmlFor="pers-lieu" className="text-[11px]">
-            Lieu de naissance
-          </Label>
-          <Input
-            id="pers-lieu"
-            value={value.lieu_naissance ?? ""}
-            onChange={(e) => onChange({ ...value, lieu_naissance: e.target.value || null })}
-            placeholder="Ex : Dabou"
-            className={small}
+      {/* === NAISSANCE — groupe DISTINCT des dates d'entrée (demande
+          utilisateur : « les dates de naissance sont différentes des
+          dates d'entrée à la FP et à l'IEP ») === */}
+      <div className="rounded-md border bg-background p-2.5 space-y-2.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <Cake className="w-3.5 h-3.5" />
+          Naissance de l&apos;agent
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <DateSelects
+            id="pers-naissance"
+            label="Date de naissance (Jour · Mois · Année)"
+            iso={value.date_naissance}
+            years={birthYears}
+            hint="Date de NAISSANCE — années 1940 → aujourd'hui"
+            onChange={(iso) => onChange({ ...value, date_naissance: iso })}
           />
+          <div className={field}>
+            <Label htmlFor="pers-lieu" className="text-[11px]">
+              Lieu de naissance
+            </Label>
+            <Input
+              id="pers-lieu"
+              value={value.lieu_naissance ?? ""}
+              onChange={(e) => onChange({ ...value, lieu_naissance: e.target.value || null })}
+              placeholder="Ex : Dabou"
+              className={small}
+            />
+          </div>
         </div>
       </div>
 
@@ -429,34 +482,47 @@ export function PersonnelDossierFields({
         </div>
       </div>
 
-      {/* Dates d'entrée */}
-      <DateSelects
-        id="pers-fp"
-        label="Date d'entrée à la F.P (Jour · Mois · Année)"
-        iso={value.date_entree_fp}
-        years={entryYears}
-        onChange={(iso) => onChange({ ...value, date_entree_fp: iso })}
-      />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      {/* === DATES D'ENTRÉE — groupe DISTINCT de la naissance : les trois
+          dates sont différentes entre elles (F.P = entrée dans la
+          Fonction publique ≠ DREN ≠ IEP = arrivée dans l'inspection) —
+          demande utilisateur (lever la confusion du formulaire). === */}
+      <div className="rounded-md border bg-background p-2.5 space-y-2.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <CalendarDays className="w-3.5 h-3.5" />
+          Dates d&apos;entrée de l&apos;agent — distinctes de la naissance
+        </div>
         <DateSelects
-          id="pers-dren"
-          label="Date d'entrée DREN (Jour · Mois · Année)"
-          iso={value.date_entree_dren}
+          id="pers-fp"
+          label="Date d'entrée à la F.P (Jour · Mois · Année)"
+          iso={value.date_entree_fp}
           years={entryYears}
-          onChange={(iso) => onChange({ ...value, date_entree_dren: iso })}
+          hint="Entrée dans la FONCTION PUBLIQUE — années 1960 → aujourd'hui"
+          onChange={(iso) => onChange({ ...value, date_entree_fp: iso })}
         />
-        <DateSelects
-          id="pers-iep"
-          label="Entrée à l'IEP (Jour · Mois · Année)"
-          iso={value.date_entree_iep}
-          years={entryYears}
-          onChange={(iso) => onChange({ ...value, date_entree_iep: iso })}
-        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <DateSelects
+            id="pers-dren"
+            label="Date d'entrée DREN (Jour · Mois · Année)"
+            iso={value.date_entree_dren}
+            years={entryYears}
+            hint="Entrée à la DREN — années 1960 → aujourd'hui"
+            onChange={(iso) => onChange({ ...value, date_entree_dren: iso })}
+          />
+          <DateSelects
+            id="pers-iep"
+            label="Entrée à l'IEP (Jour · Mois · Année)"
+            iso={value.date_entree_iep}
+            years={entryYears}
+            hint="Arrivée dans l'INSPECTION (IEP) — années 1960 → aujourd'hui"
+            onChange={(iso) => onChange({ ...value, date_entree_iep: iso })}
+          />
+        </div>
       </div>
 
-      {/* COURS — plage demandée : bande déroulante des 8 cours tenus
-          (CP1 → CM2 + RPL + MAC — même position que la colonne COURS du
-          document : après les dates, avant les effectifs). */}
+      {/* COURS — plage demandée : bande déroulante des 11 cours tenus
+          (maternelle PS · MS · GS puis CP1 → CM2 + RPL + MAC — même
+          position que la colonne COURS du document : après les dates,
+          avant les effectifs). */}
       <div className="grid grid-cols-2 gap-2.5">
         <div className={field}>
           <Label className="text-[11px]">Cours</Label>
@@ -471,7 +537,7 @@ export function PersonnelDossierFields({
             </SelectTrigger>
             <SelectContent className="min-w-[8.5rem]">
               <SelectGroup>
-                <SelectLabel>Cours (CP1 → CM2 · RPL · MAC)</SelectLabel>
+                <SelectLabel>Cours (PS → CM2 · RPL · MAC)</SelectLabel>
                 <SelectItem value={UNSET}>—</SelectItem>
                 {COURS_OPTIONS.map((c) => (
                   <SelectItem key={c} value={c}>
