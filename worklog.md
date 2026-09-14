@@ -4582,3 +4582,26 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 ### Vérifications
 - `go build ./...` OK ; gofmt (tabs restaurés — normalisation incluse au commit, diff réel 117 insertions) ; `tsc --noEmit` = 0 erreur (après `bun install` exceljs de Task 27) ; eslint OK sur les fichiers touchés.
 - Rebase sur origin/main (6 commits Task 26/27 arrivés entre-temps) sans conflit ; push `2ab0a57` → Vercel READY (SHA vérifié via API) + Render LIVE (SHA vérifié) + `/api/health` 200.
+
+---
+## Task 29 — Hotfix : édition du dossier bloquée par « date invalide (RFC3339) »
+
+**Date** : 2026-09-14 | **Commits** : `8f2f675` (fix) + `180f08e` (chore lockfile) | **Déploiements** : Vercel READY (180f08e) · Render LIVE (180f08e) · `/api/health` 200
+
+### Demande (remontée utilisateur après Task 28)
+« voici ce cela donne modification echouée {"error":"date invalide ("1996-03-16T00:00:00Z") — utilisez les listes déroulantes Jour/Mois/Année"} »
+
+### Cause racine (chaîne intégralement relue)
+- À l'ÉDITION (dialog Directeur/Adjoint), `openEdit` initialise le dossier avec `personnelOf(user)` : l'API sérialise les dates (`*time.Time` dans models.go) en horodatage RFC3339 (« 1996-03-16T00:00:00Z »).
+- Le dossier part ENTIER à chaque sauvegarde (sémantique « mise à jour complète ») : une date NON retouchée par les listes Jour/Mois/Année repartait sous forme d'horodatage → `parseDossierDate` n'acceptait que « 2006-01-02 » → 400 « date invalide » → la MODIFICATION était bloquée (la création part d'un dossier vide — d'où l'impression que « l'inscription ne marche pas »).
+- Les vues (Mon profil, État nominatif) s'affichaient correctement — `formatDossierDate` tronque à 10 caractères — d'où le contraste affichage OK / sauvegarde KO.
+
+### Implémentation (défense en profondeur — 2 fichiers)
+- **frontend `personnel-dossier-fields.tsx`** : helper `isoDate()` — `personnelOf` normalise les 4 dates du dossier (naissance, F.P, DREN, IEP) en « YYYY-MM-DD » dès l'initialisation → l'édition d'un agent existant enregistre SANS toucher aux listes.
+- **backend `handlers/personnel.go`** : `parseDossierDate` accepte en plus RFC3339 (« …T…Z ») et « YYYY-MM-DDTHH:MM:SS », tronqués au jour UTC avant stockage ; les formats réellement invalides (16/03/1996, 1996-13-45) restent refusés ; message d'erreur inchangé.
+
+### Vérifications
+- `go build ./...` + `go vet ./...` OK ; test du parseur 8 cas (dont « 1996-03-16T00:00:00Z » → 1996-03-16, « 16/03/1996 » → erreur) PASS (fichier temporaire, non commité) ; `tsc --noEmit` 0 erreur ; `gofmt -w` personnel.go (fichier repassé en espaces pendant l'édition — diff final limité au changement fonctionnel).
+- push `180f08e` → Vercel **READY** (SHA vérifié via API) + Render **LIVE** (SHA vérifié via API) + `/api/health` 200.
+- `chore(deps) 180f08e` : bun.lock synchronisé (exceljs installé en Task 27, lock non commité à l'époque).
+- Aucun changement de schéma ni de données Neon (tolérance de parsing uniquement).
