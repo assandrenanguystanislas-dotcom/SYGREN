@@ -4533,3 +4533,27 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - **Bulletins périodiques** (`app/bulletins/page.tsx` — le document imprimé par lot ; `bulletins-view.tsx` n'est que le sélecteur et n'a PAS été touché) : Word un bulletin/page (accolade Éveil au Milieu, visa directeur, résultats, statistiques avec progression ▲▼, appréciation) + Excel 1 feuille par élève (≤60).
 - Toolbars DocExportButtons (PDF/Word/Excel) sous verrou d'impression existant ; useState avant retours conditionnels ; fichiers `releve-notes-*`, `bulletins-fin-annee-*`, `bulletins-*` (slugFile).
 - tsc 0 erreur ; next build OK.
+
+---
+## Task 27 — Module Résultats : export PDF / Word / Excel du CLASSEMENT (Synthèse déjà couverte Task 26)
+
+**Date** : 2026-09-14 | **Commit** : `7454d45` | **Déploiements** : Vercel READY (7454d45) · Render non concerné (backend inchangé — LIVE, /api/health 200)
+
+### Demande
+« dans le module resultat, classement, synthese generer le fichier en PDF, EXCEL et WORD »
+
+### Constat (vérité du dépôt)
+- La SYNTHÈSE du module Résultats possède déjà ses 3 modèles (Task 26 : PDF impression + Word .doc paysage + Excel exceljs, barre DocExportButtons sous verrou).
+- Le CLASSEMENT (tableau moyennes/rangs de la session) n'avait AUCUN export → seul chantier restant de la demande.
+
+### Implémentation (frontend seul)
+- Nouveau module `frontend/src/lib/classement-exports.ts` BÂTI SUR l'infrastructure Task 26 (`doc-export.tsx` : buildWordShell/saveWordDoc/saveBlob/slugFile/XLSX_MIME + exceljs) :
+  - **Word** : .doc MSO A4 portrait (marge 12 mm), thead `table-header-group` (répété à chaque page), armoiries en base64 (best effort) ;
+  - **Excel** : exceljs import dynamique — 4 titres fusionnés A1:G4, ligne d'en-têtes fond vert #009E60 texte blanc (`printTitlesRow 6:6`), zebra #E4F4ED, moyenne en gras, statistiques + répartition des mentions en pied, volet figé, impression portrait fitToWidth ;
+  - **PDF** : iframe caché imprimable (pas de route d'impression dédiée au classement) — en-tête institutionnel repris À L'IDENTIQUE des documents SYGREN (textes du document de Synthèse) via GET /api/reports/synthese-data (RBAC vérifié côté handler) ; repli en-tête simplifié si le rôle n'y a pas accès ; armoiries URL absolue attendues avant print ; nettoyage onafterprint + filet 120 s ; document.title = nom de fichier proposé.
+- `results-view.tsx` : 3 boutons outline (PDF / Word / Excel) dans l'en-tête de la carte Classement ; état `exporting "pdf"/"doc"/"xlsx"` (convention DocExportButtons, Loader2 + désactivation) ; hooks déclarés avant les retours conditionnels.
+- **Données exactement celles affichées** : filteredResults (filtre classe respecté) + statistics agrégées ; moyennes au barème propre de chaque élève (CP/CE /10, CM /20).
+- Vue de TRAVAIL (pas un document officiel) → SANS verrou canPrintDocument : directeur/enseignant exportent le classement de leur école ; les documents officiels restent verrouillés (Task 23/24/26).
+
+### Vérifications
+- `bun install` (exceljs 4.4.0) ; `tsc --noEmit` = 0 erreur ; `next build` OK (17 routes) ; push `7454d45` → Vercel **READY** (SHA vérifié via API) ; Render non concerné (aucun Go modifié) — service LIVE, `/api/health` 200. Aucun changement de schéma/données Neon.
