@@ -4557,3 +4557,28 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 
 ### Vérifications
 - `bun install` (exceljs 4.4.0) ; `tsc --noEmit` = 0 erreur ; `next build` OK (17 routes) ; push `7454d45` → Vercel **READY** (SHA vérifié via API) ; Render non concerné (aucun Go modifié) — service LIVE, `/api/health` 200. Aucun changement de schéma/données Neon.
+
+---
+## Task 28 — Module Utilisateurs : cours PS · MS · GS (maternelle) + dates du dossier sans confusion
+
+**Date** : 2026-09-14 | **Commit** : `2ab0a57` | **Déploiements** : Vercel READY (2ab0a57) · Render LIVE (2ab0a57) · `/api/health` 200
+
+### Demande
+« dans le module utilisateurs creer un directeur ou creer un adjoint au directeur ajouter a la liste deroulante cours " GS ; PS ; MS". aussi dans ce formulaire vous portez la confusion sur les dates. les dates de naissance sont differentes des dates d'entrée a la FP et d'entrée a l'IEP. regler cela pour que les directeurs et les adjoints au directeur puissent s'inscrire. »
+
+### Constat (vérité du dépôt — chaîne intégralement relue avant correction)
+- L'onglet « Adjoint(e)s au directeur » = TeachersView (rôle teacher) ; « Directeurs » = DirectorsView — les DEUX formulaires partagent `personnel-dossier-fields.tsx` (le cours et les dates sont donc corrigés aux deux endroits d'un coup).
+- Chaîne dates vérifiée de bout en bout (formulaire → api.ts → personnel.go applyTo → models.go → Neon → document État nominatif → Mon profil) : AUCUN croisement de champs ; données Neon cohérentes (naissance < FP < DREN/IEP sur les 5 agents datés). La « confusion » est donc : (a) 4 trios Jour/Mois/Année IDENTIQUES sans séparation visuelle naissance/entrées, (b) un vrai défaut — une date inexistante (ex : 31/02) était émise telle quelle et le backend rejetait la SAUVEGARDE ENTIÈRE (« date invalide »), ce qui empêche concrètement l'inscription du dossier.
+- La liste COURS était limitée à 8 items (CP1..CM2 · RPL · MAC) : aucun cours de maternelle sélectionnable pour les directeurs/adjoints des écoles maternelles.
+
+### Implémentation
+- **COURS porté à 11 items** (ordre pédagogique PS · MS · GS puis CP1 → CM2 · RPL · MAC) :
+  - `backend/handlers/personnel.go` : validCours (PS/MS/GS), classRank (PS=1 → MAC=11 — le tri de l'État nominatif place la maternelle en tête), message d'erreur ; `models.go` commentaire.
+  - `frontend/src/lib/types.ts` : CoursCode ; `personnel-dossier-fields.tsx` : COURS_OPTIONS + libellé « Cours (PS → CM2 · RPL · MAC) ».
+- **Dates sans confusion** (`personnel-dossier-fields.tsx`) : deux groupes titrés distincts — « Naissance de l'agent » (🎂) / « Dates d'entrée de l'agent — distinctes de la naissance » (📅) ; chaque sélecteur garde son libellé explicite et reçoit une précision de sens + plage d'années sous le trio (« Date de NAISSANCE — années 1940 → aujourd'hui » / « Entrée dans la FONCTION PUBLIQUE… » / « Arrivée dans l'INSPECTION (IEP)… »).
+- **Garde anti-date-inexistante** (DateSelects) : le trio ne plus émettre un duo jour/mois impossible (daysInMonth, bissextiles gérées) — message rouge local « Ce jour n'existe pas pour ce mois » au lieu du rejet backend global ; la sauvegarde n'est plus bloquée par une seule liste aberrante.
+- Aucun changement de schéma ni de données Neon (cours = TEXT, validation élargie sans migration).
+
+### Vérifications
+- `go build ./...` OK ; gofmt (tabs restaurés — normalisation incluse au commit, diff réel 117 insertions) ; `tsc --noEmit` = 0 erreur (après `bun install` exceljs de Task 27) ; eslint OK sur les fichiers touchés.
+- Rebase sur origin/main (6 commits Task 26/27 arrivés entre-temps) sans conflit ; push `2ab0a57` → Vercel READY (SHA vérifié via API) + Render LIVE (SHA vérifié) + `/api/health` 200.
