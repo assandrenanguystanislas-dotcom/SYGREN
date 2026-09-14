@@ -21,6 +21,7 @@ import {
   ShieldOff,
   Search,
   FileSpreadsheet,
+  FileDown,
   Eye,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,10 +29,20 @@ import { toast } from "sonner";
 import { sessionsApi, computationApi, reportsApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
+import {
+  classementFileBase,
+  classementSessionLabel,
+  exportClassementExcel,
+  exportClassementWord,
+  printClassementToPdf,
+  type ClassementExportInput,
+  type ClassementHeaderInfo,
+} from "@/lib/classement-exports";
 import { SyntheseDocument } from "./synthese-document";
 import { StudentAnnualCard } from "./student-annual-card";
 import { StudentDetailDialog } from "./student-detail-dialog";
 import {
+  EVAL_TYPE_LABELS,
   MENTION_COLOR_CLASSES,
   type SessionResults,
   type StudentResult,
@@ -85,6 +96,9 @@ function ResultsRankingView() {
   const [showSynthese, setShowSynthese] = useState(false);
   // === Deux documents de synthèse (cahier des charges) ===
   const [syntheseLevelGroup, setSyntheseLevelGroup] = useState<"primary" | "cm2">("primary");
+  // Task 27 — exports PDF / Word / Excel du classement (spinner par format,
+  // convention « doc »/« xlsx » identique à la barre DocExportButtons).
+  const [exporting, setExporting] = useState<"pdf" | "doc" | "xlsx" | null>(null);
 
   // === Cascade stricte : École → Session → Classe ===
   // - admin/inspector : schoolFilter démarre à "" (vide) → doit choisir
@@ -160,6 +174,106 @@ function ResultsRankingView() {
   const sessionCfg = selectedSession
     ? SESSION_STATUS_CONFIG[selectedSession.status as keyof typeof SESSION_STATUS_CONFIG]
     : null;
+
+  // === Task 27 — Exports PDF / Word / Excel du CLASSEMENT ===
+  // Les 3 modèles partagent les données EXACTES de la vue (filteredResults
+  // — filtre classe respecté). La Synthèse du même module possède déjà ses
+  // 3 modèles (Task 26) ; infrastructure réutilisée : doc-export.tsx
+  // (Word .doc, saveBlob) + exceljs (Excel) — lib/classement-exports.ts.
+
+  // « Toutes les classes » ou le nom de la classe filtrée.
+  const filterLabel =
+    classFilter !== "all"
+      ? classesInResults.find((c) => c.id === classFilter)?.name ?? "Classe"
+      : "Toutes les classes";
+
+  const buildClassementInput = (
+    header: ClassementHeaderInfo | null = null,
+  ): ClassementExportInput => ({
+    schoolName: results?.school_name || "École",
+    sessionLabel: selectedSession
+      ? classementSessionLabel(
+          EVAL_TYPE_LABELS[selectedSession.eval_type],
+          selectedSession.eval_number,
+          selectedSession.month,
+          selectedSession.year,
+        )
+      : "Résultats",
+    filterLabel,
+    rows: filteredResults,
+    stats: results!.statistics,
+    aggregateScale: results!.average_scale,
+    header,
+  });
+
+  const classementBaseName = () =>
+    classementFileBase({
+      schoolName: results?.school_name || "École",
+      sessionLabel: buildClassementInput().sessionLabel,
+      filterLabel,
+    });
+
+  // Infos IEP pour l'en-tête institutionnel (même endpoint que le document
+  // de Synthèse — RBAC vérifié côté handler). Tolérant aux échecs : les
+  // rôles sans accès obtiennent l'en-tête simplifié.
+  const fetchHeaderInfo = async (): Promise<ClassementHeaderInfo | null> => {
+    try {
+      const d = await reportsApi.getSyntheseData(autoSessionId!, "all");
+      return {
+        iep_region: d.iep_region,
+        iep_name: d.iep_name,
+        iep_bp: d.iep_bp,
+        inspector_phone: d.inspector_phone,
+        school_name: results?.school_name || d.school_name,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  // PDF : impression navigateur (iframe caché → « Enregistrer au format PDF »).
+  const handleExportPdf = async () => {
+    if (!results || !selectedSession || exporting) return;
+    setExporting("pdf");
+    try {
+      await printClassementToPdf(
+        buildClassementInput(await fetchHeaderInfo()),
+        classementBaseName(),
+      );
+    } catch {
+      toast.error("Échec de la génération du PDF");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  // Word : .doc HTML MSO (enveloppe partagée doc-export).
+  const handleExportWord = async () => {
+    if (!results || exporting) return;
+    setExporting("doc");
+    try {
+      await exportClassementWord(buildClassementInput(), `${classementBaseName()}.doc`);
+      toast.success("Classement Word généré");
+    } catch {
+      toast.error("Échec de la génération Word");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  // Excel : .xlsx exceljs (titres fusionnés + stats en pied).
+  const handleExportExcel = async () => {
+    if (!results || exporting) return;
+    setExporting("xlsx");
+    try {
+      await exportClassementExcel(buildClassementInput(), `${classementBaseName()}.xlsx`);
+      toast.success("Classement Excel généré");
+    } catch {
+      toast.error("Échec de la génération Excel");
+    } finally {
+      setExporting(null);
+    }
+  };
 
   // Afficher le document de synthèse si demandé
   if (showSynthese && autoSessionId) {
@@ -418,17 +532,68 @@ function ResultsRankingView() {
           {/* Tableau de classement */}
           <Card className="border-border/60 overflow-hidden">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Medal className="w-4 h-4 text-primary" />
-                Classement — {monthLabel(results.month)} {results.year}
-                <span className="text-xs font-normal text-muted-foreground">
-                  ({results.school_name || "École inconnue"}
-                  {classFilter !== "all" && classesInResults.find((c) => c.id === classFilter)
-                    ? ` · ${classesInResults.find((c) => c.id === classFilter)?.name}`
-                    : " · toutes classes"}
-                  )
-                </span>
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Medal className="w-4 h-4 text-primary" />
+                  Classement — {monthLabel(results.month)} {results.year}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({results.school_name || "École inconnue"}
+                    {classFilter !== "all" && classesInResults.find((c) => c.id === classFilter)
+                      ? ` · ${classesInResults.find((c) => c.id === classFilter)?.name}`
+                      : " · toutes classes"}
+                    )
+                  </span>
+                </CardTitle>
+                {/* Task 27 — Exports du classement affiché (filtre classe
+                    respecté) : PDF = impression navigateur, Word = .doc MSO,
+                    Excel = exceljs — lib/classement-exports.ts. Vue de
+                    travail : sans verrou d'impression (contrairement aux
+                    documents officiels). */}
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={exporting !== null}
+                    onClick={handleExportPdf}
+                    title="Exporter le classement en PDF (impression navigateur)"
+                  >
+                    {exporting === "pdf" ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <FileDown className="w-4 h-4 mr-1.5" />
+                    )}
+                    PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={exporting !== null}
+                    onClick={handleExportWord}
+                    title="Exporter le classement en Word (.doc)"
+                  >
+                    {exporting === "doc" ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <FileText className="w-4 h-4 mr-1.5" />
+                    )}
+                    Word
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={exporting !== null}
+                    onClick={handleExportExcel}
+                    title="Exporter le classement en Excel (.xlsx)"
+                  >
+                    {exporting === "xlsx" ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                    )}
+                    Excel
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto scroll-sygren">
