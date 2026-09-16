@@ -4605,3 +4605,26 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - push `180f08e` → Vercel **READY** (SHA vérifié via API) + Render **LIVE** (SHA vérifié via API) + `/api/health` 200.
 - `chore(deps) 180f08e` : bun.lock synchronisé (exceljs installé en Task 27, lock non commité à l'époque).
 - Aucun changement de schéma ni de données Neon (tolérance de parsing uniquement).
+
+---
+## Task 30 — « Arrivée au poste » : 4e date du dossier + colonne État nominatif (21 colonnes)
+
+**Date** : 2026-09-17 | **Commit** : `11436c1` | **Déploiements** : Vercel READY (11436c1) · Render LIVE (11436c1) · `/api/health` 200
+
+### Demande
+« DANS LE MODULE UTILISATEUR, ETAT NOMINATIF, INSERER UNE COLONNE ET NOMMER CETTE COLONNE "Arrivée au poste". Aussi dans le formulaire "créer un directeur et créer un adjoint au directeur" ajouter en dessous de date d'entrée DREN la "date d'arrivée au poste" »
+
+### Implémentation
+- **Backend** : `models.User.DateArriveePoste` (*time.Time → JSON date_arrivee_poste) ; `PersonnelDossierInput.DateArriveePoste` + `parseDossierDate` dans `applyTo` (mêmes règles que les 3 autres dates : YYYY-MM-DD, RFC3339 toléré, tronqué au jour).
+- **Neon** : `ALTER TABLE users ADD COLUMN date_arrivee_poste timestamptz` (type aligné sur date_entree_iep — vérifié information_schema) ; script réutilisable `scripts/add_arrivee_poste_neon.py` ; AutoMigrate sans conflit au boot Render.
+- **Formulaire** (`personnel-dossier-fields.tsx`) : 4e DateSelects « Date d'arrivée au poste (Jour · Mois · Année) » EN DESSOUS de l'entrée DREN (grille dédiée alignée), hint « Arrivée sur le POSTE actuel (école) — après les entrées F.P / DREN / IEP » ; `personnelOf` normalise en YYYY-MM-DD (isoDate — même correction anti-RFC3339 que Task 29).
+- **État nominatif** (`personnel-document.tsx`) : tableau 20 → **21 colonnes** sur les 3 modèles :
+  - PDF : colgroup rééquilibré (total 100 % : NOM 15.2, naissance 9, dates 6.4, Arrivée 6.8, Contact/Emargement 5.6), groupe DATES colSpan 2→3, entête sous-rangée + cellule StaffRow + ligne vide 19 cellules + TOTAL colSpan 3.
+  - Word (.doc) : EXPORT_COL_WIDTHS identiques au PDF, colspan=3 Dates, entête/cellule/ligne vide.
+  - Excel (.xlsx) : 21 largeurs (Arrivée 10.5), fusions en-têtes 10-12 (DATES) / 14-16 (Effectif) / 17-19 (Redoublants), TOTAL fusion 10-12 + valeurs 14-19, ligne Ecole 1-9 / Année 10-21, armoiries col 21, ligne vierge 20 cellules.
+- **Mon profil** : ligne « Arrivée au poste » après Entrée IEP.
+
+### Vérifications
+- `go build ./...` + `go vet ./...` OK ; `tsc --noEmit` 0 erreur ; `bun install` (post-reset, lock inchangé).
+- Neon : colonne créée et relue via information_schema (timestamptz).
+- push `11436c1` → Vercel **READY** + Render **LIVE** (SHA vérifiés via API) + `/api/health` 200.
