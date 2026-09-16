@@ -24,6 +24,10 @@
 //     du module Classes dans la colonne COURS de l'État nominatif)
 //   - Date d'entrée DREN — listes déroulantes JOUR / MOIS / ANNÉE
 //   - Entrée à l'IEP — listes déroulantes JOUR / MOIS / ANNÉE
+//   - DATE D'ARRIVÉE AU POSTE — listes déroulantes JOUR / MOIS / ANNÉE
+//     (en dessous de l'entrée DREN — DISTINCTE des entrées F.P / DREN /
+//     IEP : jour d'arrivée sur le poste actuel, colonne « Arrivée au
+//     poste » de l'État nominatif — demande utilisateur)
 //   - Effectif — F | G | T (saisies numériques, comme les colonnes du document)
 //   - Redoublants — F | G | T
 //   - Sexe — liste déroulante F | G
@@ -517,6 +521,20 @@ export function PersonnelDossierFields({
             onChange={(iso) => onChange({ ...value, date_entree_iep: iso })}
           />
         </div>
+        {/* ARRIVÉE AU POSTE — en dessous de l'entrée DREN (demande
+            utilisateur) : 4e date du dossier, distincte des trois
+            entrées — alimente la colonne « Arrivée au poste » de
+            l'État nominatif. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <DateSelects
+            id="pers-arrivee-poste"
+            label="Date d'arrivée au poste (Jour · Mois · Année)"
+            iso={value.date_arrivee_poste}
+            years={entryYears}
+            hint="Arrivée sur le POSTE actuel (école) — après les entrées F.P / DREN / IEP"
+            onChange={(iso) => onChange({ ...value, date_arrivee_poste: iso })}
+          />
+        </div>
       </div>
 
       {/* COURS — plage demandée : bande déroulante des 11 cours tenus
@@ -599,6 +617,7 @@ export function personnelOf(u: {
   cours?: CoursCode | null;
   date_entree_dren?: string | null;
   date_entree_iep?: string | null;
+  date_arrivee_poste?: string | null;
   effectif_f?: number | null;
   effectif_g?: number | null;
   effectif_t?: number | null;
@@ -619,6 +638,7 @@ export function personnelOf(u: {
     cours: u.cours ?? null,
     date_entree_dren: isoDate(u.date_entree_dren),
     date_entree_iep: isoDate(u.date_entree_iep),
+    date_arrivee_poste: isoDate(u.date_arrivee_poste),
     effectif_f: u.effectif_f ?? null,
     effectif_g: u.effectif_g ?? null,
     effectif_t: u.effectif_t ?? null,

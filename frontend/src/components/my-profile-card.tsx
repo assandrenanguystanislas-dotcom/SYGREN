@@ -167,6 +167,10 @@ export function MyProfileCard() {
               label="Entrée IEP"
               value={formatDossierDate(dossier.date_entree_iep)}
             />
+            <DossierRow
+              label="Arrivée au poste"
+              value={formatDossierDate(dossier.date_arrivee_poste)}
+            />
             <FGTGroup
               label="Effectif"
               f={dossier.effectif_f}

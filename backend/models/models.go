@@ -73,12 +73,16 @@ type User struct {
 	Cours          *string    `gorm:"type:text" json:"cours,omitempty"`
 	DateEntreeDREN *time.Time `json:"date_entree_dren,omitempty"` // entrée DREN
 	DateEntreeIEP  *time.Time `json:"date_entree_iep,omitempty"`  // entrée IEP
-	EffectifF      *int       `json:"effectif_f,omitempty"`       // effectif du cours tenu — Filles
-	EffectifG      *int       `json:"effectif_g,omitempty"`       // effectif du cours tenu — Garçons
-	EffectifT      *int       `json:"effectif_t,omitempty"`       // effectif du cours tenu — Total
-	RedoublantF    *int       `json:"redoublant_f,omitempty"`     // redoublants — Filles
-	RedoublantG    *int       `json:"redoublant_g,omitempty"`     // redoublants — Garçons
-	RedoublantT    *int       `json:"redoublant_t,omitempty"`     // redoublants — Total
+	// Date d'ARRIVÉE AU POSTE — distincte des entrées F.P / DREN / IEP
+	// (demande utilisateur) : jour d'arrivée sur le poste actuel (école),
+	// colonne « Arrivée au poste » de l'État nominatif.
+	DateArriveePoste *time.Time `json:"date_arrivee_poste,omitempty"`
+	EffectifF        *int       `json:"effectif_f,omitempty"`   // effectif du cours tenu — Filles
+	EffectifG        *int       `json:"effectif_g,omitempty"`   // effectif du cours tenu — Garçons
+	EffectifT        *int       `json:"effectif_t,omitempty"`   // effectif du cours tenu — Total
+	RedoublantF      *int       `json:"redoublant_f,omitempty"` // redoublants — Filles
+	RedoublantG      *int       `json:"redoublant_g,omitempty"` // redoublants — Garçons
+	RedoublantT      *int       `json:"redoublant_t,omitempty"` // redoublants — Total
 	// Architecture D — Suspension (Palier 1)
 	SuspendedAt     *time.Time     `gorm:"index" json:"suspended_at,omitempty"`
 	SuspendedByID   *string        `gorm:"type:text;index" json:"suspended_by_id,omitempty"`

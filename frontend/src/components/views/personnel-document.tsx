@@ -9,11 +9,12 @@
 //   - Boîte à bord arrondi avec le titre « ETAT NOMINATIF DU
 //     PERSONNEL » (police à empattements, comme le modèle) ;
 //   - Ligne « Ecole : … » / « Année scolaire : 2025 2026 » ;
-//   - Tableau 20 colonnes du modèle : N° | Nom et prénoms | Matricule |
+//   - Tableau 21 colonnes du modèle : N° | Nom et prénoms | Matricule |
 //     Date et lieu de naissance | IO IA IS IAS | Classe | Échelon |
-//     Date entrée F.P | Fonction | Dates (Entrée DREN | Entrée IEP) |
-//     Cours | Effectif (F|G|T) | Redoublants (F|G|T) | Contact |
-//     Emargement — avec une ligne vide supplémentaire (le modèle) ;
+//     Date entrée F.P | Fonction | Dates (Entrée DREN | Entrée IEP |
+//     Arrivée au poste) | Cours | Effectif (F|G|T) | Redoublants (F|G|T)
+//     | Contact | Emargement — avec une ligne vide supplémentaire (le
+//     modèle) ;
 //   - N° ordre ; noms des femmes EN ROUGE (N.B du modèle) ;
 //   - Ligne TOTAL CALCULÉE : somme des effectifs et des redoublants
 //     saisis (colonne sans aucune donnée → case vide, comme les « # »
@@ -33,7 +34,7 @@
 //     Liberation Sans — métriques identiques sous Linux) ;
 //   - Contenu du tableau porté à 12px (comme la LISTE DES CANDIDATS) ;
 //   - NOMS ET PRÉNOMS du personnel sur UNE SEULE LIGNE : cellule
-//     insécable (nowrap) + colonne élargie et largeurs des 20 colonnes
+//     insécable (nowrap) + colonne élargie et largeurs des 21 colonnes
 //     rééquilibrées en conséquence.
 //
 // v5 — LECTURE VERTICALE + ARIAL 10 CADRES + CONTACTS SANS +225
@@ -56,7 +57,7 @@
 //   - Le bouton unique « Imprimer / PDF » devient la barre uniforme
 //     PDF / Word / Excel (lib partagée doc-export.tsx, état exporting) :
 //       · Word (.doc) : HTML MSO A4 PAYSAGE fidèle au PDF (en-tête
-//         institutionnel, tableau 20 colonnes — entêtes CLASSE /
+//         institutionnel, tableau 21 colonnes — entêtes CLASSE /
 //         ÉCHELON / COURS remis à l'horizontale —, TOTAL, signature +
 //         NOM, N.B et mention « A RETOURNER EN 03 EXEMPLAIRES ») ;
 //       · Excel (.xlsx) : classeur exceljs PAYSAGE ajusté à 1 page de
@@ -407,7 +408,7 @@ export function PersonnelDocument({
           </span>
         </div>
 
-        {/* --- Tableau du modèle (20 colonnes) --- */}
+        {/* --- Tableau du modèle (21 colonnes) --- */}
         <table
           style={{
             width: "100%",
@@ -424,27 +425,31 @@ export function PersonnelDocument({
                 ET PRÉNOMS élargie (15.6 %, cellule insécable → noms et
                 prénoms sur la même ligne), dates calibrées jj/mm/aaaa,
                 colonnes numériques réduites. */}
+            {/* v6 — colonne « Arrivée au poste » ajoutée dans le groupe
+                DATES (demande utilisateur) — largeurs rééquilibrées,
+                total toujours 100 %. */}
             {[
-              "2.4%", // N°
-              "15.6%", // Nom et prénoms (insécable)
-              "5.4%", // Matricule
-              "10%", // Date et lieu de naissance
-              "2.7%", // IO IA IS IAS
-              "2.4%", // Classe
-              "2.4%", // Échelon
-              "6.8%", // Date entrée F.P
-              "5.4%", // Fonction
-              "6.8%", // Entrée DREN
-              "6.8%", // Entrée IEP
-              "3.1%", // Cours
+              "2.2%", // N°
+              "15.2%", // Nom et prénoms (insécable)
+              "5%", // Matricule
+              "9%", // Date et lieu de naissance
+              "2.5%", // IO IA IS IAS
+              "2.2%", // Classe
+              "2.2%", // Échelon
+              "6.4%", // Date entrée F.P
+              "5%", // Fonction
+              "6.4%", // Entrée DREN
+              "6.4%", // Entrée IEP
+              "6.8%", // Arrivée au poste
+              "2.7%", // Cours
               "2.8%", // Effectif F
               "2.8%", // Effectif G
               "2.8%", // Effectif T
               "2.8%", // Redoublants F
               "2.8%", // Redoublants G
               "2.8%", // Redoublants T
-              "6.4%", // Contact
-              "7%", // Emargement
+              "5.6%", // Contact
+              "5.6%", // Emargement
             ].map((w, i) => (
               <col key={i} style={{ width: w }} />
             ))}
@@ -481,7 +486,7 @@ export function PersonnelDocument({
               <th style={th} rowSpan={2}>
                 Fonction
               </th>
-              <th style={th} colSpan={2}>
+              <th style={th} colSpan={3}>
                 Dates
               </th>
               <th style={thVertical} rowSpan={2}>
@@ -504,6 +509,7 @@ export function PersonnelDocument({
             <tr>
               <th style={th}>Entrée DREN</th>
               <th style={th}>Entrée IEP</th>
+              <th style={th}>Arrivée au poste</th>
               <th style={th}>F</th>
               <th style={th}>G</th>
               <th style={th}>T</th>
@@ -522,7 +528,7 @@ export function PersonnelDocument({
             <tr>
               <td style={td}>{staff.length + 1}</td>
               <td style={tdLeft}>&nbsp;</td>
-              {Array.from({ length: 18 }, (_, k) => (
+              {Array.from({ length: 19 }, (_, k) => (
                 <td key={k} style={td}>
                   &nbsp;
                 </td>
@@ -532,7 +538,7 @@ export function PersonnelDocument({
             <tr>
               <td colSpan={9} style={{ border: "none", padding: 0 }} />
               <td
-                colSpan={2}
+                colSpan={3}
                 style={{
                   ...th,
                   background: CI_GREEN_BG,
@@ -686,6 +692,7 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
       <td style={tdc}>{s.fonction ?? ""}</td>
       <td style={tdc}>{formatDossierDate(s.date_entree_dren)}</td>
       <td style={tdc}>{formatDossierDate(s.date_entree_iep)}</td>
+      <td style={tdc}>{formatDossierDate(s.date_arrivee_poste)}</td>
       {/* COURS : le champ explicite du dossier personnel (bande déroulante
           CP1..CM2) prime sur la classe affectée (module Classes). */}
       <td style={tdc}>{s.cours ?? s.class_name ?? ""}</td>
@@ -705,7 +712,7 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
 // ============================================================ 3 MODÈLES ===
 // v6 — Word (.doc) + Excel (.xlsx) en plus de l'impression PDF navigateur
 // (lib partagée doc-export.tsx) : mêmes en-têtes d'origine, même tableau
-// (20 colonnes, femmes en rouge, TOTAL calculé) et même signature
+// (21 colonnes, femmes en rouge, TOTAL calculé) et même signature
 // « Le Directeur » + NOM que le document PDF ci-dessus.
 
 /** Données transmises aux modèles Word / Excel : personnel complet, école,
@@ -741,35 +748,37 @@ function classeCellText(s: PersonnelStaffRow): string {
     : "";
 }
 
-// Largeurs des 20 colonnes (mêmes proportions que le colgroup du PDF :
-// NOM ET PRÉNOMS élargie, dates calibrées jj/mm/aaaa).
+// Largeurs des 21 colonnes (mêmes proportions que le colgroup du PDF :
+// NOM ET PRÉNOMS élargie, dates calibrées jj/mm/aaaa, colonne
+// « Arrivée au poste » dans le groupe DATES).
 const EXPORT_COL_WIDTHS = [
-  "2.4%", // N°
-  "15.6%", // Nom et prénoms
-  "5.4%", // Matricule
-  "10%", // Date et lieu de naissance
-  "2.7%", // IO IA IS IAS
-  "2.4%", // Classe
-  "2.4%", // Échelon
-  "6.8%", // Date entrée F.P
-  "5.4%", // Fonction
-  "6.8%", // Entrée DREN
-  "6.8%", // Entrée IEP
-  "3.1%", // Cours
+  "2.2%", // N°
+  "15.2%", // Nom et prénoms
+  "5%", // Matricule
+  "9%", // Date et lieu de naissance
+  "2.5%", // IO IA IS IAS
+  "2.2%", // Classe
+  "2.2%", // Échelon
+  "6.4%", // Date entrée F.P
+  "5%", // Fonction
+  "6.4%", // Entrée DREN
+  "6.4%", // Entrée IEP
+  "6.8%", // Arrivée au poste
+  "2.7%", // Cours
   "2.8%", // Effectif F
   "2.8%", // Effectif G
   "2.8%", // Effectif T
   "2.8%", // Redoublants F
   "2.8%", // Redoublants G
   "2.8%", // Redoublants T
-  "6.4%", // Contact
-  "7%", // Emargement
+  "5.6%", // Contact
+  "5.6%", // Emargement
 ];
 
 // === MODÈLE WORD (.doc) — HTML MSO A4 PAYSAGE fidèle au document PDF ===
 // En-tête institutionnel (copie HTML du composant OfficialDocHeader,
 // variante « plan » : République / Union-Discipline-Travail / armoiries),
-// boîte du titre, tableau 20 colonnes (entêtes CLASSE / ÉCHELON / COURS
+// boîte du titre, tableau 21 colonnes (entêtes CLASSE / ÉCHELON / COURS
 // remis à l'HORIZONTALE, texte court — Word ne rend pas l'écriture
 // verticale ; thead répété à chaque page via display:table-header-group),
 // ligne vierge du modèle, TOTAL calculé, signature « Le Directeur » + NOM,
@@ -799,7 +808,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `<th style="${th}" rowspan=2>&Eacute;CHELON</th>` +
     `<th style="${th}" rowspan=2>Date entr&eacute;e F.P</th>` +
     `<th style="${th}" rowspan=2>Fonction</th>` +
-    `<th style="${th}" colspan=2>Dates</th>` +
+    `<th style="${th}" colspan=3>Dates</th>` +
     `<th style="${th}" rowspan=2>COURS</th>` +
     `<th style="${th}" colspan=3>Effectif</th>` +
     `<th style="${th}" colspan=3>Redoublants</th>` +
@@ -807,12 +816,12 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `<th style="${th}" rowspan=2>Emargement</th>`;
   const headSub =
     `<tr>` +
-    `<th style="${th}">Entr&eacute;e DREN</th><th style="${th}">Entr&eacute;e IEP</th>` +
+    `<th style="${th}">Entr&eacute;e DREN</th><th style="${th}">Entr&eacute;e IEP</th><th style="${th}">Arriv&eacute;e au poste</th>` +
     `<th style="${th}">F</th><th style="${th}">G</th><th style="${th}">T</th>` +
     `<th style="${th}">F</th><th style="${th}">G</th><th style="${th}">T</th>` +
     `</tr>`;
 
-  // Une ligne agent (20 cellules) — NOM en caractère d'imprimerie,
+  // Une ligne agent (21 cellules) — NOM en caractère d'imprimerie,
   // femmes EN ROUGE (N.B du modèle), lignes DIRECTEUR / ADJOINT(E) en
   // 10px et CONTACT en 10px sans « +225 » (mêmes règles que le PDF).
   const body = o.staff
@@ -833,6 +842,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
         `<td style="${td}${sz}">${esc(s.fonction ?? "")}</td>` +
         `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_dren))}</td>` +
         `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_iep))}</td>` +
+        `<td style="${td}${sz}">${esc(formatDossierDate(s.date_arrivee_poste))}</td>` +
         `<td style="${td}${sz}">${esc(s.cours ?? s.class_name ?? "")}</td>` +
         `<td style="${td}${sz}">${esc(fmtNum(s.effectif_f))}</td>` +
         `<td style="${td}${sz}">${esc(fmtNum(s.effectif_g))}</td>` +
@@ -852,7 +862,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `<tr>` +
     `<td style="${td}">${o.staff.length + 1}</td>` +
     `<td style="${tdL}">&nbsp;</td>` +
-    Array.from({ length: 18 }, () => `<td style="${td}">&nbsp;</td>`).join("") +
+    Array.from({ length: 19 }, () => `<td style="${td}">&nbsp;</td>`).join("") +
     `</tr>`;
 
   // Ligne TOTAL calculée — même structure que le PDF : libellé sous les
@@ -939,7 +949,7 @@ ${o.directeur.trim() ? `<p style="font-size:12px; font-weight:bold; text-transfo
 }
 
 // === MODÈLE EXCEL (.xlsx) — classeur mis en page (exceljs, import
-// dynamique) : en-tête institutionnel fusionné, tableau 20 colonnes bordé
+// dynamique) : en-tête institutionnel fusionné, tableau 21 colonnes bordé
 // vert (femmes en rouge), TOTAL en gras, signature « Le Directeur » + NOM ;
 // impression PAYSAGE ajustée à 1 page de large, entêtes répétés.
 async function exportExcelAsync(o: ExportData): Promise<void> {
@@ -963,19 +973,20 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       printTitlesRow: `${HEAD_START}:${HEAD_END}`,
     },
   });
-  // Largeurs raisonnables des 20 colonnes.
+  // Largeurs raisonnables des 21 colonnes.
   ws.columns = [
     4.5, // N°
-    30, // Nom et prénoms
+    28, // Nom et prénoms
     10, // Matricule
-    22, // Date et lieu de naissance
+    20, // Date et lieu de naissance
     6, // IO IA IS IAS
     6.5, // Classe
     7, // Échelon
-    11, // Date entrée F.P
+    10.5, // Date entrée F.P
     11, // Fonction
-    11, // Entrée DREN
-    11, // Entrée IEP
+    10.5, // Entrée DREN
+    10.5, // Entrée IEP
+    10.5, // Arrivée au poste
     7, // Cours
     5.5, 5.5, 5.5, // Effectif F G T
     5.5, 5.5, 5.5, // Redoublants F G T
@@ -996,7 +1007,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   const border = { style: "thin" as const, color: GREEN };
   const BOX = { top: border, left: border, bottom: border, right: border };
 
-  // Ligne fusionnée sur les 20 colonnes (en-tête institutionnel).
+  // Ligne fusionnée sur les 21 colonnes (en-tête institutionnel).
   const merged = (
     row: number,
     text: string,
@@ -1004,7 +1015,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     bold = false,
     italic = false,
   ) => {
-    ws.mergeCells(row, 1, row, 20);
+    ws.mergeCells(row, 1, row, 21);
     const c = ws.getCell(row, 1);
     c.value = text;
     c.font = { name: "Arial", size, bold, italic };
@@ -1027,7 +1038,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   );
   merged(4, "République de Côte d'Ivoire — Union-Discipline-Travail", 11, true);
   merged(5, "ETAT NOMINATIF DU PERSONNEL", 14, true);
-  for (let col = 1; col <= 20; col++) ws.getCell(5, col).border = BOX;
+  for (let col = 1; col <= 21; col++) ws.getCell(5, col).border = BOX;
 
   // Ligne Ecole (gauche) / Année scolaire (droite).
   ws.mergeCells(6, 1, 6, 9);
@@ -1035,7 +1046,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   ecole.value = `Ecole : ${o.schoolName}`;
   ecole.font = font(11, true, GREEN_TXT.argb);
   ecole.alignment = { horizontal: "left", vertical: "middle" };
-  ws.mergeCells(6, 10, 6, 20);
+  ws.mergeCells(6, 10, 6, 21);
   const annee = ws.getCell(6, 10);
   annee.value = `Année scolaire : ${(o.anneeScolaire || "").split(" ").join("  ")}`;
   annee.font = font(11, true, GREEN_TXT.argb);
@@ -1056,24 +1067,24 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     [8, "Date entrée F.P"],
     [9, "Fonction"],
     [12, "COURS"],
-    [19, "Contact"],
-    [20, "Emargement"],
+    [20, "Contact"],
+    [21, "Emargement"],
   ];
   for (const [col, label] of headTopLabels) {
     ws.mergeCells(HEAD_START, col, HEAD_END, col);
     ws.getCell(HEAD_START, col).value = label;
   }
-  ws.mergeCells(HEAD_START, 10, HEAD_START, 11);
+  ws.mergeCells(HEAD_START, 10, HEAD_START, 12);
   ws.getCell(HEAD_START, 10).value = "Dates";
-  ws.mergeCells(HEAD_START, 13, HEAD_START, 15);
-  ws.getCell(HEAD_START, 13).value = "Effectif";
-  ws.mergeCells(HEAD_START, 16, HEAD_START, 18);
-  ws.getCell(HEAD_START, 16).value = "Redoublants";
-  ["Entrée DREN", "Entrée IEP"].forEach((label, k) => {
+  ws.mergeCells(HEAD_START, 14, HEAD_START, 16);
+  ws.getCell(HEAD_START, 14).value = "Effectif";
+  ws.mergeCells(HEAD_START, 17, HEAD_START, 19);
+  ws.getCell(HEAD_START, 17).value = "Redoublants";
+  ["Entrée DREN", "Entrée IEP", "Arrivée au poste"].forEach((label, k) => {
     ws.getCell(HEAD_END, 10 + k).value = label;
   });
   ["F", "G", "T", "F", "G", "T"].forEach((label, k) => {
-    ws.getCell(HEAD_END, 13 + k).value = label;
+    ws.getCell(HEAD_END, 14 + k).value = label;
   });
   for (let r = HEAD_START; r <= HEAD_END; r++) {
     const row = ws.getRow(r);
@@ -1102,6 +1113,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       s.fonction ?? "",
       formatDossierDate(s.date_entree_dren),
       formatDossierDate(s.date_entree_iep),
+      formatDossierDate(s.date_arrivee_poste),
       s.cours ?? s.class_name ?? "",
       fmtNum(s.effectif_f),
       fmtNum(s.effectif_g),
@@ -1118,7 +1130,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       // Femmes EN ROUGE sur la colonne NOM (N.B du modèle).
       c.font = font(10, col === 2, s.sexe === "F" && col === 2 ? RED.argb : undefined);
       c.alignment = {
-        horizontal: col === 2 || col === 4 || col === 19 ? "left" : "center",
+        horizontal: col === 2 || col === 4 || col === 20 ? "left" : "center",
         vertical: "middle",
         wrapText: true,
       };
@@ -1128,7 +1140,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   // --- Ligne vierge du modèle (une ligne libre numérotée) ---
   const rEmpty = HEAD_END + 1 + o.staff.length;
   const emptyRow = ws.getRow(rEmpty);
-  emptyRow.values = [o.staff.length + 1, ...Array<string>(19).fill("")];
+  emptyRow.values = [o.staff.length + 1, ...Array<string>(20).fill("")];
   emptyRow.height = 16;
   emptyRow.eachCell({ includeEmpty: true }, (c) => {
     c.border = BOX;
@@ -1146,16 +1158,16 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     sumCol(o.staff.map((s) => s.redoublant_g)),
     sumCol(o.staff.map((s) => s.redoublant_t)),
   ];
-  // Libellé TOTAL sous les colonnes DATES (10-11), valeurs F→T (13-18) ;
+  // Libellé TOTAL sous les colonnes DATES (10-12), valeurs F→T (14-19) ;
   // les cellules N°→Fonction et Cours restent vides SANS bordure.
   ws.mergeCells(rTotal, 1, rTotal, 9);
-  ws.mergeCells(rTotal, 10, rTotal, 11);
+  ws.mergeCells(rTotal, 10, rTotal, 12);
   const totalLabel = ws.getCell(rTotal, 10);
   totalLabel.value = "TOTAL";
   totals.forEach((v, k) => {
-    ws.getCell(rTotal, 13 + k).value = v == null ? "" : fmtNum(v);
+    ws.getCell(rTotal, 14 + k).value = v == null ? "" : fmtNum(v);
   });
-  for (let col = 10; col <= 18; col++) {
+  for (let col = 10; col <= 19; col++) {
     const c = ws.getCell(rTotal, col);
     c.border = BOX;
     c.font = font(10, true, GREEN_TXT.argb);
@@ -1185,7 +1197,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
         buffer: u8 as unknown as Parameters<typeof wb.addImage>[0]["buffer"],
         extension: "png",
       });
-      ws.addImage(imgId, { tl: { col: 19, row: 0.2 }, ext: { width: 46, height: 46 } });
+      ws.addImage(imgId, { tl: { col: 20, row: 0.2 }, ext: { width: 46, height: 46 } });
     }
   } catch {
     // armoiries omises — l'en-tête reste lisible

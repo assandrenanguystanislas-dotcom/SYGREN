@@ -43,12 +43,16 @@ type PersonnelDossierInput struct {
 	Cours          *string `json:"cours"` // cours tenu — bande déroulante PS · MS · GS · CP1..CM2 · RPL · MAC
 	DateEntreeDREN *string `json:"date_entree_dren"`
 	DateEntreeIEP  *string `json:"date_entree_iep"`
-	EffectifF      *int    `json:"effectif_f"`
-	EffectifG      *int    `json:"effectif_g"`
-	EffectifT      *int    `json:"effectif_t"`
-	RedoublantF    *int    `json:"redoublant_f"`
-	RedoublantG    *int    `json:"redoublant_g"`
-	RedoublantT    *int    `json:"redoublant_t"`
+	// Arrivée au poste — jour d'arrivée sur le poste actuel (école),
+	// DISTINCT des entrées F.P / DREN / IEP (demande utilisateur) ;
+	// colonne « Arrivée au poste » de l'État nominatif.
+	DateArriveePoste *string `json:"date_arrivee_poste"`
+	EffectifF        *int    `json:"effectif_f"`
+	EffectifG        *int    `json:"effectif_g"`
+	EffectifT        *int    `json:"effectif_t"`
+	RedoublantF      *int    `json:"redoublant_f"`
+	RedoublantG      *int    `json:"redoublant_g"`
+	RedoublantT      *int    `json:"redoublant_t"`
 }
 
 var (
@@ -223,6 +227,10 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 	if err != nil {
 		return err
 	}
+	dArrivee, err := parseDossierDate(in.DateArriveePoste)
+	if err != nil {
+		return err
+	}
 
 	u.Matricule = matricule
 	u.Sexe = sexe
@@ -236,6 +244,7 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 	u.Cours = cours
 	u.DateEntreeDREN = dDREN
 	u.DateEntreeIEP = dIEP
+	u.DateArriveePoste = dArrivee
 	u.EffectifF = effectifs[0]
 	u.EffectifG = effectifs[1]
 	u.EffectifT = effectifs[2]

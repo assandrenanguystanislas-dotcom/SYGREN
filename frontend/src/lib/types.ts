@@ -72,6 +72,10 @@ export interface PersonnelDossier {
   cours?: CoursCode | null;
   date_entree_dren?: string | null;
   date_entree_iep?: string | null;
+  // Arrivée au poste — jour d'arrivée sur le poste actuel (école),
+  // DISTINCT des entrées F.P / DREN / IEP ; colonne « Arrivée au poste »
+  // de l'État nominatif (demande utilisateur).
+  date_arrivee_poste?: string | null;
   effectif_f?: number | null; // effectif du cours tenu — Filles
   effectif_g?: number | null; // — Garçons
   effectif_t?: number | null; // — Total
