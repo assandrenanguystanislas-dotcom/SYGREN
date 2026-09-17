@@ -254,7 +254,7 @@ function allowedViewsForRole(role: Role): ReadonlySet<string> | null {
 // Annonces par défaut affichées si le setting infos.sygren est vide ou si
 // l'appel échoue (l'en-tête doit toujours montrer la bande défilante).
 const DEFAULT_INFOS_TEXT =
-  "Bienvenue sur SYGREN — plateforme de gestion des évaluations des écoles primaires | Année scolaire 2025-2026 | Restez informés : cette bande diffuse les annonces officielles | Pour toute assistance, contactez l'administrateur";
+  "Année scolaire 2026-2027 | Les Directeurs et Adjoints au Directeur s'inscrivent sur la plateforme SYGREN à partir de la création de leurs accès. Pour toutes informations complémentaires appeler le 0101263515";
 
 /** Contenu défilant : le texte est DOUBLÉ pour une boucle sans couture —
  *  l'animation CSS translate le conteneur de -50 % (exactement une copie). */

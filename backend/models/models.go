@@ -444,8 +444,8 @@ func DefaultSettings() []Setting {
 		// TEXTUELLES libres — la validation numérique 0-20 de
 		// UpdateSetting ne s'applique qu'aux catégories mention /
 		// system / coefficient (cf. handlers/settings.go).
-		{Key: "infos.admin_phone", Value: "", Category: "infos", Label: "Téléphone de l'administrateur (haut à gauche de l'en-tête)"},
-		{Key: "infos.sygren", Value: "Bienvenue sur SYGREN — plateforme de gestion des évaluations des écoles primaires | Année scolaire 2025-2026 | Restez informés : cette bande diffuse les annonces officielles | Pour toute assistance, contactez l'administrateur", Category: "infos", Label: "Bande défilante « Infos SYGREN » (annonces séparées par |)"},
+		{Key: "infos.admin_phone", Value: "0101263515", Category: "infos", Label: "Téléphone de l'administrateur (haut à gauche de l'en-tête)"},
+		{Key: "infos.sygren", Value: "Année scolaire 2026-2027 | Les Directeurs et Adjoints au Directeur s'inscrivent sur la plateforme SYGREN à partir de la création de leurs accès. Pour toutes informations complémentaires appeler le 0101263515", Category: "infos", Label: "Bande défilante « Infos SYGREN » (annonces séparées par |)"},
 	}
 }
 

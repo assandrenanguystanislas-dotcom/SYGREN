@@ -83,9 +83,9 @@ const DEFAULT_VALUES: Record<string, string> = {
   "system.pass_rate_threshold": "10",
   "system.distinction_threshold": "14",
   "coefficient.default": "1",
-  "infos.admin_phone": "",
+  "infos.admin_phone": "0101263515",
   "infos.sygren":
-    "Bienvenue sur SYGREN — plateforme de gestion des évaluations des écoles primaires | Année scolaire 2025-2026 | Restez informés : cette bande diffuse les annonces officielles | Pour toute assistance, contactez l'administrateur",
+    "Année scolaire 2026-2027 | Les Directeurs et Adjoints au Directeur s'inscrivent sur la plateforme SYGREN à partir de la création de leurs accès. Pour toutes informations complémentaires appeler le 0101263515",
 };
 
 export type SettingsTab =
