@@ -71,6 +71,12 @@
 //   la suite). Les 3 modèles (PDF / Word / Excel) partagent la même
 //   liste triée par l'API.
 //
+// v8 — RUBRIQUE FONCTION (demande utilisateur) : première lettre en
+//   MAJUSCULE et le reste en minuscules — « DIRECTEUR » → « Directeur »,
+//   « ADJOINT(E) » → « Adjoint(e) » — dans les 3 modèles (PDF / Word /
+//   Excel) via le helper commun fmtFonction ; la valeur stockée reste
+//   inchangée (validation backend DIRECTEUR / ADJOINT(E)).
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -141,6 +147,18 @@ function fmtContact(v: string | null | undefined): string {
   const s = (v ?? "").trim();
   if (!s) return "";
   return s.replace(/^\+?225/, "").trim();
+}
+
+/** FONCTION (v8 — demande utilisateur) : première lettre en MAJUSCULE
+ *  et le reste en MINUSCULES — « DIRECTEUR » → « Directeur »,
+ *  « ADJOINT(E) » → « Adjoint(e) ». La valeur STOCKÉE reste inchangée
+ *  (la validation backend attend DIRECTEUR / ADJOINT(E)) ; seule la
+ *  rubrique FONCTION des 3 modèles (PDF / Word / Excel) est retouchée
+ *  à l'affichage. Vide si non renseignée. */
+function fmtFonction(v: string | null | undefined): string {
+  const s = (v ?? "").trim();
+  if (!s) return "";
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
 // Bordures du tableau en VERT DRAPEAU (inspiration bulletins individuels)
@@ -701,7 +719,9 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
       </td>
       <td style={tdc}>{s.echelon ?? ""}</td>
       <td style={tdc}>{formatDossierDate(s.date_entree_fp)}</td>
-      <td style={tdc}>{s.fonction ?? ""}</td>
+      {/* FONCTION (v8) : « Directeur » / « Adjoint(e) » — première
+          lettre majuscule, reste en minuscules (demande utilisateur). */}
+      <td style={tdc}>{fmtFonction(s.fonction)}</td>
       <td style={tdc}>{formatDossierDate(s.date_entree_dren)}</td>
       <td style={tdc}>{formatDossierDate(s.date_entree_iep)}</td>
       <td style={tdc}>{formatDossierDate(s.date_arrivee_poste)}</td>
@@ -851,7 +871,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
         `<td style="${td}${sz}">${esc(classeCellText(s))}</td>` +
         `<td style="${td}${sz}">${esc(s.echelon != null ? String(s.echelon) : "")}</td>` +
         `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_fp))}</td>` +
-        `<td style="${td}${sz}">${esc(s.fonction ?? "")}</td>` +
+        `<td style="${td}${sz}">${esc(fmtFonction(s.fonction))}</td>` +
         `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_dren))}</td>` +
         `<td style="${td}${sz}">${esc(formatDossierDate(s.date_entree_iep))}</td>` +
         `<td style="${td}${sz}">${esc(formatDossierDate(s.date_arrivee_poste))}</td>` +
@@ -1122,7 +1142,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       classeCellText(s),
       s.echelon != null ? String(s.echelon) : "",
       formatDossierDate(s.date_entree_fp),
-      s.fonction ?? "",
+      fmtFonction(s.fonction), // v8 — « Directeur » / « Adjoint(e) »
       formatDossierDate(s.date_entree_dren),
       formatDossierDate(s.date_entree_iep),
       formatDossierDate(s.date_arrivee_poste),
