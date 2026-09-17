@@ -17,6 +17,7 @@ import {
   KeyRound,
   Ruler,
   Search,
+  Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -62,6 +63,12 @@ const CATEGORY_LABELS: Record<
     description:
       "Coefficient par défaut appliqué aux nouvelles matières (modifiable individuellement par matière).",
   },
+  infos: {
+    label: "Infos SYGREN (en-tête)",
+    icon: <Megaphone className="w-4 h-4" />,
+    description:
+      "Téléphone de l'administrateur (haut à gauche de l'en-tête) et annonces de la bande défilante « Infos SYGREN » (haut à droite). Séparez les annonces par le caractère |.",
+  },
 };
 
 // Valeurs par défaut (pour réinitialisation)
@@ -76,6 +83,9 @@ const DEFAULT_VALUES: Record<string, string> = {
   "system.pass_rate_threshold": "10",
   "system.distinction_threshold": "14",
   "coefficient.default": "1",
+  "infos.admin_phone": "",
+  "infos.sygren":
+    "Bienvenue sur SYGREN — plateforme de gestion des évaluations des écoles primaires | Année scolaire 2025-2026 | Restez informés : cette bande diffuse les annonces officielles | Pour toute assistance, contactez l'administrateur",
 };
 
 export type SettingsTab =

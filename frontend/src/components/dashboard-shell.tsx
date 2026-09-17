@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   GraduationCap,
   LayoutDashboard,
@@ -21,7 +21,11 @@ import {
   Lock,
   KeyRound,
   Network,
+  Phone,
+  Megaphone,
 } from "lucide-react";
+
+import { api } from "@/lib/api";
 
 import { useAuthStore } from "@/lib/auth-store";
 import { ROLE_LABELS, type Role } from "@/lib/types";
@@ -244,6 +248,25 @@ function allowedViewsForRole(role: Role): ReadonlySet<string> | null {
   // impression verrouillée)
   if (role === "conseiller") return CONSEILLER_ALLOWED_VIEWS;
   return null;
+}
+
+// === Bande « Infos SYGREN » (demandes utilisateur) ===
+// Annonces par défaut affichées si le setting infos.sygren est vide ou si
+// l'appel échoue (l'en-tête doit toujours montrer la bande défilante).
+const DEFAULT_INFOS_TEXT =
+  "Bienvenue sur SYGREN — plateforme de gestion des évaluations des écoles primaires | Année scolaire 2025-2026 | Restez informés : cette bande diffuse les annonces officielles | Pour toute assistance, contactez l'administrateur";
+
+/** Contenu défilant : le texte est DOUBLÉ pour une boucle sans couture —
+ *  l'animation CSS translate le conteneur de -50 % (exactement une copie). */
+function MarqueeContent({ text }: { text: string }) {
+  return (
+    <>
+      <span className="pr-14">{text}</span>
+      <span className="pr-14" aria-hidden="true">
+        {text}
+      </span>
+    </>
+  );
 }
 
 /** Task 30 — Menu déroulant « code école » EN HAUT ET À DROITE des pages
@@ -470,6 +493,29 @@ export function DashboardShell({
   const user = useAuthStore((s) => s.user);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Bande « Infos SYGREN » — téléphone de l'administrateur (haut à gauche)
+  // + annonces défilantes (haut à droite), lus depuis les settings via
+  // /api/public/infos (accessible à tout utilisateur connecté). En cas
+  // d'échec : valeurs par défaut (bande toujours affichée, chip masquée).
+  const [adminPhone, setAdminPhone] = useState("");
+  const [infosText, setInfosText] = useState(DEFAULT_INFOS_TEXT);
+  useEffect(() => {
+    let alive = true;
+    api.infos
+      .get()
+      .then((d) => {
+        if (!alive) return;
+        if (d.admin_phone) setAdminPhone(d.admin_phone);
+        if (d.infos) setInfosText(d.infos);
+      })
+      .catch(() => {
+        /* silencieux — valeurs par défaut affichées */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // Gestion centralisée du changement de vue : ferme aussi le drawer mobile
   const handleViewChange = (view: string) => {
     onViewChange(view);
@@ -520,10 +566,48 @@ export function DashboardShell({
             <Menu className="w-5 h-5" />
           </Button>
 
+          {/* En haut et à GAUCHE — téléphone de l'administrateur (demande
+              utilisateur). Chip cliquable (tel:) masqué tant que le setting
+              infos.admin_phone est vide ; icône seule sur mobile (dans la
+              bande Infos sous l'en-tête). */}
+          {adminPhone && (
+            <a
+              href={`tel:${adminPhone.replace(/\s+/g, "")}`}
+              title="Téléphone de l'administrateur"
+              aria-label={`Téléphone de l'administrateur ${adminPhone}`}
+              className="hidden sm:flex items-center gap-1.5 shrink-0 h-9 px-3 rounded-md border border-emerald-300/70 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition-colors"
+            >
+              <Phone className="w-3.5 h-3.5" aria-hidden />
+              <span className="text-xs font-semibold whitespace-nowrap tabular-nums">
+                {adminPhone}
+              </span>
+            </a>
+          )}
+
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold truncate">
               {activeItem?.label ?? "Tableau de bord"}
             </h1>
+          </div>
+
+          {/* En haut et à DROITE — bande « Infos SYGREN » (demande
+              utilisateur) : étiquette verte + annonces DÉFILANTES (marquee
+              CSS — boucle sans couture, pause au survol). Version mobile :
+              pleine largeur sous l'en-tête (voir plus bas). */}
+          <div
+            className="hidden md:flex items-stretch shrink-0 overflow-hidden rounded-md border border-primary/30 h-9 w-[300px] lg:w-[420px] xl:w-[540px]"
+            role="region"
+            aria-label="Infos SYGREN — annonces défilantes"
+          >
+            <span className="flex items-center gap-1 px-2.5 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wide shrink-0">
+              <Megaphone className="w-3 h-3" aria-hidden />
+              Infos SYGREN
+            </span>
+            <div className="relative overflow-hidden flex-1 min-w-0 bg-primary/5">
+              <div className="marquee-sygren h-full items-center text-xs font-medium text-foreground/80">
+                <MarqueeContent text={infosText} />
+              </div>
+            </div>
           </div>
 
           {/* Task 30 — en haut et à droite : menu déroulant CODE ÉCOLE
@@ -542,7 +626,7 @@ export function DashboardShell({
 
           {/* Bande tricolore ivoirien — TÊTE de l'en-tête (orange · blanc ·
               vert). Elle est calée sur la largeur EXACTE du contenu des
-              modules (marges p-4/lg:p-6 + max-w-7xl centré, comme <main>) :
+              modules (marges p-4/lg:p-6 + max-w-[1800px] centré, comme <main>) :
               un cran MOINS LARGE que la colonne de contenu — elle ne touche
               ni la barre latérale verte ni le bord droit de l'écran et ne
               peut donc plus dépasser le cadre des modules (demande
@@ -551,7 +635,7 @@ export function DashboardShell({
             className="absolute inset-x-4 top-0 flex justify-center lg:inset-x-6"
             aria-hidden="true"
           >
-            <div className="h-1.5 w-full max-w-7xl ci-flag-stripe" />
+            <div className="h-1.5 w-full max-w-[1800px] ci-flag-stripe" />
           </div>
 
           {/* Liseré tricolore ivoirien sous l'en-tête (orange · blanc ·
@@ -561,18 +645,42 @@ export function DashboardShell({
             className="absolute inset-x-4 bottom-0 flex justify-center lg:inset-x-6"
             aria-hidden="true"
           >
-            <div className="h-[3px] w-full max-w-7xl ci-flag-stripe" />
+            <div className="h-[3px] w-full max-w-[1800px] ci-flag-stripe" />
           </div>
         </header>
 
+        {/* Mobile — bande « Infos SYGREN » en pleine largeur SOUS l'en-tête
+            (sur desktop elle est intégrée à droite de l'en-tête) + téléphone
+            de l'administrateur en icône (le chip complet est sm+). */}
+        <div className="md:hidden flex items-stretch overflow-hidden border-b border-border bg-card">
+          <span className="flex items-center gap-1 px-2 py-1.5 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wide shrink-0">
+            <Megaphone className="w-3 h-3" aria-hidden />
+            Infos
+          </span>
+          <div className="relative overflow-hidden flex-1 min-w-0 bg-primary/5">
+            <div className="marquee-sygren h-full items-center text-xs font-medium text-foreground/80">
+              <MarqueeContent text={infosText} />
+            </div>
+          </div>
+          {adminPhone && (
+            <a
+              href={`tel:${adminPhone.replace(/\s+/g, "")}`}
+              className="flex items-center px-2.5 bg-emerald-50 text-emerald-800 border-l border-border shrink-0"
+              aria-label={`Téléphone de l'administrateur ${adminPhone}`}
+            >
+              <Phone className="w-3.5 h-3.5" aria-hidden />
+            </a>
+          )}
+        </div>
+
         {/* Zone de contenu */}
         <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
-          <div className="max-w-7xl mx-auto animate-in-up">{children}</div>
+          <div className="max-w-[1800px] mx-auto animate-in-up">{children}</div>
         </main>
 
         {/* Footer sticky */}
         <footer className="mt-auto border-t border-border bg-card py-3 px-4 lg:px-6 text-xs text-muted-foreground">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+          <div className="max-w-[1800px] mx-auto flex flex-wrap items-center justify-between gap-2">
             <span>© {new Date().getFullYear()} SYGREN — Côte d'Ivoire</span>
             <span className="text-[11px]">
               v0.1.0 · Architecture D · RBAC dynamique + Audit

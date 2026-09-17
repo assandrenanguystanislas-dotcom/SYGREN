@@ -300,6 +300,35 @@
       transform: translateY(0);
     }
   }
+
+  /* === Bande défilante « Infos SYGREN » (en-tête du tableau de bord) ===
+   * Boucle sans couture : le texte est DOUBLÉ dans le DOM (cf.
+   * MarqueeContent) et le conteneur (largeur = 2 copies) translate de
+   * -50 % — exactement une copie — avant de repartir à 0. Pause au survol
+   * pour laisser le temps de lire une annonce. */
+  @keyframes sygren-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  .marquee-sygren {
+    display: inline-flex;
+    align-items: center;
+    width: max-content;
+    animation: sygren-marquee 45s linear infinite;
+    will-change: transform;
+  }
+  .marquee-sygren:hover {
+    animation-play-state: paused;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-sygren {
+      animation: none;
+    }
+  }
 }
 
 

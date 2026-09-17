@@ -1309,6 +1309,18 @@ export const settingsApi = {
     }),
 };
 
+// === Bande « Infos SYGREN » de l'en-tête (tout utilisateur connecté) ===
+//
+// Téléphone de l'administrateur (haut à gauche) + annonces de la bande
+// défilante (haut à droite). Lecture pour TOUS les rôles ; modification
+// uniquement via settingsApi.update (admin, module Paramètres).
+
+export const infosApi = {
+  /** Téléphone admin + annonces défilantes de l'en-tête. */
+  get: () =>
+    apiFetch<{ admin_phone: string; infos: string }>("/api/public/infos"),
+};
+
 // Export par défaut groupé
 // === Architecture D — Permissions (matrice RBAC) ===
 
@@ -1513,6 +1525,7 @@ export const api = {
   computation: computationApi,
   dashboard: dashboardApi,
   settings: settingsApi,
+  infos: infosApi,
   // Architecture D
   permissions: permissionsApi,
   audit: auditApi,

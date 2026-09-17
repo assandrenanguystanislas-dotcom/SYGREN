@@ -4628,3 +4628,24 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - `go build ./...` + `go vet ./...` OK ; `tsc --noEmit` 0 erreur ; `bun install` (post-reset, lock inchangé).
 - Neon : colonne créée et relue via information_schema (timestamptz).
 - push `11436c1` → Vercel **READY** + Render **LIVE** (SHA vérifiés via API) + `/api/health` 200.
+
+---
+
+## Task 32 — Interface élargie + bande « Infos SYGREN » défilante + téléphone admin (en-tête)
+
+**Demande utilisateur** : « je veux un interface plus large avec en haut à droite une plage nommée "infos sygren" accompagné d'une bande annonce defilante. dans la partie en haut à gauche mettre le numero de telephone de l'administrateur ».
+
+### Réalisation
+- **Interface élargie** (`dashboard-shell.tsx`) : contrainte de largeur `max-w-7xl` (1280px) → `max-w-[1800px]` sur les 4 points (contenu `<main>`, 2 bandes tricolores, footer) — quasi pleine largeur sur écran 1920px, toujours centrée au-delà.
+- **Settings catégorie « infos »** (nouveaux, valeurs textuelles libres — la validation numérique 0-20 d'UpdateSetting ne vise que mention/system/coefficient) :
+  - `infos.admin_phone` : téléphone de l'administrateur (chip cliquable `tel:` en haut à GAUCHE de l'en-tête, masqué si vide ; icône seule sur mobile).
+  - `infos.sygren` : annonces de la bande défilante (séparées par `|`).
+  - Nouvel endpoint **`GET /api/public/infos`** (`handlers.GetPublicInfos`) : lecture pour TOUT utilisateur connecté (aucun module requis — l'en-tête est visible de tous les rôles) ; modification reste via PUT settings (admin).
+- **Bande « Infos SYGREN »** (en haut à DROITE de l'en-tête, desktop) : étiquette verte + marquee CSS (`@keyframes sygren-marquee`, texte DOUBLÉ → boucle sans couture translateX(-50 %), pause au survol, `prefers-reduced-motion` respecté). Mobile : bande pleine largeur SOUS l'en-tête.
+- **Vue Paramètres** : catégorie « infos » labellisée (icône Megaphone) + DEFAULT_VALUES — l'admin modifie le numéro et les annonces dans Paramètres → Général.
+- **Neon** : INSERT des 2 clés (`ON CONFLICT DO NOTHING`) — le seed par défaut ne tourne que si la table est vide.
+
+### Vérifications
+- `go build ./...` + `go vet ./...` OK ; `bunx tsc --noEmit` 0 erreur (après `bun install` post-reset).
+- Neon : 2 lignes relues (category=infos).
+- push → Vercel READY + Render LIVE (SHA vérifiés via API) + `/api/health` 200.
