@@ -4649,3 +4649,22 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - `go build ./...` + `go vet ./...` OK ; `bunx tsc --noEmit` 0 erreur (après `bun install` post-reset).
 - Neon : 2 lignes relues (category=infos).
 - push → Vercel READY + Render LIVE (SHA vérifiés via API) + `/api/health` 200.
+
+---
+
+## Task 33/34/35 — Texte de la bande annonce · année de calcul 2026 → 2027 · inversion bande/téléphone
+
+**Demandes utilisateur** : (33) « dans la bande annonce changer l'année en "2026-2027" et écrire "les Directeurs et Adjoints au Directeur s'inscrivent sur la plateforme SYGREN à partir de la création de leurs accès. Pour toutes informations complémentaires appeler le 0101263515." » ; (34) « oui faites le » (passer l'année de calcul en 2026-2027) ; (35) « il faut mettre la bande annonce à gauche et le numero de telephone à droite ».
+
+### Réalisation
+- **Task 33 — Texte de la bande** (`65db725`) : `infos.sygren` mis à jour dans Neon ET valeurs par défaut (`DEFAULT_INFOS_TEXT` dans `dashboard-shell.tsx`, DEFAULT_VALUES dans `settings-view.tsx`, `DefaultSettings` dans `models.go`) : année 2026-2027 + message d'inscription + téléphone 0101263515. Effet immédiat en production (le texte est lu à l'exécution via `/api/public/infos`).
+- **Task 34 — Année de calcul** (`7ee7f66`) : `system.school_year` = **2027** (et non « 2026-2027 » : les calculs d'évaluations consomment une année numérique ; le format `NNNN-NNNN` casserait les comparaisons et la validation numérique 0-20 d'UpdateSetting). Neon UPDATE + défauts alignés (`models.go`, `settings-view.tsx`).
+- **Task 35 — Inversion des positions** (`87709e6`, `dashboard-shell.tsx` uniquement) : desktop → bande « Infos SYGREN » déplacée à **GAUCHE** (après le bouton menu mobile, avant le titre), chip téléphone `tel:` déplacée à **DROITE** (après le titre, avant le menu CODE ÉCOLE) ; commentaires mis à jour. Mobile inchangé (bande pleine largeur sous l'en-tête, icône tél à droite de la bande — déjà conforme).
+
+### Vérifications
+- Task 33/34 : Vercel READY + Render LIVE sur `65db725`/`7ee7f66` (SHA via API), `/api/health` 200, Neon relu (school_year=2027).
+- Task 35 : `tsc --noEmit` 0 erreur (après suppression du `tsconfig.tsbuildinfo` périmé — cache incrémental piège), `next build` OK ; Vercel **READY 87709e6** ; Render inchangé live `7ee7f66` (commit frontend seul — normal) ; `/api/health` 200.
+
+### Leçon outillage (important)
+- **Artefact d'affichage** : les sorties d'outils Bash (sed/cat/git show/curl/python repr) qui contiennent la séquence `[m` (ex. `[mobileOpen`) l'affichent amputée → fausse impression de fichier corrompu. Vérifier avec le **Read tool** ou des **comptages d'occurrences** (python/node) avant de conclure ; ici `const [mobileOpen` ×1 / `const obileOpen` ×0 = fichier sain, blob git = GitHub (467c11e), tsc EXIT 0.
+- **tsc incremental** : `tsconfig.tsbuildinfo` périmé fait passer `tsc --noEmit` sans rien vérifier → le supprimer avant toute vérification post-modification.
