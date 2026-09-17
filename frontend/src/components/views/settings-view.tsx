@@ -79,7 +79,7 @@ const DEFAULT_VALUES: Record<string, string> = {
   "mention.threshold.passable": "10",
   "mention.threshold.faible": "8",
   "mention.threshold.insuffisant": "5",
-  "system.school_year": "2026",
+  "system.school_year": "2027",
   "system.pass_rate_threshold": "10",
   "system.distinction_threshold": "14",
   "coefficient.default": "1",

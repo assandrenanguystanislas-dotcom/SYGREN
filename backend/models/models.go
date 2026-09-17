@@ -433,7 +433,7 @@ func DefaultSettings() []Setting {
 		{Key: "mention.threshold.faible", Value: "8", Category: "mention", Label: "Seuil Faible (≥)"},
 		{Key: "mention.threshold.insuffisant", Value: "5", Category: "mention", Label: "Seuil Insuffisant (≥)"},
 		// Config système
-		{Key: "system.school_year", Value: "2026", Category: "system", Label: "Année scolaire en cours"},
+		{Key: "system.school_year", Value: "2027", Category: "system", Label: "Année scolaire en cours"},
 		{Key: "system.pass_rate_threshold", Value: "10", Category: "system", Label: "Seuil de réussite (≥)"},
 		{Key: "system.distinction_threshold", Value: "14", Category: "system", Label: "Seuil de distinction (≥)"},
 		// Coefficient par défaut pour les nouvelles matières
