@@ -4685,3 +4685,23 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - `go build ./...` + `go vet ./handlers/` OK ; `gofmt -w` passé après édition (l'outil d'édition avait converti les tabulations du fichier Go en espaces — diff re-normalisé avant commit) ; `tsc --noEmit` 0 erreur (tsbuildinfo purgé).
 - Simulation avant/après sur données réelles Neon (`scripts/diag_cours_before_after.py`) : EPP DABOU BADIA 3 — AVANT « CM2(directrice), CP1, CP2, CE1, CE2 » → APRÈS « CP1, CP2, CE1, CE2, CM2(directrice) » ; 35/35 écoles conformes CP1→CM2.
 - push → Vercel **READY 9c9ee04** + Render **LIVE 9c9ee04** (ancien 7ee7f66 désactivé ; SHA vérifiés via API) ; `/api/health` 200.
+
+---
+
+## Task 38 — État nominatif : rubrique FONCTION en « Directeur » / « Adjoint(e) »
+
+**Demande utilisateur** : « dans le module utilisateur, état nominatif du personnel, et dans la rubrique "Fonction" écrire la première des mots "Adjoint(e) ou Directeur" en majuscule et le reste en minuscule ».
+
+### Réalisation
+- Helper commun **`fmtFonction`** (`personnel-document.tsx`, commit `80fc8dc`) : première lettre en MAJUSCULE, le reste en minuscules — « DIRECTEUR » → « Directeur », « ADJOINT(E) » → « Adjoint(e) » ; vide si non renseignée.
+- Appliqué aux **3 modèles** : PDF (écran + impression, cellule de StaffRow), Word `.doc` (buildWordHtml), Excel `.xlsx` (buildXlsx) — la valeur STOCKÉE reste DIRECTEUR / ADJOINT(E) (validation backend inchangée) : transformation d'affichage uniquement.
+- Commentaires v8 en tête de fichier. Les deux tests de style de ligne (`/direct|adjoint/i`) conservent la valeur brute — seules les CELLULES d'affichage passent par le helper.
+
+### Vérifications
+- Comptages : `fmtFonction` 1 définition + 3 appels (PDF/Word/Excel) ; plus aucun `s.fonction ?? ""` en cellule d'affichage (2 restantes = tests regex, voulus).
+- `tsc --noEmit` 0 erreur (tsbuildinfo purgé avant vérification).
+- push → Vercel **READY 80fc8dc** ; Render inchangé **live 9c9ee04** (commit frontend seul — normal) ; `/api/health` 200 ; front 200.
+- Neon : aucun changement (affichage uniquement).
+
+### Note numérotation
+- Le worklog contient aussi une ancienne entrée « Task 37 — Session 37 » (session antérieure, autre séquence) ; la séquence courante suit : 33/34/35 → 37 (ordre des cours, `9c9ee04`) → 38 (fonction, `80fc8dc`).
