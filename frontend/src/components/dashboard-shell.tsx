@@ -493,8 +493,8 @@ export function DashboardShell({
   const user = useAuthStore((s) => s.user);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Bande « Infos SYGREN » — téléphone de l'administrateur (haut à gauche)
-  // + annonces défilantes (haut à droite), lus depuis les settings via
+  // Bande « Infos SYGREN » — annonces défilantes (haut à gauche)
+  // + téléphone de l'administrateur (haut à droite), lus depuis les settings via
   // /api/public/infos (accessible à tout utilisateur connecté). En cas
   // d'échec : valeurs par défaut (bande toujours affichée, chip masquée).
   const [adminPhone, setAdminPhone] = useState("");
@@ -566,31 +566,7 @@ export function DashboardShell({
             <Menu className="w-5 h-5" />
           </Button>
 
-          {/* En haut et à GAUCHE — téléphone de l'administrateur (demande
-              utilisateur). Chip cliquable (tel:) masqué tant que le setting
-              infos.admin_phone est vide ; icône seule sur mobile (dans la
-              bande Infos sous l'en-tête). */}
-          {adminPhone && (
-            <a
-              href={`tel:${adminPhone.replace(/\s+/g, "")}`}
-              title="Téléphone de l'administrateur"
-              aria-label={`Téléphone de l'administrateur ${adminPhone}`}
-              className="hidden sm:flex items-center gap-1.5 shrink-0 h-9 px-3 rounded-md border border-emerald-300/70 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition-colors"
-            >
-              <Phone className="w-3.5 h-3.5" aria-hidden />
-              <span className="text-xs font-semibold whitespace-nowrap tabular-nums">
-                {adminPhone}
-              </span>
-            </a>
-          )}
-
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-semibold truncate">
-              {activeItem?.label ?? "Tableau de bord"}
-            </h1>
-          </div>
-
-          {/* En haut et à DROITE — bande « Infos SYGREN » (demande
+          {/* En haut et à GAUCHE — bande « Infos SYGREN » (demande
               utilisateur) : étiquette verte + annonces DÉFILANTES (marquee
               CSS — boucle sans couture, pause au survol). Version mobile :
               pleine largeur sous l'en-tête (voir plus bas). */}
@@ -609,6 +585,30 @@ export function DashboardShell({
               </div>
             </div>
           </div>
+
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-semibold truncate">
+              {activeItem?.label ?? "Tableau de bord"}
+            </h1>
+          </div>
+
+          {/* En haut et à DROITE — téléphone de l'administrateur (demande
+              utilisateur). Chip cliquable (tel:) masqué tant que le setting
+              infos.admin_phone est vide ; icône seule sur mobile (dans la
+              bande Infos sous l'en-tête). */}
+          {adminPhone && (
+            <a
+              href={`tel:${adminPhone.replace(/\s+/g, "")}`}
+              title="Téléphone de l'administrateur"
+              aria-label={`Téléphone de l'administrateur ${adminPhone}`}
+              className="hidden sm:flex items-center gap-1.5 shrink-0 h-9 px-3 rounded-md border border-emerald-300/70 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition-colors"
+            >
+              <Phone className="w-3.5 h-3.5" aria-hidden />
+              <span className="text-xs font-semibold whitespace-nowrap tabular-nums">
+                {adminPhone}
+              </span>
+            </a>
+          )}
 
           {/* Task 30 — en haut et à droite : menu déroulant CODE ÉCOLE
               (Directeur / Enseignant — actions « Modifier votre mot de
@@ -650,8 +650,9 @@ export function DashboardShell({
         </header>
 
         {/* Mobile — bande « Infos SYGREN » en pleine largeur SOUS l'en-tête
-            (sur desktop elle est intégrée à droite de l'en-tête) + téléphone
-            de l'administrateur en icône (le chip complet est sm+). */}
+            (sur desktop elle est intégrée à gauche de l'en-tête) + téléphone
+            de l'administrateur en icône à droite de la bande (le chip
+            complet est sm+). */}
         <div className="md:hidden flex items-stretch overflow-hidden border-b border-border bg-card">
           <span className="flex items-center gap-1 px-2 py-1.5 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wide shrink-0">
             <Megaphone className="w-3 h-3" aria-hidden />
