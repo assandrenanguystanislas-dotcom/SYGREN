@@ -4668,3 +4668,20 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 ### Leçon outillage (important)
 - **Artefact d'affichage** : les sorties d'outils Bash (sed/cat/git show/curl/python repr) qui contiennent la séquence `[m` (ex. `[mobileOpen`) l'affichent amputée → fausse impression de fichier corrompu. Vérifier avec le **Read tool** ou des **comptages d'occurrences** (python/node) avant de conclure ; ici `const [mobileOpen` ×1 / `const obileOpen` ×0 = fichier sain, blob git = GitHub (467c11e), tsc EXIT 0.
 - **tsc incremental** : `tsconfig.tsbuildinfo` périmé fait passer `tsc --noEmit` sans rien vérifier → le supprimer avant toute vérification post-modification.
+
+---
+
+## Task 37 — État nominatif : ordre des cours CP1 → CP2 → CE1 → CE2 → CM1 → CM2
+
+**Demande utilisateur** : « dans le module utilisateur, état nominatif du personnel, mettre les "cours" dans l'ordre suivant CP1- CP2- CE1- CE2- CM1- CM2 ».
+
+### Réalisation
+- **Diagnostic** : le tri serveur (`GetPersonnelSheet`) plaçait le directeur TOUJOURS en tête (SortKey=0) puis les enseignants par cours (100+rank). Or plusieurs directeurs tiennent un cours en production (EPP DABOU BADIA 3 : CM2 ; EPP OKPOYOU 2 et TIAHA 1 : CE2 ; EPP MOPOYEM 1 : CM1) → la colonne COURS se lisait « CM2, CP1, CP2, … » au lieu de démarrer à CP1.
+- **Correctif** (`backend/handlers/personnel.go`, commit `9c9ee04`) : la position du cours prime sur le rôle — tout agent tenant un cours (directeur compris) occupe la place de son cours dans la séquence pédagogique (PS MS GS · CP1 CP2 CE1 CE2 CM1 CM2 · RPL MAC) ; le directeur SANS cours tenu reste en tête (convention du modèle IEPP) ; les agents sans cours suivent, triés par nom.
+- `frontend/src/components/views/personnel-document.tsx` : commentaires v7 — le nom du signataire reste trouvé par le rôle (position indifférente) ; les 3 modèles PDF / Word / Excel partagent la même liste triée par l'API (aucun tri local).
+- **Neon** : aucun changement de schéma ni de données (ordre d'affichage uniquement).
+
+### Vérifications
+- `go build ./...` + `go vet ./handlers/` OK ; `gofmt -w` passé après édition (l'outil d'édition avait converti les tabulations du fichier Go en espaces — diff re-normalisé avant commit) ; `tsc --noEmit` 0 erreur (tsbuildinfo purgé).
+- Simulation avant/après sur données réelles Neon (`scripts/diag_cours_before_after.py`) : EPP DABOU BADIA 3 — AVANT « CM2(directrice), CP1, CP2, CE1, CE2 » → APRÈS « CP1, CP2, CE1, CE2, CM2(directrice) » ; 35/35 écoles conformes CP1→CM2.
+- push → Vercel **READY 9c9ee04** + Render **LIVE 9c9ee04** (ancien 7ee7f66 désactivé ; SHA vérifiés via API) ; `/api/health` 200.
