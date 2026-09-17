@@ -64,6 +64,13 @@
 //         large (en-tête institutionnel fusionné, tableau bordé vert,
 //         femmes en rouge, TOTAL en gras, signature + NOM).
 //
+// v7 — ORDRE DES COURS (demande utilisateur) : les lignes suivent la
+//   séquence CP1 → CP2 → CE1 → CE2 → CM1 → CM2 (tri serveur — tout
+//   agent tenant un cours, DIRECTEUR COMPRIS, occupe la position de son
+//   cours ; le directeur sans cours reste en tête ; agents sans cours à
+//   la suite). Les 3 modèles (PDF / Word / Excel) partagent la même
+//   liste triée par l'API.
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -255,8 +262,11 @@ export function PersonnelDocument({
 
   const staff = data.staff;
   // v6 — nom du directeur signataire : l'agent dont le rôle vaut
-  // « director » (le serveur le place toujours en tête de liste) —
-  // affiché SOUS « Le Directeur » et repris par les modèles Word / Excel.
+  // « director » (v7 : le serveur le place en tête uniquement s'il ne
+  // tient pas de cours — sinon sa ligne prend la position de son cours,
+  // le nom du signataire reste trouvé par le rôle, quelle que soit sa
+  // position) — affiché SOUS « Le Directeur » et repris par les modèles
+  // Word / Excel.
   const directeurName =
     data.staff.find((r) => r.role === "director")?.full_name ?? "";
   const totalEffF = sumCol(staff.map((s) => s.effectif_f));
@@ -519,8 +529,10 @@ export function PersonnelDocument({
             </tr>
           </thead>
           <tbody>
-            {/* Une ligne par agent — directeur d'abord, puis cours CP1→CM2
-                (tri serveur). Noms des femmes EN ROUGE (N.B du modèle). */}
+            {/* Une ligne par agent — v7 : ordre des cours CP1→CM2 (tri
+                serveur : la position du cours prime, directeur compris) :
+                CP1 · CP2 · CE1 · CE2 · CM1 · CM2. Noms des femmes EN
+                ROUGE (N.B du modèle). */}
             {staff.map((s, i) => (
               <StaffRow key={s.id} s={s} n={i + 1} />
             ))}

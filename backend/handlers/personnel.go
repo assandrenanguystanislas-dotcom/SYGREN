@@ -258,8 +258,11 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 //
 // Données du document « ÉTAT NOMINATIF DU PERSONNEL » pour une école :
 // école + IEP (en-tête officiel), année scolaire en cours et liste des
-// agents — directeur d'abord, puis enseignants dans l'ordre des cours
-// (CP1→CM2), puis agents sans cours, chacun enrichi du nom du cours tenu.
+// agents dans l'ORDRE DES COURS TENUS — CP1 → CM2 (demande utilisateur ;
+// PS MS GS avant, RPL MAC après ; la position du cours prime, directeur
+// compris). Le directeur SANS cours tenu reste en tête (convention du
+// modèle IEPP) ; les agents sans cours suivent, chacun enrichi du nom
+// du cours tenu.
 //
 // RBAC de périmètre (comme /api/reports/synthese-data) :
 //   - director  : uniquement son école
@@ -356,12 +359,18 @@ func GetPersonnelSheet(w http.ResponseWriter, r *http.Request) {
 		} else if n, ok := classNameByTeacher[u.ID]; ok {
 			coursTenu = n
 		}
-		if u.Role == models.RoleDirector {
-			row.SortKey = 0 // directeur toujours en tête
-		} else if rank := classRank(coursTenu); rank > 0 {
-			row.SortKey = 100 + rank // enseignants dans l'ordre des cours
+		// Ordre des lignes (demande utilisateur) : la position du COURS
+		// prime — tout agent tenant un cours (directeur compris) occupe
+		// la place de son cours dans la séquence pédagogique (PS MS GS ·
+		// CP1 CP2 CE1 CE2 CM1 CM2 · RPL MAC). Le directeur SANS cours
+		// tenu reste en tête (convention du modèle IEPP) ; les agents
+		// sans cours suivent, triés par nom.
+		if rank := classRank(coursTenu); rank > 0 {
+			row.SortKey = 100 + rank // position du cours tenu (CP1→CM2…)
+		} else if u.Role == models.RoleDirector {
+			row.SortKey = 0 // directeur sans cours tenu : toujours en tête
 		} else {
-			row.SortKey = 200 // agents sans cours (RPL, adjoints…)
+			row.SortKey = 200 // agents sans cours (adjoints…)
 		}
 		if coursTenu != "" {
 			n := coursTenu
