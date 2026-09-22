@@ -4705,3 +4705,30 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 
 ### Note numérotation
 - Le worklog contient aussi une ancienne entrée « Task 37 — Session 37 » (session antérieure, autre séquence) ; la séquence courante suit : 33/34/35 → 37 (ordre des cours, `9c9ee04`) → 38 (fonction, `80fc8dc`).
+
+---
+
+## Task 40 — Le conseiller corrige les inscriptions de son secteur (RBAC v8)
+
+**Demande utilisateur** : « je n'arrive pas à faire des corrections sur des erreurs faites par les directeurs et leurs adjoints. exemple sur des inscriptions ».
+
+### Diagnostic
+- Production : 16 comptes conseiller (aucun Admin IEP). Le conseiller CONSULTE les documents de son secteur (v6) — il y voit les erreurs de saisie (noms, naissances, classes d'inscription…) sans aucun moyen de les corriger :
+  - matrice RBAC : conseiller students read=False / write=False → le module Élèves n'apparaît même pas dans sa nav ;
+  - middleware `ConseillerScope` : toute route `/api/students*` renvoyait 403 (liste blanche v6 sans students).
+- (Le Super Admin, lui, pouvait déjà corriger — la demande porte bien sur la main des conseillers.)
+
+### Réalisation (commit `fc2fb90`)
+- `models/rbac_defaults.go` : **matrice v8** — conseiller students read+write ; `RbacMatrixVersion` 7 → 8 (re-synchronisation complète auto au démarrage).
+- `middleware/conseiller.go` : liste blanche étendue à `/api/students` + `/api/students/*` ; message 403 mis à jour.
+- `handlers/students.go` :
+  - `ListStudents` : case conseiller — élèves des écoles de SON secteur (sous-requête IN, même modèle que ListClasses) ; secteur absent → liste vide ;
+  - `UpdateStudent` : scope conseiller (élève → classe → école → sector_id) ET classe cible d'un déplacement validée secteur (la correction peut inclure le changement de classe et la rectification du matricule) ;
+  - `CreateStudent` / `DeleteStudent` : 403 explicites — la CORRECTION n'inclut ni inscription ni suppression (défense en profondeur, matrice binaire) ; `BulkCreateStudents` déjà fermé (case default).
+- `students-view.tsx` : conseiller branché — `canEdit` (bouton Modifier), filtre École actif (SON secteur, cascade stricte comme l'admin), filtre Classe, sous-titre « · écoles de votre secteur » ; Inscrire / Importer / Supprimer restent `canManage` (admin + director).
+
+### Vérifications
+- `gofmt -w` (3 fichiers Go), `go build ./...`, `go vet` OK ; `tsc --noEmit` 0 erreur (node_modules réinstallés, tsbuildinfo purgé).
+- Simulation Neon (`scripts/sim_scope_conseiller_40.py`) : BADIA 373 élèves / 9 écoles, BOUBOURY 173/13, COSROU 439/16, VIEUX-BADIEN 132/12, LEBOUTOU-OUSROU-TOUPAH 0 (aucune inscription) ; 2 conseillers sans secteur → 0 ; 0 élève d'école non affectée masqué.
+- push → Render **LIVE fc2fb90** + Vercel **READY fc2fb90** ; `/api/health` 200.
+- Neon après déploiement : `rbac.matrix_version` = 8 ; conseiller students read=True / write=True confirmés (re-seed automatique).
