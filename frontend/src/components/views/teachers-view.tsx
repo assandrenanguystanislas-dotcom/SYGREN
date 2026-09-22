@@ -20,11 +20,11 @@ import {
 } from "lucide-react";
 
 import { teachersApi, schoolsApi, iepApi } from "@/lib/api";
+import { SchoolCombobox } from "@/components/school-combobox";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type {
   TeacherWithDetails,
-  SchoolWithStats,
   PersonnelDossier,
 } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -560,21 +560,15 @@ export function TeachersView() {
             {!isTeacher && (
               <div className="space-y-1.5">
                 <Label htmlFor="teacher-school">École</Label>
-                <Select
+                {/* v9 — AUTOCOMPLÉTION (même demande que le formulaire
+                    directeur) : premières lettres du nom ou code
+                    ministériel — remplace le Select à ~124 entrées. */}
+                <SchoolCombobox
+                  id="teacher-school"
+                  schools={schools}
                   value={form.school_id}
-                  onValueChange={(v) => setForm({ ...form, school_id: v })}
-                >
-                  <SelectTrigger id="teacher-school">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schools.map((s: SchoolWithStats) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => setForm({ ...form, school_id: v })}
+                />
               </div>
             )}
             <PersonnelDossierFields

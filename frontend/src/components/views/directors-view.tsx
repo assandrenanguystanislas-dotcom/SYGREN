@@ -18,11 +18,11 @@ import {
 } from "lucide-react";
 
 import { directorsApi, schoolsApi, iepApi } from "@/lib/api";
+import { SchoolCombobox } from "@/components/school-combobox";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type {
   DirectorWithDetails,
-  SchoolWithStats,
   PersonnelDossier,
 } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -484,21 +484,17 @@ export function DirectorsView() {
           {isStaffAdmin && (
             <div className="space-y-1.5">
               <Label htmlFor="director-school">École dirigée</Label>
-              <Select
+              {/* v9 — AUTOCOMPLÉTION (demande utilisateur : « on pourra
+                  écrire les premières lettres ou les chiffres et le nom
+                  voulu apparaît ») : saisie filtrée par nom OU code
+                  ministériel, insensible aux accents — remplace le Select
+                  à ~124 entrées. */}
+              <SchoolCombobox
+                id="director-school"
+                schools={schools}
                 value={form.school_id}
-                onValueChange={(v) => setForm({ ...form, school_id: v })}
-              >
-                <SelectTrigger id="director-school">
-                  <SelectValue placeholder="Choisir une école…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {schools.map((s: SchoolWithStats) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setForm({ ...form, school_id: v })}
+              />
               <p className="text-[11px] text-muted-foreground">
                 Un seul directeur actif par école.
               </p>
