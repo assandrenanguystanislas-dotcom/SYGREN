@@ -4782,3 +4782,19 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` de production OK (17 pages).
 - push → Render (backend inchangé, reste LIVE 519f8d3) + Vercel READY du commit ; front 200 ; `/api/health` 200.
 - Neon : aucun changement (UI seule).
+
+---
+
+## Task 43.1 — v11.1 : « un seul contrôle à usage unique »
+
+**Demande utilisateur** : « je veux un seul contrôle à usage unique : le bouton ouvre la liste déroulante complète défilable à la souris (comme avant), et le champ de recherche en haut accepte toujours les premières lettres ou les chiffres (code ministériel) ».
+
+### Ajustements (commit `74fa188`)
+- C'était déjà UN seul contrôle (le champ de recherche n'existe que DANS la liste ouverte) — l'ajustement lève toute ambiguïté visuelle :
+  - Chevron **simple ↓** sur le bouton, identique à l'ancien `<Select>` (au lieu du chevron double de combobox) ; idem pour les listes JJ/MM/AAAA des dates ;
+  - **Pied de liste pédagogique retiré** (« Parcourez la liste… ou tapez… ») — plus de discours sur les « deux modes » : le contrôle fait simplement les deux.
+- Rien d'autre : filtre lettres (insensible casse/accents) OU chiffres (code) inchangé, liste complète à l'ouverture inchangée.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK. (Environnement réinitialisé entre-temps : clone réaligné sur origin/main 9a9ab0c, node_modules refaits.)
+- push → Vercel **READY 74fa188** ; Render **live 519f8d3** (backend non touché) ; front 200 ; `/api/health` 200 ; Neon sans changement.
