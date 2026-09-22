@@ -5,7 +5,9 @@
 // Champs administratifs du document officiel « ÉTAT NOMINATIF DU
 // PERSONNEL », avec les LISTES DÉROULANTES demandées :
 //   - Matricule (saisie libre)
-//   - Date et lieu de naissance — listes déroulantes JOUR / MOIS / ANNÉE + lieu
+//   - Date et lieu de naissance — saisie directe JJ / MM / AAAA + lieu
+//     (v10 — « faites de même pour les dates de naissance » : on TAPE
+//     les chiffres au lieu de parcourir des listes)
 //   - Catégorie — liste déroulante IO | IA | IS | IAS
 //   - Classe — liste déroulante des 4 valeurs administratives du
 //     fonctionnaire (précisions utilisateur, sessions 12-13) :
@@ -15,30 +17,30 @@
 //     3=E, 4=P) — backend, validation 1..4 et base Neon préservés ;
 //     le libellé court est restitué à l'écran ET dans l'État nominatif
 //     via CLASSE_GRADE_LABELS.
-//   - Date d'entrée à la F.P — listes déroulantes JOUR / MOIS / ANNÉE
+//   - Date d'entrée à la F.P — saisie directe JJ / MM / AAAA (v10)
 //   - Fonction — liste déroulante DIRECTEUR | ADJOINT(E)
 //   - COURS — liste déroulante PS | MS | GS | CP1 | CP2 | CE1 | CE2 |
 //     CM1 | CM2 | RPL | MAC (plage « COURS » à 11 items demandée —
 //     maternelle ajoutée à la demande utilisateur pour les directeurs
 //     et adjoints des écoles maternelles ; prime sur la classe affectée
 //     du module Classes dans la colonne COURS de l'État nominatif)
-//   - Date d'entrée DREN — listes déroulantes JOUR / MOIS / ANNÉE
-//   - Entrée à l'IEP — listes déroulantes JOUR / MOIS / ANNÉE
-//   - DATE D'ARRIVÉE AU POSTE — listes déroulantes JOUR / MOIS / ANNÉE
+//   - Date d'entrée DREN — saisie directe JJ / MM / AAAA (v10)
+//   - Entrée à l'IEP — saisie directe JJ / MM / AAAA (v10)
+//   - DATE D'ARRIVÉE AU POSTE — saisie directe JJ / MM / AAAA (v10)
 //     (en dessous de l'entrée DREN — DISTINCTE des entrées F.P / DREN /
 //     IEP : jour d'arrivée sur le poste actuel, colonne « Arrivée au
 //     poste » de l'État nominatif — demande utilisateur)
-//   - Effectif — F | G | T (saisies numériques, comme les colonnes du document)
-//   - Redoublants — F | G | T
+//   - Effectif — F | G (T = F + G CALCULÉ automatiquement — v9)
+//   - Redoublants — F | G (T = F + G calculé — v9)
 //   - Sexe — liste déroulante F | G
 //
 // CONFUSION DES DATES (demande utilisateur) : la date de NAISSANCE et
 // les dates D'ENTRÉE (F.P / DREN / IEP) sont des dates DIFFÉRENTES —
 // le formulaire les isole visuellement en DEUX groupes titrés (boxed),
-// chacun des 4 sélecteurs restant explicitement libellé, avec la plage
-// d'années en précision sous le trio. Un duo jour/mois impossible
-// (ex : 31/02) n'est jamais émis — un message local le signale au lieu
-// de laisser le backend rejeter la sauvegarde entière (« date invalide »).
+// chaque date restant explicitement libellée, avec la plage d'années
+// en précision sous le trio. Un duo jour/mois impossible (ex : 31/02)
+// n'est jamais émis — un message local le signale au lieu de laisser
+// le backend rejeter la sauvegarde entière (« date invalide »).
 //
 // Le dossier part entier à chaque enregistrement (sémantique « mise à
 // jour complète » du backend — un champ vide efface la valeur stockée).
@@ -67,12 +69,6 @@ import {
 // Valeur sentinelle des listes « non renseigné » (Radix refuse value="")
 const UNSET = "?";
 
-const MONTHS = [
-  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
-];
-
-const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 const GRADES = [1, 2, 3, 4];
 
 /** Les 4 valeurs administratives de la CLASSE du fonctionnaire :
@@ -96,7 +92,7 @@ export const COURS_OPTIONS: CoursCode[] = [
   "PS", "MS", "GS", "CP1", "CP2", "CE1", "CE2", "CM1", "CM2", "RPL", "MAC",
 ];
 
-/** Bornes d'années des listes :
+/** Bornes d'années des plages de saisie (v10 — champs JJ/MM/AAAA) :
  *  - naissance : 1940 → l'année courante ;
  *  - entrées (F.P / DREN / IEP) : 1960 → l'année courante. */
 function yearRange(from: number): number[] {
@@ -111,8 +107,8 @@ type IsoParts = { y: string; m: string; d: string };
 function parseIsoParts(iso: string | null | undefined): IsoParts {
   if (!iso || iso.length < 10) return { y: "", m: "", d: "" };
   const [y, m, d] = iso.slice(0, 10).split("-");
-  // L'ISO est zéro-padé ("05") mais les items des listes portent les valeurs
-  // simples ("5") : dé-pader pour que la valeur retrouve son item à l'édition.
+  // L'ISO est zéro-padé ("05") : dé-pader pour un affichage naturel
+  // dans les champs de saisie (5 plutôt que 05).
   const unpad = (s: string) => (s ? String(Number(s)) : "");
   return { y: y || "", m: unpad(m), d: unpad(d) };
 }
@@ -124,18 +120,24 @@ function daysInMonth(m: number, y: number): number {
   return new Date(y, m, 0).getDate();
 }
 
-/** Sélecteur de date en 3 listes déroulantes (Jour / Mois / Année).
+/** Saisie de date en 3 champs TAPÉS AU CLAVIER — JJ / MM / AAAA
+ *  (v10 — demande utilisateur, dans la lignée de l'autocomplétion de
+ *  l'école : « faites de même pour les dates de naissance ») : on ÉCRIT
+ *  les chiffres au lieu de parcourir des listes (jusqu'à ~87 années).
  *  ISO vaut "YYYY-MM-DD…" (API) ou null ; la date n'est posée que si les
- *  3 parties sont choisies ET forment une date réelle — un duo
+ *  3 parties sont saisies ET forment une date réelle — un duo
  *  jour/mois impossible (ex : 31/02) n'est JAMAIS émis : un message
  *  local le signale et la valeur du dossier reste inchangée, au lieu de
  *  voir la sauvegarde entière rejetée par le backend « date invalide ».
+ *  Garde-fous de saisie : chiffres seuls, mois 01-12, jour existant
+ *  pour le mois (bissextile géré), année dans la plage du champ
+ *  (naissance 1940 → année courante ; entrées 1960 → année courante).
  *
  *  ⚠ Les 3 parties vivent dans un ÉTAT LOCAL initialisé depuis l'ISO :
- *  chaque liste garde sa sélection pendant qu'on complète les deux autres.
+ *  chaque champ garde sa saisie pendant qu'on complète les deux autres.
  *  (Version initiale : les parties dérivées directement de la prop iso —
- *  la sélection partielle était écrasée par le re-render parent dès la
- *  première liste choisie, les listes semblaient « ne pas fonctionner ».)
+ *  la saisie partielle était écrasée par le re-render parent dès le
+ *  premier champ complété, les champs semblaient « ne pas fonctionner ».)
  *  L'ISO n'est émis au dossier que lorsque les 3 parties sont réunies et
  *  valides. Le dialog démonte son contenu à la fermeture : chaque
  *  ouverture réinitialise proprement les parties depuis la valeur
@@ -143,9 +145,9 @@ function daysInMonth(m: number, y: number): number {
  *
  *  `hint` — précision affichée sous le trio (plage d'années, sens de la
  *  date). Naissance et dates d'entrée (F.P / DREN / IEP) étant DES
- *  DATES DIFFÉRENTES (demande utilisateur), chaque sélecteur reste
- *  explicitement libellé et regroupé dans sa section titrée. */
-function DateSelects({
+ *  DATES DIFFÉRENTES (demande utilisateur), chaque date reste
+ *  explicitement libellée et regroupée dans sa section titrée. */
+function DateInputs({
   id,
   label,
   iso,
@@ -162,85 +164,91 @@ function DateSelects({
 }) {
   const [parts, setParts] = useState<IsoParts>(() => parseIsoParts(iso));
 
+  // Plage d'années autorisée (bornes de la liste fournie au champ).
+  const minYear = years.length ? Math.min(...years) : 1900;
+  const maxYear = years.length ? Math.max(...years) : 2100;
+
   const set = (part: keyof IsoParts, raw: string) => {
-    const v = raw === UNSET ? "" : raw;
+    // Chiffres seuls, longueur bornée (2 chiffres jour/mois, 4 l'année) —
+    // la saisie au clavier remplace la sélection dans une liste.
+    const v = raw.replace(/\D/g, "").slice(0, part === "y" ? 4 : 2);
     const next = { ...parts, [part]: v };
     setParts(next);
     // La date n'est émise que si les 3 parties sont réunies ET
-    // cohérentes : le jour doit exister dans le mois choisi (février
-    // 29/30/31, mois à 30 jours…). Sinon → null (valeur non posée).
-    const complete = next.y && next.m && next.d;
+    // cohérentes : mois 1-12, année dans la plage, jour existant dans
+    // le mois choisi (février 29/30/31, mois à 30 jours…). Sinon →
+    // null (valeur non posée).
+    const m = Number(next.m);
+    const y = Number(next.y);
+    const complete = next.d !== "" && next.m !== "" && next.y.length === 4;
+    const monthOk = next.m !== "" && m >= 1 && m <= 12;
+    const yearOk = next.y.length === 4 && y >= minYear && y <= maxYear;
     const validDay =
-      complete && Number(next.d) <= daysInMonth(Number(next.m), Number(next.y));
+      monthOk && yearOk && Number(next.d) >= 1 &&
+      Number(next.d) <= daysInMonth(m, y);
     onChange(
-      complete && validDay
+      complete && monthOk && yearOk && validDay
         ? `${next.y}-${next.m.padStart(2, "0")}-${next.d.padStart(2, "0")}`
         : null,
     );
   };
-  const trigger = "h-8 w-full text-xs px-2";
-  const maxDay =
-    parts.m && parts.y ? daysInMonth(Number(parts.m), Number(parts.y)) : null;
-  const invalidDay = maxDay != null && parts.d !== "" && Number(parts.d) > maxDay;
+  const cell = "h-8 w-full text-xs px-2 text-center";
+  const mOk = parts.m !== "" && Number(parts.m) >= 1 && Number(parts.m) <= 12;
+  const yOk =
+    parts.y.length === 4 &&
+    Number(parts.y) >= minYear &&
+    Number(parts.y) <= maxYear;
+  const invalidDay =
+    mOk && yOk && parts.d !== "" &&
+    Number(parts.d) > daysInMonth(Number(parts.m), Number(parts.y));
+  const monthOut = parts.m !== "" && !mOk;
+  const yearOut = parts.y.length === 4 && !yOk;
+  const error = monthOut
+    ? "Le mois est entre 01 et 12."
+    : yearOut
+      ? `Année hors plage (${minYear} → ${maxYear}).`
+      : invalidDay
+        ? "Ce jour n'existe pas pour ce mois — corrigez le jour ou le mois."
+        : null;
   return (
     <div className="space-y-1 min-w-0">
       <Label htmlFor={id} className="text-[11px] leading-tight block">
         {label}
       </Label>
       <div className="flex gap-1.5" id={id}>
-        <Select value={parts.d || UNSET} onValueChange={(v) => set("d", v)}>
-          <SelectTrigger className={trigger} aria-label={`${label} — jour`}>
-            <SelectValue placeholder="Jour" />
-          </SelectTrigger>
-          <SelectContent className="max-h-56">
-            <SelectGroup>
-              <SelectLabel>Jour (01 → 31)</SelectLabel>
-              <SelectItem value={UNSET}>—</SelectItem>
-              {DAYS.map((d) => (
-                <SelectItem key={d} value={String(d)}>
-                  {String(d).padStart(2, "0")}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <Select value={parts.m || UNSET} onValueChange={(v) => set("m", v)}>
-          <SelectTrigger className={trigger} aria-label={`${label} — mois`}>
-            <SelectValue placeholder="Mois" />
-          </SelectTrigger>
-          <SelectContent className="max-h-56">
-            <SelectGroup>
-              <SelectLabel>Mois (Janvier → Décembre)</SelectLabel>
-              <SelectItem value={UNSET}>—</SelectItem>
-              {MONTHS.map((name, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <Select value={parts.y || UNSET} onValueChange={(v) => set("y", v)}>
-          <SelectTrigger className={trigger} aria-label={`${label} — année`}>
-            <SelectValue placeholder="Année" />
-          </SelectTrigger>
-          <SelectContent className="max-h-56">
-            <SelectGroup>
-              <SelectLabel>Année</SelectLabel>
-              <SelectItem value={UNSET}>—</SelectItem>
-              {years.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <div className="flex-1 min-w-0">
+          <Input
+            aria-label={`${label} — jour`}
+            inputMode="numeric"
+            placeholder="JJ"
+            className={cell}
+            value={parts.d}
+            onChange={(e) => set("d", e.target.value)}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <Input
+            aria-label={`${label} — mois`}
+            inputMode="numeric"
+            placeholder="MM"
+            className={cell}
+            value={parts.m}
+            onChange={(e) => set("m", e.target.value)}
+          />
+        </div>
+        <div className="flex-[1.3] min-w-0">
+          <Input
+            aria-label={`${label} — année`}
+            inputMode="numeric"
+            placeholder="AAAA"
+            className={cell}
+            value={parts.y}
+            onChange={(e) => set("y", e.target.value)}
+          />
+        </div>
       </div>
-      {invalidDay ? (
-        <p className="text-[10px] text-destructive leading-tight">
-          Ce jour n&apos;existe pas pour ce mois — corrigez le jour ou le mois.
-        </p>
+      {error ? (
+        <p className="text-[10px] text-destructive leading-tight">{error}</p>
       ) : hint ? (
         <p className="text-[10px] text-muted-foreground leading-tight">{hint}</p>
       ) : null}
@@ -412,7 +420,7 @@ export function PersonnelDossierFields({
           Naissance de l&apos;agent
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <DateSelects
+          <DateInputs
             id="pers-naissance"
             label="Date de naissance (Jour · Mois · Année)"
             iso={value.date_naissance}
@@ -519,7 +527,7 @@ export function PersonnelDossierFields({
           <CalendarDays className="w-3.5 h-3.5" />
           Dates d&apos;entrée de l&apos;agent — distinctes de la naissance
         </div>
-        <DateSelects
+        <DateInputs
           id="pers-fp"
           label="Date d'entrée à la F.P (Jour · Mois · Année)"
           iso={value.date_entree_fp}
@@ -528,7 +536,7 @@ export function PersonnelDossierFields({
           onChange={(iso) => onChange({ ...value, date_entree_fp: iso })}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <DateSelects
+          <DateInputs
             id="pers-dren"
             label="Date d'entrée DREN (Jour · Mois · Année)"
             iso={value.date_entree_dren}
@@ -536,7 +544,7 @@ export function PersonnelDossierFields({
             hint="Entrée à la DREN — années 1960 → aujourd'hui"
             onChange={(iso) => onChange({ ...value, date_entree_dren: iso })}
           />
-          <DateSelects
+          <DateInputs
             id="pers-iep"
             label="Entrée à l'IEP (Jour · Mois · Année)"
             iso={value.date_entree_iep}
@@ -550,7 +558,7 @@ export function PersonnelDossierFields({
             entrées — alimente la colonne « Arrivée au poste » de
             l'État nominatif. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <DateSelects
+          <DateInputs
             id="pers-arrivee-poste"
             label="Date d'arrivée au poste (Jour · Mois · Année)"
             iso={value.date_arrivee_poste}
