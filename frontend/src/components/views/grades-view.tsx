@@ -47,6 +47,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SchoolCombobox } from "@/components/school-combobox";
+import { ClassCombobox } from "@/components/class-combobox";
 import { cn } from "@/lib/utils";
 
 interface GradesGridProps {
@@ -368,18 +370,14 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <School className="w-3 h-3" /> École
                 </label>
-                <Select value={schoolFilter} onValueChange={handleSchoolChange}>
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schools.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* v11 — bande déroulante scrollable + recherche
+                    (lettres du nom ou code ministériel) */}
+                <SchoolCombobox
+                  schools={schools}
+                  value={schoolFilter}
+                  onChange={handleSchoolChange}
+                  placeholder="Choisir une école…"
+                />
               </div>
             ) : (
               <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">
@@ -399,31 +397,24 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <GraduationCap className="w-3 h-3" /> Classe
               </label>
-              <Select
+              {/* v11 — bande déroulante + recherche (même traitement) ;
+                  l'enseignant n'a pas l'option « Toutes les classes » */}
+              <ClassCombobox
+                classes={classes}
                 value={classFilter}
-                onValueChange={handleClassChange}
+                onChange={handleClassChange}
                 disabled={!hasSchoolSelected || classes.length === 0}
-              >
-                <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue
-                    placeholder={
-                      !hasSchoolSelected
-                        ? "Choisir une école d'abord"
-                        : "Choisir une classe…"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {isTeacher ? null : (
-                    <SelectItem value="all">Toutes les classes</SelectItem>
-                  )}
-                  {classes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} {c.level && `(${c.level})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                allowEmpty={!isTeacher}
+                emptyValue="all"
+                emptyLabel="Toutes les classes"
+                placeholder={
+                  !hasSchoolSelected
+                    ? "Choisir une école d'abord"
+                    : "Choisir une classe…"
+                }
+                emptyText="Aucune classe dans cette école."
+                groupLabel="Classes de l'école"
+              />
             </div>
 
             {/* Filtre Session (désactivé tant que pas d'école) */}

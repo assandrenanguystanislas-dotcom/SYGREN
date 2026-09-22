@@ -73,6 +73,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SchoolCombobox } from "@/components/school-combobox";
 
 // === Helpers de maîtrise (miroir de la logique serveur) ===
 
@@ -398,26 +399,19 @@ export function PdaView() {
             {needsSchoolSelect ? (
               <div className="space-y-1.5 w-full sm:w-auto sm:flex-1 sm:max-w-[280px]">
                 <Label className="text-xs text-muted-foreground">École</Label>
-                <Select
+                {/* v11 — bande déroulante scrollable + recherche
+                    (lettres du nom ou code ministériel) */}
+                <SchoolCombobox
+                  schools={schoolsData?.schools ?? []}
                   value={schoolFilter}
-                  onValueChange={(v) => {
+                  onChange={(v) => {
                     setSchoolFilter(v);
                     setExamId("");
                     setClassId("");
                     setOverride(null);
                   }}
-                >
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(schoolsData?.schools ?? []).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Choisir une école…"
+                />
               </div>
             ) : null}
 

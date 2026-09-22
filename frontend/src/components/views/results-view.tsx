@@ -68,6 +68,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SchoolCombobox } from "@/components/school-combobox";
 import { PdaView } from "./pda-view";
 import { PdaTimelineView } from "./pda-timeline-view";
 import { EndOfYearView } from "./end-of-year-view";
@@ -370,22 +371,18 @@ function ResultsRankingView() {
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <School className="w-3 h-3" /> École
                 </label>
-                <Select value={schoolFilter} onValueChange={(v) => {
-                  setSchoolFilter(v);
-                  setSelectedSessionId(undefined);
-                  setClassFilter("all");
-                }}>
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schools.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* v11 — bande déroulante scrollable + recherche
+                    (lettres du nom ou code ministériel) */}
+                <SchoolCombobox
+                  schools={schools}
+                  value={schoolFilter}
+                  onChange={(v) => {
+                    setSchoolFilter(v);
+                    setSelectedSessionId(undefined);
+                    setClassFilter("all");
+                  }}
+                  placeholder="Choisir une école…"
+                />
               </div>
             ) : (
               <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[280px] min-w-0">

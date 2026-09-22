@@ -27,7 +27,6 @@ import {
 
 import { classesApi, reportsApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import type { SchoolWithStats } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +48,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SchoolCombobox } from "@/components/school-combobox";
+import { ClassCombobox } from "@/components/class-combobox";
 import { cn } from "@/lib/utils";
 
 const YEARS = [2024, 2025, 2026, 2027, 2028];
@@ -227,24 +228,17 @@ export function EndOfYearView() {
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <SchoolIcon className="w-3 h-3" /> École
                 </label>
-                <Select
+                {/* v11 — bande déroulante scrollable + recherche
+                    (lettres du nom ou code ministériel) */}
+                <SchoolCombobox
+                  schools={schoolsData?.schools ?? []}
                   value={schoolFilter}
-                  onValueChange={(v) => {
+                  onChange={(v) => {
                     setSchoolFilter(v);
                     setClassId(""); // reset classe quand école change
                   }}
-                >
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(schoolsData?.schools ?? []).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {(s as SchoolWithStats).name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Choisir une école…"
+                />
               </div>
             )}
             {isDirector && (
@@ -264,26 +258,18 @@ export function EndOfYearView() {
               <label className="text-xs font-medium text-muted-foreground">
                 Cours (classe)
               </label>
-              <Select
+              {/* v11 — bande déroulante + recherche (même traitement) */}
+              <ClassCombobox
+                classes={classes}
                 value={classId}
-                onValueChange={setClassId}
+                onChange={setClassId}
                 disabled={!hasSchoolSelected || classesLoading || classes.length === 0}
-              >
-                <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue
-                    placeholder={
-                      hasSchoolSelected ? "Choisir un cours…" : "Choisir une école d'abord"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  {classes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder={
+                  hasSchoolSelected ? "Choisir un cours…" : "Choisir une école d'abord"
+                }
+                emptyText="Aucune classe dans cette école."
+                groupLabel="Cours de l'école"
+              />
             </div>
             <div className="space-y-1.5 min-w-[110px] max-w-[140px]">
               <label className="text-xs font-medium text-muted-foreground">

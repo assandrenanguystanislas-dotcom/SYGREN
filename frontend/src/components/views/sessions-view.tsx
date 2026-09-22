@@ -58,6 +58,10 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  EntityCombobox,
+  type ComboItem,
+} from "@/components/entity-combobox";
 
 // Niveaux d'exemption possibles (Approche A — exemptions par niveau)
 const EXEMPT_LEVELS = ["CP", "CE", "CM"] as const;
@@ -741,30 +745,30 @@ export function SessionsView() {
                       </p>
                     </>
                   ) : (
-                    <Select
+                    // v11 — bande déroulante scrollable + recherche ;
+                    // valeur = CODE ministériel (inchangé), la saisie de
+                    // lettres OU de chiffres retrouve l'école
+                    <EntityCombobox
+                      id="school-select"
+                      items={schools.map(
+                        (s): ComboItem => ({
+                          value: s.code,
+                          label: s.name,
+                          keywords: s.code,
+                          right: (
+                            <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+                              {s.code}
+                            </span>
+                          ),
+                        }),
+                      )}
                       value={form.school_code}
-                      onValueChange={(v) => setForm({ ...form, school_code: v })}
-                    >
-                      <SelectTrigger id="school-select">
-                        <SelectValue placeholder="Choisir une école…" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        {schools.length === 0 ? (
-                          <div className="px-3 py-2 text-xs text-muted-foreground">
-                            Aucune école enregistrée
-                          </div>
-                        ) : (
-                          schools.map((s) => (
-                            <SelectItem key={s.id} value={s.code}>
-                              <span className="font-medium">{s.name}</span>
-                              <span className="text-muted-foreground ml-2 font-mono text-[10px]">
-                                {s.code}
-                              </span>
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                      onChange={(v) => setForm({ ...form, school_code: v })}
+                      placeholder="Choisir une école…"
+                      searchPlaceholder="Premières lettres du nom ou code…"
+                      emptyText="Aucune école enregistrée."
+                      groupLabel="Toutes les écoles"
+                    />
                   )}
                 </div>
               )}

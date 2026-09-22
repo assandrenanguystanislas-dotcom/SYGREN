@@ -50,6 +50,8 @@ import {
 } from "@/components/ui/table";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SchoolCombobox } from "@/components/school-combobox";
+import { ClassCombobox } from "@/components/class-combobox";
 import {
   ImportStudentsDialog,
   type ParsedStudent,
@@ -552,27 +554,18 @@ export function StudentsView() {
                   <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <SchoolIcon className="w-3 h-3" /> École
                   </label>
-                  <Select
+                  {/* v11 — les DEUX modes : bande déroulante scrollable
+                      (~100 écoles) + saisie lettres/code (EntityCombobox).
+                      Pas d'option "Toutes" — cascade stricte demandée. */}
+                  <SchoolCombobox
+                    schools={schools}
                     value={schoolFilter}
-                    onValueChange={(v) => {
+                    onChange={(v) => {
                       setSchoolFilter(v);
                       setClassFilter("all"); // reset classe quand école change
                     }}
-                  >
-                    <SelectTrigger className="w-full overflow-hidden">
-                      {/* Placeholder quand aucune école choisie (cascade stricte) */}
-                      <SelectValue placeholder="Choisir une école…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {/* Plus d'option "Toutes les écoles" — l'admin DOIT choisir
-                          une école précise (cascade stricte demandée par l'utilisateur). */}
-                      {schools.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Choisir une école…"
+                  />
                 </div>
               )}
               {isDirector && (
@@ -596,29 +589,23 @@ export function StudentsView() {
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <GraduationCap className="w-3 h-3" /> Classe
                 </label>
-                <Select
+                {/* v11 — même traitement hybride : déroulant + saisie */}
+                <ClassCombobox
+                  classes={classes}
                   value={classFilter}
-                  onValueChange={setClassFilter}
+                  onChange={setClassFilter}
                   disabled={!hasSchoolSelected || classes.length === 0}
-                >
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue
-                      placeholder={
-                        hasSchoolSelected
-                          ? "Toutes les classes"
-                          : "Choisir une école d'abord"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Toutes les classes</SelectItem>
-                    {classes.map((c: ClassWithDetails) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  allowEmpty
+                  emptyValue="all"
+                  emptyLabel="Toutes les classes"
+                  placeholder={
+                    hasSchoolSelected
+                      ? "Toutes les classes"
+                      : "Choisir une école d'abord"
+                  }
+                  emptyText="Aucune classe dans cette école."
+                  groupLabel="Classes de l'école"
+                />
               </div>
 
               {/* Recherche texte (toujours disponible) */}
@@ -893,21 +880,17 @@ export function StudentsView() {
             {!isTeacher && (
               <div className="space-y-1.5">
                 <Label htmlFor="student-class">Classe</Label>
-                <Select
+                {/* v11 — bande déroulante + recherche (nom de classe ou
+                    d'école) ; l'école reste affichée à droite de la ligne */}
+                <ClassCombobox
+                  id="student-class"
+                  classes={classes}
                   value={form.class_id}
-                  onValueChange={(v) => setForm({ ...form, class_id: v })}
-                >
-                  <SelectTrigger id="student-class">
-                    <SelectValue placeholder="Choisir une classe…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classes.map((c: ClassWithDetails) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} — {c.school_name ?? "École"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => setForm({ ...form, class_id: v })}
+                  withSchoolName
+                  placeholder="Choisir une classe…"
+                  emptyText="Aucune classe disponible."
+                />
                 {classes.length === 0 && (
                   <p className="text-xs text-destructive">
                     Aucune classe disponible — créez-en une d'abord.

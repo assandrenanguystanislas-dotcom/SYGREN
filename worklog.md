@@ -4765,3 +4765,20 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - `tsc --noEmit` 0 erreur (node_modules réinstallés après reset, tsbuildinfo purgé).
 - push → Vercel **READY 6c88210** ; Render inchangé **live 519f8d3** (commit frontend seul — normal) ; front 200, `/api/health` 200.
 - Neon : aucun changement (saisie uniquement).
+
+---
+
+## Task 43 — v11 : les listes déroulantes RESTENT, avec les deux modes partout
+
+**Demande utilisateur** : « je souhaite que les bandes déroulantes restent. On pourra faire avec les deux exemples. Permettre aussi qu'on puisse utiliser la bande déroulante. Étendre le même traitement ailleurs ».
+
+### Réalisation
+- **EntityCombobox** (`frontend/src/components/entity-combobox.tsx`, nouveau) : LE contrôle à DEUX MODES — (1) bande déroulante : le bouton ouvre la liste COMPLÈTE scrollable à la souris (max-h 340px), sans rien taper ; (2) saisie : le champ en haut filtre au fil des lettres (insensible casse/accents NFD) et des CHIFFRES (mots-clés, ex : code ministériel). Titre de groupe avec compte (« Toutes les écoles (97) »), entrée « Tous » optionnelle pour les filtres (emptyValue), lignes désactivables (classe exemptée), rappel des deux modes en pied de liste.
+- **SchoolCombobox** réécrit sur EntityCombobox (API inchangée) ; **ClassCombobox** créé (`class-combobox.tsx`) pour les classes (recherche par nom + école d'appartenance).
+- **Étension à toutes les listes longues** : élèves (filtre École + filtre Classe + classe du formulaire élève, école affichée à droite), classes (école du formulaire de création), bulletins (filtre École + filtre Classe avec classes exemptées visibles/non cliquables), notes (École + Classe, « Toutes » masquée pour l'enseignant), résultats (École), sessions (école du dialog — valeur = code ministériel inchangée), PDA (École), fin d'année (École + Cours).
+- **Dates du dossier (v11)** : les 5 dates JJ/MM/AAAA gardent la saisie clavier ET regagnent une LISTE DÉROULANTE par segment (chevron) — jour borné au mois choisi (février 28/29 : impossible de choisir 31/02), mois 01-12, année = plage du champ (filtrable à la frappe pour les ~87 valeurs) ; passage par le même set() et ses mêmes garde-fous.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` de production OK (17 pages).
+- push → Render (backend inchangé, reste LIVE 519f8d3) + Vercel READY du commit ; front 200 ; `/api/health` 200.
+- Neon : aucun changement (UI seule).

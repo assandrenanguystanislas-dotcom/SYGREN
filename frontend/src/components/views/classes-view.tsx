@@ -36,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SchoolCombobox } from "@/components/school-combobox";
 
 interface FormData {
   school_id: string;
@@ -280,21 +281,15 @@ export function ClassesView() {
             {!editing && (
               <div className="space-y-1.5">
                 <Label htmlFor="class-school">École</Label>
-                <Select
+                {/* v11 — bande déroulante scrollable + recherche
+                    (lettres du nom ou code ministériel) */}
+                <SchoolCombobox
+                  id="class-school"
+                  schools={schools}
                   value={form.school_id}
-                  onValueChange={(v) => setForm({ ...form, school_id: v })}
-                >
-                  <SelectTrigger id="class-school">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schools.map((s: SchoolWithStats) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => setForm({ ...form, school_id: v })}
+                  placeholder="Choisir une école…"
+                />
               </div>
             )}
             {!editing && (

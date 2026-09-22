@@ -5,9 +5,13 @@
 // Champs administratifs du document officiel « ÉTAT NOMINATIF DU
 // PERSONNEL », avec les LISTES DÉROULANTES demandées :
 //   - Matricule (saisie libre)
-//   - Date et lieu de naissance — saisie directe JJ / MM / AAAA + lieu
-//     (v10 — « faites de même pour les dates de naissance » : on TAPE
-//     les chiffres au lieu de parcourir des listes)
+//   - Date et lieu de naissance — JJ / MM / AAAA avec LES DEUX MODES
+//     (v11) : on TAPE les chiffres AU CLAVIER, OU on ouvre la LISTE
+//     DÉROULANTE du segment (chevron) et on clique la valeur —
+//     « je souhaite que les bandes déroulantes restent ; permettre
+//     aussi qu'on puisse utiliser la bande déroulante ». La liste du
+//     jour s'adapte au mois choisi (février = 28/29), celle de l'année
+//     respecte la plage du champ ; + lieu de naissance (texte)
 //   - Catégorie — liste déroulante IO | IA | IS | IAS
 //   - Classe — liste déroulante des 4 valeurs administratives du
 //     fonctionnaire (précisions utilisateur, sessions 12-13) :
@@ -17,16 +21,16 @@
 //     3=E, 4=P) — backend, validation 1..4 et base Neon préservés ;
 //     le libellé court est restitué à l'écran ET dans l'État nominatif
 //     via CLASSE_GRADE_LABELS.
-//   - Date d'entrée à la F.P — saisie directe JJ / MM / AAAA (v10)
+//   - Date d'entrée à la F.P — JJ / MM / AAAA clavier OU liste déroulante (v11)
 //   - Fonction — liste déroulante DIRECTEUR | ADJOINT(E)
 //   - COURS — liste déroulante PS | MS | GS | CP1 | CP2 | CE1 | CE2 |
 //     CM1 | CM2 | RPL | MAC (plage « COURS » à 11 items demandée —
 //     maternelle ajoutée à la demande utilisateur pour les directeurs
 //     et adjoints des écoles maternelles ; prime sur la classe affectée
 //     du module Classes dans la colonne COURS de l'État nominatif)
-//   - Date d'entrée DREN — saisie directe JJ / MM / AAAA (v10)
-//   - Entrée à l'IEP — saisie directe JJ / MM / AAAA (v10)
-//   - DATE D'ARRIVÉE AU POSTE — saisie directe JJ / MM / AAAA (v10)
+//   - Date d'entrée DREN — JJ / MM / AAAA clavier OU liste déroulante (v11)
+//   - Entrée à l'IEP — JJ / MM / AAAA clavier OU liste déroulante (v11)
+//   - DATE D'ARRIVÉE AU POSTE — JJ / MM / AAAA clavier OU liste déroulante (v11)
 //     (en dessous de l'entrée DREN — DISTINCTE des entrées F.P / DREN /
 //     IEP : jour d'arrivée sur le poste actuel, colonne « Arrivée au
 //     poste » de l'État nominatif — demande utilisateur)
@@ -46,12 +50,32 @@
 // jour complète » du backend — un champ vide efface la valeur stockée).
 
 import { useState } from "react";
-import { type LucideIcon, Cake, CalendarDays, IdCard } from "lucide-react";
+import {
+  type LucideIcon,
+  Cake,
+  CalendarDays,
+  IdCard,
+  ChevronsUpDown,
+} from "lucide-react";
 
 import type { PersonnelDossier } from "@/lib/types";
 import type { CoursCode } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Select,
   SelectContent,
@@ -120,10 +144,88 @@ function daysInMonth(m: number, y: number): number {
   return new Date(y, m, 0).getDate();
 }
 
-/** Saisie de date en 3 champs TAPÉS AU CLAVIER — JJ / MM / AAAA
- *  (v10 — demande utilisateur, dans la lignée de l'autocomplétion de
- *  l'école : « faites de même pour les dates de naissance ») : on ÉCRIT
- *  les chiffres au lieu de parcourir des listes (jusqu'à ~87 années).
+/** v11 — LA LISTE DÉROULANTE d'un segment de date (JJ, MM ou AAAA),
+ *  rendue à la demande : « je souhaite que les bandes déroulantes
+ *  restent ; permettre aussi qu'on puisse utiliser la bande
+ *  déroulante ». Chaque segment du trio garde SA SAISIE CLAVIER et
+ *  reçoit EN PLUS un chevron qui ouvre la liste scrollable — les deux
+ *  modes cohabitent (le champ reste maître, la liste ne fait que
+ *  remplir la même valeur via le même set() et ses mêmes garde-fous).
+ *  La liste est aussi filtrable à la frappe (ce sont des chiffres). */
+function PartCombo({
+  part,
+  label,
+  items,
+  onPick,
+}: {
+  part: "d" | "m" | "y";
+  label: string;
+  items: string[];
+  onPick: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`${label} — ouvrir la liste déroulante`}
+          disabled={items.length === 0}
+          title={`${label} — choisir dans la liste`}
+          className="h-7 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+        >
+          <ChevronsUpDown className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-28 p-0" align="start">
+        <Command
+          filter={(itemValue, search) =>
+            itemValue.includes(search) ? 1 : 0
+          }
+        >
+          {/* Champ de filtre utile pour l'année (~87 valeurs) ; pour le
+              jour et le mois (≤ 31 valeurs) la liste se parcourt telle
+              quelle — bande déroulante classique. */}
+          {part === "y" && (
+            <CommandInput placeholder="Filtrer…" className="h-8" />
+          )}
+          <CommandList className="max-h-[220px]">
+            <CommandEmpty>Aucune valeur.</CommandEmpty>
+            <CommandGroup>
+              {items.map((v) => (
+                <CommandItem
+                  key={v}
+                  value={v}
+                  onSelect={() => {
+                    onPick(v);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="w-full text-center font-mono text-xs">
+                    {v}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Saisie de date en 3 champs JJ / MM / AAAA — LES DEUX MODES (v11,
+ *  demande utilisateur : « je souhaite que les bandes déroulantes
+ *  restent ; on pourra faire avec les deux exemples ; permettre aussi
+ *  qu'on puisse utiliser la bande déroulante ») :
+ *  - MODE CLAVIER (v10) : on ÉCRIT les chiffres (JJ/MM/AAAA), sans
+ *    rien parcourir ;
+ *  - MODE LISTE DÉROULANTE : chaque segment a SON chevron qui ouvre
+ *    une liste scrollable — jour (adapté au mois : février = 28/29),
+ *    mois (01-12), année (plage du champ) — on clique, la valeur se
+ *    remplit par le même set() et ses mêmes garde-fous.
  *  ISO vaut "YYYY-MM-DD…" (API) ou null ; la date n'est posée que si les
  *  3 parties sont saisies ET forment une date réelle — un duo
  *  jour/mois impossible (ex : 31/02) n'est JAMAIS émis : un message
@@ -210,13 +312,28 @@ function DateInputs({
       : invalidDay
         ? "Ce jour n'existe pas pour ce mois — corrigez le jour ou le mois."
         : null;
+  // Listes déroulantes des segments (v11) :
+  //  - jour : 1..31, ou borné au mois choisi quand il est valide
+  //    (février 28/29, mois à 30…) — impossible de choisir 31/02 ;
+  //  - mois : 01..12 ;
+  //  - année : la plage du champ (décroissante — la plus récente en tête).
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const maxDay =
+    mOk && yOk
+      ? daysInMonth(Number(parts.m), Number(parts.y))
+      : mOk
+        ? daysInMonth(Number(parts.m), 2001)
+        : 31;
+  const dayItems = Array.from({ length: maxDay }, (_, i) => pad2(i + 1));
+  const monthItems = Array.from({ length: 12 }, (_, i) => pad2(i + 1));
+  const yearItems = years.map(String);
   return (
     <div className="space-y-1 min-w-0">
       <Label htmlFor={id} className="text-[11px] leading-tight block">
         {label}
       </Label>
       <div className="flex gap-1.5" id={id}>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-0.5">
           <Input
             aria-label={`${label} — jour`}
             inputMode="numeric"
@@ -225,8 +342,14 @@ function DateInputs({
             value={parts.d}
             onChange={(e) => set("d", e.target.value)}
           />
+          <PartCombo
+            part="d"
+            label="Jour"
+            items={dayItems}
+            onPick={(v) => set("d", v)}
+          />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-0.5">
           <Input
             aria-label={`${label} — mois`}
             inputMode="numeric"
@@ -235,8 +358,14 @@ function DateInputs({
             value={parts.m}
             onChange={(e) => set("m", e.target.value)}
           />
+          <PartCombo
+            part="m"
+            label="Mois"
+            items={monthItems}
+            onPick={(v) => set("m", v)}
+          />
         </div>
-        <div className="flex-[1.3] min-w-0">
+        <div className="flex-[1.3] min-w-0 flex items-center gap-0.5">
           <Input
             aria-label={`${label} — année`}
             inputMode="numeric"
@@ -244,6 +373,12 @@ function DateInputs({
             className={cell}
             value={parts.y}
             onChange={(e) => set("y", e.target.value)}
+          />
+          <PartCombo
+            part="y"
+            label="Année"
+            items={yearItems}
+            onPick={(v) => set("y", v)}
           />
         </div>
       </div>

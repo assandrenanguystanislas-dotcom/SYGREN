@@ -41,6 +41,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SchoolCombobox } from "@/components/school-combobox";
+import {
+  EntityCombobox,
+  type ComboItem,
+} from "@/components/entity-combobox";
 import { cn } from "@/lib/utils";
 
 // === Module Bulletins — impression A5 (modèle officiel CI) ===
@@ -221,22 +226,18 @@ export function BulletinsView() {
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <SchoolIcon className="w-3 h-3" /> École
                 </label>
-                <Select value={schoolFilter} onValueChange={(v) => {
-                  setSchoolFilter(v);
-                  setSelectedSessionId(undefined);
-                  setClassFilter("all");
-                }}>
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schools.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* v11 — bande déroulante scrollable + recherche
+                    (lettres du nom ou code ministériel) */}
+                <SchoolCombobox
+                  schools={schools}
+                  value={schoolFilter}
+                  onChange={(v) => {
+                    setSchoolFilter(v);
+                    setSelectedSessionId(undefined);
+                    setClassFilter("all");
+                  }}
+                  placeholder="Choisir une école…"
+                />
               </div>
             ) : (
               <div className="space-y-1.5 min-w-[180px] flex-1 max-w-[300px] min-w-0">
@@ -300,24 +301,31 @@ export function BulletinsView() {
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <Users className="w-3 h-3" /> Classe
                 </label>
-                <Select value={classFilter} onValueChange={setClassFilter}>
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Toutes les classes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Toutes les classes</SelectItem>
-                    {releveClasses.map((c) => (
-                      <SelectItem
-                        key={c.id}
-                        value={c.id}
-                        disabled={c.exempted}
-                      >
-                        {c.name} ({c.student_count} élève{c.student_count > 1 ? "s" : ""})
-                        {c.exempted ? " — Exemptée" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* v11 — bande déroulante + recherche ; les classes
+                    exemptées restent visibles mais non sélectionnables */}
+                <EntityCombobox
+                  items={releveClasses.map(
+                    (c): ComboItem => ({
+                      value: c.id,
+                      label: c.name,
+                      right: (
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {c.student_count} élève{c.student_count > 1 ? "s" : ""}
+                          {c.exempted ? " — Exemptée" : ""}
+                        </span>
+                      ),
+                      disabled: c.exempted,
+                    }),
+                  )}
+                  value={classFilter}
+                  onChange={setClassFilter}
+                  allowEmpty
+                  emptyValue="all"
+                  emptyLabel="Toutes les classes"
+                  placeholder="Toutes les classes"
+                  emptyText="Aucune classe dans cette session."
+                  groupLabel="Classes de la session"
+                />
               </div>
             )}
           </div>
