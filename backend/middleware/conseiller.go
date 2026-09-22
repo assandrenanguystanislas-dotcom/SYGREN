@@ -39,8 +39,27 @@ import (
 //	/api/pda/*                       → plan d'action pluriannuel (GET)
 //
 // NB : les routes d'ÉCRITURE de ces familles restent protégées par
-// RequireModule (students/schools/sessions/grades… :write) — la matrice v6
+// RequireModule (schools/sessions/grades… :write) — la matrice v6
 // n'accorde au conseiller AUCUNE écriture (défense en profondeur).
+//
+// === v8 (session 40) — CORRECTION des inscriptions de son secteur ===
+//
+// Demande utilisateur : « je n'arrive pas à faire des corrections sur des
+// erreurs faites par les directeurs et leurs adjoints. exemple sur des
+// inscriptions ». Le conseiller voit les erreurs de saisie dans les
+// documents de son secteur (v6) sans pouvoir les corriger : la liste
+// blanche est étendue au module Élèves :
+//
+//	/api/students, /api/students/* → élèves de son secteur (scope
+//	handler) ; la MISE À JOUR (PUT) est bornée dans UpdateStudent
+//	(élève ET classe cible du secteur) ; les routes de création /
+//	suppression / import restent refusées par les HANDLERS (403
+//	explicites — la correction n'inclut ni inscription ni suppression).
+//
+// La matrice v8 accorde au conseiller students:read + students:write
+// (nécessaire au PUT, qui contrôle rbac.CanWrite) ; le périmètre et les
+// interdits fins sont appliqués dans les handlers (défense en profondeur,
+// la matrice restant modifiable à chaud).
 //
 // Toute autre route renvoie un 403 explicite, que la matrice RBAC
 // l'autorise ou non (défense en profondeur — la matrice reste modifiable
@@ -61,11 +80,16 @@ func ConseillerScope(next http.Handler) http.Handler {
 					p == "/api/schools" ||
 					p == "/api/sessions" ||
 					p == "/api/classes" ||
+					// v8 — correction des inscriptions de
+					// son secteur (scope + interdits dans
+					// les handlers students).
+					p == "/api/students" ||
+					strings.HasPrefix(p, "/api/students/") ||
 					strings.HasPrefix(p, "/api/computation/") ||
 					strings.HasPrefix(p, "/api/reports/") ||
 					strings.HasPrefix(p, "/api/pda/")
 			if !allowed {
-				JSONError(w, "accès refusé : le conseiller accède uniquement à sa vue « Mon Secteur » et à la consultation des documents de son secteur", http.StatusForbidden)
+				JSONError(w, "accès refusé : le conseiller accède uniquement à sa vue « Mon Secteur », à la consultation des documents de son secteur et à la correction des inscriptions de son secteur", http.StatusForbidden)
 				return
 			}
 		}

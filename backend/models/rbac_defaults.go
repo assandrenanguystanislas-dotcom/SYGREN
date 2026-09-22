@@ -71,6 +71,30 @@ package models
 //     retirer la main (même via l'UI Permissions, la ligne Super Admin
 //     est verrouillée lecture+écriture partout).
 //
+// === v8 (session 40 — le conseiller CORRIGE les inscriptions de son secteur) ===
+//
+//   Demande utilisateur : « je n'arrive pas à faire des corrections sur des
+//   erreurs faites par les directeurs et leurs adjoints. exemple sur des
+//   inscriptions ». Depuis la v6 le conseiller CONSULTE les documents
+//   officiels de son secteur (synthèses, relevés, bulletins…) — il y voit
+//   des erreurs de saisie (nom, prénoms, naissance, classe d'inscription…)
+//   sans aucun moyen de les corriger : le module Élèves lui était fermé
+//   (matrice false/false + middleware ConseillerScope). Le conseiller
+//   obtient désormais lecture + ÉCRITURE sur le module Élèves, bornée par
+//   le PÉRIMÈTRE SECTORIEL appliqué dans les HANDLERS :
+//
+//   - ListStudents : élèves des écoles de SON secteur (sous-requête) ;
+//   - UpdateStudent : l'élève ET la classe cible doivent appartenir à son
+//     secteur (la CORRECTION peut inclure le déplacement d'un élève vers
+//     la bonne classe et la rectification du matricule) ;
+//   - CreateStudent / BulkCreateStudents / DeleteStudent : 403 explicite —
+//     la CORRECTION n'inclut ni l'inscription ni la suppression (défense
+//     en profondeur, la matrice restant binaire) ;
+//   - middleware ConseillerScope : liste blanche étendue à /api/students.
+//
+//   Les autres modules de données restent fermés au conseiller (matrice
+//   v6 inchangée pour classes/sessions/grades : lecture seule ou rien).
+//
 // La matrice MIRRORS the RequireModule(...) calls in router.go. After seed,
 // every dynamic permission check returns the intended result. The super
 // admin can then edit the matrix via the /api/permissions UI.
@@ -84,7 +108,7 @@ const (
 	ModuleIEP             = "iep"              // admin+inspector
 	ModuleSchools         = "schools"          // write: admin+inspector
 	ModuleClasses         = "classes"          // write: admin+inspector+director
-	ModuleStudents        = "students"         // v2 write: admin+inspector+director+TEACHER
+	ModuleStudents        = "students"         // v2 write: admin+inspector+director+TEACHER — v8: conseiller (correction sectorielle, handlers)
 	ModuleUsersTeachers   = "users.teachers"   // write: admin+inspector+director+teacher(self, v3)
 	ModuleUsersDirectors  = "users.directors"  // write: admin+inspector+director(self) — v4 : l'adjoint n'y accède pas
 	ModuleUsersInspectors = "users.inspectors" // write+read: admin only
@@ -113,7 +137,10 @@ const (
 // soient re-synchronisées au démarrage.
 // v7 : la main TOTALE au Super Admin — lecture + écriture sur TOUS les
 // modules de données, irréductible (session 41).
-const RbacMatrixVersion = 7
+// v8 : le conseiller obtient lecture + écriture sur le module Élèves
+// (correction des inscriptions de son secteur — périmètre dans les
+// handlers).
+const RbacMatrixVersion = 8
 
 // RbacMatrixVersionKey — clé du setting stockant la version appliquée.
 const RbacMatrixVersionKey = "rbac.matrix_version"
@@ -333,6 +360,18 @@ func DefaultRoleModules() []DefaultRoleModuleSeed {
 	// ConseillerScope). L'impression reste verrouillée (print-guard).
 	out = setDefault(out, RoleConseiller, ModuleReports, true, false)
 	out = setDefault(out, RoleConseiller, ModuleReportCards, true, false)
+	// --- v8 (session 40) — CORRECTION des inscriptions de son secteur ---
+	// Demande : « je n'arrive pas à faire des corrections sur des erreurs
+	// faites par les directeurs et leurs adjoints. exemple sur des
+	// inscriptions ». Le conseiller voit les erreurs dans les documents
+	// (v6) sans pouvoir les corriger : il obtient lecture + écriture sur
+	// le module Élèves. Le PÉRIMÈTRE SECTORIEL est appliqué dans les
+	// handlers (ListStudents sous-requête secteur ; UpdateStudent exige
+	// élève ET classe cible de son secteur) et la CORRECTION ne couvre
+	// NI création NI suppression (403 explicites dans les handlers —
+	// CreateStudent / BulkCreateStudents / DeleteStudent). Le middleware
+	// ConseillerScope liste /api/students (défense en profondeur).
+	out = setDefault(out, RoleConseiller, ModuleStudents, true, true)
 	// CRUD des comptes conseillers (Utilisateurs > onglet Conseillers) :
 	// admin + inspector. L'affectation des conseillers AUX secteurs passe
 	// par le module Écoles > SECTEURS D'ECOLES (schools write, comme les

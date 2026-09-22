@@ -195,16 +195,24 @@ export function StudentsView() {
   // isAdmin : voit toutes les écoles (filtre École actif)
   // isDirector : son école est pré-sélectionnée (filtre École désactivé)
   // isTeacher : pas de filtre du tout, sa classe s'affiche directement
+  // isConseiller : filtre École actif (backend scoppé à SON secteur)
   const isAdmin = user?.role === "admin";
   const isDirector = user?.role === "director";
   const isTeacher = user?.role === "teacher";
+  const isConseiller = user?.role === "conseiller";
   // Gestion (inscrire / importer Excel / supprimer) : admin + director.
+  // v8 (session 40) : le CONSEILLER n'y a pas droit — il corrige les
+  // inscriptions existantes de son secteur, il ne crée ni ne supprime.
   const canManage = isAdmin || isDirector;
   // MODIFICATION (correction d'une erreur de saisie) : admin + director +
   // teacher — le tenant du cours peut corriger les élèves de SA classe
   // (nom, prénoms, année de naissance…) ; le scope est vérifié par le
   // backend (élève de sa classe uniquement, classe et matricule figés).
-  const canEdit = canManage || isTeacher;
+  // v8 (session 40) — demande : « je n'arrive pas à faire des corrections
+  // sur des erreurs faites par les directeurs et leurs adjoints. exemple
+  // sur des inscriptions » : le CONSEILLER corrige les élèves des écoles
+  // de SON secteur (scope backend : élève ET classe cible du secteur).
+  const canEdit = canManage || isTeacher || isConseiller;
 
   // === Filtres en cascade stricte ===
   // - admin : schoolFilter démarre à "" (vide) → doit choisir une école
@@ -233,18 +241,19 @@ export function StudentsView() {
   const [importQueue, setImportQueue] = useState<ParsedStudent[] | null>(null);
   const [queueIdx, setQueueIdx] = useState(0);
 
-  // === Écoles (admin seulement) ===
+  // === Écoles (admin : toutes ; conseiller : SON secteur — scope backend,
+  // handler ListSchools v6) ===
   const { data: schoolsData } = useQuery({
     queryKey: ["schools"],
     queryFn: () => schoolsApi.list(),
-    enabled: isAdmin,
+    enabled: isAdmin || isConseiller,
   });
 
   // === Classes : filtrées par école sélectionnée ===
   // Cascade stricte : on ne charge les classes QUE si une école est choisie
-  // (admin) ou si l'utilisateur est director/teacher (école implicite).
-  // Tant que schoolFilter est vide (admin n'a rien choisi), on ne charge
-  // rien → le select classe reste désactivé et vide.
+  // (admin ou conseiller) ou si l'utilisateur est director/teacher (école
+  // implicite). Tant que schoolFilter est vide, on ne charge rien → le
+  // select classe reste désactivé et vide.
   const hasSchoolSelected = schoolFilter !== "" && schoolFilter !== "all";
   const { data: classesData } = useQuery({
     queryKey: ["classes", "students-view", schoolFilter],
@@ -252,15 +261,19 @@ export function StudentsView() {
       classesApi.list({
         schoolId: hasSchoolSelected ? schoolFilter : undefined,
       }),
-    // enabled si : admin a choisi une école, OU director (son école est figée),
-    // OU teacher (le backend filtre par teacher_id — pas besoin d'école).
-    enabled: isTeacher || (isDirector && !!user?.school_id) || (isAdmin && hasSchoolSelected),
+    // enabled si : admin ou conseiller a choisi une école, OU director (son
+    // école est figée), OU teacher (le backend filtre par teacher_id — pas
+    // besoin d'école). Le conseiller ne reçoit que les classes de son
+    // secteur (handler ListClasses v6).
+    enabled: isTeacher || (isDirector && !!user?.school_id) || ((isAdmin || isConseiller) && hasSchoolSelected),
   });
 
   // === Élèves : le backend filtre déjà par rôle (RBAC) ===
   // - admin : doit avoir choisi une école (sinon pas de liste — cascade stricte)
   // - director : élèves de son école (école figée)
   // - teacher : élèves de sa classe (teacher_id = classes.teacher_id)
+  // - conseiller (v8) : élèves des écoles de SON secteur — cascade stricte
+  //   comme l'admin : il choisit d'abord une école de son secteur.
   // On passe classFilter au backend pour filtrer côté serveur (plus performant
   // que de filtrer côté client sur de grosses listes).
   const { data, isLoading, error, refetch } = useQuery({
@@ -270,9 +283,10 @@ export function StudentsView() {
         classId: classFilter !== "all" ? classFilter : undefined,
         schoolId: schoolFilter || undefined,
       }),
-    // Cascade stricte : admin doit avoir choisi une école pour charger les
-    // élèves. Director et teacher ont toujours leur scope (RBAC backend).
-    enabled: isTeacher || isDirector || (isAdmin && hasSchoolSelected),
+    // Cascade stricte : admin et conseiller doivent avoir choisi une école
+    // pour charger les élèves. Director et teacher ont toujours leur scope
+    // (RBAC backend).
+    enabled: isTeacher || isDirector || ((isAdmin || isConseiller) && hasSchoolSelected),
   });
 
   const queryClient = useQueryClient();
@@ -389,9 +403,11 @@ export function StudentsView() {
   const allStudents = data?.students ?? [];
   const classes = classesData?.classes ?? [];
   const schools = (schoolsData?.schools ?? []) as SchoolWithStats[];
-  // Cascade stricte : admin doit choisir une école avant de voir quoi que ce
-  // soit. Director et teacher ont toujours leur scope (RBAC backend).
-  const waitingForSchool = isAdmin && !hasSchoolSelected;
+  // Cascade stricte : admin et conseiller doivent choisir une école avant de
+  // voir quoi que ce soit (le conseiller ne voit que les écoles de son
+  // secteur — le dropdown est alimenté par le backend scoped v6). Director
+  // et teacher ont toujours leur scope (RBAC backend).
+  const waitingForSchool = (isAdmin || isConseiller) && !hasSchoolSelected;
 
   // === Liste des candidats (document officiel « LISTE DES CANDIDATS ...
   // A L'EXAMEN DU CEPE », A4 paysage — image reçue de l'utilisateur) ===
@@ -475,6 +491,7 @@ export function StudentsView() {
                     : `${allStudents.length} élève(s) affiché(s)`
                       + (isTeacher ? " · votre classe" : "")
                       + (isDirector ? ` · ${directorSchoolName}` : "")
+                      + (isConseiller ? " · écoles de votre secteur" : "")
                       + (isAdmin ? " · matricule fourni par le Ministère" : "")}
                 </p>
               </div>
@@ -520,15 +537,17 @@ export function StudentsView() {
               )}
             </div>
           </div>
-          {/* === Filtres en cascade (admin + director seulement) ===
+          {/* === Filtres en cascade (admin + conseiller + director) ===
               - admin : École (toutes) → Classe (cascade selon école)
+              - conseiller (v8) : École (SON secteur — backend scoped) → Classe
               - director : École (figée = son école, désactivé) → Classe
               - teacher : aucun filtre (sa classe est chargée automatiquement
                 par le backend via RBAC teacher_id) */}
-          {(isAdmin || isDirector) && (
+          {(isAdmin || isConseiller || isDirector) && (
             <div className="flex flex-wrap items-end gap-3">
-              {/* Filtre École (admin: actif, director: désactivé/figé) */}
-              {isAdmin && (
+              {/* Filtre École (admin: toutes ; conseiller: son secteur —
+                  backend scoped ; director: désactivé/figé) */}
+              {(isAdmin || isConseiller) && (
                 <div className="space-y-1.5 min-w-[200px] flex-1 max-w-[300px] min-w-0">
                   <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <SchoolIcon className="w-3 h-3" /> École

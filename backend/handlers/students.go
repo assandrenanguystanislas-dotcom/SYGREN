@@ -47,6 +47,19 @@ func ListStudents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		query = query.Where("classes.school_id = ?", schoolID)
+	case models.RoleConseiller:
+		// v8 (session 40) — correction des inscriptions : les élèves
+		// des écoles de SON secteur (sous-requête IN, même modèle que
+		// ListClasses — les colonnes des deux tables rendraient un
+		// JOIN de sous-requête ambigu). Aucun secteur → liste vide.
+		sectorID := conseillerSectorID(r)
+		if sectorID == "" {
+			jsonResponse(w, http.StatusOK, map[string]interface{}{"students": []interface{}{}, "count": 0})
+			return
+		}
+		query = query.Where("classes.school_id IN (?)",
+			database.DB.Model(&models.School{}).
+				Select("id").Where("sector_id = ?", sectorID))
 	case "teacher":
 		userID := ctxUserID(r)
 		query = query.Where("classes.teacher_id = ?", userID)
@@ -373,6 +386,16 @@ func applyDecisionConseilUpdate(in *string, dst **string) error {
 // Le matricule est fourni par le Ministère de l'Éducation ; il est optionnel.
 // Si absent → NULL en base (affiché "N/A" côté frontend).
 func CreateStudent(w http.ResponseWriter, r *http.Request) {
+	// v8 (session 40) — la CORRECTION (PUT) est ouverte au conseiller
+	// (périmètre sectoriel), mais PAS l'inscription de nouveaux élèves
+	// (défense en profondeur : la matrice students:write est binaire,
+	// l'interdit fin est appliqué ici — même modèle que la v4). Le
+	// directeur/adjoint de l'école corrige ses propres données, l'admin
+	// et l'admin IEP inscrivent si nécessaire.
+	if role := ctxRole(r); role == models.RoleConseiller {
+		middleware.JSONError(w, "accès refusé : le conseiller corrige les inscriptions existantes de son secteur — l'inscription d'un nouvel élève reste du ressort de l'école", http.StatusForbidden)
+		return
+	}
 	var req CreateStudentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
@@ -542,6 +565,26 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// v8 (session 40) — scope conseiller : l'élève doit appartenir à une
+	// école du SECTEUR du conseiller (élève → classe → école → sector_id).
+	// La CORRECTION peut inclure le déplacement vers une autre classe et
+	// la rectification du matricule ; la classe CIBLE d'un éventuel
+	// déplacement est validée plus bas (même périmètre).
+	if role == models.RoleConseiller {
+		sectorID := conseillerSectorID(r)
+		var cls models.Class
+		if err := database.DB.First(&cls, "id = ?", student.ClassID).Error; err != nil {
+			middleware.JSONError(w, "classe introuvable", http.StatusNotFound)
+			return
+		}
+		var school models.School
+		if err := database.DB.First(&school, "id = ?", cls.SchoolID).Error; err != nil ||
+			sectorID == "" || school.SectorID == nil || *school.SectorID != sectorID {
+			middleware.JSONError(w, "accès refusé : élève hors de votre secteur", http.StatusForbidden)
+			return
+		}
+	}
+
 	if req.FirstName != "" {
 		student.FirstName = req.FirstName
 	}
@@ -552,6 +595,23 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		student.Gender = req.Gender
 	}
 	if req.ClassID != "" {
+		// v8 — conseiller : la classe cible d'un déplacement doit
+		// aussi appartenir à SON secteur (pas de transfert hors
+		// secteur, même involontaire).
+		if role == models.RoleConseiller {
+			sectorID := conseillerSectorID(r)
+			var targetCls models.Class
+			if err := database.DB.First(&targetCls, "id = ?", req.ClassID).Error; err != nil {
+				middleware.JSONError(w, "classe cible introuvable", http.StatusNotFound)
+				return
+			}
+			var targetSchool models.School
+			if err := database.DB.First(&targetSchool, "id = ?", targetCls.SchoolID).Error; err != nil ||
+				sectorID == "" || targetSchool.SectorID == nil || *targetSchool.SectorID != sectorID {
+				middleware.JSONError(w, "accès refusé : classe cible hors de votre secteur", http.StatusForbidden)
+				return
+			}
+		}
 		student.ClassID = req.ClassID
 	}
 	if req.Matricule != nil {
@@ -663,6 +723,14 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 // puis réimportés étaient invisibles dans l'historique ; la main totale
 // du super admin s'accompagne de la trace de TOUTES les modifications).
 func DeleteStudent(w http.ResponseWriter, r *http.Request) {
+	// v8 (session 40) — la CORRECTION (PUT) est ouverte au conseiller
+	// (périmètre sectoriel), mais PAS la suppression : un doublon ou une
+	// inscription erronée se traite avec l'école ou l'IEP (défense en
+	// profondeur — même modèle que CreateStudent).
+	if role := ctxRole(r); role == models.RoleConseiller {
+		middleware.JSONError(w, "accès refusé : le conseiller corrige les inscriptions existantes de son secteur — la suppression reste du ressort de l'école ou de l'IEP", http.StatusForbidden)
+		return
+	}
 	id := chi.URLParam(r, "id")
 
 	var student models.Student
