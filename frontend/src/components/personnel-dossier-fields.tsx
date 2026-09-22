@@ -55,7 +55,7 @@ import {
   Cake,
   CalendarDays,
   IdCard,
-  ChevronsUpDown,
+  ChevronDown,
 } from "lucide-react";
 
 import type { PersonnelDossier } from "@/lib/types";
@@ -176,7 +176,10 @@ function PartCombo({
           title={`${label} — choisir dans la liste`}
           className="h-7 w-6 shrink-0 text-muted-foreground hover:text-foreground"
         >
-          <ChevronsUpDown className="h-3.5 w-3.5" />
+          {/* Même chevron ↓ que l'ancien <Select> — un seul contrôle :
+              le champ JJ/MM/AAAA garde sa saisie clavier et ce chevron
+              déroule la liste au même titre. */}
+          <ChevronDown className="h-3.5 w-3.5" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-28 p-0" align="start">

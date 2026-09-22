@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -15,24 +15,20 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * EntityCombobox (v11 — demande utilisateur) — LE contrôle de sélection
- * à DEUX MODES, né de la consigne : « je souhaite que les bandes
- * déroulantes restent ; on pourra faire avec les deux exemples ;
- * permettre aussi qu'on puisse utiliser la bande déroulante ; étendre
- * le même traitement ailleurs ».
+ * EntityCombobox (v11 — demande utilisateur) — UN SEUL CONTRÔLE de
+ * sélection, à usage unique : choisir une entité. Tout est dans le
+ * même contrôle :
  *
- * MODE 1 — LA BANDE DÉROULANTE : le bouton (chevron) ouvre la liste
- * COMPLÈTE, immédiatement scrollable à la souris/molette, comme un
- * <Select> classique. Rien à taper : on parcourt, on clique.
+ * - Le BOUTON (chevron ↓ comme l'ancien <Select>) ouvre la liste
+ *   COMPLÈTE, défilable à la souris/molette — « comme avant » ;
+ * - Le CHAMP en haut de la liste accepte les premières lettres du
+ *   libellé (insensible à la casse et aux accents, É → e) OU les
+ *   CHIFFRES (mots-clés : code ministériel de l'école…) — « le nom
+ *   voulu apparaît ». Effacer le champ rend la liste complète.
  *
- * MODE 2 — LA SAISIE : le champ en haut filtre la liste au fil des
- * lettres du libellé (insensible à la casse et aux accents, É → e) et
- * des CHIFFRES (mots-clés : code ministériel de l'école…).
- *
- * Un seul contrôle remplace donc l'ancien <Select> ET l'autocomplétion
- * (v9) : « les deux exemples » cohabitent. Utilisé pour les écoles
- * (~100 entrées), les classes, et toute liste trop longue pour un
- * parcours à l'œil.
+ * Pas de second contrôle à côté : le champ de recherche N'EXISTE QUE
+ * dans la liste ouverte. Utilisé pour les écoles (~100 entrées), les
+ * classes, et toute liste trop longue pour un parcours à l'œil.
  */
 
 /** Minuscule + suppression des diacritiques (comparaison É = e). */
@@ -124,7 +120,10 @@ export function EntityCombobox({
               {selected ? selected.label : placeholder}
             </span>
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          {/* Même chevron ↓ que l'ancien <Select> — l'ouverture révèle
+              le champ de recherche ET la liste complète : un seul
+              contrôle, aucun choix de mode à faire. */}
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -188,12 +187,6 @@ export function EntityCombobox({
             </CommandGroup>
           </CommandList>
         </Command>
-        {/* Rappel des deux modes — la liste reste utilisable SANS rien
-            taper (molette), la saisie n'est qu'un raccourci. */}
-        <p className="border-t px-3 py-2 text-[10px] leading-tight text-muted-foreground">
-          Parcourez la liste à la souris, ou tapez les premières lettres /
-          chiffres pour filtrer.
-        </p>
       </PopoverContent>
     </Popover>
   );
