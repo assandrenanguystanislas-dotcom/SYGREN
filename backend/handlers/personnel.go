@@ -189,11 +189,16 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 	}
 
 	effectifs := [3]*int{}
+	// v9 (session 41) — le TOTAL (T) est désormais CALCULÉ côté frontend
+	// (T = F + G, demande : « le calcul des totaux peut être automatique ») :
+	// son plafond passe à F_max + G_max = 1998 pour accepter toute somme
+	// cohérente de deux effectifs valides (F et G restent plafonnés à 999).
 	for i, f := range []struct {
 		n   *int
 		lbl string
-	}{{in.EffectifF, "l'effectif F"}, {in.EffectifG, "l'effectif G"}, {in.EffectifT, "l'effectif T"}} {
-		v, err := cleanDossierInt(f.n, 0, 999, f.lbl)
+		cap int
+	}{{in.EffectifF, "l'effectif F", 999}, {in.EffectifG, "l'effectif G", 999}, {in.EffectifT, "l'effectif T", 1998}} {
+		v, err := cleanDossierInt(f.n, 0, f.cap, f.lbl)
 		if err != nil {
 			return err
 		}
@@ -203,8 +208,9 @@ func (in *PersonnelDossierInput) applyTo(u *models.User) error {
 	for i, f := range []struct {
 		n   *int
 		lbl string
-	}{{in.RedoublantF, "les redoublants F"}, {in.RedoublantG, "les redoublants G"}, {in.RedoublantT, "les redoublants T"}} {
-		v, err := cleanDossierInt(f.n, 0, 999, f.lbl)
+		cap int
+	}{{in.RedoublantF, "les redoublants F", 999}, {in.RedoublantG, "les redoublants G", 999}, {in.RedoublantT, "les redoublants T", 1998}} {
+		v, err := cleanDossierInt(f.n, 0, f.cap, f.lbl)
 		if err != nil {
 			return err
 		}

@@ -248,24 +248,34 @@ function DateSelects({
   );
 }
 
-/** Trois saisies numériques F / G / T (effectif ou redoublants du cours). */
+/** v9 — TOTAL AUTOMATIQUE (demande utilisateur : « le calcul des totaux
+ *  peut être automatique ») : T = F + G. F et G vides → T vide ; sinon
+ *  la somme des valeurs saisies (0 pour un champ vide). */
+export function fgtTotal(
+  f: number | null | undefined,
+  g: number | null | undefined,
+): number | null {
+  if (f == null && g == null) return null;
+  return (f ?? 0) + (g ?? 0);
+}
+
+/** Deux saisies numériques F / G + TOTAL T CALCULÉ en lecture seule
+ *  (effectif ou redoublants du cours) — le total suit les saisies en
+ *  temps réel et n'est plus éditable (plus d'incohérence F+G ≠ T). */
 function FGTInputs({
   label,
   f,
   g,
-  t,
   onF,
   onG,
-  onT,
 }: {
   label: string;
   f: number | null | undefined;
   g: number | null | undefined;
-  t: number | null | undefined;
   onF: (v: number | null) => void;
   onG: (v: number | null) => void;
-  onT: (v: number | null) => void;
 }) {
+  const t = fgtTotal(f, g);
   const cell = (v: number | null | undefined, on: (v: number | null) => void, cap: string) => (
     <div className="flex-1 min-w-0">
       <Input
@@ -290,12 +300,26 @@ function FGTInputs({
       <div className="flex gap-1.5">
         {cell(f, onF, "F")}
         {cell(g, onG, "G")}
-        {cell(t, onT, "T")}
+        {/* T — AUTOMATIQUE (F + G) : lecture seule, style atténué. */}
+        <div className="flex-1 min-w-0">
+          <Input
+            type="number"
+            aria-label={`${label} T (automatique : F + G)`}
+            value={t ?? ""}
+            readOnly
+            tabIndex={-1}
+            title="Automatique : F + G"
+            placeholder="—"
+            className="h-8 text-xs px-2 w-full bg-muted/50 text-muted-foreground cursor-default"
+          />
+        </div>
       </div>
       <div className="flex gap-1.5 text-[10px] text-muted-foreground text-center">
         <span className="flex-1">F</span>
         <span className="flex-1">G</span>
-        <span className="flex-1">T</span>
+        <span className="flex-1" title="Total automatique : F + G">
+          T = F + G
+        </span>
       </div>
     </div>
   );
@@ -569,25 +593,30 @@ export function PersonnelDossierFields({
         <div className="hidden sm:block" />
       </div>
 
-      {/* Effectif + Redoublants (F / G / T du document) */}
+      {/* Effectif + Redoublants (F / G du document — T calculé automatiquement,
+          v9 : « le calcul des totaux peut être automatique ») */}
       <div className="grid grid-cols-2 gap-2.5">
         <FGTInputs
           label="Effectif"
           f={value.effectif_f}
           g={value.effectif_g}
-          t={value.effectif_t}
-          onF={(v) => onChange({ ...value, effectif_f: v })}
-          onG={(v) => onChange({ ...value, effectif_g: v })}
-          onT={(v) => onChange({ ...value, effectif_t: v })}
+          onF={(v) =>
+            onChange({ ...value, effectif_f: v, effectif_t: fgtTotal(v, value.effectif_g) })
+          }
+          onG={(v) =>
+            onChange({ ...value, effectif_g: v, effectif_t: fgtTotal(value.effectif_f, v) })
+          }
         />
         <FGTInputs
           label="Redoublants"
           f={value.redoublant_f}
           g={value.redoublant_g}
-          t={value.redoublant_t}
-          onF={(v) => onChange({ ...value, redoublant_f: v })}
-          onG={(v) => onChange({ ...value, redoublant_g: v })}
-          onT={(v) => onChange({ ...value, redoublant_t: v })}
+          onF={(v) =>
+            onChange({ ...value, redoublant_f: v, redoublant_t: fgtTotal(v, value.redoublant_g) })
+          }
+          onG={(v) =>
+            onChange({ ...value, redoublant_g: v, redoublant_t: fgtTotal(value.redoublant_f, v) })
+          }
         />
       </div>
 
@@ -641,10 +670,12 @@ export function personnelOf(u: {
     date_arrivee_poste: isoDate(u.date_arrivee_poste),
     effectif_f: u.effectif_f ?? null,
     effectif_g: u.effectif_g ?? null,
-    effectif_t: u.effectif_t ?? null,
+    // v9 — T CALCULÉ (F + G) : le dossier ouvert affiche le total exact
+    // et l'enregistrement converge (plus d'incohérence F+G ≠ T stockée).
+    effectif_t: fgtTotal(u.effectif_f, u.effectif_g),
     redoublant_f: u.redoublant_f ?? null,
     redoublant_g: u.redoublant_g ?? null,
-    redoublant_t: u.redoublant_t ?? null,
+    redoublant_t: fgtTotal(u.redoublant_f, u.redoublant_g), // v9 — T calculé
   };
 }
 
