@@ -4732,3 +4732,36 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 - Simulation Neon (`scripts/sim_scope_conseiller_40.py`) : BADIA 373 élèves / 9 écoles, BOUBOURY 173/13, COSROU 439/16, VIEUX-BADIEN 132/12, LEBOUTOU-OUSROU-TOUPAH 0 (aucune inscription) ; 2 conseillers sans secteur → 0 ; 0 élève d'école non affectée masqué.
 - push → Render **LIVE fc2fb90** + Vercel **READY fc2fb90** ; `/api/health` 200.
 - Neon après déploiement : `rbac.matrix_version` = 8 ; conseiller students read=True / write=True confirmés (re-seed automatique).
+
+---
+
+## Task 41 — Autocomplétion de l'école + totaux d'effectifs automatiques
+
+**Demande utilisateur** : « dans le formulaire modifier un directeur ou un adjoint, on pourra écrire les premières lettres ou les chiffres et le nom voulu apparaît. aussi au niveau des effectifs, le calcul des totaux peut être automatique ».
+
+### Réalisation (commits `59e0e69` + `519f8d3`)
+- **SchoolCombobox** (`frontend/src/components/school-combobox.tsx`, cmdk + Popover) : saisie filtrée au fil des lettres du NOM ou par CODE ministériel (les chiffres), insensible casse/accents (NFD), code affiché à droite, « Aucune école ne correspond » — remplace le `<Select>` à ~124 écoles dans « Modifier/Créer un directeur » (École dirigée) et « Modifier/Créer un adjoint(e) » (École). Les filtres de liste gardent leurs Select.
+- **Totaux automatiques** (`personnel-dossier-fields.tsx`) : `fgtTotal(f,g)` — le champ T n'est plus saisi : T = F + G calculé en temps réel, affiché en lecture seule (style atténué), légende « T = F + G » ; `personnelOf()` recalcule T à l'ouverture (l'enregistrement converge les anciennes valeurs divergentes).
+- **Backend** (`handlers/personnel.go`) : plafond des champs T porté 999 → 1998 (= 999+999) pour accepter toute somme cohérente ; F et G restent plafonnés à 999.
+
+### Vérifications
+- `go build`/`go vet` OK (gofmt passé) ; `tsc --noEmit` 0 erreur ; imports `SchoolWithStats` inutilisés retirés des 2 vues.
+- push → Render **LIVE 519f8d3** + Vercel **READY 519f8d3** ; `/api/health` 200. Neon : aucun changement de données.
+
+---
+
+## Task 42 — Dates du dossier saisies au clavier (JJ / MM / AAAA)
+
+**Demande utilisateur** : « faites de même pour les dates de naissance ».
+
+### Réalisation (commit `6c88210`)
+- `DateSelects` → **`DateInputs`** (`personnel-dossier-fields.tsx`) : les 3 listes déroulantes Jour / Mois / Année (jusqu'à ~87 années à parcourir) deviennent 3 champs numériques tapés au clavier — chiffres seuls, longueur bornée (2/2/4), placeholders JJ / MM / AAAA.
+- Garde-fous conservés + renforcés : mois 01-12 (nouveau message dédié — les listes ne pouvaient pas produire 13), année dans la plage du champ (naissance 1940 → aujourd'hui ; entrées 1960 → aujourd'hui), jour réel pour le mois (bissextile géré) — une date impossible n'est JAMAIS émise (message local, zéro « date invalide » backend).
+- État local des 3 parties conservé (saisie partielle jamais écrasée par le re-render parent — leçon de la version listes) ; appliqué aux 5 dates du dossier (naissance, F.P, DREN, IEP, arrivée au poste).
+- Consts DAYS/MONTHS retirées ; commentaires d'en-tête mis à jour (v10).
+
+### Vérifications
+- Simulation Node 9/9 PASS (07/03/1996 OK · 31/02 refusé · 29/02/2024 bissextile OK · mois 13/0 refusés · année 1850 hors plage refusée · 2026 OK · saisie partielle 199 refusée · jour 0 refusé).
+- `tsc --noEmit` 0 erreur (node_modules réinstallés après reset, tsbuildinfo purgé).
+- push → Vercel **READY 6c88210** ; Render inchangé **live 519f8d3** (commit frontend seul — normal) ; front 200, `/api/health` 200.
+- Neon : aucun changement (saisie uniquement).
