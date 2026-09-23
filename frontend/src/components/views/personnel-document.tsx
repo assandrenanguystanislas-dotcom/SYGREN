@@ -77,6 +77,15 @@
 //   Excel) via le helper commun fmtFonction ; la valeur stockée reste
 //   inchangée (validation backend DIRECTEUR / ADJOINT(E)).
 //
+// v9 — LIGNES À 25 mm + DATE DU JOUR (demande utilisateur) :
+//   - Hauteur des cellules portée à 25 mm pour TOUTES les lignes
+//     numérotées À PARTIR DU N° 1 (agents + ligne libre du modèle) dans
+//     les 3 modèles — PDF : height 25mm ; Word : 70.9pt ; Excel :
+//     70.9 points — la ligne TOTAL reste compacte ;
+//   - « Date : JJ/MM/AAAA » (date du jour de génération) ajoutée SOUS
+//     « Année scolaire » dans les 3 modèles (alignée à droite comme
+//     l'année scolaire).
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -161,6 +170,14 @@ function fmtFonction(v: string | null | undefined): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+/** DATE DU JOUR (v9 — demande utilisateur) : JJ/MM/AAAA — affichée SOUS
+ *  « Année scolaire » dans les 3 modèles (PDF / Word / Excel). */
+function todayFr(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
 // Bordures du tableau en VERT DRAPEAU (inspiration bulletins individuels)
 // et entêtes sur FOND VERT DRAPEAU (texte blanc, sortent à l'impression
 // grâce à print-color-adjust: exact).
@@ -185,7 +202,10 @@ const td: CSSProperties = {
   textAlign: "center",
   verticalAlign: "middle",
   color: INK,
-  height: "18px",
+  // v9 — hauteur portée à 25 mm pour toutes les lignes numérotées à
+  // partir du N° 1 (demande utilisateur) ; la ligne TOTAL reste compacte
+  // (elle redéfinit height: "18px" ci-dessous).
+  height: "25mm",
 };
 
 /** Cellule NOM ET PRÉNOMS : session 40 — noms du personnel TOUJOURS
@@ -430,9 +450,13 @@ export function PersonnelDocument({
           <span>
             <span style={{ color: CI_GREEN_TEXT }}>Ecole</span>: {data.school.name}
           </span>
-          <span>
+          <span style={{ textAlign: "right" }}>
             <span style={{ color: CI_GREEN_TEXT }}>Année scolaire</span>: {data.annee_scolaire.split(" ")[0]}&nbsp;&nbsp;
             {data.annee_scolaire.split(" ")[1] ?? ""}
+            {/* v9 — date du jour SOUS « Année scolaire » (demande
+                utilisateur) ; alignée à droite comme l'année scolaire. */}
+            <br />
+            <span style={{ color: CI_GREEN_TEXT }}>Date</span>: {todayFr()}
           </span>
         </div>
 
@@ -578,22 +602,22 @@ export function PersonnelDocument({
                 TOTAL
               </td>
               <td style={{ border: "none", padding: 0 }} />
-              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
+              <td style={{ ...td, height: "18px", background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalEffF)}
               </td>
-              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
+              <td style={{ ...td, height: "18px", background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalEffG)}
               </td>
-              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
+              <td style={{ ...td, height: "18px", background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalEffT)}
               </td>
-              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
+              <td style={{ ...td, height: "18px", background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalRedF)}
               </td>
-              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
+              <td style={{ ...td, height: "18px", background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalRedG)}
               </td>
-              <td style={{ ...td, background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
+              <td style={{ ...td, height: "18px", background: CI_GREEN_BG, color: CI_GREEN_TEXT, fontWeight: 700 }}>
                 {fmtNum(totalRedT)}
               </td>
             </tr>
@@ -823,9 +847,13 @@ async function buildWordHtml(o: ExportData): Promise<string> {
   // une partie des classes CSS) ; bordures vert drapeau comme le PDF.
   const th =
     "border:1px solid #009E60; padding:2px 3px; font-size:12px; font-weight:bold; text-align:center; vertical-align:middle; color:#ffffff; background:#009E60;";
-  const td =
-    "border:1px solid #009E60; padding:1px 3px; font-size:12px; line-height:1.25; text-align:center; vertical-align:middle; height:18px;";
+  // v9 — lignes numérotées (à partir du N° 1) à 25 mm = 70.9pt (demande
+  // utilisateur) ; tdC — hauteur compacte réservée à la ligne TOTAL.
+  const tdBase =
+    "border:1px solid #009E60; padding:1px 3px; font-size:12px; line-height:1.25; text-align:center; vertical-align:middle;";
+  const td = `${tdBase} height:70.9pt;`;
   const tdL = td.replace("text-align:center", "text-align:left");
+  const tdC = `${tdBase} height:18px;`;
 
   // Entêtes sur 2 rangées (fusions identiques au PDF).
   const headTop =
@@ -900,7 +928,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
   // Ligne TOTAL calculée — même structure que le PDF : libellé sous les
   // colonnes DATES, effectifs puis redoublants F/G/T, fond pastel vert.
   const totalCell = (v: number | null) =>
-    `<td style="${td}; background:#E4F4ED; color:#00734A; font-weight:bold;">${esc(fmtNum(v))}</td>`;
+    `<td style="${tdC}; background:#E4F4ED; color:#00734A; font-weight:bold;">${esc(fmtNum(v))}</td>`;
   const totalRow =
     `<tr>` +
     `<td colspan=9 style="border:none;"></td>` +
@@ -955,7 +983,7 @@ ${header}
 <p style="text-align:center; margin:2px 0 6px;"><span class=titre>ETAT NOMINATIF DU<br>PERSONNEL</span></p>
 <table class=hdr><tr>
 <td style="font-size:12px;"><span style="color:#00734A;">Ecole</span>: ${esc(o.schoolName)}</td>
-<td style="font-size:12px; text-align:right; white-space:nowrap;"><span style="color:#00734A;">Ann&eacute;e scolaire</span>: ${esc(annee[0] ?? "")}&nbsp;&nbsp;${esc(annee[1] ?? "")}</td>
+<td style="font-size:12px; text-align:right; white-space:nowrap;"><span style="color:#00734A;">Ann&eacute;e scolaire</span>: ${esc(annee[0] ?? "")}&nbsp;&nbsp;${esc(annee[1] ?? "")}<br><span style="color:#00734A;">Date</span> : ${esc(todayFr())}</td>
 </tr></table>
 <table class=doc>
 <colgroup>${EXPORT_COL_WIDTHS.map((w) => `<col style="width:${w}">`).join("")}</colgroup>
@@ -1083,7 +1111,14 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   annee.value = `Année scolaire : ${(o.anneeScolaire || "").split(" ").join("  ")}`;
   annee.font = font(11, true, GREEN_TXT.argb);
   annee.alignment = { horizontal: "right", vertical: "middle" };
-  ws.getRow(7).height = 4;
+  // v9 — date du jour SOUS « Année scolaire » (demande utilisateur) —
+  // alignée à droite sur les mêmes colonnes (10-21).
+  ws.mergeCells(7, 10, 7, 21);
+  const dateCell = ws.getCell(7, 10);
+  dateCell.value = `Date : ${todayFr()}`;
+  dateCell.font = font(11, true, GREEN_TXT.argb);
+  dateCell.alignment = { horizontal: "right", vertical: "middle" };
+  ws.getRow(7).height = 14;
 
   // --- Entêtes du tableau (2 rangées, fusions comme le PDF) ---
   // Entêtes fusionnés verticalement (N° → Fonction, Cours, Contact,
@@ -1156,7 +1191,9 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       fmtContact(s.phone),
       "",
     ];
-    row.height = 16;
+    // v9 — lignes numérotées (à partir du N° 1) à 25 mm ≈ 70.9 points
+    // (demande utilisateur).
+    row.height = 70.9;
     row.eachCell({ includeEmpty: true }, (c, col) => {
       c.border = BOX;
       // Femmes EN ROUGE sur la colonne NOM (N.B du modèle).
@@ -1173,7 +1210,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   const rEmpty = HEAD_END + 1 + o.staff.length;
   const emptyRow = ws.getRow(rEmpty);
   emptyRow.values = [o.staff.length + 1, ...Array<string>(20).fill("")];
-  emptyRow.height = 16;
+  emptyRow.height = 70.9; // v9 — 25 mm (demande utilisateur, ligne numérotée)
   emptyRow.eachCell({ includeEmpty: true }, (c) => {
     c.border = BOX;
     c.font = font(10);

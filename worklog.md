@@ -4821,3 +4821,24 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - `go build` + `go vet` OK ; `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` OK (17 pages).
 - **Test de bout en bout en local contre Neon** (serveur compilé, JWT admin, école réelle sans agent) : création 201 → upsert même id → liste → **ligne `vacant` bien injectée dans /api/reports/personnel** (cours CE1, nom '', effectifs 15/10/25, redoublants 4/2/6 ; CM2 sans redoublants → null toléré) ; cours invalide → 400 ; cours CP2 déjà tenu (EPP BOUGBO 2) → **409 avec le nom du titulaire** ; DELETE → 200 ; sans token → 401. Table `staff_level_reports` créée par AutoMigrate dans Neon. Lignes de test supprimées (base laissée propre).
+
+---
+
+## Task 46 — v13 (document v9) : cellules à 25 mm à partir du N° 1 + date sous l'année scolaire
+
+**Demande utilisateur** : « DANS LE MODULE UTILISATEURS ETAT NOMINATIF DU PERSONNEL, AUGMENTER LA HAUTEUR DES CELLULES JUSQU'A 25 mm A PARTIR DU N° 1...... AJOUTER EN DESSOUS DE ANNEE SCOLAIRE : 2026-2027, LA DATE ».
+
+### Réalisation (personnel-document.tsx — les 3 modèles restent fidèles)
+- **Hauteur 25 mm** pour TOUTES les lignes numérotées À PARTIR DU N° 1 (agents + ligne libre du modèle) :
+  - PDF (impression navigateur) : `td.height` 18px → **25mm** ; toutes les cellules dérivées (tdLeft / tdNom / tdContact) suivent automatiquement ;
+  - Word (.doc) : style td reconstruit (`tdBase` + `td`) avec `height:70.9pt` (= 25 mm) ;
+  - Excel (.xlsx) : `row.height` 16 → **70.9 points** (= 25 mm) sur les lignes agents ET la ligne libre numérotée ;
+  - la ligne TOTAL (non numérotée) reste compacte : `height:"18px"` redéfini sur ses cellules (PDF), `tdC` height:18px (Word), hauteur par défaut (Excel) ;
+  - pagination déjà prête : lignes insécables (`#personnel-doc tr { break-inside: avoid }`) + thead répété par le navigateur — le tableau coule proprement sur plusieurs pages A4 paysage.
+- **Date du jour** « Date : JJ/MM/AAAA » (helper `todayFr()`) ajoutée SOUS « Année scolaire » dans les 3 modèles :
+  - PDF : seconde ligne du bloc droit (année scolaire puis date, alignées à droite) ;
+  - Word : `<br>` dans la cellule droite de la ligne École / Année scolaire (même alignement) ;
+  - Excel : ligne 7 fusionnée colonnes 10-21, alignée à droite, vert drapeau (l'ancien espaceur de 4px devient la ligne de date, hauteur 14).
+
+### Vérifications
+- `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` OK (17 pages, /personnel-doc intacte). Frontend seul — backend non touché, Neon sans changement.
