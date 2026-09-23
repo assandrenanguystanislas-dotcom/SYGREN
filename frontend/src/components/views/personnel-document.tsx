@@ -77,11 +77,12 @@
 //   Excel) via le helper commun fmtFonction ; la valeur stockée reste
 //   inchangée (validation backend DIRECTEUR / ADJOINT(E)).
 //
-// v9 — LIGNES À 25 mm + DATE DU JOUR (demande utilisateur) :
-//   - Hauteur des cellules portée à 25 mm pour TOUTES les lignes
+// v9 — LIGNES HAUTES + DATE DU JOUR (demande utilisateur) :
+//   - Hauteur des cellules portée à 17 mm pour TOUTES les lignes
 //     numérotées À PARTIR DU N° 1 (agents + ligne libre du modèle) dans
-//     les 3 modèles — PDF : height 25mm ; Word : 70.9pt ; Excel :
-//     70.9 points — la ligne TOTAL reste compacte ;
+//     les 3 modèles — PDF : height 17mm ; Word : 48.2pt ; Excel :
+//     48.2 points — la ligne TOTAL reste compacte ; (v9.1 — révisée
+//     de 25 mm à 17 mm après retour utilisateur « c'est trop ») ;
 //   - « Date : JJ/MM/AAAA » (date du jour de génération) ajoutée SOUS
 //     « Année scolaire » dans les 3 modèles (alignée à droite comme
 //     l'année scolaire).
@@ -202,10 +203,10 @@ const td: CSSProperties = {
   textAlign: "center",
   verticalAlign: "middle",
   color: INK,
-  // v9 — hauteur portée à 25 mm pour toutes les lignes numérotées à
-  // partir du N° 1 (demande utilisateur) ; la ligne TOTAL reste compacte
-  // (elle redéfinit height: "18px" ci-dessous).
-  height: "25mm",
+  // v9.1 — hauteur portée à 17 mm (révisée de 25 mm après retour
+  // utilisateur) pour toutes les lignes numérotées à partir du N° 1 ;
+  // la ligne TOTAL reste compacte (elle redéfinit height: "18px").
+  height: "17mm",
 };
 
 /** Cellule NOM ET PRÉNOMS : session 40 — noms du personnel TOUJOURS
@@ -847,11 +848,12 @@ async function buildWordHtml(o: ExportData): Promise<string> {
   // une partie des classes CSS) ; bordures vert drapeau comme le PDF.
   const th =
     "border:1px solid #009E60; padding:2px 3px; font-size:12px; font-weight:bold; text-align:center; vertical-align:middle; color:#ffffff; background:#009E60;";
-  // v9 — lignes numérotées (à partir du N° 1) à 25 mm = 70.9pt (demande
-  // utilisateur) ; tdC — hauteur compacte réservée à la ligne TOTAL.
+  // v9.1 — lignes numérotées (à partir du N° 1) à 17 mm = 48.2pt
+  // (révisée de 25 mm après retour utilisateur) ; tdC — hauteur
+  // compacte réservée à la ligne TOTAL.
   const tdBase =
     "border:1px solid #009E60; padding:1px 3px; font-size:12px; line-height:1.25; text-align:center; vertical-align:middle;";
-  const td = `${tdBase} height:70.9pt;`;
+  const td = `${tdBase} height:48.2pt;`;
   const tdL = td.replace("text-align:center", "text-align:left");
   const tdC = `${tdBase} height:18px;`;
 
@@ -1191,9 +1193,9 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       fmtContact(s.phone),
       "",
     ];
-    // v9 — lignes numérotées (à partir du N° 1) à 25 mm ≈ 70.9 points
-    // (demande utilisateur).
-    row.height = 70.9;
+    // v9.1 — lignes numérotées (à partir du N° 1) à 17 mm ≈ 48.2 points
+    // (révisée de 25 mm après retour utilisateur).
+    row.height = 48.2;
     row.eachCell({ includeEmpty: true }, (c, col) => {
       c.border = BOX;
       // Femmes EN ROUGE sur la colonne NOM (N.B du modèle).
@@ -1210,7 +1212,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   const rEmpty = HEAD_END + 1 + o.staff.length;
   const emptyRow = ws.getRow(rEmpty);
   emptyRow.values = [o.staff.length + 1, ...Array<string>(20).fill("")];
-  emptyRow.height = 70.9; // v9 — 25 mm (demande utilisateur, ligne numérotée)
+  emptyRow.height = 48.2; // v9.1 — 17 mm (révisée de 25 mm, ligne numérotée)
   emptyRow.eachCell({ includeEmpty: true }, (c) => {
     c.border = BOX;
     c.font = font(10);

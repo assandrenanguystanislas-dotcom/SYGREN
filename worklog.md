@@ -4842,3 +4842,17 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 
 ### Vérifications
 - `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` OK (17 pages, /personnel-doc intacte). Frontend seul — backend non touché, Neon sans changement.
+
+---
+
+## Task 47 — v13.1 (document v9.1) : hauteur des lignes revue de 25 mm à 17 mm
+
+**Demande utilisateur** : « C'EST TROP. REVOIR LA HAUTEUR A 17mm ».
+
+### Réalisation (personnel-document.tsx — même périmètre que la v13)
+- Hauteur des lignes numérotées (à partir du N° 1) ramenée de 25 mm à **17 mm** dans les 3 modèles :
+  - PDF : `td.height` 25mm → **17mm** ; Word : 70.9pt → **48.2pt** ; Excel : 70.9 → **48.2 points** (agents + ligne libre numérotée) ;
+  - la ligne TOTAL reste compacte (18px / hauteur par défaut) ; date sous l'année scolaire inchangée.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
