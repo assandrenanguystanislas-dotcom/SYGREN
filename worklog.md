@@ -4798,3 +4798,26 @@ Le conseiller dispose de la consultation SANS impression sur les deux modules ci
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK. (Environnement réinitialisé entre-temps : clone réaligné sur origin/main 9a9ab0c, node_modules refaits.)
 - push → Vercel **READY 74fa188** ; Render **live 519f8d3** (backend non touché) ; front 200 ; `/api/health` 200 ; Neon sans changement.
+
+---
+
+## Task 45 — v12 : écoles sans enseignant à tous les niveaux — effectifs & redoublants saisis par l'école
+
+**Demande utilisateur** : « dans le module Utilisateurs état nominatif, il y a des écoles qui n'ont pas d'enseignants pour tous les niveaux. Peux-tu me permettre de faire spécialement pour ces écoles. Je remplirai seulement les effectifs et les redoublants ».
+
+### Constat
+Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent sur le DOSSIER de chaque agent (users.effectif_*/redoublant_*). Sans compte enseignant pour un niveau, aucune ligne n'existait pour ce cours dans la feuille — impossible d'y faire figurer les effectifs du niveau.
+
+### Réalisation
+- **Modèle `StaffLevelReport`** (models.go + AllModels → AutoMigrate) : une ligne par (école, cours) — cours (bande PS MS GS · CP1..CM2 · RPL MAC), effectif F/G/T et redoublants F/G/T (pointeurs, bornes identiques au dossier : F/G ≤ 999, T ≤ 1998), soft delete.
+- **Endpoints** (`handlers/level_reports.go`, nouveau ; routes router.go) :
+  - `GET /api/schools/{schoolID}/level-reports` — lecture au périmètre de l'état nominatif (directeur = son école, inspecteur = son IEP, conseiller = son secteur, admin = toutes, parent refusé) ;
+  - `POST …/level-reports` — création OU mise à jour (upsert école+cours, réactivation des lignes soft-deleted) ; écriture réservée directeur (son école) + admin ; **refus 409** si le cours est déjà tenu par un agent (users.cours ou classe affectée — même convention que la feuille) avec le nom du titulaire dans le message ; cours invalides → 400 ;
+  - `DELETE /api/level-reports/{id}` — mêmes droits que le POST ; audit LogAction (created/updated/deleted).
+- **Injection dans la feuille** (`handlers/personnel.go`) : les niveaux sans titulaire apparaissent automatiquement dans « ÉTAT NOMINATIF DU PERSONNEL » à la place de leur cours (ordre pédagogique PS→CM2, RPL MAC) : nom/matricule/dossier VIDES, colonne COURS remplie, effectifs/redoublants saisis, flag `vacant` ; les totaux F/G/T de la feuille les intègrent — PDF, Word et Excel. Une ligne dont le cours redevient tenu par un agent est ignorée (le dossier de l'agent reprend la main).
+- **Interface** (`level-reports-dialog.tsx`, nouveau ; bouton dans `teachers-view.tsx`) : bouton « Niveaux sans enseignant » à côté d'« État nominatif » (directeur : son école ; admin/inspecteur : école du filtre). Formulaire d'ajout (cours restants + effectif F/G + redoublants F/G, TOTAL T calculé automatiquement T=F+G comme le dossier v9), lignes éditables (F/G saisis, T auto en lecture seule), retrait avec confirmation. Aide intégrée : « saisissez SEULEMENT l'effectif et les redoublants — la ligne s'ajoute à l'État nominatif (nom vide), totaux compris ».
+- Frontend : types `StaffLevelReport`/`LevelReportInput` + `vacant?` sur PersonnelStaffRow ; `levelReportsApi` (list/upsert/remove).
+
+### Vérifications
+- `go build` + `go vet` OK ; `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` OK (17 pages).
+- **Test de bout en bout en local contre Neon** (serveur compilé, JWT admin, école réelle sans agent) : création 201 → upsert même id → liste → **ligne `vacant` bien injectée dans /api/reports/personnel** (cours CE1, nom '', effectifs 15/10/25, redoublants 4/2/6 ; CM2 sans redoublants → null toléré) ; cours invalide → 400 ; cours CP2 déjà tenu (EPP BOUGBO 2) → **409 avec le nom du titulaire** ; DELETE → 200 ; sans token → 401. Table `staff_level_reports` créée par AutoMigrate dans Neon. Lignes de test supprimées (base laissée propre).

@@ -203,6 +203,18 @@ func New(cfg *config.Config) http.Handler {
 			r.Delete("/api/teachers/{id}", handlers.DeleteTeacher)
 		})
 
+		// v12 — Niveaux SANS enseignant titulaire (état nominatif) :
+		// l'école saisit SEULEMENT les effectifs et redoublants des
+		// cours sans titulaire. Lecture = périmètre état nominatif
+		// (contrôlé dans le handler) ; écriture = module Utilisateurs
+		// (directeur = son école, admin = toutes — contrôles handler).
+		r.Get("/api/schools/{schoolID}/level-reports", handlers.ListLevelReports)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleUsersTeachers, "write"))
+			r.Post("/api/schools/{schoolID}/level-reports", handlers.UpsertLevelReport)
+			r.Delete("/api/level-reports/{id}", handlers.DeleteLevelReport)
+		})
+
 		// Directeurs d'école — lecture ouverte, écriture admin seulement
 		r.Get("/api/directors", handlers.ListDirectors)
 		r.Group(func(r chi.Router) {

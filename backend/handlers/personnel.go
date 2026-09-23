@@ -280,6 +280,11 @@ type PersonnelStaffRow struct {
 	models.User
 	ClassName *string `json:"class_name,omitempty"` // cours tenu (CP1..CM2)
 	SortKey   int     `json:"-"`                    // tri serveur (non sérialisé)
+	// v12 — ligne « SANS TITULAIRE » (niveau sans enseignant, table
+	// staff_level_reports) : nom/matricule/dossier vides, COURS +
+	// effectifs + redoublants saisis par l'école. Présent dans le PDF,
+	// Word et Excel (totaux compris) comme sur la feuille papier.
+	Vacant bool `json:"vacant,omitempty"`
 }
 
 func GetPersonnelSheet(w http.ResponseWriter, r *http.Request) {
@@ -383,6 +388,49 @@ func GetPersonnelSheet(w http.ResponseWriter, r *http.Request) {
 			row.ClassName = &n
 		}
 		rows = append(rows, row)
+	}
+
+	// v12 — Niveaux SANS enseignant titulaire : les lignes saisies par
+	// l'école (staff_level_reports — SEULEMENT effectifs + redoublants)
+	// sont injectées à la place de leur cours dans la feuille. Une ligne
+	// dont le cours est déjà tenu par un agent (rang ci-dessus) est
+	// ignorée : le dossier de l'agent reprend la main.
+	var reports []models.StaffLevelReport
+	database.DB.
+		Where("school_id = ?", school.ID).
+		Find(&reports)
+	heldCours := make(map[string]bool, len(rows))
+	for _, rw := range rows {
+		if rw.ClassName != nil {
+			heldCours[strings.ToUpper(strings.TrimSpace(*rw.ClassName))] = true
+		}
+	}
+	for _, rep := range reports {
+		cours := strings.ToUpper(strings.TrimSpace(rep.Cours))
+		if cours == "" || heldCours[cours] {
+			continue
+		}
+		c := rep.Cours
+		vr := PersonnelStaffRow{
+			User: models.User{ID: rep.ID}, // nom, matricule, dossier : vides
+		}
+		vr.Cours = &c
+		vr.ClassName = &c
+		vr.EffectifF = rep.EffectifF
+		vr.EffectifG = rep.EffectifG
+		vr.EffectifT = rep.EffectifT
+		vr.RedoublantF = rep.RedoublantF
+		vr.RedoublantG = rep.RedoublantG
+		vr.RedoublantT = rep.RedoublantT
+		vr.Vacant = true
+		// Place du cours dans la séquence pédagogique (comme un agent) ;
+		// cours inconnu : avec les agents sans cours (fin de feuille).
+		if rank := classRank(c); rank > 0 {
+			vr.SortKey = 100 + rank
+		} else {
+			vr.SortKey = 200
+		}
+		rows = append(rows, vr)
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].SortKey != rows[j].SortKey {

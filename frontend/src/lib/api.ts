@@ -31,6 +31,8 @@ import type {
   InspectorWithDetails,
   PersonnelDossierInput,
   PersonnelSheet,
+  StaffLevelReport,
+  LevelReportInput,
   EvaluationSession,
   SessionWithDetails,
   SessionExemption,
@@ -699,6 +701,30 @@ export const teachersApi = {
     }),
   delete: (id: string) =>
     apiFetch<{ status: string }>(`/api/teachers/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Niveaux SANS enseignant titulaire (v12 — état nominatif) ===
+// Effectifs & redoublants saisis par l'école pour les cours sans
+// enseignant (aucune fiche agent) ; injectés dans l'état nominatif.
+
+export const levelReportsApi = {
+  list: (schoolId: string) =>
+    apiFetch<{ level_reports: StaffLevelReport[]; count: number }>(
+      `/api/schools/${encodeURIComponent(schoolId)}/level-reports`,
+    ),
+  /** Création OU mise à jour (une ligne par école + cours). */
+  upsert: (schoolId: string, data: LevelReportInput) =>
+    apiFetch<StaffLevelReport>(
+      `/api/schools/${encodeURIComponent(schoolId)}/level-reports`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
+  remove: (id: string) =>
+    apiFetch<{ status: string }>(`/api/level-reports/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 };

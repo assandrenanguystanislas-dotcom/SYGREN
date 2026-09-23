@@ -17,6 +17,7 @@ import {
   MapPin,
   Printer,
   IdCard,
+  Layers,
 } from "lucide-react";
 
 import { teachersApi, schoolsApi, iepApi } from "@/lib/api";
@@ -46,6 +47,7 @@ import {
   PersonnelDossierFields,
   personnelOf,
 } from "@/components/personnel-dossier-fields";
+import { LevelReportsDialog } from "@/components/level-reports-dialog";
 
 interface FormData {
   full_name: string;
@@ -108,6 +110,9 @@ export function TeachersView() {
   const [deleteTarget, setDeleteTarget] = useState<TeacherWithDetails | null>(
     null,
   );
+  // v12 — dialog « Niveaux sans enseignant » (effectifs + redoublants
+  // des cours sans titulaire, injectés dans l'état nominatif).
+  const [levelDialogOpen, setLevelDialogOpen] = useState(false);
 
   const createMut = useCrudMutation(teachersApi.create, {
     invalidateKeys: [["teachers"], ["classes"]],
@@ -227,6 +232,19 @@ export function TeachersView() {
     return true;
   });
 
+  // Cible des documents de l'école (état nominatif, niveaux sans
+  // enseignant) : le directeur travaille sur SON école, l'admin et
+  // l'inspecteur sur l'école sélectionnée dans le filtre.
+  const personnelTarget =
+    user?.role === "director"
+      ? user?.school_id ?? ""
+      : schoolFilter !== "all"
+        ? schoolFilter
+        : "";
+  const personnelTargetName = schools.find(
+    (s) => s.id === personnelTarget,
+  )?.name;
+
   return (
     <div className="space-y-4">
       {/* Task 30 — identification à l'établissement (directeur connecté) :
@@ -252,15 +270,24 @@ export function TeachersView() {
             </div>
             {canEdit && (
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!personnelTarget}
+                  title={
+                    personnelTarget
+                      ? "Effectifs et redoublants des cours sans enseignant"
+                      : "Sélectionnez d'abord une école dans le filtre"
+                  }
+                  onClick={() => setLevelDialogOpen(true)}
+                >
+                  <Layers className="w-4 h-4 mr-1.5" />
+                  Niveaux sans enseignant
+                </Button>
                 {(() => {
                   // Cible de l'état nominatif : le directeur imprime son école,
                   // admin/inspecteur l'école sélectionnée dans le filtre.
-                  const target =
-                    user?.role === "director"
-                      ? user?.school_id ?? ""
-                      : schoolFilter !== "all"
-                        ? schoolFilter
-                        : "";
+                  const target = personnelTarget;
                   return (
                     <Button
                       variant="outline"
@@ -592,6 +619,17 @@ export function TeachersView() {
             </div>
           </form>
         </EntityDialog>
+      )}
+
+      {/* v12 — Niveaux sans enseignant : effectifs + redoublants des
+          cours sans titulaire, injectés dans l'état nominatif. */}
+      {canEdit && (
+        <LevelReportsDialog
+          open={levelDialogOpen}
+          onOpenChange={setLevelDialogOpen}
+          schoolId={personnelTarget}
+          schoolName={personnelTargetName}
+        />
       )}
 
       <ConfirmDialog

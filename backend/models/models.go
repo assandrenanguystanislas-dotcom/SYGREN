@@ -725,6 +725,49 @@ func (p *PDARemediation) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// StaffLevelReport — v12 : effectifs et redoublants d'un NIVEAU SANS
+// ENSEIGNANT TITULAIRE (demande utilisateur) : « il y a des écoles qui
+// n'ont pas d'enseignants pour tous les niveaux — permettre de faire
+// spécialement pour ces écoles, en ne remplissant que les effectifs et
+// les redoublants ».
+//
+// Une ligne = un cours (CP1, CE2…) de l'école sans agent titulaire ; les
+// effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL »
+// vivent normalement sur le DOSSIER de l'enseignant (users.effectif_*,
+// users.redoublant_*) : sans compte enseignant, aucune ligne n'existerait
+// pour ce niveau. Ces lignes « sans titulaire » sont injectées dans la
+// feuille (handlers/personnel.go) à la place de leur cours, avec les
+// totaux — nom, matricule et dossier restent vides.
+//
+// Une ligne par (école, cours) ; si un agent reprend ce cours, la ligne
+// est simplement ignorée par la feuille (le dossier de l'agent reprend
+// la main) et peut être supprimée depuis l'interface.
+type StaffLevelReport struct {
+	ID       string `gorm:"primaryKey;type:text" json:"id"`
+	SchoolID string `gorm:"type:text;index" json:"school_id"`
+	// Cours — bande déroulante du dossier personnel (PS MS GS · CP1..CM2 ·
+	// RPL · MAC), validée côté handler (handlers/personnel.go validCours).
+	Cours string `gorm:"type:text" json:"cours"`
+	// Unicité logique (école + cours) : jamais deux lignes pour le même
+	// niveau d'une même école.
+	EffectifF   *int           `json:"effectif_f,omitempty"` // effectif du niveau — Filles
+	EffectifG   *int           `json:"effectif_g,omitempty"` // effectif du niveau — Garçons
+	EffectifT   *int           `json:"effectif_t,omitempty"` // effectif du niveau — Total
+	RedoublantF *int           `json:"redoublant_f,omitempty"`
+	RedoublantG *int           `json:"redoublant_g,omitempty"`
+	RedoublantT *int           `json:"redoublant_t,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+func (r *StaffLevelReport) BeforeCreate(tx *gorm.DB) error {
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	return nil
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
 	return []interface{}{
@@ -742,5 +785,8 @@ func AllModels() []interface{} {
 		&ExamCenter{},
 		// v5 (session 26) — Secteurs d'écoles (conseillers pédagogiques)
 		&Sector{},
+		// v12 — Niveaux sans enseignant (effectifs & redoublants saisis
+		// par l'école, sans compte enseignant)
+		&StaffLevelReport{},
 	}
 }

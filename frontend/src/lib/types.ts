@@ -522,6 +522,39 @@ export interface PersonnelStaffRow extends PersonnelDossier {
   email?: string | null;
   active: boolean;
   class_name?: string; // cours tenu (CP1..CM2)
+  /** v12 — ligne « SANS TITULAIRE » (niveau sans enseignant, saisi via
+   *  « Niveaux sans enseignant ») : nom/matricule/dossier vides, seules
+   *  les colonnes COURS + Effectif + Redoublants sont renseignées. */
+  vacant?: boolean;
+}
+
+// === NIVEAUX SANS ENSEIGNANT (v12 — module Utilisateurs) ===
+
+/** Effectifs & redoublants d'un niveau SANS enseignant titulaire —
+ *  saisie spéciale pour les écoles qui n'ont pas d'enseignants pour
+ *  tous les niveaux (l'utilisateur ne remplit que les effectifs et les
+ *  redoublants) ; injectée dans l'état nominatif (ligne vacant). */
+export interface StaffLevelReport {
+  id: string;
+  school_id: string;
+  cours: CoursCode | string;
+  effectif_f?: number | null;
+  effectif_g?: number | null;
+  effectif_t?: number | null;
+  redoublant_f?: number | null;
+  redoublant_g?: number | null;
+  redoublant_t?: number | null;
+}
+
+/** Payload du POST (création / mise à jour — une ligne par école+cours). */
+export interface LevelReportInput {
+  cours: string;
+  effectif_f?: number | null;
+  effectif_g?: number | null;
+  effectif_t?: number | null;
+  redoublant_f?: number | null;
+  redoublant_g?: number | null;
+  redoublant_t?: number | null;
 }
 
 /** Données complètes du document « ÉTAT NOMINATIF DU PERSONNEL ».
