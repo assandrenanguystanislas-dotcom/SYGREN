@@ -4856,3 +4856,15 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 
 ### Vérifications
 - `tsc --noEmit` 0 erreur (tsbuildinfo purgé) ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
+
+---
+
+## Task 48 — v13.2 (document v9.2) : hauteur des lignes ajustée à 15 mm
+
+**Demande utilisateur** : « 15mm » (ajustement après 25 mm puis 17 mm).
+
+### Réalisation (personnel-document.tsx)
+- Lignes numérotées (à partir du N° 1) : PDF `height:"15mm"`, Word `height:42.5pt`, Excel `42.5` points (agents + ligne libre) ; TOTAL compact et date sous l'année scolaire inchangés.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
