@@ -89,6 +89,16 @@
 //     « Année scolaire » dans les 3 modèles (alignée à droite comme
 //     l'année scolaire).
 //
+// v10 — LIGNES À 10 mm + EN-TÊTE RESSERRÉ (demande utilisateur : « trop
+//   espacé » — au moins 9 lignes doivent tenir ensemble sur UNE page) :
+//   - hauteur des lignes numérotées ramenée à 10 mm (25 → 17 → 15 → 12) ;
+//   - en-tête institutionnel en variante compacte « xs » (déjà utilisée
+//     par le plan réseau paysage), boîte du titre allégée (15px, paddings
+//     réduits), ligne École/Année/Date en 10.5px, entêtes du tableau
+//     allégés (11px, libellés verticaux 10px) ; Word et Excel alignés
+//     (ps d'entête sans marge + armoiries 38, hauteurs de rangées 1-9
+//     compactes) — la page 1 accueille ainsi 12 lignes et plus.
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -186,8 +196,10 @@ function todayFr(): string {
 // grâce à print-color-adjust: exact).
 const th: CSSProperties = {
   border: `1px solid ${CI_GREEN}`,
-  padding: "2px 3px",
-  fontSize: "12px", // ARIAL 12 (demande utilisateur)
+  // v10 — entêtes du tableau allégés (en-tête « trop espacé ») : paddings
+  // et police réduits pour gagner de la hauteur sur chaque page.
+  padding: "1.5px 2px",
+  fontSize: "11px",
   lineHeight: 1.2,
   fontWeight: 700, // entêtes en gras comme le modèle reçu
   textAlign: "center",
@@ -205,11 +217,11 @@ const td: CSSProperties = {
   textAlign: "center",
   verticalAlign: "middle",
   color: INK,
-  // v9.3 — hauteur ajustée à 12 mm (25 → 17 → 15 mm auparavant, à la
+  // v9.3 → v10 — hauteur ramenée à 10 mm (25 → 17 → 15 → 12 mm, à la
   // demande de l'utilisateur) pour toutes les lignes numérotées à
   // partir du N° 1 ; la ligne TOTAL reste compacte (elle redéfinit
   // height: "18px").
-  height: "12mm",
+  height: "10mm",
 };
 
 /** Cellule NOM ET PRÉNOMS : session 40 — noms du personnel TOUJOURS
@@ -242,11 +254,14 @@ const thVerticalSpan: CSSProperties = {
   transform: "rotate(180deg)",
   display: "inline-block",
   whiteSpace: "nowrap",
-  letterSpacing: "0.5px",
+  // v10 — libellés verticaux en 10px : c'est leur longueur qui fixait
+  // la hauteur des entêtes (2 rangées) — allégés avec le reste.
+  fontSize: "10px",
+  letterSpacing: "0.2px",
 };
 
 /** Cellule d'entête verticale : padding réduit (la colonne est étroite). */
-const thVertical: CSSProperties = { ...th, padding: "3px 2px" };
+const thVertical: CSSProperties = { ...th, padding: "2px 1.5px" };
 
 export function PersonnelDocument({
   schoolId,
@@ -411,25 +426,30 @@ export function PersonnelDocument({
         <CIArmoiriesWatermark fixed />
         <div style={{ position: "relative", zIndex: 1 }}>
         {/* --- En-tête institutionnel (bloc ministériel + République + armoiries) --- */}
-        <OfficialDocHeader iep={data.iep} variant="plan" size="sm" />
+        {/* v10 — en-tête institutionnel en variante compacte « xs »
+            (déjà éprouvée sur le plan réseau A4 paysage) : l'en-tête
+            « sm » consommait trop de hauteur pour tenir 9 lignes sur
+            la première page (demande utilisateur). */}
+        <OfficialDocHeader iep={data.iep} variant="plan" size="xs" />
 
         {/* --- Boîte du titre (bord arrondi VERT DRAPEAU, fond pastel
             orange — inspiration bulletins individuels) --- */}
-        <div style={{ textAlign: "center", margin: "2px 0 6px" }}>
+        <div style={{ textAlign: "center", margin: "2px 0 4px" }}>
           <span
             style={{
               display: "inline-block",
               border: `2.2px solid ${CI_GREEN}`,
-              borderRadius: "14px",
-              padding: "6px 30px 7px",
+              // v10 — boîte du titre allégée (en-tête trop espacé).
+              borderRadius: "10px",
+              padding: "3px 22px 4px",
               // Police ARIAL (héritée du document — demande utilisateur).
-              fontSize: "19px",
+              fontSize: "15px",
               fontWeight: 700,
-              letterSpacing: "1.5px",
+              letterSpacing: "1px",
               lineHeight: 1.25,
               color: INK,
               background: CI_ORANGE_BG,
-              boxShadow: `2.5px 2.5px 0 ${CI_GREEN_BG}`,
+              boxShadow: `2px 2px 0 ${CI_GREEN_BG}`,
               textAlign: "center",
               ...PRINT_COLOR_STYLE,
             }}
@@ -446,8 +466,9 @@ export function PersonnelDocument({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
-            fontSize: "12px",
-            margin: "0 2px 3px",
+            // v10 — ligne École/Année/Date resserrée (10.5px).
+            fontSize: "10.5px",
+            margin: "0 2px 2px",
             color: INK,
           }}
         >
@@ -850,13 +871,13 @@ async function buildWordHtml(o: ExportData): Promise<string> {
   // Cellules du tableau (styles EN LIGNE — le convertisseur Word ignore
   // une partie des classes CSS) ; bordures vert drapeau comme le PDF.
   const th =
-    "border:1px solid #009E60; padding:2px 3px; font-size:12px; font-weight:bold; text-align:center; vertical-align:middle; color:#ffffff; background:#009E60;";
-  // v9.3 — lignes numérotées (à partir du N° 1) à 12 mm = 34pt
-  // (25 → 17 → 15 mm auparavant) ; tdC — hauteur compacte réservée à
-  // la ligne TOTAL.
+    "border:1px solid #009E60; padding:1.5px 2px; font-size:11px; font-weight:bold; text-align:center; vertical-align:middle; color:#ffffff; background:#009E60;";
+  // v10 — lignes numérotées (à partir du N° 1) à 10 mm = 28.3pt
+  // (25 → 17 → 15 → 12 mm auparavant) ; tdC — hauteur compacte réservée
+  // à la ligne TOTAL.
   const tdBase =
     "border:1px solid #009E60; padding:1px 3px; font-size:12px; line-height:1.25; text-align:center; vertical-align:middle;";
-  const td = `${tdBase} height:34pt;`;
+  const td = `${tdBase} height:28.3pt;`;
   const tdL = td.replace("text-align:center", "text-align:left");
   const tdC = `${tdBase} height:18px;`;
 
@@ -948,26 +969,27 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `</tr>`;
 
   // En-tête institutionnel — copie HTML de OfficialDocHeader (variante
-  // « plan » : devise au-dessus des armoiries ; taille « sm »).
+  // « plan » : devise au-dessus des armoiries ; v10 — taille compacte
+  // « xs » : ps sans marge, 9.5px, armoiries 38 — en-tête resserré).
   const region = (o.iepRegion || o.iepName || "…………").toUpperCase();
   const iepName = (o.iepName || "…………").toUpperCase();
   const annee = o.anneeScolaire.split(" ");
   const header = `
 <table class=hdr><tr>
-<td style="width:64%">
-<p>MINISTERE DE L'EDUCATION NATIONALE ET</p>
-<p style="padding-left:6px;">DE L'ALPHABETISATION</p>
-<p>DIRECTION REGIONALE DE ${esc(region)}</p>
-<p style="letter-spacing:2px; margin-left:56px;">........................</p>
-<p>INSPECTION DE L'ENSEIGNEMENT</p>
-<p>PRESCOLAIRE ET PRIMAIRE DE ${esc(iepName)}</p>
-<p>BP ${esc(o.iepBp || "……")}&nbsp;&nbsp;&nbsp;T&eacute;l ${esc(o.iepPhone || "…………")}</p>
-<p>Courriel : <span style="color:#0563C1; text-decoration:underline;">${esc(o.iepEmail || "…………")}</span></p>
+<td style="width:64%; font-size:9.5px;">
+<p style="margin:0;">MINISTERE DE L'EDUCATION NATIONALE ET</p>
+<p style="margin:0; padding-left:6px;">DE L'ALPHABETISATION</p>
+<p style="margin:0;">DIRECTION REGIONALE DE ${esc(region)}</p>
+<p style="margin:0; letter-spacing:2px; margin-left:56px;">........................</p>
+<p style="margin:0;">INSPECTION DE L'ENSEIGNEMENT</p>
+<p style="margin:0;">PRESCOLAIRE ET PRIMAIRE DE ${esc(iepName)}</p>
+<p style="margin:0;">BP ${esc(o.iepBp || "……")}&nbsp;&nbsp;&nbsp;T&eacute;l ${esc(o.iepPhone || "…………")}</p>
+<p style="margin:0;">Courriel : <span style="color:#0563C1; text-decoration:underline;">${esc(o.iepEmail || "…………")}</span></p>
 </td>
-<td style="width:36%; text-align:center;">
-<p style="font-size:12px;">REPUBLIQUE DE C&Ocirc;TE D'IVOIRE</p>
-<p style="padding:1px 0;">Union-Discipline-Travail</p>
-${armoiries ? `<img src="${armoiries}" width="50" height="50" alt="">` : ""}
+<td style="width:36%; text-align:center; font-size:9.5px;">
+<p style="margin:0;">REPUBLIQUE DE C&Ocirc;TE D'IVOIRE</p>
+<p style="margin:0; padding:1px 0;">Union-Discipline-Travail</p>
+${armoiries ? `<img src="${armoiries}" width="38" height="38" alt="">` : ""}
 </td>
 </tr></table>`;
 
@@ -977,18 +999,18 @@ ${armoiries ? `<img src="${armoiries}" width="50" height="50" alt="">` : ""}
     marginMm: 8,
     styles: `
 table.hdr { border-collapse:collapse; width:100%; }
-table.hdr td { border:none; vertical-align:top; font-size:11px; line-height:1.32; }
-.titre { display:inline-block; border:2.2px solid #009E60; background:#FDEBDA; border-radius:14px; padding:6px 30px 7px; font-size:19px; font-weight:bold; letter-spacing:1.5px; line-height:1.25; text-align:center; }
+table.hdr td { border:none; vertical-align:top; font-size:9.5px; line-height:1.25; }
+.titre { display:inline-block; border:2.2px solid #009E60; background:#FDEBDA; border-radius:10px; padding:3px 22px 4px; font-size:15px; font-weight:bold; letter-spacing:1px; line-height:1.25; text-align:center; }
 table.doc { border-collapse:collapse; width:100%; table-layout:fixed; }
 table.doc td, table.doc th { overflow-wrap:break-word; }
 thead.rep { display:table-header-group; }
 `,
     bodyHtml: `
 ${header}
-<p style="text-align:center; margin:2px 0 6px;"><span class=titre>ETAT NOMINATIF DU<br>PERSONNEL</span></p>
+<p style="text-align:center; margin:2px 0 4px;"><span class=titre>ETAT NOMINATIF DU<br>PERSONNEL</span></p>
 <table class=hdr><tr>
-<td style="font-size:12px;"><span style="color:#00734A;">Ecole</span>: ${esc(o.schoolName)}</td>
-<td style="font-size:12px; text-align:right; white-space:nowrap;"><span style="color:#00734A;">Ann&eacute;e scolaire</span>: ${esc(annee[0] ?? "")}&nbsp;&nbsp;${esc(annee[1] ?? "")}<br><span style="color:#00734A;">Date</span> : ${esc(todayFr())}</td>
+<td style="font-size:10.5px;"><span style="color:#00734A;">Ecole</span>: ${esc(o.schoolName)}</td>
+<td style="font-size:10.5px; text-align:right; white-space:nowrap;"><span style="color:#00734A;">Ann&eacute;e scolaire</span>: ${esc(annee[0] ?? "")}&nbsp;&nbsp;${esc(annee[1] ?? "")}<br><span style="color:#00734A;">Date</span> : ${esc(todayFr())}</td>
 </tr></table>
 <table class=doc>
 <colgroup>${EXPORT_COL_WIDTHS.map((w) => `<col style="width:${w}">`).join("")}</colgroup>
@@ -1104,6 +1126,13 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   merged(4, "République de Côte d'Ivoire — Union-Discipline-Travail", 11, true);
   merged(5, "ETAT NOMINATIF DU PERSONNEL", 14, true);
   for (let col = 1; col <= 21; col++) ws.getCell(5, col).border = BOX;
+  // v10 — en-tête resserré (au moins 9 lignes sur la première page) :
+  // hauteurs explicites compactes pour les rangées 1-5.
+  ws.getRow(1).height = 16;
+  ws.getRow(2).height = 14;
+  ws.getRow(3).height = 13;
+  ws.getRow(4).height = 13;
+  ws.getRow(5).height = 20;
 
   // Ligne Ecole (gauche) / Année scolaire (droite).
   ws.mergeCells(6, 1, 6, 9);
@@ -1116,6 +1145,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   annee.value = `Année scolaire : ${(o.anneeScolaire || "").split(" ").join("  ")}`;
   annee.font = font(11, true, GREEN_TXT.argb);
   annee.alignment = { horizontal: "right", vertical: "middle" };
+  ws.getRow(6).height = 13;
   // v9 — date du jour SOUS « Année scolaire » (demande utilisateur) —
   // alignée à droite sur les mêmes colonnes (10-21).
   ws.mergeCells(7, 10, 7, 21);
@@ -1123,7 +1153,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   dateCell.value = `Date : ${todayFr()}`;
   dateCell.font = font(11, true, GREEN_TXT.argb);
   dateCell.alignment = { horizontal: "right", vertical: "middle" };
-  ws.getRow(7).height = 14;
+  ws.getRow(7).height = 12;
 
   // --- Entêtes du tableau (2 rangées, fusions comme le PDF) ---
   // Entêtes fusionnés verticalement (N° → Fonction, Cours, Contact,
@@ -1160,7 +1190,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   });
   for (let r = HEAD_START; r <= HEAD_END; r++) {
     const row = ws.getRow(r);
-    row.height = r === HEAD_START ? 26 : 16;
+    row.height = r === HEAD_START ? 20 : 14;
     row.eachCell({ includeEmpty: true }, (c) => {
       c.font = font(9, true, "FFFFFFFF");
       c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
@@ -1196,9 +1226,9 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       fmtContact(s.phone),
       "",
     ];
-    // v9.3 — lignes numérotées (à partir du N° 1) à 12 mm ≈ 34 points
-    // (25 → 17 → 15 mm auparavant).
-    row.height = 34;
+    // v10 — lignes numérotées (à partir du N° 1) à 10 mm ≈ 28.3 points
+    // (25 → 17 → 15 → 12 mm auparavant).
+    row.height = 28.3;
     row.eachCell({ includeEmpty: true }, (c, col) => {
       c.border = BOX;
       // Femmes EN ROUGE sur la colonne NOM (N.B du modèle).
@@ -1215,7 +1245,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   const rEmpty = HEAD_END + 1 + o.staff.length;
   const emptyRow = ws.getRow(rEmpty);
   emptyRow.values = [o.staff.length + 1, ...Array<string>(20).fill("")];
-  emptyRow.height = 34; // v9.3 — 12 mm (ligne numérotée)
+  emptyRow.height = 28.3; // v10 — 10 mm (ligne numérotée)
   emptyRow.eachCell({ includeEmpty: true }, (c) => {
     c.border = BOX;
     c.font = font(10);
@@ -1271,7 +1301,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
         buffer: u8 as unknown as Parameters<typeof wb.addImage>[0]["buffer"],
         extension: "png",
       });
-      ws.addImage(imgId, { tl: { col: 20, row: 0.2 }, ext: { width: 46, height: 46 } });
+      ws.addImage(imgId, { tl: { col: 20, row: 0.2 }, ext: { width: 38, height: 38 } });
     }
   } catch {
     // armoiries omises — l'en-tête reste lisible

@@ -4880,3 +4880,20 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
+
+---
+
+## Task 50 — v14 (document v10) : lignes à 10 mm + en-tête resserré — au moins 9 lignes par page
+
+**Demande utilisateur** : « 10MM. AJUSTER L'ENTETE CAR TROP ESPACÉ DE SORTE A AVOIR AU MOINS 9 COLONNES QUI VONT DANS L'ENSEMBLE TENIR SUR UNE SEULE PAGE ».
+
+### Réalisation (personnel-document.tsx — 3 modèles alignés)
+- Lignes numérotées (à partir du N° 1) : **10 mm** (25 → 17 → 15 → 12 → 10) — PDF `height:"10mm"`, Word `28.3pt`, Excel `28.3` points.
+- En-tête resserré :
+  - PDF : en-tête institutionnel en variante compacte « xs » (OfficialDocHeader, déjà éprouvée sur le plan réseau) ; boîte du titre allégée (15px, padding 3px 22px 4px, radius 10) ; ligne École/Année/Date en 10.5px ; entêtes du tableau 11px + libellés verticaux 10px (c'est leur longueur qui fixait la hauteur des 2 rangées) ;
+  - Word : ps d'entête sans marge (margin:0) et 9.5px, armoiries 38, .titre alignée sur le PDF, École/Année/Date 10.5px, th 11px/padding réduit ;
+  - Excel : hauteurs explicites compactes des rangées 1-7 (16/14/13/13/20 + 13 + 12), entêtes du tableau 20/14, armoiries 38.
+- Budget résultant : en-tête ≈ 60 mm + thead ≈ 13 mm + 9 lignes × 10 mm = 90 mm → ≈ 163 mm « ~194 mm imprimables : 12 lignes et plus tiennent sur la page 1 (≥ 9 garanti).
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
