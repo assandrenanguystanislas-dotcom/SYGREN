@@ -15,10 +15,17 @@ import {
   MapPin,
   Search,
   IdCard,
+  ArrowLeftRight,
 } from "lucide-react";
 
 import { directorsApi, schoolsApi, iepApi } from "@/lib/api";
 import { SchoolCombobox } from "@/components/school-combobox";
+// Task 53 — plage « Changement d'école » (transfert inter-établissements)
+import { SchoolTransferSection } from "@/components/school-transfer-section";
+import {
+  SchoolTransferDialog,
+  type TransferPerson,
+} from "@/components/school-transfer-dialog";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type {
@@ -102,6 +109,21 @@ export function DirectorsView() {
   const [deleteTarget, setDeleteTarget] = useState<DirectorWithDetails | null>(
     null,
   );
+  // Task 53 — dialog « Changement d'école » (directeur à transférer).
+  const [transferTarget, setTransferTarget] = useState<TransferPerson | null>(
+    null,
+  );
+
+  // Task 53 — conversion d'un directeur en cible de transfert.
+  function toTransferPerson(d: DirectorWithDetails): TransferPerson {
+    return {
+      kind: "director",
+      id: d.id,
+      name: d.full_name,
+      currentSchoolId: d.school_id ?? null,
+      currentSchoolName: d.school_name ?? null,
+    };
+  }
 
   const createMut = useCrudMutation(directorsApi.create, {
     invalidateKeys: [["directors"], ["schools"]],
@@ -219,6 +241,17 @@ export function DirectorsView() {
       {/* Task 30 — identification à l'établissement (directeur connecté) :
           le code école de SON école est affiché en tête de l'onglet. */}
       <SchoolIdentityBanner />
+      {/* Task 53 — PLAGE « Changement d'école » : le directeur a changé
+          d'établissement (mutation) ? Réaffectation réservée au Super
+          Admin et à l'Admin IEP (règle v4 du module). */}
+      {isStaffAdmin && (
+        <SchoolTransferSection
+          persons={directors.map(toTransferPerson)}
+          entityLabel="un directeur"
+          onTransfer={setTransferTarget}
+          emptyHint="Aucun directeur dans votre périmètre."
+        />
+      )}
       <Card className="border-border/60">
         <CardContent className="py-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -385,6 +418,17 @@ export function DirectorsView() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    {isStaffAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Changer d'école (mutation vers un autre établissement)"
+                        onClick={() => setTransferTarget(toTransferPerson(d))}
+                      >
+                        <ArrowLeftRight className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -521,6 +565,14 @@ export function DirectorsView() {
           </div>
         </form>
       </EntityDialog>
+
+      {/* Task 53 — Changement d'école : transfert guidé vers la
+          nouvelle école (école cible + confirmation). */}
+      <SchoolTransferDialog
+        person={transferTarget}
+        open={!!transferTarget}
+        onOpenChange={(o) => !o && setTransferTarget(null)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

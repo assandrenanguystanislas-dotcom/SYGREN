@@ -612,7 +612,26 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		// Task 53 — CHANGEMENT D'ÉCOLE (l'élève change d'établissement) :
+		// si la classe cible appartient à une école différente de l'actuelle,
+		// on trace le transfert dans le journal d'audit (le dossier de
+		// l'élève — matricule, naissance, résultats — reste attaché à
+		// l'élève lui-même).
+		previousClassID := student.ClassID
 		student.ClassID = req.ClassID
+		var prevCls models.Class
+		if errP := database.DB.First(&prevCls, "id = ?", previousClassID).Error; errP == nil {
+			var nextCls models.Class
+			if errN := database.DB.First(&nextCls, "id = ?", req.ClassID).Error; errN == nil &&
+				prevCls.SchoolID != nextCls.SchoolID {
+				LogAction(r, "student.school_transferred", "student", &id, map[string]interface{}{
+					"from_school": prevCls.SchoolID,
+					"to_school":   nextCls.SchoolID,
+					"from_class":  prevCls.ID,
+					"to_class":    nextCls.ID,
+				})
+			}
+		}
 	}
 	if req.Matricule != nil {
 		newMat := normalizeMatricule(*req.Matricule)

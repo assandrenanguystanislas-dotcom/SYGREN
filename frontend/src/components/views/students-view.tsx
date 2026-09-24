@@ -15,6 +15,7 @@ import {
   Upload,
   FileText,
   FileSpreadsheet,
+  ArrowLeftRight,
 } from "lucide-react";
 
 import { studentsApi, classesApi, schoolsApi } from "@/lib/api";
@@ -52,6 +53,12 @@ import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SchoolCombobox } from "@/components/school-combobox";
 import { ClassCombobox } from "@/components/class-combobox";
+// Task 53 — plage « Changement d'école » (transfert inter-établissements)
+import { SchoolTransferSection } from "@/components/school-transfer-section";
+import {
+  SchoolTransferDialog,
+  type TransferPerson,
+} from "@/components/school-transfer-dialog";
 import {
   ImportStudentsDialog,
   type ParsedStudent,
@@ -215,6 +222,12 @@ export function StudentsView() {
   // sur des inscriptions » : le CONSEILLER corrige les élèves des écoles
   // de SON secteur (scope backend : élève ET classe cible du secteur).
   const canEdit = canManage || isTeacher || isConseiller;
+  // Task 53 — CHANGEMENT D'ÉCOLE : l'élève a changé d'établissement.
+  // admin : toutes les écoles ; conseiller : les écoles de SON secteur
+  // (la liste des écoles est déjà scopée par le backend). Le tenant du
+  // cours et le directeur n'ont pas accès à la liste des autres écoles :
+  // la plage ne leur est pas proposée (règle de gestion).
+  const canTransfer = isAdmin || isConseiller;
 
   // === Filtres en cascade stricte ===
   // - admin : schoolFilter démarre à "" (vide) → doit choisir une école
@@ -242,6 +255,22 @@ export function StudentsView() {
   // suivante (le fichier guide la saisie jusqu'à épuisement).
   const [importQueue, setImportQueue] = useState<ParsedStudent[] | null>(null);
   const [queueIdx, setQueueIdx] = useState(0);
+  // Task 53 — dialog « Changement d'école » (élève à transférer).
+  const [transferTarget, setTransferTarget] = useState<TransferPerson | null>(
+    null,
+  );
+
+  // Task 53 — conversion d'un élève en cible de transfert.
+  function toTransferPerson(s: StudentWithClass): TransferPerson {
+    return {
+      kind: "student",
+      id: s.id,
+      name: `${s.last_name} ${s.first_name}`,
+      currentSchoolId: null, // StudentWithClass n'expose pas school_id
+      currentSchoolName: s.school_name ?? null,
+      currentClassName: s.class_name ?? null,
+    };
+  }
 
   // === Écoles (admin : toutes ; conseiller : SON secteur — scope backend,
   // handler ListSchools v6) ===
@@ -647,6 +676,23 @@ export function StudentsView() {
         </CardContent>
       </Card>
 
+      {/* Task 53 — PLAGE « Changement d'école » : l'élève a changé
+          d'établissement ? On le transfère vers une classe de sa nouvelle
+          école (matricule et dossier conservés, transfert tracé au
+          journal d'audit). La liste suit le filtre École courant. */}
+      {canTransfer && (
+        <SchoolTransferSection
+          persons={allStudents.map(toTransferPerson)}
+          entityLabel="un élève"
+          onTransfer={setTransferTarget}
+          emptyHint={
+            hasSchoolSelected
+              ? "Aucun élève dans cette école."
+              : "Sélectionnez d'abord une école dans le filtre pour retrouver l'élève à transférer."
+          }
+        />
+      )}
+
       {/* === État vide selon le contexte ===
           - admin sans école choisie : message "Sélectionnez une école"
           - liste vide (école choisie mais 0 élève) : EmptyState avec bouton créer
@@ -771,6 +817,17 @@ export function StudentsView() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {canTransfer && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Changer d'école (transfert vers un autre établissement)"
+                              onClick={() => setTransferTarget(toTransferPerson(s))}
+                            >
+                              <ArrowLeftRight className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           {canEdit && (
                             <Button
                               variant="ghost"
@@ -1193,6 +1250,14 @@ export function StudentsView() {
           </form>
         </EntityDialog>
       )}
+
+      {/* Task 53 — Changement d'école : transfert guidé (école cible →
+          classe cible → confirmation). */}
+      <SchoolTransferDialog
+        person={transferTarget}
+        open={!!transferTarget}
+        onOpenChange={(o) => !o && setTransferTarget(null)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

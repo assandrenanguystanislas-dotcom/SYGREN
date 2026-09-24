@@ -21,6 +21,9 @@ const ACTION_LABELS: Record<string, string> = {
   "user.create":         "Création utilisateur",
   "user.delete":         "Suppression utilisateur",
   "user.role_change":    "Changement de rôle",
+  // Task 53 — changements d'école (transferts inter-établissements)
+  "user.school_transferred":   "Changement d'école (agent)",
+  "student.school_transferred": "Changement d'école (élève)",
   "permission.update":   "Modification permission",
   "session.validate":    "Validation session",
   "session.cancel":      "Annulation session",

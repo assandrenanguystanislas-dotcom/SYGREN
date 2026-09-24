@@ -288,7 +288,24 @@ func UpdateDirector(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		// Task 53 — CHANGEMENT D'ÉCOLE (le directeur change d'établissement) :
+		// si l'école cible diffère de l'école actuelle (y compris un
+		// détachement — école vidée), on détache les classes qu'il tient
+		// encore et on trace le transfert dans le journal d'audit.
+		previousSchoolID := ""
+		if director.SchoolID != nil {
+			previousSchoolID = *director.SchoolID
+		}
 		director.SchoolID = req.SchoolID
+		if previousSchoolID != *req.SchoolID {
+			database.DB.Model(&models.Class{}).
+				Where("teacher_id = ?", director.ID).
+				Update("teacher_id", nil)
+			LogAction(r, "user.school_transferred", "user", &director.ID, map[string]interface{}{
+				"from_school": previousSchoolID,
+				"to_school":   *req.SchoolID,
+			})
+		}
 	}
 	if req.Active != nil && role != "director" && role != "teacher" {
 		director.Active = *req.Active

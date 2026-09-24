@@ -18,10 +18,17 @@ import {
   Printer,
   IdCard,
   Layers,
+  ArrowLeftRight,
 } from "lucide-react";
 
 import { teachersApi, schoolsApi, iepApi } from "@/lib/api";
 import { SchoolCombobox } from "@/components/school-combobox";
+// Task 53 — plage « Changement d'école » (transfert inter-établissements)
+import { SchoolTransferSection } from "@/components/school-transfer-section";
+import {
+  SchoolTransferDialog,
+  type TransferPerson,
+} from "@/components/school-transfer-dialog";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type {
@@ -77,6 +84,12 @@ export function TeachersView() {
   // backend ET masquée côté interface.
   const isTeacher = user?.role === "teacher";
   const canModify = canEdit || isTeacher;
+  // Task 53 — CHANGEMENT D'ÉCOLE : la réaffectation d'un agent vers un
+  // autre établissement est réservée au Super Admin et à l'Admin IEP
+  // (même règle que la réaffectation d'un directeur — v4). Le directeur
+  // ne voit que son école dans la liste des écoles : il ne pourrait pas
+  // choisir d'école cible ; il garde le formulaire d'édition classique.
+  const canTransfer = user?.role === "admin" || user?.role === "inspector";
   // Cascade : IEP (admin) → École → recherche
   // - admin : filtre IEP optionnel → filtre École (cascade) → recherche
   // - inspector : IEP figé (RBAC backend) → filtre École → recherche
@@ -95,7 +108,7 @@ export function TeachersView() {
   const { data: schoolsData } = useQuery({
     queryKey: ["schools"],
     queryFn: schoolsApi.list,
-    enabled: canEdit,
+    enabled: canEdit || canTransfer,
   });
   // IEPs (admin seulement — inspector a son IEP figé par le backend RBAC)
   const { data: iepsData } = useQuery({
@@ -113,6 +126,21 @@ export function TeachersView() {
   // v12 — dialog « Niveaux sans enseignant » (effectifs + redoublants
   // des cours sans titulaire, injectés dans l'état nominatif).
   const [levelDialogOpen, setLevelDialogOpen] = useState(false);
+  // Task 53 — dialog « Changement d'école » (personne à transférer).
+  const [transferTarget, setTransferTarget] = useState<TransferPerson | null>(
+    null,
+  );
+
+  // Task 53 — conversion d'un adjoint en cible de transfert.
+  function toTransferPerson(t: TeacherWithDetails): TransferPerson {
+    return {
+      kind: "teacher",
+      id: t.id,
+      name: t.full_name,
+      currentSchoolId: t.school_id ?? null,
+      currentSchoolName: t.school_name ?? null,
+    };
+  }
 
   const createMut = useCrudMutation(teachersApi.create, {
     invalidateKeys: [["teachers"], ["classes"]],
@@ -250,6 +278,18 @@ export function TeachersView() {
       {/* Task 30 — identification à l'établissement (directeur connecté) :
           le code école de SON école est affiché en tête de l'onglet. */}
       <SchoolIdentityBanner />
+      {/* Task 53 — PLAGE « Changement d'école » : l'agent a changé
+          d'établissement ? On le transfère vers sa nouvelle école (la
+          fiche quitte l'état nominatif de l'ancienne école et alimente
+          celle de la nouvelle). */}
+      {canTransfer && (
+        <SchoolTransferSection
+          persons={teachers.map(toTransferPerson)}
+          entityLabel="un(e) adjoint(e) au directeur"
+          onTransfer={setTransferTarget}
+          emptyHint="Aucun(e) adjoint(e) au directeur dans votre périmètre."
+        />
+      )}
       <Card className="border-border/60">
         <CardContent className="py-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -455,6 +495,17 @@ export function TeachersView() {
                   </div>
                   {canModify && (
                     <div className="flex items-center gap-1">
+                      {canTransfer && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Changer d'école (transfert vers un autre établissement)"
+                          onClick={() => setTransferTarget(toTransferPerson(t))}
+                        >
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -631,6 +682,14 @@ export function TeachersView() {
           schoolName={personnelTargetName}
         />
       )}
+
+      {/* Task 53 — Changement d'école : transfert guidé vers la
+          nouvelle école (école cible + confirmation). */}
+      <SchoolTransferDialog
+        person={transferTarget}
+        open={!!transferTarget}
+        onOpenChange={(o) => !o && setTransferTarget(null)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

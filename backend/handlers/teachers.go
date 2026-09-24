@@ -305,7 +305,25 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 				http.StatusConflict)
 			return
 		}
+		// Task 53 — CHANGEMENT D'ÉCOLE (l'agent change d'établissement) :
+		// si l'école cible diffère de l'école actuelle, on détache les
+		// classes qu'il tient encore (sinon il resterait titulaire d'un
+		// cours de son ancienne école — incohérence état nominatif) et on
+		// trace le transfert dans le journal d'audit.
+		previousSchoolID := ""
+		if teacher.SchoolID != nil {
+			previousSchoolID = *teacher.SchoolID
+		}
 		teacher.SchoolID = req.SchoolID
+		if previousSchoolID != *req.SchoolID {
+			database.DB.Model(&models.Class{}).
+				Where("teacher_id = ?", teacher.ID).
+				Update("teacher_id", nil)
+			LogAction(r, "user.school_transferred", "user", &teacher.ID, map[string]interface{}{
+				"from_school": previousSchoolID,
+				"to_school":   *req.SchoolID,
+			})
+		}
 	}
 	if req.Active != nil && ctxRole(r) != models.RoleTeacher {
 		teacher.Active = *req.Active
