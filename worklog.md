@@ -4977,3 +4977,33 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK. Backend non modifié (aucun changement Render attendu).
 - Post-sync : test login production des comptes réinitialisés (téléphone/téléphone → 200).
+
+---
+
+## Task 55 — Fichier du personnel : module « fichier Excel à compléter » (14 colonnes)
+
+**Demande utilisateur** : « ETABLIR UN FICHIER EXCEL AVEC LES DONNES SUIVANTES N°, SECTEUR, NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE NAISSANCE, Categorie, MATRICULE, DATE D'ENTREE FP, ANCIENNETE, COURS, FONCTION, CONTACT, EFFECTIF. » puis « je souhaite que ce fichier soit dans un module afin de le completer chaque fois que besoin sera ».
+
+### Conception
+- **Module de navigation « Fichier du personnel »** (id `staff-data`, icône IdCard, après Utilisateurs) : le fichier vit DANS SYGREN — chaque ligne est stockée en base, complétalbe à tout moment (ajouter / modifier / supprimer), et exportable en classeur Excel (.xlsx, exceljs) à la demande.
+- **Table `staff_records`** (AutoMigrate, une ligne = un agent, indépendante des comptes users) : les 14 colonnes demandées — N° = ordre d'affichage (calculé), sector_id (table sectors), full_name, sexe (F|G), date_naissance, lieu_naissance, categorie (IO|IA|IS|IAS), matricule, date_entree_fp, anciennete (saisie libre, sinon calculée), cours (PS..MAC), fonction (DIRECTEUR|ADJOINT(E)), contact, effectif.
+- **Pré-remplissage ONE-SHOT** (seed au boot, marqué par le setting `staff_records.seeded`) depuis les dossiers personnels des 192 directeurs/adjoints actifs : secteur déduit du champ sector_id de l'agent, sinon de SON école (schools.sector_id) → 188/192 lignes avec secteur ; effectif = total du cours tenu (T, sinon F+G) → 151/192 ; contact = téléphone.
+
+### Réalisation — Backend
+- `models/models.go` : struct `StaffRecord` (14 colonnes, soft-delete) + enregistrement dans `AllModels()`.
+- `models/rbac_defaults.go` : module `staff-data` (« Fichier du personnel ») — métadonnée UI + cellule inspector read+write (le Super Admin a la main totale v7) ; cellules seedées automatiquement (seedRBACCells onlyMissing).
+- `handlers/staff_data.go` : ListStaffRecords (?q= nom/matricule/contact/lieu, ?sector_id=, tri ordre de saisie), Create/Update/Delete — réutilise les validations du dossier personnel (validSexe/validCategorie/validFonction/validCours, parseDossierDate, cleanDossierStr) ; payloads complets (chaîne vide = valeur effacée) ; audit staff_record.created/updated/deleted ; messages d'erreur 100 % français.
+- `router/router.go` : `/api/staff-records` protégée RequireModule("staff-data", "read") en GET et ("staff-data", "write") en POST/PUT/DELETE — conseiller bloqué par ConseillerScope, directeur/teacher/parent hors module.
+- `database/database.go` : `seedStaffRecords` (one-shot, mapping agent → ligne, sector_id déduit de l'école si absent).
+
+### Réalisation — Frontend
+- `staff-data-view.tsx` (nouvelle vue) : tableau complet 14 colonnes + Actions (N° = position, noms de secteurs résolus, dates jj/mm/aaaa, ancienneté affichée = saisie sinon calculée depuis l'entrée FP, nom des femmes en rouge — convention de l'État nominatif) ; recherche + filtre par secteur ; formulaire EntityDialog 2 colonnes (secteur/sexe/catégorie/cours/fonction en listes déroulantes — mêmes codes que le dossier —, dates via input date, effectif numérique) ; ConfirmDialog suppression.
+- **Export Excel** (bouton, exceljs en import dynamique) : classeur « Fichier du personnel » — les 14 colonnes dans l'ordre exact demandé, en-têtes vert SYGREN, lignes bordées, femmes en rouge, ligne TOTAL EFFECTIF, en-tête figé + zone d'impression paysage A4 ; nommage `fichier-du-personnel-<date>.xlsx`.
+- `dashboard-shell.tsx` : entrée NAV_ITEMS « Fichier du personnel » (moduleKeys ["staff-data"], rôles admin+inspector) ; `page.tsx` : rendu de la vue (hash #staff-data) ; `types.ts` : StaffRecord/StaffRecordInput + computeAnciennete (années révolues au jour même) ; `api.ts` : staffDataApi (list/create/update/delete).
+
+### Vérifications
+- `gofmt` + `go build` + `go vet` OK ; `tsc --noEmit` 0 erreur ; `next build` OK.
+- Tests locaux (SQLite) : boot + AutoMigrate staff_records (DDL 14 colonnes vérifié), CRUD complet 200, validation invalide rejetée (« valeur invalide pour « catégorie » »).
+- Déploiement : push `f30e7f3` → Vercel READY `f30e7f3`, **Render LIVE `f30e7f3`** (backend redéployé), front 200, `/api/health` 200.
+- **Neon synchronisée automatiquement au boot** : table staff_records créée, 192 lignes pré-remplies (188 secteurs, 151 effectifs), setting staff_records.seeded=1, 2 cellules RBAC staff-data r+w.
+- Test bout-en-bout production (lecture seule) : login admin → GET /api/staff-records → 192 lignes complètes (1re : ABIE OKPO NOELLE, F, 281789B, IO, 08/06/2000, CE2, ADJOINT(E), 0749830355, effectif 58, secteur renseigné).
