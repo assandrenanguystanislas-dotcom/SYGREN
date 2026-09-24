@@ -130,6 +130,8 @@ const (
 	// v5 (session 26) — Secteurs d'écoles & Conseillers
 	ModuleUsersConseillers = "users.conseillers" // CRUD comptes conseillers: admin+inspector
 	ModuleUsersConseiller  = "users.conseiller"  // vue « Mon Secteur » du conseiller (périmètre strict)
+	// Task 55 — Fichier du personnel (fichier Excel à compléter)
+	ModuleStaffData = "staff-data" // CRUD du fichier du personnel: admin+inspector
 )
 
 // RbacMatrixVersion — version de la matrice par défaut (voir seedRBAC).
@@ -159,6 +161,8 @@ func AllModuleKeys() []string {
 		ModuleParentPortal,
 		// v5 (session 26) — Secteurs d'écoles & Conseillers
 		ModuleUsersConseillers, ModuleUsersConseiller,
+		// Task 55 — Fichier du personnel
+		ModuleStaffData,
 	}
 }
 
@@ -199,6 +203,8 @@ func AllModuleMetas() []ModuleMeta {
 		// v5 (session 26) — Secteurs d'écoles & Conseillers
 		{Key: ModuleUsersConseillers, Label: "Utilisateurs · Conseillers", Description: "CRUD des comptes conseillers pédagogiques", IconHint: "UsersRound"},
 		{Key: ModuleUsersConseiller, Label: "Mon Secteur", Description: "Vue conseiller — directeurs et adjoints au directeur des écoles de son secteur", IconHint: "Network"},
+		// Task 55 — Fichier du personnel
+		{Key: ModuleStaffData, Label: "Fichier du personnel", Description: "Fichier Excel du personnel à compléter — secteur, identité, catégorie, matricule, entrée FP, ancienneté, cours, fonction, contact, effectif", IconHint: "IdCard"},
 	}
 }
 
@@ -378,6 +384,13 @@ func DefaultRoleModules() []DefaultRoleModuleSeed {
 	// centres d'examen).
 	out = setDefault(out, RoleAdmin, ModuleUsersConseillers, true, true)
 	out = setDefault(out, RoleInspector, ModuleUsersConseillers, true, true)
+
+	// --- Task 55 — Fichier du personnel (fichier Excel à compléter) ---
+	// Fichier administratif tenu par l'IEP : lecture + écriture pour
+	// l'Admin IEP (le Super Admin a la main totale via la boucle v7
+	// ci-dessous). Le directeur n'y a pas accès : il dispose déjà de
+	// l'État nominatif de SON école (module Résultats).
+	out = setDefault(out, RoleInspector, ModuleStaffData, true, true)
 
 	// --- v7 (session 41) — LA MAIN TOTALE AU SUPER ADMIN ---
 	// Demande : « il faut donner la main au super admin pour toutes

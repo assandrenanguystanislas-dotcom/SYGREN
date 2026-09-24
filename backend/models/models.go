@@ -768,6 +768,55 @@ func (r *StaffLevelReport) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// StaffRecord — une ligne du « Fichier du personnel » (Task 55).
+//
+// Fichier administratif à compléter à tout moment, avec les 14 colonnes
+// demandées : N° (ordre d'affichage, calculé — jamais stocké), SECTEUR,
+// NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE NAISSANCE, CATÉGORIE,
+// MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ, COURS, FONCTION, CONTACT,
+// EFFECTIF.
+//
+// Indépendant des comptes users : le fichier peut lister des agents sans
+// compte SYGREN. Pré-rempli une seule fois (seed one-shot) depuis les
+// dossiers personnels des directeurs et adjoints au directeur actifs —
+// voir database.seedStaffRecords. L'ancienneté est calculée côté client
+// à partir de la date d'entrée FP ; le champ ANCIENNETÉ libre n'est là
+// que pour les cas particuliers (reprise, stage, etc.).
+type StaffRecord struct {
+	ID       string  `gorm:"primaryKey;type:text" json:"id"`
+	SectorID *string `gorm:"type:text;index" json:"sector_id,omitempty"` // secteur d'affectation (table sectors)
+	FullName string  `gorm:"type:text" json:"full_name"`                 // NOM ET PRÉNOM
+	Sexe     *string `gorm:"type:text" json:"sexe,omitempty"`            // F | G
+	// Date et lieu de naissance.
+	DateNaissance *time.Time `json:"date_naissance,omitempty"`
+	LieuNaissance *string    `gorm:"type:text" json:"lieu_naissance,omitempty"`
+	// Catégorie IO | IA | IS | IAS ; matricule ministériel.
+	Categorie *string `gorm:"type:text" json:"categorie,omitempty"`
+	Matricule *string `gorm:"type:text" json:"matricule,omitempty"`
+	// Date d'entrée à la Fonction Publique (F.P).
+	DateEntreeFP *time.Time `json:"date_entree_fp,omitempty"`
+	// ANCIENNETÉ — saisie libre (ex. « 12 ans ») ; si vide, le client
+	// affiche celle calculée depuis DateEntreeFP.
+	Anciennete *string `gorm:"type:text" json:"anciennete,omitempty"`
+	// Cours tenu (PS · MS · GS · CP1..CM2 · RPL · MAC) et fonction
+	// (DIRECTEUR | ADJOINT(E)) — mêmes codes que le dossier personnel.
+	Cours    *string `gorm:"type:text" json:"cours,omitempty"`
+	Fonction *string `gorm:"type:text" json:"fonction,omitempty"`
+	// CONTACT (téléphone) et EFFECTIF (effectif de la classe/du cours).
+	Contact   *string        `gorm:"type:text" json:"contact,omitempty"`
+	Effectif  *int           `json:"effectif,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+func (r *StaffRecord) BeforeCreate(tx *gorm.DB) error {
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	return nil
+}
+
 // AllModels returns all models for auto-migration.
 func AllModels() []interface{} {
 	return []interface{}{
@@ -788,5 +837,7 @@ func AllModels() []interface{} {
 		// v12 — Niveaux sans enseignant (effectifs & redoublants saisis
 		// par l'école, sans compte enseignant)
 		&StaffLevelReport{},
+		// Task 55 — Fichier du personnel (fichier Excel à compléter)
+		&StaffRecord{},
 	}
 }

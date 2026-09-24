@@ -24,6 +24,7 @@ import { IepView } from "@/components/views/iep-view";
 import { SchoolsView } from "@/components/views/schools-view";
 import { StudentsView } from "@/components/views/students-view";
 import { UsersView } from "@/components/views/users-view";
+import { StaffDataView } from "@/components/views/staff-data-view";
 import { SubjectsView } from "@/components/views/subjects-view";
 import { EvaluationsView } from "@/components/views/evaluations-view";
 import { ResultsView } from "@/components/views/results-view";
@@ -290,6 +291,7 @@ function AppContent() {
       {view === "schools" && <SchoolsView />}
       {view === "students" && <StudentsView />}
       {view === "users" && <UsersView onNavigate={navigateFromUsers} />}
+      {view === "staff-data" && <StaffDataView />}
       {view === "subjects" && <SubjectsView />}
       {view === "evaluations" && <EvaluationsView />}
       {view === "results" && (

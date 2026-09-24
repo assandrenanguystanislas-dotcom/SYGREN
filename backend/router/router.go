@@ -159,6 +159,20 @@ func New(cfg *config.Config) http.Handler {
 			r.Delete("/api/conseillers/{id}", handlers.DeleteConseiller)
 		})
 
+		// Task 55 — Fichier du personnel (module "staff-data") :
+		// fichier Excel à compléter à tout moment (14 colonnes).
+		// Lecture + écriture : admin + inspector.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleStaffData, "read"))
+			r.Get("/api/staff-records", handlers.ListStaffRecords)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireModule(models.ModuleStaffData, "write"))
+			r.Post("/api/staff-records", handlers.CreateStaffRecord)
+			r.Put("/api/staff-records/{id}", handlers.UpdateStaffRecord)
+			r.Delete("/api/staff-records/{id}", handlers.DeleteStaffRecord)
+		})
+
 		// Vue conseiller « Mon Secteur » — v5 (session 26) : périmètre
 		// STRICT (directeurs et adjoints au directeur des écoles de SON
 		// secteur, déduit côté serveur de users.sector_id). Admin /

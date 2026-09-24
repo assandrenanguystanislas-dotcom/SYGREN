@@ -99,6 +99,67 @@ export function formatDossierDate(iso?: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
+/** Task 55 — ANCIENNETÉ calculée : années révolues depuis une date API
+ *  (entrée FP), au jour d'aujourd'hui. « 12 ans » ; vide si non calculable
+ *  (date absente ou postérieure à aujourd'hui). */
+export function computeAnciennete(iso?: string | null): string {
+  if (!iso || iso.length < 10) return "";
+  const parts = iso.slice(0, 10).split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!y || !m || !d) return "";
+  const now = new Date();
+  let years = now.getFullYear() - y;
+  const diffM = now.getMonth() + 1 - m;
+  if (diffM < 0 || (diffM === 0 && now.getDate() < d)) years--;
+  if (years <= 0) return "";
+  return years === 1 ? "1 an" : `${years} ans`;
+}
+
+/** Task 55 — Une ligne du « Fichier du personnel » : les 14 colonnes du
+ *  fichier Excel à compléter dans son module (N° = ordre d'affichage,
+ *  calculé). Dates RFC3339 côté API. */
+export interface StaffRecord {
+  id: string;
+  sector_id?: string | null;
+  full_name: string;
+  sexe?: SexeCode | null;
+  date_naissance?: string | null;
+  lieu_naissance?: string | null;
+  categorie?: CategorieCode | null;
+  matricule?: string | null;
+  date_entree_fp?: string | null;
+  /** Ancienneté saisie librement — si vide, le client affiche celle
+   *  calculée depuis date_entree_fp (computeAnciennete). */
+  anciennete?: string | null;
+  cours?: CoursCode | null;
+  fonction?: FonctionCode | null;
+  contact?: string | null;
+  effectif?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Payload complet d'une ligne du fichier (create/update) — le client
+ *  envoie toujours l'objet entier ; vide = valeur effacée. */
+export interface StaffRecordInput {
+  sector_id?: string | null;
+  full_name: string;
+  sexe?: string | null;
+  date_naissance?: string | null;
+  lieu_naissance?: string | null;
+  categorie?: string | null;
+  matricule?: string | null;
+  date_entree_fp?: string | null;
+  anciennete?: string | null;
+  cours?: string | null;
+  fonction?: string | null;
+  contact?: string | null;
+  effectif?: number | null;
+}
+
+
 export interface User extends PersonnelDossier {
   id: string;
   phone?: string | null;

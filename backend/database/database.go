@@ -194,6 +194,13 @@ func seedDefaults(db *gorm.DB) error {
 	// seule IEP existe (rattachement non ambigu).
 	seedSectors(db)
 
+	// 7. Task 55 — FICHIER DU PERSONNEL : pré-remplissage one-shot depuis
+	// les dossiers personnels des directeurs et adjoints au directeur
+	// actifs (l'agent complète ensuite librement dans son module).
+	if err := seedStaffRecords(db); err != nil {
+		log.Println("[DB] seed fichier du personnel warning:", err)
+	}
+
 	return nil
 }
 
@@ -368,4 +375,117 @@ func seedSectors(db *gorm.DB) {
 		}
 	}
 	log.Printf("[DB] %d secteurs d'écoles par défaut créés dans l'IEP %s", len(defaultSectors), iep.Name)
+}
+
+// seedStaffRecords — Task 55 : pré-remplissage ONE-SHOT du « Fichier du
+// personnel » (table staff_records) depuis les dossiers personnels des
+// directeurs et adjoints au directeur actifs. Marqué par le setting
+// "staff_records.seeded" : ne s'exécute jamais deux fois — le fichier
+// appartient ensuite à ses utilisateurs (lignes éditables/supprimables
+// dans le module). Le secteur d'affectation est déduit du champ
+// sector_id de l'agent, sinon de celui de SON école (schools.sector_id).
+// L'effectif repris est celui du cours tenu (total, sinon filles+garçons).
+func seedStaffRecords(db *gorm.DB) error {
+	var marker models.Setting
+	if db.Where(models.Setting{Key: "staff_records.seeded"}).First(&marker).Error == nil {
+		return nil // déjà seedé
+	}
+
+	type agentRow struct {
+		ID            string
+		FullName      string
+		Phone         *string
+		SectorID      *string
+		SchoolID      *string
+		Matricule     *string
+		Sexe          *string
+		DateNaissance *time.Time
+		LieuNaissance *string
+		Categorie     *string
+		DateEntreeFP  *time.Time
+		Cours         *string
+		Fonction      *string
+		EffectifF     *int
+		EffectifG     *int
+		EffectifT     *int
+	}
+	var agents []agentRow
+	if err := db.Model(&models.User{}).
+		Select("id, full_name, phone, sector_id, school_id, matricule, sexe, date_naissance, lieu_naissance, categorie, date_entree_fp, cours, fonction, effectif_f, effectif_g, effectif_t").
+		Where("role IN ? AND active AND deleted_at IS NULL", []string{models.RoleDirector, models.RoleTeacher}).
+		Order("full_name ASC").
+		Scan(&agents).Error; err != nil {
+		return err
+	}
+	if len(agents) == 0 {
+		// Rien à pré-remplir : on marque quand même pour ne pas
+		// retenter à chaque démarrage.
+		return db.Create(&models.Setting{
+			Key:      "staff_records.seeded",
+			Value:    "1",
+			Category: "system",
+			Label:    "Fichier du personnel pré-rempli (Task 55)",
+		}).Error
+	}
+
+	// Secteur de chaque école (pour déduire le secteur des agents qui
+	// n'en portent pas eux-mêmes).
+	schoolSector := map[string]*string{}
+	var schools []models.School
+	if err := db.Select("id, sector_id").Find(&schools).Error; err == nil {
+		for _, sc := range schools {
+			schoolSector[sc.ID] = sc.SectorID
+		}
+	}
+
+	created := 0
+	for _, a := range agents {
+		sectorID := a.SectorID
+		if sectorID == nil && a.SchoolID != nil {
+			sectorID = schoolSector[*a.SchoolID]
+		}
+		rec := models.StaffRecord{
+			SectorID:      sectorID,
+			FullName:      a.FullName,
+			Sexe:          a.Sexe,
+			DateNaissance: a.DateNaissance,
+			LieuNaissance: a.LieuNaissance,
+			Categorie:     a.Categorie,
+			Matricule:     a.Matricule,
+			DateEntreeFP:  a.DateEntreeFP,
+			Cours:         a.Cours,
+			Fonction:      a.Fonction,
+			Contact:       a.Phone,
+		}
+		// EFFECTIF — total du cours tenu (T), sinon F+G.
+		if a.EffectifT != nil && *a.EffectifT > 0 {
+			rec.Effectif = a.EffectifT
+		} else if a.EffectifF != nil || a.EffectifG != nil {
+			sum := 0
+			if a.EffectifF != nil {
+				sum += *a.EffectifF
+			}
+			if a.EffectifG != nil {
+				sum += *a.EffectifG
+			}
+			if sum > 0 {
+				rec.Effectif = &sum
+			}
+		}
+		if err := db.Create(&rec).Error; err != nil {
+			log.Println("[DB] seed staff_record:", a.FullName, err)
+			continue
+		}
+		created++
+	}
+	if err := db.Create(&models.Setting{
+		Key:      "staff_records.seeded",
+		Value:    "1",
+		Category: "system",
+		Label:    "Fichier du personnel pré-rempli (Task 55)",
+	}).Error; err != nil {
+		return err
+	}
+	log.Printf("[DB] fichier du personnel pré-rempli : %d lignes créées depuis les dossiers des agents", created)
+	return nil
 }

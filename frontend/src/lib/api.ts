@@ -73,6 +73,9 @@ import type {
   SectorWithStats,
   ConseillerWithSector,
   ConseillerStaffResponse,
+  // Task 55 — Fichier du personnel
+  StaffRecord,
+  StaffRecordInput,
 } from "./types";
 
 // En production (Vercel), NEXT_PUBLIC_API_URL pointe vers le backend déployé.
@@ -816,7 +819,6 @@ export const inspectorsApi = {
 // === v2 — Parents (module Utilisateurs → onglet Parents) ===
 // Comptes du rôle "parent" — Portail Parent : consultation + impression
 // du bulletin individuel de l'enfant (par matricule).
-
 export const parentsApi = {
   list: (q?: string) =>
     apiFetch<{ parents: User[]; count: number }>(
@@ -853,6 +855,35 @@ export const parentsApi = {
     }),
   delete: (id: string) =>
     apiFetch<{ status: string }>(`/api/parents/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// === Task 55 — Fichier du personnel (module « Fichier du personnel ») ===
+// Fichier Excel à compléter : CRUD des lignes (14 colonnes) + pré-rempli
+// côté backend depuis les dossiers des agents.
+export const staffDataApi = {
+  list: (q?: string, sectorId?: string) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (sectorId) params.set("sector_id", sectorId);
+    const qs = params.toString();
+    return apiFetch<{ staff_records: StaffRecord[]; count: number }>(
+      `/api/staff-records${qs ? `?${qs}` : ""}`,
+    );
+  },
+  create: (data: StaffRecordInput) =>
+    apiFetch<StaffRecord>("/api/staff-records", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: StaffRecordInput) =>
+    apiFetch<StaffRecord>(`/api/staff-records/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ status: string }>(`/api/staff-records/${id}`, {
       method: "DELETE",
     }),
 };

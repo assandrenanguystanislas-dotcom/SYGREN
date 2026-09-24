@@ -23,6 +23,7 @@ import {
   Network,
   Phone,
   Megaphone,
+  IdCard,
 } from "lucide-react";
 
 import { api } from "@/lib/api";
@@ -111,6 +112,17 @@ export const NAV_ITEMS: NavItem[] = [
       "users.conseillers",
       "users-admin",
     ],
+  },
+  // === Task 55 — Fichier du personnel : fichier Excel à compléter à
+  // tout moment (14 colonnes — secteur, identité, catégorie, matricule,
+  // entrée FP, ancienneté, cours, fonction, contact, effectif). Item
+  // visible pour admin + inspector (module "staff-data"). ===
+  {
+    id: "staff-data",
+    label: "Fichier du personnel",
+    icon: <IdCard className="w-4 h-4" />,
+    roles: ["admin", "inspector"],
+    moduleKeys: ["staff-data"],
   },
   // === v5 (session 26) — Vue conseiller « Mon Secteur » : périmètre
   // STRICT du conseiller pédagogique (directeurs et adjoints au
