@@ -4897,3 +4897,35 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
+
+---
+
+## Task 51 — v15 (document v11) : pied de page réorganisé — N.B et mention centrés, Directeur au niveau de la mention
+
+**Demande utilisateur** : « METTRE LE NOM DU DIRECTEUR AU MEME NIVEAU QUE "a retourner en 03 exemplaires". AUSSI CENTRER LE TEXTE " N.B: Ecrire le nom des femmes en rouge. Préciser les RPL (Remplaçants) , MAC (Malade Avec Certificat), MSC (Malade Sans Certificat) (A RETOURNER EN 03 EXEMPLAIRES )" ».
+
+### Réalisation (personnel-document.tsx — 3 modèles alignés)
+- PDF : bloc « Le Directeur » (auparavant AU-DESSUS du N.B) descendu ; N.B (3 lignes, « femmes » en rouge) CENTRÉ ; rangée flex 1/auto/1 — mention « (A RETOURNER EN 03 EXEMPLAIRES) » centrée, bloc Directeur + NOM à droite au même niveau.
+- Word : N.B centré (p margin:0) ; table sans bordures table.sig (33/34/33) — mention centrée, signature à droite.
+- Excel : pied de page COMPLÉTÉ (le modèle n'avait ni N.B ni mention) — 3 rangées N.B fusionnées 1-21 centrées (« femmes » en rouge via richText E00000), mention fusionnée 1-15 centrée + « Le Directeur » fusionné 16-21, NOM en dessous.
+- Historique du fichier porté à v11.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
+- Déploiement : push `91a0908` → Vercel READY `91a0908`, Render LIVE `956adca`, front 200, `/api/health` 200.
+
+---
+
+## Task 52 — v16 (document v11.1) : Le Directeur en haut à gauche sur la ligne du N.B, NOM après la mention
+
+**Demande utilisateur** : « LE DIRECTEUR EST EN HAUT A GAUCHE ET SUR LA MEME LIGNE QUE N.B: Ecrire le nom des femmes en rouge. LE NOM DU DIRECTEUR EST JUSTE EN DESSOUS DU DIRECTEUR MAIS APRÈS LA LIGNE (A RETOURNER EN 03 EXEMPLAIRES ) ».
+
+### Réalisation (personnel-document.tsx — 3 modèles alignés)
+- PDF : « Le Directeur » (souligné) EN HAUT À GAUCHE dans une colonne de 25 %, sur la MÊME LIGNE que la 1re ligne du N.B ; colonne centrale flex (N.B 3 lignes + mention, centrés, colonne droite vide de 25 % pour garder le centrage exact) ; NOM du Directeur en caractère d'imprimerie DÉPLACÉ APRÈS la ligne « (A RETOURNER EN 03 EXEMPLAIRES) », colonne de gauche (zone signature).
+- Word : table.sig en 25 % / 50 % / 25 % — libellé à gauche sur la ligne du N.B, N.B + mention centrés au centre ; NOM en <p> après la table, marge gauche 12px (aligné sur le libellé).
+- Excel : « Le Directeur » fusionné colonnes 1-3 sur la RANGÉE du 1er N.B ; N.B + mention fusionnés colonnes 4-19 centrés (rangée libre entre MSC et mention) ; NOM fusionné colonnes 1-3 sur la rangée APRÈS la mention.
+- Historique du fichier porté à v11.1.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
+- Déploiement : push `4fdfb81` → Vercel READY `4fdfb81`, Render LIVE `956adca`, front 200, `/api/health` 200 (1er essai timeout à froid, 200 à la reprise).
