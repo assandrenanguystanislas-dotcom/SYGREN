@@ -12,6 +12,14 @@
 //
 // Accès (matrice RBAC v5 — module "users.conseillers") : admin + inspector.
 // Le conseiller lui-même n'a PAS accès à cette liste (isolation).
+//
+// Task 54 — « Permettre aux conseillers de se connecter avec leurs accès » :
+// action « Réinitialiser l'accès » par ligne (icône clé) — remet le mot de
+// passe du conseiller au STANDARD SYGREN (= son numéro de téléphone), pour
+// débloquer immédiatement tout conseiller qui ne parvient plus/plus encore à
+// se connecter (mot de passe personnalisé perdu ou jamais communiqué). Le
+// conseiller se connecte alors avec : Identifiant = téléphone, Mot de passe
+// = téléphone (modifiable ensuite via « Modifier votre mot de passe »).
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -26,6 +34,7 @@ import {
   Search,
   Network,
   Eye,
+  KeyRound,
 } from "lucide-react";
 
 import { conseillersApi } from "@/lib/api";
@@ -72,6 +81,8 @@ export function ConseillersView() {
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  // Task 54 — conseiller dont on réinitialise l'accès (mot de passe = téléphone)
+  const [resetTarget, setResetTarget] = useState<User | null>(null);
   // v33 — « reproduire la même chose » : consultation du secteur du
   // conseiller dans la vue Mon Secteur exacte (SectorViewDialog partagé).
   const [viewTarget, setViewTarget] = useState<ConseillerWithSector | null>(
@@ -110,6 +121,19 @@ export function ConseillersView() {
     successMessage: "Compte conseiller supprimé",
     actionLabel: "Suppression",
   });
+  // Task 54 — réinitialisation de l'accès : mot de passe remis au standard
+  // SYGREN (numéro de téléphone du conseiller). Le backend UpdateConseiller
+  // accepte { password } sans toucher aux autres champs (payload minimal).
+  const resetMut = useCrudMutation(
+    (id: string, phone: string) =>
+      conseillersApi.update(id, { password: phone }),
+    {
+      invalidateKeys: [["conseillers"]],
+      successMessage:
+        "Accès réinitialisé — mot de passe = numéro de téléphone",
+      actionLabel: "Réinitialisation",
+    },
+  );
 
   const conseillers = useMemo(() => data?.conseillers ?? [], [data]);
 
@@ -159,6 +183,16 @@ export function ConseillersView() {
     try {
       await deleteMut.mutateAsync([deleteTarget.id]);
       setDeleteTarget(null);
+    } catch {
+      /* toastée */
+    }
+  }
+  // Task 54 — confirmation de la réinitialisation d'accès.
+  async function onResetAccess() {
+    if (!resetTarget?.phone) return;
+    try {
+      await resetMut.mutateAsync([resetTarget.id, resetTarget.phone]);
+      setResetTarget(null);
     } catch {
       /* toastée */
     }
@@ -239,7 +273,7 @@ export function ConseillersView() {
                     </TableHead>
                     <TableHead className="text-center">Statut</TableHead>
                     {canManage && (
-                      <TableHead className="w-[92px] text-center">
+                      <TableHead className="w-[124px] text-center">
                         Actions
                       </TableHead>
                     )}
@@ -313,6 +347,26 @@ export function ConseillersView() {
                                 <Eye className="w-3.5 h-3.5" />
                               </Button>
                             )}
+                            {/* Task 54 — Réinitialiser l'accès : remet le mot
+                                de passe au standard SYGREN (téléphone). Nécessite
+                                un téléphone (identifiant ET mot de passe standard) ;
+                                sans téléphone, l'action reste possible via Modifier
+                                (mot de passe personnalisé). */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              disabled={!c.phone}
+                              onClick={() => setResetTarget(c)}
+                              aria-label={`Réinitialiser l'accès de ${c.full_name}`}
+                              title={
+                                c.phone
+                                  ? "Réinitialiser l'accès — mot de passe remis au standard (son numéro de téléphone)"
+                                  : "Renseignez d'abord un téléphone (identifiant + mot de passe standard)"
+                              }
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -453,6 +507,26 @@ export function ConseillersView() {
         icon={Trash2}
         onConfirm={onDelete}
         loading={deleteMut.isPending}
+      />
+
+      {/* === Task 54 — Confirmation de réinitialisation d'accès === */}
+      <ConfirmDialog
+        open={!!resetTarget}
+        onOpenChange={(open) => !open && setResetTarget(null)}
+        title={
+          resetTarget
+            ? `Réinitialiser l'accès de ${resetTarget.full_name} ?`
+            : "Réinitialiser l'accès ?"
+        }
+        description={
+          resetTarget?.phone
+            ? `Le mot de passe sera remis au STANDARD SYGREN : le numéro de téléphone du conseiller (${resetTarget.phone}). Il se connectera ensuite avec : Identifiant = ${resetTarget.phone}, Mot de passe = ${resetTarget.phone} — puis pourra le modifier via « Modifier votre mot de passe ». Le mot de passe actuel sera remplacé.`
+            : ""
+        }
+        confirmLabel="Réinitialiser l'accès"
+        icon={KeyRound}
+        onConfirm={onResetAccess}
+        loading={resetMut.isPending}
       />
 
       {/* v33 — « reproduire la même chose » : la vue Mon Secteur EXACTE du

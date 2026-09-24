@@ -4953,3 +4953,27 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - `go build` + `go vet` OK ; `gofmt` OK (patch appliqué par script pour préserver les tabulations) ; `tsc --noEmit` 0 erreur ; `next build` OK.
 - **Aucun changement de schéma** → Neon sans synchronisation nécessaire.
 - Déploiement : push `39f7222` → Vercel READY `39f7222`, **Render LIVE `39f7222`** (backend redéployé), front 200, `/api/health` 200.
+
+---
+
+## Task 54 — Permettre aux conseillers de se connecter avec leurs accès
+
+**Demande utilisateur** : « PERMETTRE AUX CONSEILLERS DE SE CONNECTER AVEC LEURS ACCES ».
+
+### Diagnostic (production)
+- Le rôle conseiller est DÉJÀ raccordé au login (onglet « Conseiller » de l'écran de connexion, v5 ; backend Login accepte téléphone OU email pour tout rôle ; 45 logins conseiller réussis dans l'audit).
+- Base Neon : 16 comptes conseillers ACTIFS. **10 n'ont AUCUN login réussi** depuis leur création (11/09) : ATSE, DAGBEU, GNANGON, KOFFI, KOUA, N'CHO, N'DRIN, N'ZOU, TCHIRIKE, DANON.
+- Vérification bcrypt locale + test live : leur mot de passe n'est PAS le standard SYGREN (téléphone) — un mot de passe personnalisé avait été saisi à la création et jamais communiqué (aucune demande de reset enregistrée).
+- Témoins : DOUMBIA (mdp = téléphone standard) se connecte ; les autres témoins connaissent leur mot de passe personnalisé.
+
+### Réalisation — Frontend (conseillers-view.tsx)
+- **Nouvelle action « Réinitialiser l'accès »** (icône clé) sur chaque ligne du module Utilisateurs > onglet Conseillers : remet le mot de passe du conseiller au STANDARD SYGREN = son numéro de téléphone (PUT /api/conseillers/{id} payload minimal {password}, aucun autre champ touché).
+- Dialogue de confirmation explicite : rappelle les identifiants de connexion résultants (Identifiant = téléphone, Mot de passe = téléphone) et avertit que le mot de passe actuel sera remplacé ; désactivée si le conseiller n'a pas de téléphone.
+- Le conseiller peut ensuite changer son mot de passe via « Modifier votre mot de passe ».
+
+### Réalisation — Synchronisation Neon (10 comptes bloqués)
+- Réinitialisation DIRECTE du hash bcrypt (coût 10, $2a$, identique à utils.HashPassword Go) des 10 conseillers jamais connectés : mot de passe = numéro de téléphone. Les 6 comptes fonctionnels ne sont PAS touchés.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK. Backend non modifié (aucun changement Render attendu).
+- Post-sync : test login production des comptes réinitialisés (téléphone/téléphone → 200).
