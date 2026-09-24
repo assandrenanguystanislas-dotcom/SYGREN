@@ -109,6 +109,7 @@ function AppContent() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const setHydrated = useAuthStore((s) => s.setHydrated);
   const refreshUser = useAuthStore((s) => s.refreshUser);
+  const refreshModules = useAuthStore((s) => s.refreshModules);
   const mustChangePassword = useAuthStore((s) => s.mustChangePassword);
   const clearMustChangePassword = useAuthStore((s) => s.clearMustChangePassword);
   // Active view persistée dans l'URL hash (#students, #sessions, etc.) pour
@@ -201,6 +202,21 @@ function AppContent() {
       refreshUser();
     }
   }, [hydrated, token, user, refreshUser]);
+
+  // Task 55 (fix) — rafraîchit TOUJOURS la liste des modules au démarrage de
+  // l'app (en arrière-plan, non bloquant). Avant ce fix, la liste modules[]
+  // persistée dans localStorage n'était rechargée QUE si le profil lui-même
+  // devait l'être : un admin (ou inspecteur) déjà connecté gardait donc une
+  // liste PÉRIMÉE et tout nouveau module déployé (ex: « Fichier du
+  // personnel ») restait invisible dans la navigation jusqu'à une
+  // déconnexion/reconnexion. Le ref anti-boucle limite à UNE exécution par
+  // montée de l'app.
+  const modulesRefreshedRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || !token || modulesRefreshedRef.current) return;
+    modulesRefreshedRef.current = true;
+    refreshModules().catch(() => {});
+  }, [hydrated, token, refreshModules]);
 
   // Task 23 — le Directeur atterrit directement sur le module Utilisateurs :
   // pas d'effet de redirection nécessaire — la vue rendue est DÉRIVÉE plus
