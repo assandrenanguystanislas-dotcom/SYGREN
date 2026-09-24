@@ -5065,3 +5065,17 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK.
 - Push `00fb4d2` → Vercel READY `00fb4d2`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes — 6/6 OK.
+
+## Itération — bandeau VERT par secteur + alternance blanc/vert très pâle
+
+**Demande** : « Chaque secteur forme un bloc distinct : son bandeau vert + un fond alterné (blanc / vert très pâle) entre blocs consécutifs — la lecture secteur par secteur est immédiate, c'est ce type de fichier que je veux voir apparaître visiblement ».
+
+### Réalisation (front seul — staff-data-view.tsx)
+- TABLEAU : le bandeau de secteur devient un BANDEAU VERT FRANC (bg-[#009E60], vert drapeau ivoirien, texte blanc gras) — chaque secteur forme un bloc immédiatement identifiable ; correction au passage : les bandeaux n'apparaissent QUE quand le classement par secteur est actif (la vue par défaut retrouve le fichier intact — la garde bySector manquait dans le flatMap).
+- Alternance des blocs : fond BLANC / VERT TRÈS PÂLE (bg-[#E6F4EB]) entre blocs consécutifs (remplace bg-muted/30 gris).
+- EXPORT EXCEL harmonisé : bandeau vert FF009E60 texte blanc (remplace E1F3E9/006B44), alternance FFE6F4EB, hauteur bandeau 20 — le classeur reproduit exactement le visuel du tableau.
+- Aucun changement backend ; interaction inchangée (clic sur SECTEUR = classement, re-clic = ordre initial).
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK.
+- Push `7a2cf66` (feat) + docs — vérifications production 6/6 (voir entrée suivante si applicable).
