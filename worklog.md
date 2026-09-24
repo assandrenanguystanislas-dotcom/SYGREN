@@ -5037,3 +5037,18 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK.
 - Push `124ce0e` → Vercel READY `124ce0e`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes — 6/6 OK.
+
+## Itération — classement du fichier par secteur EN UN CLIC (sans bande déroulante)
+
+**Demande** : « je ne veux pas de bande deroulante mais seulement par un simple clic tous le fichier se classe par secteur ».
+
+### Réalisation (front seul — staff-data-view.tsx)
+- SUPPRESSION du panneau déroulant (Popover) de l'itération précédente : plus aucune liste à faire défiler.
+- L'en-tête SECTEUR du tableau devient un BOUTON-BASCULE : surbrillance verte au survol conservée ; UN SIMPLE CLIC classe TOUT le fichier par secteur (ordre alphabétique des secteurs) ; un bandeau de groupe (fond vert pâle) s'insère devant chaque secteur : « NOM DU SECTEUR — N agent(s) · effectif X » ; re-clic = retour à l'ordre initial du fichier. En-tête surligné + chevron retourné tant que le classement est actif.
+- Tri STABLE : au sein d'un secteur, l'ordre initial de saisie est conservé ; les lignes sans secteur passent à la fin sous le bandeau « SANS SECTEUR — À COMPLÉTER ».
+- Export Excel : suit l'ordre AFFICHÉ (si classé par secteur, le classeur est organisé secteur par secteur) — format 14 colonnes inchangé.
+- Nettoyage : requête ["staff-records","all"], memos sectorGroups/unsetSectorCount et imports Badge/Popover supprimés (une seule requête fichier au lieu de deux).
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK.
+- Push `9eb84e1` → Vercel READY `9eb84e1`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes — 6/6 OK.
