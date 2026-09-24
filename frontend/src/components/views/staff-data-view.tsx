@@ -39,12 +39,6 @@ import { COURS_OPTIONS } from "@/components/personnel-dossier-fields";
 import { saveBlob, XLSX_MIME, slugFile } from "@/lib/doc-export";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,9 +108,9 @@ export function StaffDataView() {
 
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState(UNSET);
-  // Panneau « secteurs par groupe » ouvert au clic sur l'en-tête SECTEUR
-  // du tableau (demande utilisateur : couleur au survol + liste groupée).
-  const [sectorPanelOpen, setSectorPanelOpen] = useState(false);
+  // Classement du fichier par secteur : un simple CLIC sur l'en-tête
+  // SECTEUR du tableau bascule (re-clic = ordre initial du fichier).
+  const [bySector, setBySector] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StaffRecord | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY);
@@ -142,39 +136,6 @@ export function StaffDataView() {
     (sectorsData?.sectors ?? []).forEach((s) => map.set(s.id, s.name));
     return map;
   }, [sectorsData]);
-
-  // Fichier SANS filtre (recherche/secteur) — sert aux compteurs du
-  // panneau « secteurs par groupe » : chaque groupe affiche le nombre
-  // d'agents et l'effectif total du secteur, quel que soit le filtre actif.
-  const { data: allData } = useQuery({
-    queryKey: ["staff-records", "all"],
-    queryFn: () => staffDataApi.list(),
-  });
-  const allRecords = useMemo(() => allData?.staff_records ?? [], [allData]);
-
-  // Groupes de secteurs (tri alphabétique) : nom, agents, effectif cumulé.
-  const sectorGroups = useMemo(() => {
-    const groups = (sectorsData?.sectors ?? []).map((s) => {
-      const rows = allRecords.filter((r) => r.sector_id === s.id);
-      const effectif = rows.reduce(
-        (sum, r) => sum + (typeof r.effectif === "number" ? r.effectif : 0),
-        0,
-      );
-      return { id: s.id, name: s.name, count: rows.length, effectif };
-    });
-    groups.sort((a, b) => a.name.localeCompare(b.name, "fr"));
-    return groups;
-  }, [sectorsData, allRecords]);
-  const unsetSectorCount = useMemo(
-    () => allRecords.filter((r) => !r.sector_id).length,
-    [allRecords],
-  );
-
-  /** Sélection d'un secteur dans le panneau → filtre le tableau. */
-  function pickSector(id: string) {
-    setSectorFilter(id);
-    setSectorPanelOpen(false);
-  }
 
   const createMut = useCrudMutation(staffDataApi.create, {
     invalidateKeys: [["staff-records"]],
@@ -207,6 +168,38 @@ export function StaffDataView() {
       ),
     [records],
   );
+
+  // Affichage : ordre du fichier (défaut) ou classé par secteur (clic sur
+  // l'en-tête SECTEUR). Tri STABLE : au sein d'un même secteur, l'ordre
+  // initial de saisie est conservé ; les lignes sans secteur passent à la
+  // fin, sous le bandeau « SANS SECTEUR ».
+  const visibleRecords = useMemo(() => {
+    if (!bySector) return records;
+    const sectorName = (r: StaffRecord) =>
+      r.sector_id ? (sectorNames.get(r.sector_id) ?? null) : null;
+    return [...records].sort((a, b) => {
+      const na = sectorName(a);
+      const nb = sectorName(b);
+      if (!na && !nb) return 0;
+      if (!na) return 1;
+      if (!nb) return -1;
+      return na.localeCompare(nb, "fr");
+    });
+  }, [records, bySector, sectorNames]);
+
+  // Stats par secteur des lignes AFFICHÉES (bandeaux de groupe) :
+  // nombre d'agents + effectif cumulé du secteur.
+  const groupStats = useMemo(() => {
+    const m = new Map<string, { count: number; effectif: number }>();
+    for (const r of visibleRecords) {
+      const k = r.sector_id ?? "__none__";
+      const cur = m.get(k) ?? { count: 0, effectif: 0 };
+      cur.count += 1;
+      cur.effectif += typeof r.effectif === "number" ? r.effectif : 0;
+      m.set(k, cur);
+    }
+    return m;
+  }, [visibleRecords]);
 
   function openCreate() {
     setEditing(null);
@@ -262,13 +255,18 @@ export function StaffDataView() {
   async function handleExcel() {
     setExporting(true);
     try {
-      await exportExcelAsync(records, totalEffectif, sectorNames);
+      // Export dans l'ordre AFFICHÉ : si le fichier est classé par
+      // secteur, l'Excel suit ce même classement secteur par secteur.
+      await exportExcelAsync(visibleRecords, totalEffectif, sectorNames);
     } finally {
       setExporting(false);
     }
   }
 
   const busy = createMut.isPending || updateMut.isPending;
+
+  // Nombre de colonnes du tableau (colSpan des bandeaux de groupe).
+  const colCount = 14 + (canManage ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -375,90 +373,30 @@ export function StaffDataView() {
                   <TableRow>
                     <TableHead className="text-center w-[44px]">N°</TableHead>
                     <TableHead>
-                      {/* En-tête SECTEUR interactif : couleur au survol,
-                          clic = panneau des secteurs par groupe. */}
-                      <Popover
-                        open={sectorPanelOpen}
-                        onOpenChange={setSectorPanelOpen}
+                      {/* En-tête SECTEUR interactif : surbrillance au survol,
+                          un simple clic CLASSE tout le fichier par secteur
+                          (re-clic = retour à l'ordre initial du fichier). */}
+                      <button
+                        type="button"
+                        onClick={() => setBySector((v) => !v)}
+                        title={
+                          bySector
+                            ? "Revenir à l'ordre initial du fichier"
+                            : "Classer tout le fichier par secteur"
+                        }
+                        className={cn(
+                          "-mx-2 -my-1 inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-primary/10 hover:text-primary",
+                          bySector && "bg-primary/10 text-primary",
+                        )}
                       >
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            title="Cliquer pour afficher les secteurs par groupe"
-                            className="-mx-2 -my-1 inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-primary/10 hover:text-primary"
-                          >
-                            Secteur
-                            <ChevronDown
-                              className={cn(
-                                "h-3 w-3 opacity-60 transition-transform",
-                                sectorPanelOpen && "rotate-180",
-                              )}
-                            />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="w-80 p-2">
-                          <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            Secteurs du fichier — {allRecords.length} agent
-                            {allRecords.length > 1 ? "s" : ""}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => pickSector(UNSET)}
-                            className={cn(
-                              "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-primary/10",
-                              sectorFilter === UNSET &&
-                                "bg-primary/10 font-medium text-primary",
-                            )}
-                          >
-                            <span>Tous les secteurs</span>
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px]"
-                            >
-                              {allRecords.length}
-                            </Badge>
-                          </button>
-                          <div className="max-h-72 space-y-0.5 overflow-y-auto">
-                            {sectorGroups.map((g) => (
-                              <button
-                                key={g.id}
-                                type="button"
-                                onClick={() => pickSector(g.id)}
-                                className={cn(
-                                  "flex w-full items-start justify-between gap-2 rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/10",
-                                  sectorFilter === g.id &&
-                                    "border-primary/40 bg-primary/10",
-                                )}
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium">
-                                    {g.name}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {g.count} agent{g.count > 1 ? "s" : ""}
-                                    {g.effectif > 0
-                                      ? ` · effectif ${g.effectif}`
-                                      : ""}
-                                  </p>
-                                </div>
-                                <Badge
-                                  variant="outline"
-                                  className="mt-0.5 shrink-0 text-[10px]"
-                                >
-                                  {g.count}
-                                </Badge>
-                              </button>
-                            ))}
-                          </div>
-                          {unsetSectorCount > 0 && (
-                            <p className="mt-1 rounded-md bg-muted/60 px-2 py-1.5 text-xs text-muted-foreground">
-                              {unsetSectorCount} agent
-                              {unsetSectorCount > 1 ? "s" : ""} sans secteur
-                              &nbsp;— à compléter
-                            </p>
+                        Secteur
+                        <ChevronDown
+                          className={cn(
+                            "h-3 w-3 opacity-60 transition-transform",
+                            bySector && "rotate-180",
                           )}
-                        </PopoverContent>
-                      </Popover>
+                        />
+                      </button>
                     </TableHead>
                     <TableHead>Nom et prénom</TableHead>
                     <TableHead className="text-center">Sexe</TableHead>
@@ -480,9 +418,17 @@ export function StaffDataView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {records.map((rec, i) => {
+                  {visibleRecords.flatMap((rec, i) => {
                     const isFemale = rec.sexe === "F";
-                    return (
+                    // Bandeau de groupe : inséré avant la 1re ligne de
+                    // chaque secteur quand le fichier est classé par
+                    // secteur (clic sur l'en-tête SECTEUR).
+                    const sectorKey = rec.sector_id ?? "__none__";
+                    const prevSectorKey =
+                      i > 0
+                        ? (visibleRecords[i - 1].sector_id ?? "__none__")
+                        : null;
+                    const row = (
                       <TableRow key={rec.id} className="hover:bg-muted/40">
                         <TableCell className="text-center text-muted-foreground">
                           {i + 1}
@@ -559,6 +505,30 @@ export function StaffDataView() {
                         )}
                       </TableRow>
                     );
+                    if (sectorKey === prevSectorKey) return [row];
+                    const st = groupStats.get(sectorKey);
+                    const label = rec.sector_id
+                      ? (sectorNames.get(rec.sector_id) ?? "SECTEUR")
+                      : "SANS SECTEUR — À COMPLÉTER";
+                    return [
+                      <TableRow
+                        key={`sec-${sectorKey}`}
+                        className="bg-primary/5 hover:bg-primary/5"
+                      >
+                        <TableCell colSpan={colCount} className="py-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-primary">
+                            {label}
+                          </span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {st?.count ?? 1} agent{(st?.count ?? 1) > 1 ? "s" : ""}
+                            {st && st.effectif > 0
+                              ? ` · effectif ${st.effectif}`
+                              : ""}
+                          </span>
+                        </TableCell>
+                      </TableRow>,
+                      row,
+                    ];
                   })}
                 </TableBody>
               </Table>
