@@ -5052,3 +5052,16 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK.
 - Push `9eb84e1` → Vercel READY `9eb84e1`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes — 6/6 OK.
+
+## Itération — blocs visuels par secteur (tableau + export Excel)
+
+**Demande** : « Souhaitez-vous aussi que les lignes du tableau soient regroupées visuellement par secteur (bloc par secteur) plutôt que filtrées ? — oui ».
+
+### Réalisation (front seul — staff-data-view.tsx)
+- TABLEAU : quand le classement par secteur est actif, les blocs consécutifs ALTERNENT leur fond (blanc / vert très pâle bg-muted/30) — chaque secteur forme un bloc visuellement distinct sous son bandeau (memo blockParity : parité du bloc par ligne).
+- EXPORT EXCEL : quand le classement est actif, le classeur REPRODUIT les blocs — bandeau vert pâle (BANNER_BG E1F3E9, texte vert foncé) inséré devant chaque secteur (cellule fusionnée A:N, bordée) + alternance de fond très légère (BLOCK_BG F2F8F4) sur les lignes des blocs impairs. N° = ordre d'affichage (curseur rIdx + compteur agentNo) ; TOTAL EFFECTIF inchangé ; classement inactif → export plat identique à l'original.
+- Signature exportExcelAsync : nouveau paramètre grouped (passé = bySector).
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK.
+- Push `00fb4d2` → Vercel READY `00fb4d2`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes — 6/6 OK.
