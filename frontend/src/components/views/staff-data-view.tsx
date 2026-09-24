@@ -201,6 +201,24 @@ export function StaffDataView() {
     return m;
   }, [visibleRecords]);
 
+  // Alternance visuelle des BLOCS de secteurs : parité du bloc pour chaque
+  // ligne affichée (les blocs consécutifs s'alternent fond blanc / fond
+  // vert très pâle — chaque secteur forme un bloc distinct).
+  const blockParity = useMemo(() => {
+    const parity = new Map<string, boolean>();
+    let idx = -1;
+    let prev: string | null = null;
+    for (const r of visibleRecords) {
+      const k = r.sector_id ?? "__none__";
+      if (k !== prev) {
+        idx += 1;
+        prev = k;
+      }
+      parity.set(r.id, idx % 2 === 1);
+    }
+    return parity;
+  }, [visibleRecords]);
+
   function openCreate() {
     setEditing(null);
     setForm(EMPTY);
@@ -256,8 +274,9 @@ export function StaffDataView() {
     setExporting(true);
     try {
       // Export dans l'ordre AFFICHÉ : si le fichier est classé par
-      // secteur, l'Excel suit ce même classement secteur par secteur.
-      await exportExcelAsync(visibleRecords, totalEffectif, sectorNames);
+      // secteur, le classeur reproduit les BLOCS par secteur (bandeau
+      // + alternance de fond) secteur par secteur.
+      await exportExcelAsync(visibleRecords, totalEffectif, sectorNames, bySector);
     } finally {
       setExporting(false);
     }
@@ -429,7 +448,15 @@ export function StaffDataView() {
                         ? (visibleRecords[i - 1].sector_id ?? "__none__")
                         : null;
                     const row = (
-                      <TableRow key={rec.id} className="hover:bg-muted/40">
+                      <TableRow
+                        key={rec.id}
+                        className={cn(
+                          "hover:bg-muted/40",
+                          bySector &&
+                            blockParity.get(rec.id) &&
+                            "bg-muted/30",
+                        )}
+                      >
                         <TableCell className="text-center text-muted-foreground">
                           {i + 1}
                         </TableCell>
@@ -857,6 +884,7 @@ async function exportExcelAsync(
   records: StaffRecord[],
   totalEffectif: number,
   sectorNames?: Map<string, string>,
+  grouped = false, // classement par secteur actif → bandeaux + blocs
 ): Promise<void> {
   const { Workbook } = await import("exceljs");
   const wb = new Workbook();
@@ -907,6 +935,11 @@ async function exportExcelAsync(
   });
   const GREEN = { argb: "FF009E60" };
   const WHITE = { argb: "FFFFFFFF" };
+  // Blocs de secteurs (classement actif) : bandeau vert pâle par secteur
+  // + alternance de fond très légère entre blocs consécutifs.
+  const BANNER_BG = { argb: "FFE1F3E9" };
+  const BANNER_TEXT = { argb: "FF006B44" };
+  const BLOCK_BG = { argb: "FFF2F8F4" };
   const border = { style: "thin" as const, color: GREEN };
   const BOX = { top: border, left: border, bottom: border, right: border };
   const HEADERS = [
@@ -957,12 +990,42 @@ async function exportExcelAsync(
   });
   headRow.height = 22;
 
-  // Lignes du fichier — N° = ordre du fichier, femmes en rouge
-  // (convention de l'État nominatif du personnel).
-  records.forEach((rec, i) => {
-    const dataRow = ws.getRow(row + 1 + i);
+  // Lignes du fichier — N° = ordre d'affichage, femmes en rouge
+  // (convention de l'État nominatif du personnel). Classement par
+  // secteur actif : un BANDEAU vert pâle s'insère devant chaque secteur
+  // et les blocs consécutifs alternent leur fond (visuel de l'appli).
+  let rIdx = row + 1;
+  let agentNo = 0;
+  let blockIdx = -1;
+  let prevKey: string | null = null;
+  for (const rec of records) {
+    const sectorKey = rec.sector_id ?? "__none__";
+    if (grouped && sectorKey !== prevKey) {
+      blockIdx += 1;
+      prevKey = sectorKey;
+      const bannerRow = ws.getRow(rIdx);
+      ws.mergeCells(rIdx, 1, rIdx, 14);
+      const bannerCell = ws.getCell(rIdx, 1);
+      const label = rec.sector_id
+        ? (sectorNames?.get(rec.sector_id) ?? "SECTEUR").toUpperCase()
+        : "SANS SECTEUR — À COMPLÉTER";
+      bannerCell.value = label;
+      bannerCell.font = font(10, true, BANNER_TEXT.argb);
+      bannerCell.alignment = { horizontal: "left", vertical: "middle" };
+      for (let col = 1; col <= 14; col++) {
+        const c = ws.getCell(rIdx, col);
+        c.border = BOX;
+        c.fill = { type: "pattern", pattern: "solid", fgColor: BANNER_BG };
+      }
+      bannerRow.height = 18;
+      rIdx += 1;
+    }
+    agentNo += 1;
+    const shade =
+      grouped && blockIdx % 2 === 1 ? BLOCK_BG : undefined;
+    const dataRow = ws.getRow(rIdx);
     dataRow.values = [
-      i + 1,
+      agentNo,
       rec.sector_id ? (sectorNames?.get(rec.sector_id) ?? "") : "",
       rec.full_name.toUpperCase(),
       rec.sexe ?? "",
@@ -987,12 +1050,16 @@ async function exportExcelAsync(
         horizontal: isNameCol || col === 6 ? "left" : "center",
         vertical: "middle",
       };
+      if (shade) {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: shade };
+      }
     });
     dataRow.height = 18;
-  });
+    rIdx += 1;
+  }
 
   // Ligne TOTAL (effectif).
-  const totalRowIdx = row + 1 + records.length;
+  const totalRowIdx = rIdx;
   ws.mergeCells(totalRowIdx, 1, totalRowIdx, 13);
   const totalCell = ws.getCell(totalRowIdx, 1);
   totalCell.value = "TOTAL EFFECTIF";
