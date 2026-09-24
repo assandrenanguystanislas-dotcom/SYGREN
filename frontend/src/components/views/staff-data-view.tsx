@@ -452,9 +452,12 @@ export function StaffDataView() {
                         key={rec.id}
                         className={cn(
                           "hover:bg-muted/40",
+                          // Blocs consécutifs : alternance de fond
+                          // BLANC / VERT TRÈS PÂLE — chaque secteur
+                          // reste un bloc distinct sous son bandeau.
                           bySector &&
                             blockParity.get(rec.id) &&
-                            "bg-muted/30",
+                            "bg-[#E6F4EB]",
                         )}
                       >
                         <TableCell className="text-center text-muted-foreground">
@@ -532,21 +535,29 @@ export function StaffDataView() {
                         )}
                       </TableRow>
                     );
-                    if (sectorKey === prevSectorKey) return [row];
+                    // Bandeaux + blocs UNIQUEMENT quand le classement
+                    // par secteur est actif (clic sur l'en-tête
+                    // SECTEUR) ; vue par défaut = fichier intact.
+                    if (!bySector || sectorKey === prevSectorKey)
+                      return [row];
                     const st = groupStats.get(sectorKey);
                     const label = rec.sector_id
                       ? (sectorNames.get(rec.sector_id) ?? "SECTEUR")
                       : "SANS SECTEUR — À COMPLÉTER";
                     return [
+                      // Bandeau VERT du secteur : fond vert franc
+                      // (vert drapeau ivoirien, identique à l'export
+                      // Excel), texte blanc — chaque secteur forme un
+                      // bloc immédiatement identifiable.
                       <TableRow
                         key={`sec-${sectorKey}`}
-                        className="bg-primary/5 hover:bg-primary/5"
+                        className="bg-[#009E60] hover:bg-[#009E60]"
                       >
-                        <TableCell colSpan={colCount} className="py-1.5">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-primary">
+                        <TableCell colSpan={colCount} className="py-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-white">
                             {label}
                           </span>
-                          <span className="ml-2 text-xs text-muted-foreground">
+                          <span className="ml-2 text-xs text-white/85">
                             {st?.count ?? 1} agent{(st?.count ?? 1) > 1 ? "s" : ""}
                             {st && st.effectif > 0
                               ? ` · effectif ${st.effectif}`
@@ -935,11 +946,13 @@ async function exportExcelAsync(
   });
   const GREEN = { argb: "FF009E60" };
   const WHITE = { argb: "FFFFFFFF" };
-  // Blocs de secteurs (classement actif) : bandeau vert pâle par secteur
-  // + alternance de fond très légère entre blocs consécutifs.
-  const BANNER_BG = { argb: "FFE1F3E9" };
-  const BANNER_TEXT = { argb: "FF006B44" };
-  const BLOCK_BG = { argb: "FFF2F8F4" };
+  // Blocs de secteurs (classement actif) : BANDEAU VERT par secteur
+  // (même vert que l'en-tête du classeur) + alternance de fond
+  // blanc / vert très pâle entre blocs consécutifs — visuel identique
+  // au tableau de l'appli.
+  const BANNER_BG = { argb: "FF009E60" };
+  const BANNER_TEXT = { argb: "FFFFFFFF" };
+  const BLOCK_BG = { argb: "FFE6F4EB" };
   const border = { style: "thin" as const, color: GREEN };
   const BOX = { top: border, left: border, bottom: border, right: border };
   const HEADERS = [
@@ -992,8 +1005,9 @@ async function exportExcelAsync(
 
   // Lignes du fichier — N° = ordre d'affichage, femmes en rouge
   // (convention de l'État nominatif du personnel). Classement par
-  // secteur actif : un BANDEAU vert pâle s'insère devant chaque secteur
-  // et les blocs consécutifs alternent leur fond (visuel de l'appli).
+  // secteur actif : un BANDEAU VERT s'insère devant chaque secteur et
+  // les blocs consécutifs alternent leur fond blanc / vert très pâle
+  // (visuel identique au tableau de l'appli).
   let rIdx = row + 1;
   let agentNo = 0;
   let blockIdx = -1;
@@ -1017,7 +1031,7 @@ async function exportExcelAsync(
         c.border = BOX;
         c.fill = { type: "pattern", pattern: "solid", fgColor: BANNER_BG };
       }
-      bannerRow.height = 18;
+      bannerRow.height = 20;
       rIdx += 1;
     }
     agentNo += 1;
