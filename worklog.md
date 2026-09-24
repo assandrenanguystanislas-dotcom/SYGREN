@@ -4929,3 +4929,27 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK. Frontend seul — backend non touché, Neon sans changement.
 - Déploiement : push `4fdfb81` → Vercel READY `4fdfb81`, Render LIVE `956adca`, front 200, `/api/health` 200 (1er essai timeout à froid, 200 à la reprise).
+
+---
+
+## Task 53 — Changement d'école : transférer un agent ou un élève vers un autre établissement
+
+**Demande utilisateur** : « DANS LES MODULES UTILISATEURS ETAT NOMINATIF ET ELEVES CREER UNE PLAGE DANS LAQUELLE ON POURRA FAIRE DES CHANGEMENTS D'ECOLES AU CAS OU L'ENSEIGNANT OU L'ELEVE CHANGEAIT D'ETABLISSEMENT ».
+
+### Réalisation — Frontend
+- **Nouveau composant `school-transfer-section.tsx`** — LA « PLAGE » demandée : carte « Changement d'école » en tête de module (bande déroulante des personnes transférables, recherche par nom ou école actuelle, bouton « Changer d'école »).
+- **Nouveau composant `school-transfer-dialog.tsx`** — dialogue guidé : école cible (SchoolCombobox, école actuelle exclue) ; pour un ÉLÈVE : classe cible dans la nouvelle école (classes chargées à la sélection) ; résumé « X passera de A à B » ; rappel des règles de gestion ; toast + invalidations.
+- **teachers-view** (adjoints — qui alimentent l'état nominatif) : plage en tête + bouton « Changer d'école » sur chaque fiche. Périmètre : Super Admin + Admin IEP (règle v4 de réaffectation ; le directeur ne voit que son école dans ListSchools, il garde le formulaire d'édition classique).
+- **directors-view** : plage + bouton (mutation d'un directeur). Périmètre : Super Admin + Admin IEP.
+- **students-view** : plage + bouton sur chaque ligne. Périmètre : admin (toutes écoles) + conseiller (écoles de SON secteur — liste déjà scopée par le backend).
+- **audit-view** : libellés des 2 nouvelles actions (filtre + affichage).
+
+### Réalisation — Backend (3 handlers, diff minimal)
+- **UpdateTeacher / UpdateDirector** : si l'école change réellement → détachement des classes tenues (`classes.teacher_id = NULL`, cohérence état nominatif) + audit `user.school_transferred` (from_school / to_school).
+- **UpdateStudent** : audit `student.school_transferred` (from/to school + classes) quand la classe cible appartient à une autre école — le matricule et le dossier restent attachés à l'élève.
+- Règles existantes conservées : adjoint → l'école cible doit avoir un directeur (409 sinon) ; directeur → l'école cible ne doit pas avoir d'autre directeur actif (409).
+
+### Vérifications
+- `go build` + `go vet` OK ; `gofmt` OK (patch appliqué par script pour préserver les tabulations) ; `tsc --noEmit` 0 erreur ; `next build` OK.
+- **Aucun changement de schéma** → Neon sans synchronisation nécessaire.
+- Déploiement : push `39f7222` → Vercel READY `39f7222`, **Render LIVE `39f7222`** (backend redéployé), front 200, `/api/health` 200.
