@@ -5007,3 +5007,19 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - Déploiement : push `f30e7f3` → Vercel READY `f30e7f3`, **Render LIVE `f30e7f3`** (backend redéployé), front 200, `/api/health` 200.
 - **Neon synchronisée automatiquement au boot** : table staff_records créée, 192 lignes pré-remplies (188 secteurs, 151 effectifs), setting staff_records.seeded=1, 2 cellules RBAC staff-data r+w.
 - Test bout-en-bout production (lecture seule) : login admin → GET /api/staff-records → 192 lignes complètes (1re : ABIE OKPO NOELLE, F, 281789B, IO, 08/06/2000, CE2, ADJOINT(E), 0749830355, effectif 58, secteur renseigné).
+
+## Fix — « Fichier du personnel » invisible dans la navigation
+
+**Signalement** : « Module « Fichier du personnel » je ne vois pas dans les modules ».
+
+### Diagnostic
+- Backend sain : `/api/n` (ListUserModules) renvoie `staff-data` pour admin et inspector (IsIrreducible admin couvre tous les modules sauf `users.conseiller` ; cellules role_modules vérifiées en Neon : admin r+w, inspector r+w, autres r/r).
+- Cause racine FRONT : `page.tsx` ne rappelait `refreshUser()` (qui déclenche `refreshModules()`) QUE si le profil lui-même devait être rechargé (pas d'user, ou directeur/enseignant sans school_code). Pour un admin/inspector déjà connecté, la liste `modules[]` persistée dans localStorage (zustand-persist) n'était JAMAIS rechargée → liste périmée d'avant le déploiement Task 55 → `isItemVisible` masquait l'item (`moduleKeys` sans `staff-data`). Toute session connectée avant le déploiement était touchée ; une déconnexion/reconnexion l'aurait masqué aussi.
+
+### Réalisation
+- `page.tsx` : nouvel effet one-shot (ref anti-boucle) qui appelle `refreshModules()` au démarrage de l'app pour TOUT user authentifié (arrière-plan, non bloquant). La navigation se recalcule dès la réponse `/api/n` → les nouveaux modules déployés apparaissent sans reconnexion.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK. Backend non modifié.
+- Push `2957cdc` → Vercel READY `2957cdc`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes staff_records.
+- Pour voir le module : recharger simplement la page (F5) — plus besoin de se reconnecter.
