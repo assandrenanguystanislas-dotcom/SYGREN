@@ -99,12 +99,22 @@
 //     (ps d'entête sans marge + armoiries 38, hauteurs de rangées 1-9
 //     compactes) — la page 1 accueille ainsi 12 lignes et plus.
 //
+// v11 — PIED DE PAGE RÉORGANISÉ (demande utilisateur) :
+//   - N.B (femmes en rouge, RPL / MAC / MSC) CENTRÉ sous le tableau ;
+//   - mention « (A RETOURNER EN 03 EXEMPLAIRES) » CENTRÉE et nom du
+//     Directeur AU MÊME NIVEAU — même ligne, bloc « Le Directeur » +
+//     NOM à droite (auparavant la signature figurait AU-DESSUS du N.B)
+//     — dans les 3 modèles ;
+//   - le modèle Excel reçoit désormais le même pied de page (N.B +
+//     mention + signature) que PDF et Word — fidélité des 3 modèles.
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
 // isolement #personnel-doc, lignes insécables).
 
 import { useQuery } from "@tanstack/react-query";
+import type { CellValue } from "exceljs";
 import { Loader2, X } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 
@@ -649,40 +659,18 @@ export function PersonnelDocument({
           </tbody>
         </table>
 
-        {/* --- Signature + N.B (modèle reçu) --- */}
+        {/* --- N.B + mention + signature (modèle reçu) — v11 : N.B et
+             mention CENTRÉS ; le nom du Directeur est AU MÊME NIVEAU que
+             « (A RETOURNER EN 03 EXEMPLAIRES) » (flex 1 / auto / 1 : la
+             mention reste centrée sur la page, le bloc « Le Directeur »
+             occupe le tiers droit, première ligne alignée). --- */}
         <div style={{ marginTop: "10px" }}>
           <div
             style={{
               fontSize: "12px",
               fontWeight: 700,
-              textDecoration: "underline",
-              margin: "0 0 6px 12px",
-            }}
-          >
-            Le Directeur
-          </div>
-          {/* v6 — NOM du directeur en caractère d'imprimerie (majuscules,
-              gras) SOUS « Le Directeur » — même style que les autres
-              documents officiels ; masqué si le personnel est vide. */}
-          {directeurName ? (
-            <div
-              style={{
-                fontSize: "12px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.3px",
-                margin: "0 0 6px 12px",
-              }}
-            >
-              {directeurName}
-            </div>
-          ) : null}
-          <div
-            style={{
-              fontSize: "12px",
-              fontWeight: 700,
-              margin: "0 0 0 18%",
               lineHeight: 1.45,
+              textAlign: "center",
             }}
           >
             <div>
@@ -696,14 +684,48 @@ export function PersonnelDocument({
           </div>
           <div
             style={{
-              fontSize: "12px",
-              fontWeight: 700,
-              margin: "8px 0 0 18%",
-              letterSpacing: "0.4px",
-              color: CI_GREEN_TEXT,
+              display: "flex",
+              alignItems: "flex-start",
+              marginTop: "8px",
             }}
           >
-            (A RETOURNER EN <u>03 EXEMPLAIRES</u>&nbsp;)
+            <div style={{ flex: 1 }} />
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "0.4px",
+                color: CI_GREEN_TEXT,
+              }}
+            >
+              (A RETOURNER EN <u>03 EXEMPLAIRES</u>&nbsp;)
+            </div>
+            {/* v11 — bloc Directeur à droite, AU MÊME NIVEAU que la
+                mention ; NOM en caractère d'imprimerie (v6), masqué si
+                le personnel est vide. */}
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  textDecoration: "underline",
+                }}
+              >
+                Le Directeur
+              </div>
+              {directeurName ? (
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.3px",
+                  }}
+                >
+                  {directeurName}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
         </div>
@@ -1004,6 +1026,8 @@ table.hdr td { border:none; vertical-align:top; font-size:9.5px; line-height:1.2
 table.doc { border-collapse:collapse; width:100%; table-layout:fixed; }
 table.doc td, table.doc th { overflow-wrap:break-word; }
 thead.rep { display:table-header-group; }
+table.sig { border-collapse:collapse; width:100%; }
+table.sig td { border:none; vertical-align:top; }
 `,
     bodyHtml: `
 ${header}
@@ -1022,14 +1046,19 @@ ${totalRow}
 </tbody>
 </table>
 <div style="margin-top:10px;">
-<p style="font-size:12px; font-weight:bold; text-decoration:underline; margin-left:12px;">Le Directeur</p>
-${o.directeur.trim() ? `<p style="font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:0.3px; margin-left:12px;">${esc(o.directeur.trim().toUpperCase())}</p>` : ""}
-<div style="font-size:12px; font-weight:bold; margin-left:18%; line-height:1.45;">
-<p>N.B: Ecrire le nom des <span style="color:#e00000;">femmes</span> en rouge.</p>
-<p>Pr&eacute;ciser les RPL (Rempla&ccedil;ants) , MAC (Malade Avec Certificat),</p>
-<p>MSC (Malade Sans Certificat)</p>
+<div style="font-size:12px; font-weight:bold; line-height:1.45; text-align:center;">
+<p style="margin:0;">N.B: Ecrire le nom des <span style="color:#e00000;">femmes</span> en rouge.</p>
+<p style="margin:0;">Pr&eacute;ciser les RPL (Rempla&ccedil;ants) , MAC (Malade Avec Certificat),</p>
+<p style="margin:0;">MSC (Malade Sans Certificat)</p>
 </div>
-<p style="font-size:12px; font-weight:bold; margin:8px 0 0 18%; letter-spacing:0.4px; color:#00734A;">(A RETOURNER EN <u>03 EXEMPLAIRES</u>&nbsp;)</p>
+<table class=sig style="margin-top:8px;"><tr>
+<td style="width:33%;"></td>
+<td style="width:34%; text-align:center; font-size:12px; font-weight:bold; letter-spacing:0.4px; color:#00734A;">(A RETOURNER EN <u>03 EXEMPLAIRES</u>&nbsp;)</td>
+<td style="width:33%; text-align:center; font-size:12px;">
+<p style="margin:0; font-weight:bold; text-decoration:underline;">Le Directeur</p>
+${o.directeur.trim() ? `<p style="margin:0; font-weight:bold; text-transform:uppercase; letter-spacing:0.3px;">${esc(o.directeur.trim().toUpperCase())}</p>` : ""}
+</td>
+</tr></table>
 </div>
 `,
   });
@@ -1279,17 +1308,56 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN_BG };
   }
 
-  // --- Signature « Le Directeur » + NOM (caractère d'imprimerie) ---
-  const rSig = rTotal + 2;
-  const sigLabel = ws.getCell(rSig, 3);
+  // --- Pied de page (v11 — fidèle aux modèles PDF / Word) : N.B (3
+  // lignes, « femmes » en rouge) et mention « (A RETOURNER EN 03
+  // EXEMPLAIRES) » CENTRÉS ; le bloc « Le Directeur » + NOM (caractère
+  // d'imprimerie) est placé AU MÊME NIVEAU que la mention, à droite
+  // (colonnes 16-21). ---
+  const rNb = rTotal + 2;
+  const centeredRow = (r: number, value: CellValue) => {
+    ws.mergeCells(r, 1, r, 21);
+    const c = ws.getCell(r, 1);
+    c.value = value;
+    if (typeof value === "string") c.font = font(11, true);
+    c.alignment = { horizontal: "center", vertical: "middle" };
+    ws.getRow(r).height = 13;
+  };
+  centeredRow(rNb, {
+    richText: [
+      { text: "N.B: Ecrire le nom des ", font: font(11, true) },
+      { text: "femmes", font: { name: "Arial", size: 11, bold: true, color: RED } },
+      { text: " en rouge.", font: font(11, true) },
+    ],
+  });
+  centeredRow(rNb + 1, "Préciser les RPL (Remplaçants) , MAC (Malade Avec Certificat),");
+  centeredRow(rNb + 2, "MSC (Malade Sans Certificat)");
+  // Rangée unique : mention centrée (colonnes 1-15) + signature à
+  // droite (colonnes 16-21) — « Le Directeur » au même niveau que la
+  // mention ; NOM juste en dessous.
+  const rM = rNb + 4; // une rangée libre entre le N.B et la mention
+  ws.mergeCells(rM, 1, rM, 15);
+  const mention = ws.getCell(rM, 1);
+  mention.value = {
+    richText: [
+      { text: "(A RETOURNER EN ", font: font(11, true, GREEN_TXT.argb) },
+      { text: "03 EXEMPLAIRES", font: { name: "Arial", size: 11, bold: true, color: GREEN_TXT, underline: true } },
+      { text: " )", font: font(11, true, GREEN_TXT.argb) },
+    ],
+  };
+  mention.alignment = { horizontal: "center", vertical: "middle" };
+  ws.mergeCells(rM, 16, rM, 21);
+  const sigLabel = ws.getCell(rM, 16);
   sigLabel.value = "Le Directeur";
   sigLabel.font = { ...font(11, true), underline: true };
-  sigLabel.alignment = { horizontal: "left", vertical: "middle" };
+  sigLabel.alignment = { horizontal: "center", vertical: "middle" };
+  ws.getRow(rM).height = 15;
   if (o.directeur.trim()) {
-    const sigName = ws.getCell(rSig + 2, 3);
+    ws.mergeCells(rM + 1, 16, rM + 1, 21);
+    const sigName = ws.getCell(rM + 1, 16);
     sigName.value = o.directeur.trim().toUpperCase();
     sigName.font = font(10, true);
-    sigName.alignment = { horizontal: "left", vertical: "middle" };
+    sigName.alignment = { horizontal: "center", vertical: "middle" };
+    ws.getRow(rM + 1).height = 13;
   }
 
   // --- Armoiries (meilleur effort — omises si indisponibles) ---
