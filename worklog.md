@@ -5023,3 +5023,17 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - `tsc --noEmit` 0 erreur ; `next build` OK. Backend non modifié.
 - Push `2957cdc` → Vercel READY `2957cdc`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes staff_records.
 - Pour voir le module : recharger simplement la page (F5) — plus besoin de se reconnecter.
+
+## Itération — en-tête SECTEUR interactif (Fichier du personnel)
+
+**Demande** : « je veux que lorque je positionne le curseur sur "secteur" une couleur apparait et en cliquant dessus les secteurs par groupe apparaissent ».
+
+### Réalisation (front seul — staff-data-view.tsx)
+- En-tête SECTEUR du tableau désormais INTERACTIF : au survol, surbrillance verte (hover:bg-primary/10 + texte primary) + chevron indicateur ; curseur pointer ; infobulle « Cliquer pour afficher les secteurs par groupe ».
+- Au clic : panneau (Popover) « SECTEURS DU FICHIER — N agents » listant les secteurs PAR GROUPE, triés alphabétiquement : chaque groupe porte le nom du secteur, le nombre d'agents et l'effectif cumulé (+ badge compte). Clic sur un groupe → le tableau est filtré sur ce secteur (synchronisé avec le filtre de la barre d'outils) ; entrée « Tous les secteurs » pour réafficher l'ensemble ; groupes filtrés/survolés surlignés.
+- Compteurs ALWAYS justes : nouvelle requête non filtrée (["staff-records","all"]) dédiée aux stats des groupes ; note « N agents sans secteur — à compléter » affichée si des lignes n'ont pas de secteur (4 actuellement).
+- Aucun changement backend ; RBAC inchangé.
+
+### Vérifications
+- `tsc --noEmit` 0 erreur ; `next build` OK.
+- Push `124ce0e` → Vercel READY `124ce0e`, Render LIVE `f30e7f3` (inchangé), front 200, `/api/health` 200, Neon 192 lignes — 6/6 OK.
