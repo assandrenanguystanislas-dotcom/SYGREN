@@ -5079,3 +5079,17 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - `tsc --noEmit` 0 erreur ; `next build` OK.
 - Push `7a2cf66` (feat) + docs — vérifications production 6/6 (voir entrée suivante si applicable).
+
+## Itération — colonne ÉCOLES dans le Fichier du personnel (15 colonnes)
+
+**Demande** : « AJOUTER UNE COLONNE « ÉCOLES » ENTRE SECTEUR ET NOM ET PRENOMS ET INSÉRER LES ÉCOLES ».
+
+### Réalisation
+- BACKEND : StaffRecord.SchoolID (*string, index, table schools) — AutoMigrate ajoute la colonne au boot ; StaffRecordInput + applyStaffRecordFields (chaîne vide = aucune école) ; recherche q étendue au NOM de l'école (sous-requête schools) ; seed : SchoolID repris du dossier.
+- BACKEND : backfillStaffRecordSchools ONE-SHOT (setting staff_records.schools_backfilled) — reprise de l'école du dossier de chaque ligne SANS école : matching par nom complet, désambiguïsation par matricule, aucun remplissage en cas de doute (écoles candidates distinctes). Simulation Neon : 192/192 noms trouvés, 1 seul groupe d'homonymes à écoles différentes.
+- FRONT : types (school_id) ; SchoolCombobox : props allowEmpty/emptyLabel (« — Aucune école — ») ; staff-data-view : colonne ÉCOLES entre SECTEUR et NOM ET PRÉNOM (tableau + cellule nom d'école), champ École (SchoolCombobox hybride bande déroulante + saisie lettres/code) dans le dialog, colCount 15, export Excel 15 colonnes (ÉCOLES insérée, largeur 30, bandeaux/bordures/total recalés à 15, noms d'écoles dans les lignes).
+- Formulaire : description « Les 15 colonnes… ».
+
+### Vérifications
+- go build + go vet OK (toolchain locale) ; tsc --noEmit 0 erreur ; next build OK.
+- Push + vérifications production (Render déploie le BACKEND cette fois : attendre le LIVE du nouveau SHA, vérifier le log backfill + Neon school_id renseigné).

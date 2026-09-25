@@ -117,12 +117,15 @@ export function computeAnciennete(iso?: string | null): string {
   return years === 1 ? "1 an" : `${years} ans`;
 }
 
-/** Task 55 — Une ligne du « Fichier du personnel » : les 14 colonnes du
+/** Task 55 — Une ligne du « Fichier du personnel » : les 15 colonnes du
  *  fichier Excel à compléter dans son module (N° = ordre d'affichage,
  *  calculé). Dates RFC3339 côté API. */
 export interface StaffRecord {
   id: string;
   sector_id?: string | null;
+  /** ÉCOLES — école d'affectation (table schools), reprise du dossier
+   *  personnel au seed, modifiable dans le module. */
+  school_id?: string | null;
   full_name: string;
   sexe?: SexeCode | null;
   date_naissance?: string | null;
@@ -145,6 +148,7 @@ export interface StaffRecord {
  *  envoie toujours l'objet entier ; vide = valeur effacée. */
 export interface StaffRecordInput {
   sector_id?: string | null;
+  school_id?: string | null;
   full_name: string;
   sexe?: string | null;
   date_naissance?: string | null;

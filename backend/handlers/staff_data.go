@@ -3,10 +3,10 @@ package handlers
 // === Fichier du personnel (module "staff-data", Task 55) ===
 //
 // Fichier administratif EXCEL à compléter à tout moment : chaque ligne
-// porte les 14 colonnes demandées — N° (ordre d'affichage, calculé par
-// le client), SECTEUR, NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE
-// NAISSANCE, CATÉGORIE, MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ, COURS,
-// FONCTION, CONTACT, EFFECTIF.
+// porte les 15 colonnes demandées — N° (ordre d'affichage, calculé par
+// le client), SECTEUR, ÉCOLES, NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE,
+// LIEU DE NAISSANCE, CATÉGORIE, MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ,
+// COURS, FONCTION, CONTACT, EFFECTIF.
 //
 // Contrairement au dossier personnel des comptes (Utilisateurs), ce
 // fichier est INDÉPENDANT des comptes users : il peut lister des agents
@@ -42,6 +42,7 @@ import (
 // reçue de l'API).
 type StaffRecordInput struct {
 	SectorID      *string `json:"sector_id"`
+	SchoolID      *string `json:"school_id"`
 	FullName      string  `json:"full_name"`
 	Sexe          *string `json:"sexe"`
 	DateNaissance *string `json:"date_naissance"`
@@ -66,6 +67,8 @@ func applyStaffRecordFields(rec *models.StaffRecord, in StaffRecordInput) error 
 
 	// Secteur — chaîne vide = aucun secteur (à compléter plus tard).
 	rec.SectorID = cleanDossierStr(in.SectorID)
+	// École — chaîne vide = aucune école (à compléter plus tard).
+	rec.SchoolID = cleanDossierStr(in.SchoolID)
 	rec.FullName = in.FullName
 	rec.Sexe = nil
 	if in.Sexe != nil && *in.Sexe != "" {
@@ -135,17 +138,19 @@ func errStaffDate(field string) error {
 }
 
 // ListStaffRecords retourne les lignes du fichier du personnel.
-// Query : ?q=recherche (nom, matricule, contact, lieu de naissance) et
-// ?sector_id= filtrage par secteur. Tri : ordre de saisie (created_at),
-// le N° affiché = position dans la liste.
+// Query : ?q=recherche (nom, matricule, contact, lieu de naissance,
+// nom d'école) et ?sector_id= filtrage par secteur. Tri : ordre de
+// saisie (created_at), le N° affiché = position dans la liste.
 func ListStaffRecords(w http.ResponseWriter, r *http.Request) {
 	query := database.DB.Model(&models.StaffRecord{})
 	if q := r.URL.Query().Get("q"); q != "" {
 		pattern := "%" + q + "%"
 		// LOWER() : compatible SQLite (dev) ET PostgreSQL (prod).
+		// La recherche par école passe par une sous-requête sur
+		// le NOM de l'école (staff_records porte school_id).
 		query = query.Where(
-			"LOWER(full_name) LIKE ? OR LOWER(matricule) LIKE ? OR LOWER(contact) LIKE ? OR LOWER(lieu_naissance) LIKE ?",
-			pattern, pattern, pattern, pattern,
+			"LOWER(full_name) LIKE ? OR LOWER(matricule) LIKE ? OR LOWER(contact) LIKE ? OR LOWER(lieu_naissance) LIKE ? OR school_id IN (SELECT id FROM schools WHERE LOWER(name) LIKE ?)",
+			pattern, pattern, pattern, pattern, pattern,
 		)
 	}
 	if sectorID := r.URL.Query().Get("sector_id"); sectorID != "" {

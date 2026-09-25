@@ -770,11 +770,11 @@ func (r *StaffLevelReport) BeforeCreate(tx *gorm.DB) error {
 
 // StaffRecord — une ligne du « Fichier du personnel » (Task 55).
 //
-// Fichier administratif à compléter à tout moment, avec les 14 colonnes
+// Fichier administratif à compléter à tout moment, avec les 15 colonnes
 // demandées : N° (ordre d'affichage, calculé — jamais stocké), SECTEUR,
-// NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE NAISSANCE, CATÉGORIE,
-// MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ, COURS, FONCTION, CONTACT,
-// EFFECTIF.
+// ÉCOLES, NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE NAISSANCE,
+// CATÉGORIE, MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ, COURS, FONCTION,
+// CONTACT, EFFECTIF.
 //
 // Indépendant des comptes users : le fichier peut lister des agents sans
 // compte SYGREN. Pré-rempli une seule fois (seed one-shot) depuis les
@@ -785,8 +785,11 @@ func (r *StaffLevelReport) BeforeCreate(tx *gorm.DB) error {
 type StaffRecord struct {
 	ID       string  `gorm:"primaryKey;type:text" json:"id"`
 	SectorID *string `gorm:"type:text;index" json:"sector_id,omitempty"` // secteur d'affectation (table sectors)
-	FullName string  `gorm:"type:text" json:"full_name"`                 // NOM ET PRÉNOM
-	Sexe     *string `gorm:"type:text" json:"sexe,omitempty"`            // F | G
+	// ÉCOLES — école d'affectation de l'agent (table schools), reprise
+	// du dossier personnel au seed, modifiable dans le module.
+	SchoolID *string `gorm:"type:text;index" json:"school_id,omitempty"`
+	FullName string  `gorm:"type:text" json:"full_name"`      // NOM ET PRÉNOM
+	Sexe     *string `gorm:"type:text" json:"sexe,omitempty"` // F | G
 	// Date et lieu de naissance.
 	DateNaissance *time.Time `json:"date_naissance,omitempty"`
 	LieuNaissance *string    `gorm:"type:text" json:"lieu_naissance,omitempty"`

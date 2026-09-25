@@ -26,6 +26,8 @@ export function SchoolCombobox({
   id,
   disabled,
   placeholder = "Choisir une école…",
+  allowEmpty = false,
+  emptyLabel = "— Aucune école —",
 }: {
   schools: SchoolWithStats[];
   value: string;
@@ -33,6 +35,9 @@ export function SchoolCombobox({
   id?: string;
   disabled?: boolean;
   placeholder?: string;
+  /** Filtres : ajoute une entrée « — Aucune école — » (valeur ""). */
+  allowEmpty?: boolean;
+  emptyLabel?: string;
 }) {
   const items: ComboItem[] = schools.map((s) => ({
     value: s.id,
@@ -58,6 +63,9 @@ export function SchoolCombobox({
       emptyText="Aucune école ne correspond."
       groupLabel="Toutes les écoles"
       icon={<School className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
+      allowEmpty={allowEmpty}
+      emptyValue=""
+      emptyLabel={emptyLabel}
     />
   );
 }

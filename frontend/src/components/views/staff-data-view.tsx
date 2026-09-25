@@ -3,10 +3,10 @@
 // === Module « Fichier du personnel » (Task 55) ===
 //
 // Fichier administratif EXCEL à compléter à tout moment dans SYGREN :
-// chaque ligne porte les 14 colonnes demandées — N° (ordre du fichier),
-// SECTEUR, NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE NAISSANCE,
-// CATÉGORIE, MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ, COURS, FONCTION,
-// CONTACT, EFFECTIF — et s'exporte en classeur Excel (exceljs).
+// chaque ligne porte les 15 colonnes demandées — N° (ordre du fichier),
+// SECTEUR, ÉCOLES, NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE
+// NAISSANCE, CATÉGORIE, MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ, COURS,
+// FONCTION, CONTACT, EFFECTIF — et s'exporte en classeur Excel (exceljs).
 //
 // Le fichier est PRÉ-REMPLI (seed backend) depuis les dossiers
 // personnels des directeurs et adjoints au directeur actifs ; il reste
@@ -30,12 +30,13 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-import { staffDataApi, sectorsApi } from "@/lib/api";
+import { staffDataApi, sectorsApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
 import type { StaffRecord } from "@/lib/types";
 import { computeAnciennete, formatDossierDate } from "@/lib/types";
 import { COURS_OPTIONS } from "@/components/personnel-dossier-fields";
+import { SchoolCombobox } from "@/components/school-combobox";
 import { saveBlob, XLSX_MIME, slugFile } from "@/lib/doc-export";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -72,6 +73,7 @@ const FONCTION_OPTIONS = ["DIRECTEUR", "ADJOINT(E)"] as const;
 
 interface FormData {
   sector_id: string; // UNSET = aucun secteur
+  school_id: string; // "" = aucune école
   full_name: string;
   sexe: string; // UNSET = non renseigné
   date_naissance: string; // YYYY-MM-DD (input date) — "" = non renseigné
@@ -88,6 +90,7 @@ interface FormData {
 
 const EMPTY: FormData = {
   sector_id: UNSET,
+  school_id: "",
   full_name: "",
   sexe: UNSET,
   date_naissance: "",
@@ -136,6 +139,18 @@ export function StaffDataView() {
     (sectorsData?.sectors ?? []).forEach((s) => map.set(s.id, s.name));
     return map;
   }, [sectorsData]);
+
+  // Écoles (colonne ÉCOLES) : résolution des noms + liste du formulaire
+  // (SchoolCombobox hybride — bande déroulante + saisie de lettres/code).
+  const { data: schoolsData } = useQuery({
+    queryKey: ["schools"],
+    queryFn: () => schoolsApi.list(),
+  });
+  const schoolNames = useMemo(() => {
+    const map = new Map<string, string>();
+    (schoolsData?.schools ?? []).forEach((s) => map.set(s.id, s.name));
+    return map;
+  }, [schoolsData]);
 
   const createMut = useCrudMutation(staffDataApi.create, {
     invalidateKeys: [["staff-records"]],
@@ -229,6 +244,7 @@ export function StaffDataView() {
     setEditing(rec);
     setForm({
       sector_id: rec.sector_id ?? UNSET,
+      school_id: rec.school_id ?? "",
       full_name: rec.full_name ?? "",
       sexe: rec.sexe ?? UNSET,
       date_naissance: rec.date_naissance ? rec.date_naissance.slice(0, 10) : "",
@@ -276,7 +292,13 @@ export function StaffDataView() {
       // Export dans l'ordre AFFICHÉ : si le fichier est classé par
       // secteur, le classeur reproduit les BLOCS par secteur (bandeau
       // + alternance de fond) secteur par secteur.
-      await exportExcelAsync(visibleRecords, totalEffectif, sectorNames, bySector);
+      await exportExcelAsync(
+        visibleRecords,
+        totalEffectif,
+        sectorNames,
+        schoolNames,
+        bySector,
+      );
     } finally {
       setExporting(false);
     }
@@ -285,7 +307,7 @@ export function StaffDataView() {
   const busy = createMut.isPending || updateMut.isPending;
 
   // Nombre de colonnes du tableau (colSpan des bandeaux de groupe).
-  const colCount = 14 + (canManage ? 1 : 0);
+  const colCount = 15 + (canManage ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -417,6 +439,7 @@ export function StaffDataView() {
                         />
                       </button>
                     </TableHead>
+                    <TableHead>Écoles</TableHead>
                     <TableHead>Nom et prénom</TableHead>
                     <TableHead className="text-center">Sexe</TableHead>
                     <TableHead>Date de naissance</TableHead>
@@ -466,6 +489,11 @@ export function StaffDataView() {
                         <TableCell className="text-xs">
                           {rec.sector_id
                             ? (sectorNames.get(rec.sector_id) ?? "—")
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {rec.school_id
+                            ? (schoolNames.get(rec.school_id) ?? "—")
                             : "—"}
                         </TableCell>
                         <TableCell
@@ -580,7 +608,7 @@ export function StaffDataView() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={editing ? "Modifier la ligne du fichier" : "Nouvel agent"}
-        description="Les 14 colonnes du fichier du personnel — completables à tout moment."
+        description="Les 15 colonnes du fichier du personnel — completables à tout moment."
         icon={IdCard}
         loading={busy}
         maxWidth="sm:max-w-2xl"
@@ -650,6 +678,18 @@ export function StaffDataView() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="staff-school">École</Label>
+              <SchoolCombobox
+                schools={schoolsData?.schools ?? []}
+                value={form.school_id}
+                onChange={(schoolId) =>
+                  setForm((f) => ({ ...f, school_id: schoolId }))
+                }
+                allowEmpty
+                placeholder="Choisir une école…"
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -872,6 +912,7 @@ function displayAnciennete(rec: StaffRecord): string {
 function formToPayload(form: FormData) {
   return {
     sector_id: form.sector_id !== UNSET ? form.sector_id : null,
+    school_id: form.school_id || null,
     full_name: form.full_name.trim(),
     sexe: form.sexe !== UNSET && form.sexe !== "" ? form.sexe : null,
     date_naissance: form.date_naissance || null,
@@ -889,12 +930,13 @@ function formToPayload(form: FormData) {
   };
 }
 
-// === Export Excel (exceljs) — les 14 colonnes du fichier ===
+// === Export Excel (exceljs) — les 15 colonnes du fichier ===
 
 async function exportExcelAsync(
   records: StaffRecord[],
   totalEffectif: number,
   sectorNames?: Map<string, string>,
+  schoolNames?: Map<string, string>,
   grouped = false, // classement par secteur actif → bandeaux + blocs
 ): Promise<void> {
   const { Workbook } = await import("exceljs");
@@ -920,10 +962,11 @@ async function exportExcelAsync(
     },
   });
 
-  // 14 colonnes — dans l'ordre exact demandé.
+  // 15 colonnes — dans l'ordre exact demandé.
   ws.columns = [
     { width: 5 }, // N°
     { width: 22 }, // SECTEUR
+    { width: 30 }, // ÉCOLES
     { width: 30 }, // NOM ET PRÉNOM
     { width: 7 }, // SEXE
     { width: 15 }, // DATE DE NAISSANCE
@@ -958,6 +1001,7 @@ async function exportExcelAsync(
   const HEADERS = [
     "N°",
     "SECTEUR",
+    "ÉCOLES",
     "NOM ET PRÉNOM",
     "SEXE",
     "DATE DE NAISSANCE",
@@ -979,13 +1023,13 @@ async function exportExcelAsync(
   ).padStart(2, "0")}/${today.getFullYear()}`;
 
   let row = 1;
-  ws.mergeCells(row, 1, row, 14);
+  ws.mergeCells(row, 1, row, 15);
   let c = ws.getCell(row, 1);
   c.value = "FICHIER DU PERSONNEL";
   c.font = font(14, true);
   c.alignment = { horizontal: "center", vertical: "middle" };
   row += 1;
-  ws.mergeCells(row, 1, row, 14);
+  ws.mergeCells(row, 1, row, 15);
   c = ws.getCell(row, 1);
   c.value = `${records.length} agent(s) — édité le ${todayStr}`;
   c.font = font(10, false, "FF666666");
@@ -1018,7 +1062,7 @@ async function exportExcelAsync(
       blockIdx += 1;
       prevKey = sectorKey;
       const bannerRow = ws.getRow(rIdx);
-      ws.mergeCells(rIdx, 1, rIdx, 14);
+      ws.mergeCells(rIdx, 1, rIdx, 15);
       const bannerCell = ws.getCell(rIdx, 1);
       const label = rec.sector_id
         ? (sectorNames?.get(rec.sector_id) ?? "SECTEUR").toUpperCase()
@@ -1026,7 +1070,7 @@ async function exportExcelAsync(
       bannerCell.value = label;
       bannerCell.font = font(10, true, BANNER_TEXT.argb);
       bannerCell.alignment = { horizontal: "left", vertical: "middle" };
-      for (let col = 1; col <= 14; col++) {
+      for (let col = 1; col <= 15; col++) {
         const c = ws.getCell(rIdx, col);
         c.border = BOX;
         c.fill = { type: "pattern", pattern: "solid", fgColor: BANNER_BG };
@@ -1041,6 +1085,7 @@ async function exportExcelAsync(
     dataRow.values = [
       agentNo,
       rec.sector_id ? (sectorNames?.get(rec.sector_id) ?? "") : "",
+      rec.school_id ? (schoolNames?.get(rec.school_id) ?? "") : "",
       rec.full_name.toUpperCase(),
       rec.sexe ?? "",
       formatDossierDate(rec.date_naissance),
@@ -1074,16 +1119,16 @@ async function exportExcelAsync(
 
   // Ligne TOTAL (effectif).
   const totalRowIdx = rIdx;
-  ws.mergeCells(totalRowIdx, 1, totalRowIdx, 13);
+  ws.mergeCells(totalRowIdx, 1, totalRowIdx, 14);
   const totalCell = ws.getCell(totalRowIdx, 1);
   totalCell.value = "TOTAL EFFECTIF";
   totalCell.font = font(10, true);
   totalCell.alignment = { horizontal: "right", vertical: "middle" };
-  const totalVal = ws.getCell(totalRowIdx, 14);
+  const totalVal = ws.getCell(totalRowIdx, 15);
   totalVal.value = totalEffectif;
   totalVal.font = font(10, true);
   totalVal.alignment = { horizontal: "center", vertical: "middle" };
-  for (let col = 1; col <= 14; col++) {
+  for (let col = 1; col <= 15; col++) {
     ws.getCell(totalRowIdx, col).border = BOX;
   }
 

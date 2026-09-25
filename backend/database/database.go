@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"sygren-api/config"
@@ -201,6 +202,13 @@ func seedDefaults(db *gorm.DB) error {
 		log.Println("[DB] seed fichier du personnel warning:", err)
 	}
 
+	// 8. Colonne ÉCOLES du fichier du personnel : reprise one-shot de
+	// l'école du dossier de chaque agent déjà présent (lignes créées
+	// avant l'ajout de la colonne). Ne touche qu'aux lignes SANS école.
+	if err := backfillStaffRecordSchools(db); err != nil {
+		log.Println("[DB] backfill écoles fichier du personnel warning:", err)
+	}
+
 	return nil
 }
 
@@ -385,6 +393,7 @@ func seedSectors(db *gorm.DB) {
 // dans le module). Le secteur d'affectation est déduit du champ
 // sector_id de l'agent, sinon de celui de SON école (schools.sector_id).
 // L'effectif repris est celui du cours tenu (total, sinon filles+garçons).
+// L'école (colonne ÉCOLES) est reprise du champ school_id du dossier.
 func seedStaffRecords(db *gorm.DB) error {
 	var marker models.Setting
 	if db.Where(models.Setting{Key: "staff_records.seeded"}).First(&marker).Error == nil {
@@ -446,6 +455,7 @@ func seedStaffRecords(db *gorm.DB) error {
 		}
 		rec := models.StaffRecord{
 			SectorID:      sectorID,
+			SchoolID:      a.SchoolID,
 			FullName:      a.FullName,
 			Sexe:          a.Sexe,
 			DateNaissance: a.DateNaissance,
@@ -487,5 +497,98 @@ func seedStaffRecords(db *gorm.DB) error {
 		return err
 	}
 	log.Printf("[DB] fichier du personnel pré-rempli : %d lignes créées depuis les dossiers des agents", created)
+	return nil
+}
+
+// backfillStaffRecordSchools — colonne ÉCOLES (school_id) ajoutée au
+// « Fichier du personnel » : reprise ONE-SHOT de l'école du dossier
+// personnel de chaque ligne créée AVANT l'ajout de la colonne (seed
+// Task 55). Matching par nom complet ; en cas d'homonymes, le matricule
+// désambiguïse ; si le doute subsiste (plusieurs écoles candidates),
+// la ligne est laissée SANS école (complétion manuelle). Ne modifie
+// JAMAIS une ligne qui a déjà une école. Marqué par le setting
+// "staff_records.schools_backfilled" : ne s'exécute jamais deux fois.
+func backfillStaffRecordSchools(db *gorm.DB) error {
+	var marker models.Setting
+	if db.Where(models.Setting{Key: "staff_records.schools_backfilled"}).First(&marker).Error == nil {
+		return nil // déjà repris
+	}
+
+	// Dossiers éligibles (mêmes critères que le seed) : directeur ou
+	// enseignant actif AVEC une école d'affectation.
+	type userRow struct {
+		FullName  string
+		Matricule *string
+		SchoolID  *string
+	}
+	var users []userRow
+	if err := db.Model(&models.User{}).
+		Select("full_name, matricule, school_id").
+		Where("role IN ? AND active AND deleted_at IS NULL AND school_id IS NOT NULL",
+			[]string{models.RoleDirector, models.RoleTeacher}).
+		Scan(&users).Error; err != nil {
+		return err
+	}
+	byName := map[string][]userRow{}
+	for _, u := range users {
+		k := strings.ToUpper(strings.TrimSpace(u.FullName))
+		byName[k] = append(byName[k], u)
+	}
+
+	// Lignes du fichier SANS école : reprise quand le dossier est non
+	// ambigu (un seul candidat, ou homonymes tous rattachés à la MÊME
+	// école ; à défaut, un seul candidat au même matricule).
+	var rows []models.StaffRecord
+	if err := db.Where("school_id IS NULL").Find(&rows).Error; err != nil {
+		return err
+	}
+	filled := 0
+	for _, rec := range rows {
+		cands := byName[strings.ToUpper(strings.TrimSpace(rec.FullName))]
+		if len(cands) == 0 {
+			continue
+		}
+		if len(cands) > 1 && rec.Matricule != nil && *rec.Matricule != "" {
+			var m []userRow
+			for _, c := range cands {
+				if c.Matricule != nil && *c.Matricule == *rec.Matricule {
+					m = append(m, c)
+				}
+			}
+			if len(m) == 1 {
+				cands = m
+			}
+		}
+		schoolsSet := map[string]bool{}
+		for _, c := range cands {
+			if c.SchoolID != nil {
+				schoolsSet[*c.SchoolID] = true
+			}
+		}
+		if len(schoolsSet) != 1 {
+			continue // ambigu : on ne devine pas, complétion manuelle
+		}
+		var sid string
+		for s := range schoolsSet {
+			sid = s
+		}
+		if err := db.Model(&models.StaffRecord{}).
+			Where("id = ? AND school_id IS NULL", rec.ID).
+			Update("school_id", sid).Error; err != nil {
+			log.Println("[DB] backfill école staff_record:", rec.FullName, err)
+			continue
+		}
+		filled++
+	}
+
+	if err := db.Create(&models.Setting{
+		Key:      "staff_records.schools_backfilled",
+		Value:    fmt.Sprintf("n=%d/%d", filled, len(rows)),
+		Category: "system",
+		Label:    "Fichier du personnel : écoles reprises des dossiers (colonne ÉCOLES)",
+	}).Error; err != nil {
+		return err
+	}
+	log.Printf("[DB] fichier du personnel : écoles reprises pour %d/%d lignes sans école", filled, len(rows))
 	return nil
 }
