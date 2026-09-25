@@ -1101,12 +1101,17 @@ async function exportExcelAsync(
     ];
     dataRow.eachCell({ includeEmpty: true }, (cell, col) => {
       cell.border = BOX;
-      const isNameCol = col === 3;
+      // NOM ET PRÉNOM = 4e colonne : l'ÉCOLES insérée entre SECTEUR
+      // et NOM a décalé toutes les colonnes d'un rang. Les FILLES
+      // (sexe F) ont leur nom en ROUGE, tout le reste reste en NOIR
+      // (convention de l'État nominatif du personnel).
+      const isNameCol = col === 4;
       const femaleName = isNameCol && rec.sexe === "F";
       cell.font = font(10, isNameCol, femaleName ? "FFE00000" : undefined);
       cell.alignment = {
         // NOM ET PRÉNOM + LIEU DE NAISSANCE à gauche ; le reste centré.
-        horizontal: isNameCol || col === 6 ? "left" : "center",
+        // LIEU DE NAISSANCE = 7e colonne (même décalage que NOM).
+        horizontal: isNameCol || col === 7 ? "left" : "center",
         vertical: "middle",
       };
       if (shade) {

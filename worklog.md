@@ -5093,3 +5093,18 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - go build + go vet OK (toolchain locale) ; tsc --noEmit 0 erreur ; next build OK.
 - Push + vérifications production (Render déploie le BACKEND cette fois : attendre le LIVE du nouveau SHA, vérifier le log backfill + Neon school_id renseigné).
+
+## Itération — FILLES en ROUGE, le reste en NOIR (export Excel corrigé)
+
+**Demande** : « LES FILLES EN ROUGE ET LE RESTE EN NOIR ».
+
+### Diagnostic
+- Le TABLEAU de l'appli était déjà conforme (noms des filles text-red-600) ; l'EXPORT EXCEL avait dérivé : depuis l'insertion de la colonne ÉCOLES en 3e position, la règle « nom en rouge si sexe F » visait encore la colonne 3 = ÉCOLES (le nom de l'école des filles partait en rouge, leurs noms restaient noirs). Même décalage d'un rang pour l'alignement à gauche (col 6 visait LIEU DE NAISSANCE, désormais en 7).
+
+### Réalisation (front seul — staff-data-view.tsx)
+- EXPORT EXCEL : isNameCol = colonne 4 (NOM ET PRÉNOM) → les FILLES (sexe F) retrouvent leur NOM en ROUGE (FFE00000, gras), tout le reste en NOIR (couleur par défaut) ; alignement LIEU DE NAISSANCE recalé colonne 7 (commentaires explicites anti-régression).
+- Contrôle Neon : sexe 'F' = 116, 'G' = 55, non renseigné = 21 (restent en noir) ; 192/192 lignes avec école.
+- Tableau : déjà conforme, inchangé. Aucun changement backend (Render ne redéploie pas).
+
+### Vérifications
+- tsc --noEmit 0 erreur ; next build OK. Push → Vercel READY nouveau SHA, Render LIVE dd9dbcf (backend inchangé), front 200, /api/health 200.
