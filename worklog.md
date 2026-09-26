@@ -5121,3 +5121,16 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 
 ### Vérifications
 - tsc --noEmit 0 erreur ; next build OK. Push → Vercel READY nouveau SHA, Render LIVE dd9dbcf (backend inchangé), front 200, /api/health 200.
+
+## Itération — Liste des candidats : matricule réduite, lieuacte élargie, quotas 15/25
+
+**Demande** : « DIMINUER LEGEREMENT LA COLONNE DES MATRICULES ET AUGMENTER CELLE DE LIEUACTE. AUGMENTER LA PREMIERE PAGE A 15 LIGNES ET LE RESTE DES PAGES A 25 ».
+
+### Réalisation (front seul — candidates-list-document.tsx)
+- COLONNES (révision 3) : MATRICULE 8% → 7% (PDF/écran + Word via colgroup + Excel 13 → 11), LIEUACTE 5,5% → 6,5% (Excel 13 → 15) — total 100% inchangé.
+- QUOTAS FIXES : 15 lignes sur la PREMIÈRE page, 25 sur les suivantes (ROWS_FIRST/ROWS_MID) — la hauteur des lignes passe de 7mm à 6,6mm (tableau écran, Word) pour que 25 lignes tiennent sous l'en-tête du tableau ; écart en-tête→tableau 4mm → 3mm sur toutes les pages.
+- PAGINATION réécrite : la DERNIÈRE page est décidée AVANT de remplir une page (reste ≤ quota 25 ET tient au-dessus de la zone signature 42mm = « LE DIRECTEUR » + 30mm + NOM) ; sinon page pleine 15/25 en gardant ≥ 1 élève pour la fin — plus aucun cas de chevauchement tableau/signature (l'ancien algorithme pouvait saturer la dernière page avec le budget « pleine page »).
+- Estimation de hauteur recalée (matricule cpl 10 → 9, lieuacte 7 → 8).
+
+### Vérifications
+- tsc --noEmit 0 erreur ; next build OK. Push → Vercel READY nouveau SHA, Render LIVE dd9dbcf (backend inchangé), front 200, /api/health 200.

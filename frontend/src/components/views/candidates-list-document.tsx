@@ -34,10 +34,12 @@
 //   - 3 modèles d'impression (demande utilisateur) : PDF (impression
 //     navigateur), WORD (.doc HTML MSO A4 paysage, en-tête + thead répété)
 //     et EXCEL (.xlsx exceljs : en-tête fusionné, tableau bordé, paysage) ;
-//   - Pagination multipage : « ELEVES (n) » en bas de CHAQUE page, numéro
-//     de page en haut au centre, signature « LE DIRECTEUR » (soulignée)
-//     en bas à gauche de la DERNIÈRE page, NOM du directeur imprimé 30 mm
-//     plus bas (espace de signature, demande utilisateur) ;
+//   - Pagination multipage DENSIFIÉE (demande utilisateur) : 15 lignes
+//     sur la PREMIÈRE page, 25 sur les suivantes (lignes 6,6mm) ;
+//     « ELEVES (n) » en bas de CHAQUE page, numéro de page en haut au
+//     centre, signature « LE DIRECTEUR » (soulignée) en bas à gauche de
+//     la DERNIÈRE page, NOM du directeur imprimé 30 mm plus bas (espace
+//     de signature, demande utilisateur) ;
 //   - Convention maison : noms/prénoms des FILLES en rouge (comme les
 //     tableaux de classement et « RESULTATS DE FIN D'ANNEE »).
 
@@ -63,39 +65,40 @@ import {
 const DOC_FONT =
   '"Agency FB", "Arial", "Helvetica", "Liberation Sans", sans-serif';
 
-// === Pagination à BUDGET DE HAUTEUR (A4 paysage : zone imprimable 194mm,
-// boîte page 192mm — padding 6mm haut/bas → 180mm de contenu) ===
-// CORRECTIF (demande utilisateur) : avec des classes allant jusqu'à 50
-// élèves, les lignes qui passent à la ligne (noms/prénoms longs) dépassaient
-// la capacité fixe [17, 24, 22] : le tableau chassait la signature « LE
-// DIRECTEUR » du bas de la dernière page (pied de page « ELEVES (n) » en
-// position absolue, élèves prenant toute la page). Désormais :
+// === Pagination DENSIFIÉE à BUDGET DE HAUTEUR (A4 paysage : zone
+// imprimable 194mm, boîte page 192mm — padding 6mm haut/bas → 180mm) ===
+// Demande utilisateur : « augmenter la première page à 15 lignes et le
+// reste des pages à 25 ». Désormais :
 //   1) chaque ligne est ESTIMÉE (majoration) selon les textes qui peuvent
 //      revenir à la ligne (police 12 : +3,5mm par ligne supplémentaire —
 //      Agency FB plus condensée qu'Arial : estimation restée majorante) ;
-//   2) les pages sont remplies par budget de hauteur (page 1 : en-tête
-//      institutionnel déduit ; pages suivantes : thead + écart déduits) ;
+//   2) QUOTAS FIXES : 15 lignes sur la PREMIÈRE page, 25 sur les
+//      suivantes — la hauteur des lignes passe à 6,6mm pour que 25
+//      lignes tiennent sous l'en-tête du tableau ;
 //   3) AUCUNE ligne vide de complétion (demande utilisateur : « annuler
 //      les lignes qui ne comportent pas d'écriture ») — seules les lignes
 //      des élèves réels sont rendues ;
-//   4) la DERNIÈRE page réserve une ZONE SIGNATURE : « LE DIRECTEUR » +
-//      30 mm d'espace de signature + NOM (demande utilisateur) — ancré en
-//      absolu au-dessus du pied, il est TOUJOURS visible.
+//   4) la DERNIÈRE page réserve la ZONE SIGNATURE (« LE DIRECTEUR » +
+//      30 mm + NOM) : elle n'accepte que ce qui tient AU-DESSUS — si les
+//      lignes restantes ne tiennent pas, la page précédente garde au
+//      moins 1 élève pour la dernière page (jamais de chevauchement).
 const PAGE_CONTENT_MM = 180;
-const HEADER_MM = 52;    // en-tête institutionnel page 1 (majoré)
-const THEAD_MM = 8;      // ligne d'en-têtes du tableau
-const GAP_FIRST_MM = 3;  // espace en-tête → tableau (page 1)
-const GAP_MM = 4;        // espace → tableau (pages suivantes)
-const SIG_GAP_MM = 30;   // distance « LE DIRECTEUR » → NOM (demande utilisateur)
-const SIGN_ZONE_MM = 42; // zone signature dernière page (label + 30mm + nom)
-const ROW_MM = 7;        // hauteur d'une ligne simple (police 12)
-const LINE_MM = 3.5;     // mm par ligne supplémentaire (texte qui revient)
+const HEADER_MM = 52;      // en-tête institutionnel page 1 (majoré)
+const THEAD_MM = 8;        // ligne d'en-têtes du tableau
+const GAP_FIRST_MM = 3;    // espace en-tête → tableau (page 1)
+const GAP_MM = 3;          // espace → tableau (pages suivantes)
+const SIG_GAP_MM = 30;     // distance « LE DIRECTEUR » → NOM (demande utilisateur)
+const SIGN_ZONE_MM = 42;   // zone signature dernière page (label + 30mm + nom)
+const ROWS_FIRST = 15;     // quota de lignes page 1 (demande utilisateur)
+const ROWS_MID = 25;       // quota de lignes pages suivantes (demande utilisateur)
+const ROW_MM = 6.6;        // hauteur d'une ligne simple (police 12)
+const LINE_MM = 3.5;       // mm par ligne supplémentaire (texte qui revient)
 
 const BUDGET_FIRST = PAGE_CONTENT_MM - HEADER_MM - GAP_FIRST_MM - THEAD_MM; // 117
-const BUDGET_MID = PAGE_CONTENT_MM - GAP_MM - THEAD_MM;                     // 168
-const BUDGET_LAST = PAGE_CONTENT_MM - GAP_MM - THEAD_MM - SIGN_ZONE_MM;     // 126
+const BUDGET_MID = PAGE_CONTENT_MM - GAP_MM - THEAD_MM;                     // 169
+const BUDGET_LAST = BUDGET_MID - SIGN_ZONE_MM;                              // 127
 
-const ROW_HEIGHT = "7mm";
+const ROW_HEIGHT = "6.6mm";
 
 // Date du jour au format jj/mm/aaaa (rendu identique serveur/client).
 function todayFr(): string {
@@ -191,16 +194,16 @@ function tdStyle(align: "left" | "center", red = false): CSSProperties {
 
 // Les 12 colonnes (fusion date+lieu de naissance, père/mère « nom et
 // prénoms », colonne DATE DE L'ACTE entre nacte et lieuacte).
-// Largeurs rééquilibrées (révision 2 — demande utilisateur) : n°, nom,
-// sexe et nacte réduites ; prenoms et lieuacte élargies. Libellés en
-// minuscules comme le modèle.
+// Largeurs rééquilibrées (révision 2 puis 3 — demande utilisateur) :
+// révision 3 : MATRICULE réduite (8% → 7%), LIEUACTE élargie
+// (5,5% → 6,5%). Libellés en minuscules comme le modèle.
 const COLS: Array<{
   w: string;
   label: string;
   align: "left" | "center";
 }> = [
   { w: "3%", label: "n°", align: "center" },
-  { w: "8%", label: "matricule", align: "center" },
+  { w: "7%", label: "matricule", align: "center" },
   { w: "7.5%", label: "nom", align: "left" },
   { w: "16.5%", label: "prenoms", align: "left" },
   { w: "3%", label: "sexe", align: "center" },
@@ -210,7 +213,7 @@ const COLS: Array<{
   { w: "11.5%", label: "nom et prénoms de la mère", align: "left" },
   { w: "4.5%", label: "nacte", align: "center" },
   { w: "6.5%", label: "date de l'acte", align: "center" },
-  { w: "5.5%", label: "lieuacte", align: "center" },
+  { w: "6.5%", label: "lieuacte", align: "center" },
 ];
 
 // Estimation MAJORÉE de la hauteur d'une ligne (mm) : on compte combien de
@@ -229,10 +232,10 @@ function estRowHeightMm(s: StudentWithClass | null): number {
     lines(15, cell(s.father_name)),                 // père (12,5%)
     lines(14, cell(s.mother_name)),                 // mère (11,5%)
     lines(9, cell(s.nationality)),                  // nationalité (7,5%)
-    lines(10, cell(s.matricule)),                   // matricule (8%)
+    lines(9, cell(s.matricule)),                    // matricule (7%)
     lines(6, cell(s.acte_number)),                  // nacte (4,5%)
     lines(8, fmtDateActe(s?.acte_date)),            // date de l'acte (6,5%)
-    lines(7, cell(s.acte_place)),                   // lieuacte (5,5%)
+    lines(8, cell(s.acte_place)),                   // lieuacte (6,5%)
   );
   return ROW_MM + (Math.min(max, 4) - 1) * LINE_MM;
 }
@@ -242,46 +245,53 @@ function estRowHeightMm(s: StudentWithClass | null): number {
 // les lignes des élèves réels.
 type DocPage = StudentWithClass[];
 
-// Découpe la classe en pages par budget de hauteur : [page 1 (en-tête),
-// pages intermédiaires, dernière page avec zone signature réservée].
+// Découpe la classe en pages : QUOTAS FIXES (15 lignes page 1, 25
+// suivantes — demande utilisateur) sous budget de hauteur, la DERNIÈRE
+// page réservant la zone signature. La dernière page est décidée AVANT
+// de remplir une page intermédiaire : si les élèves restants tiennent
+// au-dessus de la signature, c'est la dernière page ; sinon on remplit
+// une page pleine (15/25) en gardant au moins 1 élève pour la fin
+// (jamais de chevauchement tableau / « LE DIRECTEUR »).
 function buildPages(students: StudentWithClass[]): DocPage[] {
   const heights = students.map(estRowHeightMm);
   const pages: DocPage[] = [];
   let i = 0;
 
-  // Page 1 : en-tête institutionnel (budget réduit)
-  const start1 = i;
-  let used = 0;
-  while (i < students.length && used + heights[i] <= BUDGET_FIRST) {
-    used += heights[i];
-    i++;
-  }
-  if (i === start1 && students.length > 0) i = start1 + 1; // garde-fou : ≥1 élève/page
-  pages.push(students.slice(start1, i));
-
-  // Pages intermédiaires + dernière (zone signature réservée)
   while (i < students.length) {
-    // Tous les élèves restants tiennent-ils dans le budget « dernière page » ?
-    let usedLast = 0;
+    const first = pages.length === 0;
+    const budget = first ? BUDGET_FIRST : BUDGET_MID;
+    const cap = first ? ROWS_FIRST : ROWS_MID;
+
+    // 1) Les élèves restants tiennent-ils sur CETTE page en tant que
+    //    DERNIÈRE page (zone signature déduite, ≤ 25 lignes) ?
+    const lastBudget = budget - SIGN_ZONE_MM;
     let j = i;
-    while (j < students.length && usedLast + heights[j] <= BUDGET_LAST) {
+    let usedLast = 0;
+    while (
+      j < students.length &&
+      j - i < ROWS_MID &&
+      usedLast + heights[j] <= lastBudget
+    ) {
       usedLast += heights[j];
       j++;
     }
     if (j >= students.length) {
       pages.push(students.slice(i, j));
-      i = j;
-    } else {
-      let usedMid = 0;
-      let k = i;
-      while (k < students.length && usedMid + heights[k] <= BUDGET_MID) {
-        usedMid += heights[k];
-        k++;
-      }
-      if (k === i) k = i + 1; // garde-fou : ≥1 élève/page
-      pages.push(students.slice(i, k));
-      i = k;
+      break;
     }
+
+    // 2) Page pleine : quota 15 (page 1) ou 25 (suivantes), budget complet.
+    let k = i;
+    let used = 0;
+    while (k < students.length && k - i < cap && used + heights[k] <= budget) {
+      used += heights[k];
+      k++;
+    }
+    if (k === i) k = i + 1; // garde-fou : ≥1 élève/page
+    // Toujours garder ≥1 élève pour la dernière page (zone signature).
+    if (k >= students.length) k = students.length - 1;
+    pages.push(students.slice(i, k));
+    i = k;
   }
   return pages;
 }
@@ -389,7 +399,7 @@ table.hdr td { border:none; vertical-align:top; font-size:12px; line-height:1.3;
 table.doc { border-collapse:collapse; width:100%; table-layout:fixed; }
 table.doc td, table.doc th { border:1px solid #000; padding:0 3px; font-size:12px; vertical-align:middle; overflow-wrap:break-word; }
 table.doc th { font-weight:bold; text-align:center; height:8mm; }
-table.doc td { height:7mm; }
+table.doc td { height:6.6mm; } /* lignes denses 6,6mm — quotas 15/25 (demande utilisateur) */
 thead.rep { display:table-header-group; }
 .titre { display:inline-block; border:2px solid #000; padding:7px 20px 8px; font-size:16px; font-weight:bold; text-align:center; line-height:1.35; }
 .sig { font-weight:bold; text-decoration:underline; margin-top:24pt; }
@@ -465,7 +475,8 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
       printTitlesRow: "9:9",
     },
   });
-  ws.columns = [4, 13, 15, 30, 5, 28, 14, 24, 22, 11, 13, 13].map((width) => ({ width }));
+  // Révision 3 : matricule réduite (13 → 11), lieuacte élargie (13 → 15).
+  ws.columns = [4, 11, 15, 30, 5, 28, 14, 24, 22, 11, 13, 15].map((width) => ({ width }));
   const font = (size: number, bold = false, argb?: string) => ({
     name: "Agency FB",
     size,
@@ -647,9 +658,9 @@ export function CandidatesListDocument({
   const iep = data.iep;
   const annee = cepeExamYear();
 
-  // Découpage en pages à budget de hauteur — AUCUNE ligne vide de
-  // complétion (demande utilisateur) ; la zone « LE DIRECTEUR » + 30 mm
-  // + NOM reste réservée sur la dernière page (demande utilisateur).
+  // Découpage en pages DENSIFIÉES : 15 lignes page 1, 25 suivantes
+  // (demande utilisateur) — AUCUNE ligne vide ; la zone « LE DIRECTEUR »
+  // + 30 mm + NOM reste réservée sur la dernière page (demande utilisateur).
   const pages = buildPages(students);
   const lastPageIdx = pages.length - 1;
 
@@ -904,8 +915,9 @@ export function CandidatesListDocument({
                 </div>
               )}
 
-              {/* Espace entre en-tête et tableau (page 1) */}
-              <div style={{ height: isFirst ? "3mm" : "4mm" }} />
+              {/* Espace entre en-tête et tableau — 3mm sur TOUTES les pages
+                  (GAP_FIRST_MM = GAP_MM = 3) */}
+              <div style={{ height: "3mm" }} />
 
               {/* --- Tableau 12 colonnes (modèle + révisions utilisateur) --- */}
               <table
