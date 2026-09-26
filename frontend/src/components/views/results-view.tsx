@@ -69,6 +69,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SchoolCombobox } from "@/components/school-combobox";
+import { EntityCombobox } from "@/components/entity-combobox";
 import { PdaView } from "./pda-view";
 import { PdaTimelineView } from "./pda-timeline-view";
 import { EndOfYearView } from "./end-of-year-view";
@@ -439,29 +440,24 @@ function ResultsRankingView() {
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <GraduationCap className="w-3 h-3" /> Classe
               </label>
-              <Select
+              {/* v12 — clic dans le champ + premières lettres de la
+                  classe : la liste se filtre immédiatement. */}
+              <EntityCombobox
+                items={classesInResults.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                }))}
                 value={classFilter}
-                onValueChange={setClassFilter}
+                onChange={setClassFilter}
                 disabled={!autoSessionId || classesInResults.length === 0}
-              >
-                <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue
-                    placeholder={
-                      !autoSessionId
-                        ? "Choisir une session d'abord"
-                        : "Toutes les classes"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les classes</SelectItem>
-                  {classesInResults.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                allowEmpty
+                emptyValue="all"
+                emptyLabel="Toutes les classes"
+                placeholder={
+                  !autoSessionId ? "Choisir une session d'abord" : "Toutes les classes"
+                }
+                searchPlaceholder="Premières lettres de la classe…"
+              />
             </div>
           </div>
 

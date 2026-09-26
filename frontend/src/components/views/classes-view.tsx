@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SchoolCombobox } from "@/components/school-combobox";
+import { EntityCombobox } from "@/components/entity-combobox";
 
 interface FormData {
   school_id: string;
@@ -314,39 +315,42 @@ export function ClassesView() {
             )}
             <div className="space-y-1.5">
               <Label htmlFor="class-teacher">Adjoint(e) au directeur affecté(e)</Label>
-              <Select
+              {/* v12 — clic dans le champ + premières lettres du nom :
+                  la liste se filtre (plus besoin de faire défiler des
+                  centaines d'enseignants). */}
+              <EntityCombobox
+                items={availableTeachers.map((t: TeacherWithDetails) => ({
+                  value: t.id,
+                  label: t.full_name,
+                  keywords: t.email ?? "",
+                  right: (
+                    <>
+                      {t.role === "director" && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] py-0 px-1.5 h-4 font-medium border-amber-300 text-amber-700 bg-amber-50"
+                        >
+                          Directeur
+                        </Badge>
+                      )}
+                      {t.email && (
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          ({t.email})
+                        </span>
+                      )}
+                    </>
+                  ),
+                }))}
                 value={form.teacher_id ?? "none"}
-                onValueChange={(v) =>
+                onChange={(v) =>
                   setForm({ ...form, teacher_id: v === "none" ? null : v })
                 }
-              >
-                <SelectTrigger id="class-teacher">
-                  <SelectValue placeholder="Aucun enseignant" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Aucun —</SelectItem>
-                  {availableTeachers.map((t: TeacherWithDetails) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <span className="flex items-center gap-1.5">
-                        <span>{t.full_name}</span>
-                        {t.role === "director" && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] py-0 px-1.5 h-4 font-medium border-amber-300 text-amber-700 bg-amber-50"
-                          >
-                            Directeur
-                          </Badge>
-                        )}
-                        {t.email && (
-                          <span className="text-[11px] text-muted-foreground">
-                            ({t.email})
-                          </span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                allowEmpty
+                emptyValue="none"
+                emptyLabel="— Aucun —"
+                placeholder="Aucun enseignant"
+                searchPlaceholder="Premières lettres du nom…"
+              />
               <p className="text-[11px] text-muted-foreground">
                 Affectation dynamique (cahier des charges §3)
               </p>

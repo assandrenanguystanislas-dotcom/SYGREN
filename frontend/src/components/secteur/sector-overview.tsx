@@ -58,13 +58,7 @@ import { ROLE_LABELS } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EntityCombobox } from "@/components/entity-combobox";
 import {
   Table,
   TableBody,
@@ -349,19 +343,22 @@ export function SectorOverview({
                   className="pl-9"
                 />
               </div>
-              <Select value={schoolFilter} onValueChange={setSchoolFilter}>
-                <SelectTrigger className="sm:w-[240px]">
-                  <SelectValue placeholder="Toutes les écoles" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les écoles</SelectItem>
-                  {schools.map((s: SectorSchool) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* v12 — clic dans le champ + premières lettres : la liste
+                  se filtre (plus besoin de faire défiler). */}
+              <EntityCombobox
+                className="sm:w-[240px]"
+                items={schools.map((s: SectorSchool) => ({
+                  value: s.id,
+                  label: s.name,
+                }))}
+                value={schoolFilter}
+                onChange={setSchoolFilter}
+                allowEmpty
+                emptyValue="all"
+                emptyLabel="Toutes les écoles"
+                placeholder="Toutes les écoles"
+                searchPlaceholder="Premières lettres de l'école…"
+              />
               {/* Session 42 — « État nominatif » : consultation du document
                   officiel de l'école sélectionnée (impression verrouillée
                   dans le document pour le conseiller — cf. print-guard). */}

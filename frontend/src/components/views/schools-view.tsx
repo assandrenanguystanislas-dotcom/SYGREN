@@ -51,6 +51,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EntityCombobox } from "@/components/entity-combobox";
 import {
   Select,
   SelectContent,
@@ -598,21 +599,18 @@ export function SchoolsView() {
           <form onSubmit={onSubmit} className="space-y-4 pt-2">
             <div className="space-y-1.5">
               <Label htmlFor="school-iep">IEP de rattachement</Label>
-              <Select
+              {/* v12 — clic dans le champ + premières lettres de l'IEP :
+                  la liste se filtre (plus besoin de faire défiler). */}
+              <EntityCombobox
+                items={ieps.map((iep: IEPWithStats) => ({
+                  value: iep.id,
+                  label: `${iep.name} — ${iep.region}`,
+                }))}
                 value={form.iep_id}
-                onValueChange={(v) => setForm({ ...form, iep_id: v })}
-              >
-                <SelectTrigger id="school-iep">
-                  <SelectValue placeholder="Choisir une IEP…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ieps.map((iep: IEPWithStats) => (
-                    <SelectItem key={iep.id} value={iep.id}>
-                      {iep.name} — {iep.region}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setForm({ ...form, iep_id: v })}
+                placeholder="Choisir une IEP…"
+                searchPlaceholder="Premières lettres de l'IEP…"
+              />
               {ieps.length === 0 && (
                 <p className="text-xs text-destructive">
                   Aucune IEP — créez-en une d'abord.
@@ -1084,19 +1082,16 @@ function SchoolClassesPanel({
               )}
             </div>
             {canEdit ? (
-              <Select
-                value={cls.teacher_id ?? "__none__"}
-                onValueChange={(v) => updateTeacher(cls, v)}
-              >
-                <SelectTrigger className="h-7 mt-1 text-xs">
-                  <SelectValue placeholder="Aucun adjoint au directeur" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Aucun —</SelectItem>
-                  {teachers.map((t: TeacherWithDetails) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <span className="flex items-center gap-1.5">
-                        <span>{t.full_name}</span>
+              // v12 — clic dans le champ + premières lettres du nom :
+              // la liste se filtre (plus besoin de faire défiler).
+                <EntityCombobox
+                  className="mt-1 h-7 text-xs"
+                  items={teachers.map((t: TeacherWithDetails) => ({
+                    value: t.id,
+                    label: t.full_name,
+                    keywords: t.school_name ?? "",
+                    right: (
+                      <>
                         {t.role === "director" && (
                           <Badge
                             variant="outline"
@@ -1106,15 +1101,21 @@ function SchoolClassesPanel({
                           </Badge>
                         )}
                         {t.school_name && (
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
                             · {t.school_name}
                           </span>
                         )}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                      </>
+                    ),
+                  }))}
+                  value={cls.teacher_id ?? "__none__"}
+                  onChange={(v) => updateTeacher(cls, v)}
+                  allowEmpty
+                  emptyValue="__none__"
+                  emptyLabel="— Aucun —"
+                  placeholder="Aucun adjoint au directeur"
+                  searchPlaceholder="Premières lettres du nom…"
+                />
             ) : (
               <p className="text-xs text-muted-foreground mt-0.5 truncate">
                 {cls.teacher_name ?? "— Aucun enseignant —"}
@@ -1250,18 +1251,14 @@ function ExamCentersDialog({
           {/* Création */}
           <form onSubmit={onCreate} className="space-y-2">
             {ieps.length > 1 && (
-              <Select value={iepId || ieps[0]?.id} onValueChange={setIepId}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="IEP" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ieps.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              // v12 — saisie directe dans le champ (IEP).
+              <EntityCombobox
+                items={ieps.map((i) => ({ value: i.id, label: i.name }))}
+                value={iepId || ieps[0]?.id || ""}
+                onChange={setIepId}
+                placeholder="IEP"
+                searchPlaceholder="Premières lettres de l'IEP…"
+              />
             )}
             <div className="flex gap-2">
               <Input
@@ -1620,18 +1617,14 @@ function SectorsDialog({
           {/* Création */}
           <form onSubmit={onCreate} className="space-y-2">
             {ieps.length > 1 && (
-              <Select value={iepId || ieps[0]?.id} onValueChange={setIepId}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="IEP" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ieps.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              // v12 — saisie directe dans le champ (IEP).
+              <EntityCombobox
+                items={ieps.map((i) => ({ value: i.id, label: i.name }))}
+                value={iepId || ieps[0]?.id || ""}
+                onChange={setIepId}
+                placeholder="IEP"
+                searchPlaceholder="Premières lettres de l'IEP…"
+              />
             )}
             <div className="flex gap-2">
               <Input

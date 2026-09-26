@@ -23,6 +23,7 @@ import {
 
 import { teachersApi, schoolsApi, iepApi } from "@/lib/api";
 import { SchoolCombobox } from "@/components/school-combobox";
+import { EntityCombobox } from "@/components/entity-combobox";
 // Task 53 — plage « Changement d'école » (transfert inter-établissements)
 import { SchoolTransferSection } from "@/components/school-transfer-section";
 import {
@@ -39,13 +40,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -364,25 +358,24 @@ export function TeachersView() {
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <MapPin className="w-3 h-3" /> IEP
                 </label>
-                <Select
+                {/* v12 — clic dans le champ + premières lettres : la liste
+                    se filtre (plus besoin de faire défiler). */}
+                <EntityCombobox
+                  items={ieps.map((iep) => ({
+                    value: iep.id,
+                    label: iep.name,
+                  }))}
                   value={iepFilter}
-                  onValueChange={(v) => {
+                  onChange={(v) => {
                     setIepFilter(v);
                     setSchoolFilter("all");
                   }}
-                >
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Tous les IEP" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous les IEP</SelectItem>
-                    {ieps.map((iep) => (
-                      <SelectItem key={iep.id} value={iep.id}>
-                        {iep.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  allowEmpty
+                  emptyValue="all"
+                  emptyLabel="Tous les IEP"
+                  placeholder="Tous les IEP"
+                  searchPlaceholder="Premières lettres de l'IEP…"
+                />
               </div>
             )}
 
@@ -391,23 +384,21 @@ export function TeachersView() {
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <SchoolIcon className="w-3 h-3" /> École
               </label>
-              <Select
+              {/* v12 — saisie directe dans le champ. */}
+              <EntityCombobox
+                items={filteredSchools.map((s) => ({
+                  value: s.id,
+                  label: s.name,
+                }))}
                 value={schoolFilter}
-                onValueChange={setSchoolFilter}
+                onChange={setSchoolFilter}
                 disabled={filteredSchools.length === 0}
-              >
-                <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue placeholder="Toutes les écoles" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les écoles</SelectItem>
-                  {filteredSchools.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                allowEmpty
+                emptyValue="all"
+                emptyLabel="Toutes les écoles"
+                placeholder="Toutes les écoles"
+                searchPlaceholder="Premières lettres de l'école…"
+              />
             </div>
 
             {/* Recherche texte */}

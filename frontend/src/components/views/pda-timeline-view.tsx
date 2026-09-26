@@ -35,13 +35,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EntityCombobox } from "@/components/entity-combobox";
 import {
   Table,
   TableBody,
@@ -155,53 +149,44 @@ export function PdaTimelineView() {
             {needsSchoolSelect ? (
               <div className="space-y-1.5 w-full sm:w-auto sm:flex-1 sm:max-w-[280px]">
                 <Label className="text-xs text-muted-foreground">École</Label>
-                <Select
+                {/* v12 — clic dans le champ + premières lettres de
+                    l'école : la liste se filtre immédiatement. */}
+                <EntityCombobox
+                  items={(schoolsData?.schools ?? []).map((s) => ({
+                    value: s.id,
+                    label: s.name,
+                  }))}
                   value={schoolFilter}
-                  onValueChange={(v) => {
+                  onChange={(v) => {
                     setSchoolFilter(v);
                     setClassId("");
                   }}
-                >
-                  <SelectTrigger className="w-full overflow-hidden">
-                    <SelectValue placeholder="Choisir une école…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(schoolsData?.schools ?? []).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Choisir une école…"
+                  searchPlaceholder="Premières lettres de l'école…"
+                />
               </div>
             ) : null}
 
             <div className="space-y-1.5 w-full sm:w-auto sm:flex-1 sm:max-w-[240px]">
               <Label className="text-xs text-muted-foreground">Classe (CE / CM)</Label>
-              <Select
+              {/* v12 — saisie directe dans le champ. */}
+              <EntityCombobox
+                items={ceCmClasses.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                }))}
                 value={classId}
-                onValueChange={setClassId}
+                onChange={setClassId}
                 disabled={!hasSchool || ceCmClasses.length === 0}
-              >
-                <SelectTrigger className="w-full overflow-hidden">
-                  <SelectValue
-                    placeholder={
-                      !hasSchool
-                        ? "Choisir une école d'abord"
-                        : ceCmClasses.length === 0
-                          ? "Aucune classe CE/CM"
-                          : "Choisir une classe…"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {ceCmClasses.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder={
+                  !hasSchool
+                    ? "Choisir une école d'abord"
+                    : ceCmClasses.length === 0
+                      ? "Aucune classe CE/CM"
+                      : "Choisir une classe…"
+                }
+                searchPlaceholder="Premières lettres de la classe…"
+              />
             </div>
 
             <div className="space-y-1.5 w-full sm:w-auto sm:max-w-[140px]">

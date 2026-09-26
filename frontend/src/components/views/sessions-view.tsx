@@ -1447,18 +1447,19 @@ function ExemptionDialog({ session, classesOfSchool, onClose }: ExemptionDialogP
                     Aucune classe active dans cette école.
                   </p>
                 ) : (
-                  <Select value={classValue} onValueChange={setClassValue}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Choisir une classe…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classesOfSchool.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} ({c.level})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  // v12 — clic dans le champ + premières lettres de la
+                  // classe : la liste se filtre immédiatement.
+                  <EntityCombobox
+                    className="h-8 text-xs"
+                    items={classesOfSchool.map((c) => ({
+                      value: c.id,
+                      label: `${c.name} (${c.level})`,
+                    }))}
+                    value={classValue}
+                    onChange={setClassValue}
+                    placeholder="Choisir une classe…"
+                    searchPlaceholder="Premières lettres de la classe…"
+                  />
                 )}
               </div>
             )}

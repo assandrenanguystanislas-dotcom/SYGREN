@@ -23,13 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EntityCombobox } from "@/components/entity-combobox";
 import { Badge } from "@/components/ui/badge";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -320,21 +314,18 @@ export function InspectorsView() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="inspector-iep">IEP supervisée</Label>
-            <Select
+            {/* v12 — clic dans le champ + premières lettres de l'IEP :
+                la liste se filtre (plus besoin de faire défiler). */}
+            <EntityCombobox
+              items={ieps.map((iep: IEPWithStats) => ({
+                value: iep.id,
+                label: iep.region ? `${iep.name} — ${iep.region}` : iep.name,
+              }))}
               value={form.iep_id}
-              onValueChange={(v) => setForm({ ...form, iep_id: v })}
-            >
-              <SelectTrigger id="inspector-iep">
-                <SelectValue placeholder="Choisir une IEP…" />
-              </SelectTrigger>
-              <SelectContent>
-                {ieps.map((iep: IEPWithStats) => (
-                  <SelectItem key={iep.id} value={iep.id}>
-                    {iep.name} {iep.region ? `— ${iep.region}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(v) => setForm({ ...form, iep_id: v })}
+              placeholder="Choisir une IEP…"
+              searchPlaceholder="Premières lettres de l'IEP…"
+            />
             </div>
           <div className="space-y-1.5">
             <Label htmlFor="inspector-service">Service au sein de l'IEP</Label>
