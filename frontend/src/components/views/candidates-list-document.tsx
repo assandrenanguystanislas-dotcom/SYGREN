@@ -36,10 +36,10 @@
 //     et EXCEL (.xlsx exceljs : en-tête fusionné, tableau bordé, paysage) ;
 //   - Pagination à QUOTAS COMPTÉS (demande utilisateur) : 15 lignes sur
 //     la PREMIÈRE page, 25 sur les suivantes — respectées exactement
-//     (lignes 6,4mm, plus aucune estimation de hauteur) ; la DERNIÈRE
-//     page (≤ 18 lignes) garde la place de la signature « LE DIRECTEUR »
-//     (soulignée) en bas à gauche, NOM du directeur imprimé 30 mm plus
-//     bas (espace de signature) — le tout ajusté à la page ;
+//     (lignes 6,4mm, plus aucune estimation de hauteur) ; la signature
+//     « LE DIRECTEUR » (soulignée) vient JUSTE APRÈS LA DERNIÈRE LIGNE
+//     du tableau (plus ancrée en bas de page), NOM du directeur imprimé
+//     15 MM plus bas (espace de signature, demande utilisateur) ;
 //     « ELEVES (n) » en bas de CHAQUE page, numéro de page en haut au centre ;
 //   - Convention maison : noms/prénoms des FILLES en rouge (comme les
 //     tableaux de classement et « RESULTATS DE FIN D'ANNEE »).
@@ -82,18 +82,19 @@ const DOC_FONT =
 //   - page 1    : en-tête (~50mm) + 3mm + en-têtes tableau (~8mm)
 //                 + 15 × 6,4mm ≈ 157mm ≤ 180mm ✓
 //   - suivantes : 3mm + ~8mm + 25 × 6,4mm ≈ 171mm ≤ 180mm ✓
-//   - dernière  : au plus SIGN_CAP lignes → le tableau s'arrête vers
-//                 126mm et la zone signature (« LE DIRECTEUR » + 30mm +
-//                 NOM ≈ 40mm, ancrée en bas de page) reste entièrement
-//                 SUR la page — « LE DIRECTEUR ET SON NOM DOIVENT ETRE
-//                 AJUSTES A LA PAGE » : si le reste de la liste dépasse
-//                 ce plafond sans remplir une page entière, la page
-//                 courante rend une ligne de moins (jamais de
+//   - dernière  : au plus SIGN_CAP lignes → le tableau + la zone
+//                 signature (« LE DIRECTEUR » juste après la dernière
+//                 ligne + 15mm + NOM ≈ 28mm au total) tiennent dans les
+//                 180mm utiles — « JUSTE APRES LA DERNIERE LIGNE NOUS
+//                 DEVONS AVOIR LE DIRECTEUR ET RESPECTER 15 MM POUR LE
+//                 NOM » (demande utilisateur) : si le reste de la liste
+//                 dépasse ce plafond sans remplir une page entière, la
+//                 page courante rend une ligne de moins (jamais de
 //                 chevauchement, jamais de page signature seule).
-const SIG_GAP_MM = 30;     // distance « LE DIRECTEUR » → NOM (demande utilisateur)
+const SIG_GAP_MM = 15;     // distance « LE DIRECTEUR » → NOM (demande utilisateur)
 const ROWS_FIRST = 15;     // quota de lignes page 1 (demande utilisateur)
 const ROWS_MID = 25;       // quota de lignes pages suivantes (demande utilisateur)
-const SIGN_CAP = 18;       // max de lignes sur la page signature (zone ~40mm)
+const SIGN_CAP = 21;       // max de lignes sur la page signature (zone ~28mm en flux)
 const ROW_MM = 6.4;        // hauteur d'une ligne (police 12)
 
 const ROW_HEIGHT = "6.4mm";
@@ -222,11 +223,12 @@ type DocPage = StudentWithClass[];
 // Découpe la classe en pages à QUOTAS COMPTÉS : 15 lignes sur la page 1,
 // 25 sur les suivantes (demande utilisateur — comptées, sans aucune
 // estimation de hauteur). La DERNIÈRE page porte la zone signature :
-// elle reçoit au plus SIGN_CAP lignes pour que « LE DIRECTEUR » + 30mm
-// + NOM restent ajustés à la page ; si les lignes restantes dépassent
-// ce plafond sans pouvoir remplir une page entière (reste entre
-// SIGN_CAP+1 et 25), la page courante rend toutes les lignes sauf UNE —
-// la dernière page n'est jamais chevauchée ni vide.
+// elle reçoit au plus SIGN_CAP lignes pour que « LE DIRECTEUR » (juste
+// après la dernière ligne) + 15mm + NOM tiennent sur la page ; si les
+// lignes restantes dépassent ce plafond sans pouvoir remplir une page
+// entière (reste entre SIGN_CAP+1 et 25), la page courante rend toutes
+// les lignes sauf UNE — la dernière page n'est jamais chevauchée ni
+// vide.
 function buildPages(students: StudentWithClass[]): DocPage[] {
   const n = students.length;
   if (n === 0) return [[]]; // page d'en-tête + signature même à effectif nul
@@ -315,8 +317,8 @@ async function armoiriesBase64(): Promise<string> {
 // encadré, UNE table 12 colonnes bordée par page selon les MÊMES QUOTAS
 // 15/25 que le modèle PDF (saut de page Word explicite entre les tables,
 // le <br> empêche aussi Word de fusionner les tables adjacentes),
-// signature « LE DIRECTEUR » (NOM 30 mm plus bas) et pied « ELEVES (n) ».
-// Aucune ligne vide.
+// signature « LE DIRECTEUR » (juste après la dernière ligne du tableau,
+// NOM 15 mm plus bas) et pied « ELEVES (n) ». Aucune ligne vide.
 async function buildWordHtml(o: CandidatsExportData): Promise<string> {
   const armoiries = await armoiriesBase64();
   const iep = o.iep;
@@ -376,8 +378,8 @@ table.doc th { font-weight:bold; text-align:center; height:8mm; }
 table.doc td { height:6.4mm; } /* lignes 6,4mm — quotas comptés 15/25 (demande utilisateur) */
 thead.rep { display:table-header-group; }
 .titre { display:inline-block; border:2px solid #000; padding:7px 20px 8px; font-size:16px; font-weight:bold; text-align:center; line-height:1.35; }
-.sig { font-weight:bold; text-decoration:underline; margin-top:24pt; }
-/* NOM 30 mm sous « LE DIRECTEUR » — espace de signature (demande utilisateur) */
+.sig { font-weight:bold; text-decoration:underline; margin-top:3mm; } /* juste après la dernière ligne (demande utilisateur) */
+/* NOM 15 mm sous « LE DIRECTEUR » — espace de signature (demande utilisateur) */
 .signame { font-weight:bold; text-transform:uppercase; letter-spacing:0.3px; margin-top:${SIG_GAP_MM}mm; }
 .pied { text-align:center; margin-top:18pt; }
 </style>
@@ -530,8 +532,9 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
 
   // Sauts de page = QUOTAS COMPTÉS 15/25 (demande utilisateur) — les
   // MÊMES pages que le modèle PDF : 15 lignes sur la 1re page imprimée,
-  // 25 sur les suivantes ; la dernière (≤ 18 lignes) garde la place de
-  // la zone signature (LE DIRECTEUR + 30 mm + NOM) sous le tableau.
+  // 25 sur les suivantes ; la dernière (≤ 21 lignes) garde la place de
+  // la zone signature (LE DIRECTEUR juste après la dernière ligne +
+  // 15 mm + NOM) sous le tableau.
   // Ligne 9 = en-têtes du tableau (répétée à l'impression), données à
   // partir de la ligne 10 → un saut après la ligne 9 + lignes cumulées.
   const excelPages = buildPages(o.students);
@@ -556,15 +559,15 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
   foot.value = `ELEVES (${o.total})`;
   foot.font = font(11, true);
   foot.alignment = { horizontal: "center" };
-  const dir = ws.getCell(rEnd + 3, 1);
+  const dir = ws.getCell(rEnd + 2, 1); // JUSTE APRÈS la dernière ligne (sous le pied « ELEVES (n) »)
   dir.value = "LE DIRECTEUR";
   dir.font = { name: "Agency FB", size: 11, bold: true, underline: true };
-  // 30 mm d'espace de signature entre « LE DIRECTEUR » et son NOM
-  // (demande utilisateur) — ligne intercalaire vide (85pt ≈ 30mm).
-  ws.getRow(rEnd + 4).height = Math.round((SIG_GAP_MM * 72) / 25.4);
+  // 15 mm d'espace de signature entre « LE DIRECTEUR » et son NOM
+  // (demande utilisateur) — ligne intercalaire vide (43pt ≈ 15mm).
+  ws.getRow(rEnd + 3).height = Math.round((SIG_GAP_MM * 72) / 25.4);
   // Nom du directeur signataire SOUS « LE DIRECTEUR » (demande utilisateur).
   if (o.directeur.trim()) {
-    const dirName = ws.getCell(rEnd + 5, 1);
+    const dirName = ws.getCell(rEnd + 4, 1);
     dirName.value = o.directeur.trim().toUpperCase();
     dirName.font = { name: "Agency FB", size: 10, bold: true };
   }
@@ -652,9 +655,10 @@ export function CandidatesListDocument({
   const annee = cepeExamYear();
 
   // Découpage en pages à QUOTAS COMPTÉS : 15 lignes page 1, 25 suivantes
-  // (demande utilisateur) — AUCUNE ligne vide ; la dernière page (≤ 18
-  // lignes) garde la place de « LE DIRECTEUR » + 30 mm + NOM, ajustés à
-  // la page (demande utilisateur).
+  // (demande utilisateur) — AUCUNE ligne vide ; « LE DIRECTEUR » vient
+  // JUSTE APRÈS la dernière ligne de la DERNIÈRE page, NOM 15 mm plus
+  // bas (demande utilisateur) — dernière page ≤ 21 lignes pour tout
+  // tenir sur la page.
   const pages = buildPages(students);
   const lastPageIdx = pages.length - 1;
 
@@ -964,16 +968,14 @@ export function CandidatesListDocument({
               </table>
 
               {/* Signature « LE DIRECTEUR » + NOM du directeur signataire
-                  (demande utilisateur) — ANCRÉS en bas gauche de la
-                  DERNIÈRE page (position absolue au-dessus du pied « ELEVES
-                  (n) ») : le NOM est imprimé 30 mm SOUS « LE DIRECTEUR »
+                  (demande utilisateur) — EN FLUX, JUSTE APRÈS la dernière
+                  ligne du tableau de la DERNIÈRE page (plus ancrée en bas
+                  de page) : le NOM est imprimé 15 mm SOUS « LE DIRECTEUR »
                   (espace de signature, demande utilisateur). */}
               {isLast && (
                 <div
                   style={{
-                    position: "absolute",
-                    left: "7mm",
-                    bottom: "8mm",
+                    marginTop: "3mm",
                     fontWeight: 700,
                     fontSize: "12px",
                     color: INK,
