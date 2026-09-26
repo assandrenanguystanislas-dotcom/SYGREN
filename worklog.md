@@ -5108,3 +5108,16 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 
 ### Vérifications
 - tsc --noEmit 0 erreur ; next build OK. Push → Vercel READY nouveau SHA, Render LIVE dd9dbcf (backend inchangé), front 200, /api/health 200.
+
+## Itération — Liste des candidats : AGENCY FB 12, 30 mm signature, zéro ligne vide
+
+**Demande** : « DANS LE MODULE ÉLÈVES LISTE DES CANDIDATS PRENDRE LA POLICE AGENCY FB POLICE 12. METTRE UNE DISTANCE 30 MM ENTRE LE DIRECTEUR ET SON NOM. ANNULER LES LIGNES QUI NE COMPORTENT PAS D'ECRITURE. »
+
+### Réalisation (front seul — candidates-list-document.tsx, les 3 modèles)
+- POLICE : AGENCY FB taille 12 partout — DOC_FONT (« Agency FB », secours Arial/Helvetica/Liberation Sans), Word (body font-family), Excel (font() + merged() + signature). Hiérarchie de tailles conservée (convention « Arial 12 » précédente).
+- SIGNATURE : 30 mm entre « LE DIRECTEUR » et son NOM — PDF/écran (marginTop SIG_GAP_MM=30mm, bloc ancré bas gauche), Word (.signame margin-top 30mm), Excel (ligne intercalaire vide 85pt ≈ 30mm, NOM décalé rEnd+5).
+- LIGNES VIDES : supprimées (withFillers supprimé, DocPage = StudentWithClass[]) — seules les lignes des élèves réels sont rendues/imprimées ; Word/Excel n'en avaient déjà pas.
+- Pagination : SIGN_ZONE_MM 16 → 42 (label + 30 mm + nom) — la dernière page réserve la zone signature, aucun chevauchement possible ; budgets recalculés (BUDGET_LAST 126mm).
+
+### Vérifications
+- tsc --noEmit 0 erreur ; next build OK. Push → Vercel READY nouveau SHA, Render LIVE dd9dbcf (backend inchangé), front 200, /api/health 200.

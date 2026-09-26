@@ -26,14 +26,18 @@
 //     prenoms | sexe | date et lieu de naissance (fusion jj/mm/aaaa à
 //     {lieu}) | nationalite | nom et prénoms du père | nom et prénoms de
 //     la mère | nacte | date de l'acte | lieuacte ;
-//   - POLICE ARIAL, taille 12 (demande utilisateur) ;
-//   - Lignes vides pour compléter la page (modèle papier) ;
+//   - POLICE AGENCY FB, taille 12 (demande utilisateur) — Arial/Helvetica
+//     en secours si la police n'est pas installée sur le poste ;
+//   - AUCUNE ligne vide de complétion (demande utilisateur : « annuler les
+//     lignes qui ne comportent pas d'écriture ») — seules les lignes des
+//     élèves réels sont imprimées ;
 //   - 3 modèles d'impression (demande utilisateur) : PDF (impression
 //     navigateur), WORD (.doc HTML MSO A4 paysage, en-tête + thead répété)
 //     et EXCEL (.xlsx exceljs : en-tête fusionné, tableau bordé, paysage) ;
 //   - Pagination multipage : « ELEVES (n) » en bas de CHAQUE page, numéro
 //     de page en haut au centre, signature « LE DIRECTEUR » (soulignée)
-//     en bas à gauche de la DERNIÈRE page ;
+//     en bas à gauche de la DERNIÈRE page, NOM du directeur imprimé 30 mm
+//     plus bas (espace de signature, demande utilisateur) ;
 //   - Convention maison : noms/prénoms des FILLES en rouge (comme les
 //     tableaux de classement et « RESULTATS DE FIN D'ANNEE »).
 
@@ -53,9 +57,11 @@ import {
   usePrintRole,
 } from "@/lib/print-guard";
 
-// POLICE ARIAL taille 12 (demande utilisateur) — Helvetica/Liberation Sans
-// en secours (métriques identiques, Linux).
-const DOC_FONT = '"Arial", "Helvetica", "Liberation Sans", sans-serif';
+// POLICE AGENCY FB taille 12 (demande utilisateur) — Agency FB est une
+// police Windows standard ; Arial/Helvetica/Liberation Sans en secours
+// (poste non Windows).
+const DOC_FONT =
+  '"Agency FB", "Arial", "Helvetica", "Liberation Sans", sans-serif';
 
 // === Pagination à BUDGET DE HAUTEUR (A4 paysage : zone imprimable 194mm,
 // boîte page 192mm — padding 6mm haut/bas → 180mm de contenu) ===
@@ -65,24 +71,29 @@ const DOC_FONT = '"Arial", "Helvetica", "Liberation Sans", sans-serif';
 // DIRECTEUR » du bas de la dernière page (pied de page « ELEVES (n) » en
 // position absolue, élèves prenant toute la page). Désormais :
 //   1) chaque ligne est ESTIMÉE (majoration) selon les textes qui peuvent
-//      revenir à la ligne (Arial 12 : +3,5mm par ligne supplémentaire) ;
+//      revenir à la ligne (police 12 : +3,5mm par ligne supplémentaire —
+//      Agency FB plus condensée qu'Arial : estimation restée majorante) ;
 //   2) les pages sont remplies par budget de hauteur (page 1 : en-tête
 //      institutionnel déduit ; pages suivantes : thead + écart déduits) ;
-//   3) la DERNIÈRE page réserve 14mm de ZONE SIGNATURE — les lignes vides
-//      de complétion s'arrêtent avant, et « LE DIRECTEUR » est ancré en
-//      absolu au-dessus du pied : il est TOUJOURS visible.
+//   3) AUCUNE ligne vide de complétion (demande utilisateur : « annuler
+//      les lignes qui ne comportent pas d'écriture ») — seules les lignes
+//      des élèves réels sont rendues ;
+//   4) la DERNIÈRE page réserve une ZONE SIGNATURE : « LE DIRECTEUR » +
+//      30 mm d'espace de signature + NOM (demande utilisateur) — ancré en
+//      absolu au-dessus du pied, il est TOUJOURS visible.
 const PAGE_CONTENT_MM = 180;
 const HEADER_MM = 52;    // en-tête institutionnel page 1 (majoré)
 const THEAD_MM = 8;      // ligne d'en-têtes du tableau
 const GAP_FIRST_MM = 3;  // espace en-tête → tableau (page 1)
 const GAP_MM = 4;        // espace → tableau (pages suivantes)
-const SIGN_ZONE_MM = 16; // zone réservée à la signature + nom (dernière page)
-const ROW_MM = 7;        // hauteur d'une ligne simple (Arial 12)
+const SIG_GAP_MM = 30;   // distance « LE DIRECTEUR » → NOM (demande utilisateur)
+const SIGN_ZONE_MM = 42; // zone signature dernière page (label + 30mm + nom)
+const ROW_MM = 7;        // hauteur d'une ligne simple (police 12)
 const LINE_MM = 3.5;     // mm par ligne supplémentaire (texte qui revient)
 
 const BUDGET_FIRST = PAGE_CONTENT_MM - HEADER_MM - GAP_FIRST_MM - THEAD_MM; // 117
 const BUDGET_MID = PAGE_CONTENT_MM - GAP_MM - THEAD_MM;                     // 168
-const BUDGET_LAST = PAGE_CONTENT_MM - GAP_MM - THEAD_MM - SIGN_ZONE_MM;     // 154
+const BUDGET_LAST = PAGE_CONTENT_MM - GAP_MM - THEAD_MM - SIGN_ZONE_MM;     // 126
 
 const ROW_HEIGHT = "7mm";
 
@@ -204,8 +215,9 @@ const COLS: Array<{
 
 // Estimation MAJORÉE de la hauteur d'une ligne (mm) : on compte combien de
 // lignes prend le pire texte des colonnes étroites (capacité en caractères
-// déduite des largeurs % sur ~267mm utiles, police Arial 12 majorée à
-// ~1,95mm/caractère). Une ligne vide de complétion vaut exactement ROW_MM.
+// déduite des largeurs % sur ~267mm utiles, police 12 majorée à
+// ~1,95mm/caractère — calibrée Arial ; Agency FB plus condensée : reste
+// majorante).
 function estRowHeightMm(s: StudentWithClass | null): number {
   if (!s) return ROW_MM;
   const lines = (cpl: number, text: string) =>
@@ -225,15 +237,10 @@ function estRowHeightMm(s: StudentWithClass | null): number {
   return ROW_MM + (Math.min(max, 4) - 1) * LINE_MM;
 }
 
-type DocPage = Array<StudentWithClass | null>;
-
-// Complète une page avec des lignes vides (7mm) tant que le budget le permet
-// (modèle papier) — la page s'arrête AVANT la zone signature en dernière
-// position.
-function withFillers(rows: StudentWithClass[], usedMm: number, budgetMm: number): DocPage {
-  const fillers = Math.max(0, Math.floor((budgetMm - usedMm) / ROW_MM));
-  return [...rows, ...Array.from({ length: fillers }, () => null)];
-}
+// AUCUNE ligne vide de complétion (demande utilisateur : « annuler les
+// lignes qui ne comportent pas d'écriture ») — une page ne contient que
+// les lignes des élèves réels.
+type DocPage = StudentWithClass[];
 
 // Découpe la classe en pages par budget de hauteur : [page 1 (en-tête),
 // pages intermédiaires, dernière page avec zone signature réservée].
@@ -250,7 +257,7 @@ function buildPages(students: StudentWithClass[]): DocPage[] {
     i++;
   }
   if (i === start1 && students.length > 0) i = start1 + 1; // garde-fou : ≥1 élève/page
-  pages.push(withFillers(students.slice(start1, i), used, BUDGET_FIRST));
+  pages.push(students.slice(start1, i));
 
   // Pages intermédiaires + dernière (zone signature réservée)
   while (i < students.length) {
@@ -262,7 +269,7 @@ function buildPages(students: StudentWithClass[]): DocPage[] {
       j++;
     }
     if (j >= students.length) {
-      pages.push(withFillers(students.slice(i, j), usedLast, BUDGET_LAST));
+      pages.push(students.slice(i, j));
       i = j;
     } else {
       let usedMid = 0;
@@ -272,7 +279,7 @@ function buildPages(students: StudentWithClass[]): DocPage[] {
         k++;
       }
       if (k === i) k = i + 1; // garde-fou : ≥1 élève/page
-      pages.push(withFillers(students.slice(i, k), usedMid, BUDGET_MID));
+      pages.push(students.slice(i, k));
       i = k;
     }
   }
@@ -375,7 +382,7 @@ async function buildWordHtml(o: CandidatsExportData): Promise<string> {
 <style>
 @page WordSection1 { size:297mm 210mm; margin:8mm; mso-page-orientation:landscape; }
 div.WordSection1 { page:WordSection1; }
-body { font-family:Arial,Helvetica,sans-serif; font-size:12px; color:#000; }
+body { font-family:'Agency FB',Arial,Helvetica,sans-serif; font-size:12px; color:#000; }
 p { margin:0; }
 table.hdr { border-collapse:collapse; width:100%; }
 table.hdr td { border:none; vertical-align:top; font-size:12px; line-height:1.3; }
@@ -386,7 +393,8 @@ table.doc td { height:7mm; }
 thead.rep { display:table-header-group; }
 .titre { display:inline-block; border:2px solid #000; padding:7px 20px 8px; font-size:16px; font-weight:bold; text-align:center; line-height:1.35; }
 .sig { font-weight:bold; text-decoration:underline; margin-top:24pt; }
-.signame { font-weight:bold; text-transform:uppercase; letter-spacing:0.3px; margin-top:6pt; }
+/* NOM 30 mm sous « LE DIRECTEUR » — espace de signature (demande utilisateur) */
+.signame { font-weight:bold; text-transform:uppercase; letter-spacing:0.3px; margin-top:${SIG_GAP_MM}mm; }
 .pied { text-align:center; margin-top:18pt; }
 </style>
 </head>
@@ -459,7 +467,7 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
   });
   ws.columns = [4, 13, 15, 30, 5, 28, 14, 24, 22, 11, 13, 13].map((width) => ({ width }));
   const font = (size: number, bold = false, argb?: string) => ({
-    name: "Arial",
+    name: "Agency FB",
     size,
     bold,
     ...(argb ? { color: { argb } } : {}),
@@ -469,7 +477,7 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
     ws.mergeCells(row, 1, row, 12);
     const c = ws.getCell(row, 1);
     c.value = text;
-    c.font = { name: "Arial", size, bold, italic };
+    c.font = { name: "Agency FB", size, bold, italic };
     c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   };
 
@@ -546,12 +554,15 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
   foot.alignment = { horizontal: "center" };
   const dir = ws.getCell(rEnd + 3, 1);
   dir.value = "LE DIRECTEUR";
-  dir.font = { name: "Arial", size: 11, bold: true, underline: true };
+  dir.font = { name: "Agency FB", size: 11, bold: true, underline: true };
+  // 30 mm d'espace de signature entre « LE DIRECTEUR » et son NOM
+  // (demande utilisateur) — ligne intercalaire vide (85pt ≈ 30mm).
+  ws.getRow(rEnd + 4).height = Math.round((SIG_GAP_MM * 72) / 25.4);
   // Nom du directeur signataire SOUS « LE DIRECTEUR » (demande utilisateur).
   if (o.directeur.trim()) {
-    const dirName = ws.getCell(rEnd + 4, 1);
+    const dirName = ws.getCell(rEnd + 5, 1);
     dirName.value = o.directeur.trim().toUpperCase();
-    dirName.font = { name: "Arial", size: 10, bold: true };
+    dirName.font = { name: "Agency FB", size: 10, bold: true };
   }
 
   try {
@@ -636,9 +647,9 @@ export function CandidatesListDocument({
   const iep = data.iep;
   const annee = cepeExamYear();
 
-  // Découpage en pages à budget de hauteur + lignes vides de complétion
-  // (modèle papier) — la zone « LE DIRECTEUR » (14mm) reste réservée sur la
-  // dernière page même avec 50 élèves (demande utilisateur).
+  // Découpage en pages à budget de hauteur — AUCUNE ligne vide de
+  // complétion (demande utilisateur) ; la zone « LE DIRECTEUR » + 30 mm
+  // + NOM reste réservée sur la dernière page (demande utilisateur).
   const pages = buildPages(students);
   const lastPageIdx = pages.length - 1;
 
@@ -924,8 +935,8 @@ export function CandidatesListDocument({
                     const numero = idxOffset(pages, pageIdx) + i + 1;
                     const isGirl = s?.gender === "F";
                     return (
-                      <tr key={s?.id ?? `empty-${i}`} style={{ pageBreakInside: "avoid" }}>
-                        <td style={tdStyle("center")}>{s ? numero : ""}</td>
+                      <tr key={s.id} style={{ pageBreakInside: "avoid" }}>
+                        <td style={tdStyle("center")}>{numero}</td>
                         <td style={tdStyle("center")}>{cell(s?.matricule)}</td>
                         <td style={tdStyle("left", isGirl)}>
                           {cell(s?.last_name).toUpperCase()}
@@ -950,9 +961,8 @@ export function CandidatesListDocument({
               {/* Signature « LE DIRECTEUR » + NOM du directeur signataire
                   (demande utilisateur) — ANCRÉS en bas gauche de la
                   DERNIÈRE page (position absolue au-dessus du pied « ELEVES
-                  (n) ») : visibles quelle que soit la hauteur réelle des
-                  lignes ; les lignes vides de complétion s'arrêtent avant la
-                  zone réservée (16mm). */}
+                  (n) ») : le NOM est imprimé 30 mm SOUS « LE DIRECTEUR »
+                  (espace de signature, demande utilisateur). */}
               {isLast && (
                 <div
                   style={{
@@ -969,7 +979,7 @@ export function CandidatesListDocument({
                   {data.directeur ? (
                     <div
                       style={{
-                        marginTop: "2px",
+                        marginTop: `${SIG_GAP_MM}mm`,
                         textTransform: "uppercase",
                         letterSpacing: "0.3px",
                       }}
