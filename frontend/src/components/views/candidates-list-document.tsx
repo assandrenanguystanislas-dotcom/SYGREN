@@ -34,18 +34,23 @@
 //   - 3 modèles d'impression (demande utilisateur) : PDF (impression
 //     navigateur), WORD (.doc HTML MSO A4 paysage, en-tête + thead répété)
 //     et EXCEL (.xlsx exceljs : en-tête fusionné, tableau bordé, paysage) ;
-//   - Pagination multipage DENSIFIÉE (demande utilisateur) : 15 lignes
-//     sur la PREMIÈRE page, 25 sur les suivantes (lignes 6,6mm) ;
-//     « ELEVES (n) » en bas de CHAQUE page, numéro de page en haut au
-//     centre, signature « LE DIRECTEUR » (soulignée) en bas à gauche de
-//     la DERNIÈRE page, NOM du directeur imprimé 30 mm plus bas (espace
-//     de signature, demande utilisateur) ;
+//   - Pagination à QUOTAS COMPTÉS (demande utilisateur) : 15 lignes sur
+//     la PREMIÈRE page, 25 sur les suivantes — respectées exactement
+//     (lignes 6,4mm, plus aucune estimation de hauteur) ; la DERNIÈRE
+//     page (≤ 18 lignes) garde la place de la signature « LE DIRECTEUR »
+//     (soulignée) en bas à gauche, NOM du directeur imprimé 30 mm plus
+//     bas (espace de signature) — le tout ajusté à la page ;
+//     « ELEVES (n) » en bas de CHAQUE page, numéro de page en haut au centre ;
 //   - Convention maison : noms/prénoms des FILLES en rouge (comme les
 //     tableaux de classement et « RESULTATS DE FIN D'ANNEE »).
 
 import { useQuery } from "@tanstack/react-query";
 import { FileSpreadsheet, FileText, Loader2, Printer, X } from "lucide-react";
 import { useState, type CSSProperties } from "react";
+
+// Type seul (effacé au runtime) — le module exceljs reste importé
+// dynamiquement dans exportExcelAsync (chunk séparé).
+import type { Worksheet } from "exceljs";
 
 import { studentsApi } from "@/lib/api";
 import type { ClassCandidatesPayload, StudentWithClass } from "@/lib/types";
@@ -65,40 +70,33 @@ import {
 const DOC_FONT =
   '"Agency FB", "Arial", "Helvetica", "Liberation Sans", sans-serif';
 
-// === Pagination DENSIFIÉE à BUDGET DE HAUTEUR (A4 paysage : zone
-// imprimable 194mm, boîte page 192mm — padding 6mm haut/bas → 180mm) ===
-// Demande utilisateur : « augmenter la première page à 15 lignes et le
-// reste des pages à 25 ». Désormais :
-//   1) chaque ligne est ESTIMÉE (majoration) selon les textes qui peuvent
-//      revenir à la ligne (police 12 : +3,5mm par ligne supplémentaire —
-//      Agency FB plus condensée qu'Arial : estimation restée majorante) ;
-//   2) QUOTAS FIXES : 15 lignes sur la PREMIÈRE page, 25 sur les
-//      suivantes — la hauteur des lignes passe à 6,6mm pour que 25
-//      lignes tiennent sous l'en-tête du tableau ;
-//   3) AUCUNE ligne vide de complétion (demande utilisateur : « annuler
-//      les lignes qui ne comportent pas d'écriture ») — seules les lignes
-//      des élèves réels sont rendues ;
-//   4) la DERNIÈRE page réserve la ZONE SIGNATURE (« LE DIRECTEUR » +
-//      30 mm + NOM) : elle n'accepte que ce qui tient AU-DESSUS — si les
-//      lignes restantes ne tiennent pas, la page précédente garde au
-//      moins 1 élève pour la dernière page (jamais de chevauchement).
-const PAGE_CONTENT_MM = 180;
-const HEADER_MM = 52;      // en-tête institutionnel page 1 (majoré)
-const THEAD_MM = 8;        // ligne d'en-têtes du tableau
-const GAP_FIRST_MM = 3;    // espace en-tête → tableau (page 1)
-const GAP_MM = 3;          // espace → tableau (pages suivantes)
+// === Pagination à QUOTAS COMPTÉS (A4 paysage : zone imprimable 194mm,
+// boîte page 192mm — padding 6mm haut/bas → 180mm utiles) ===
+// Demande utilisateur : « LES 15 LIGNES SUR LA PREMIERE PAGE ET LES 25
+// SUR LES AUTRES PAGES NE SONT PAS RESPECTEES » — l'ancienne découpe
+// ESTIMAIT la hauteur de chaque ligne (majoration pour les textes qui
+// reviennent à la ligne) et sous-remplissait les pages (17 à 22 lignes
+// au lieu de 25). Désormais les pages sont COMPTÉES, sans aucune
+// estimation ; la géométrie garantit qu'elles tiennent :
+//   - ligne 6,4mm (police 12) ;
+//   - page 1    : en-tête (~50mm) + 3mm + en-têtes tableau (~8mm)
+//                 + 15 × 6,4mm ≈ 157mm ≤ 180mm ✓
+//   - suivantes : 3mm + ~8mm + 25 × 6,4mm ≈ 171mm ≤ 180mm ✓
+//   - dernière  : au plus SIGN_CAP lignes → le tableau s'arrête vers
+//                 126mm et la zone signature (« LE DIRECTEUR » + 30mm +
+//                 NOM ≈ 40mm, ancrée en bas de page) reste entièrement
+//                 SUR la page — « LE DIRECTEUR ET SON NOM DOIVENT ETRE
+//                 AJUSTES A LA PAGE » : si le reste de la liste dépasse
+//                 ce plafond sans remplir une page entière, la page
+//                 courante rend une ligne de moins (jamais de
+//                 chevauchement, jamais de page signature seule).
 const SIG_GAP_MM = 30;     // distance « LE DIRECTEUR » → NOM (demande utilisateur)
-const SIGN_ZONE_MM = 42;   // zone signature dernière page (label + 30mm + nom)
 const ROWS_FIRST = 15;     // quota de lignes page 1 (demande utilisateur)
 const ROWS_MID = 25;       // quota de lignes pages suivantes (demande utilisateur)
-const ROW_MM = 6.6;        // hauteur d'une ligne simple (police 12)
-const LINE_MM = 3.5;       // mm par ligne supplémentaire (texte qui revient)
+const SIGN_CAP = 18;       // max de lignes sur la page signature (zone ~40mm)
+const ROW_MM = 6.4;        // hauteur d'une ligne (police 12)
 
-const BUDGET_FIRST = PAGE_CONTENT_MM - HEADER_MM - GAP_FIRST_MM - THEAD_MM; // 117
-const BUDGET_MID = PAGE_CONTENT_MM - GAP_MM - THEAD_MM;                     // 169
-const BUDGET_LAST = BUDGET_MID - SIGN_ZONE_MM;                              // 127
-
-const ROW_HEIGHT = "6.6mm";
+const ROW_HEIGHT = "6.4mm";
 
 // Date du jour au format jj/mm/aaaa (rendu identique serveur/client).
 function todayFr(): string {
@@ -216,82 +214,43 @@ const COLS: Array<{
   { w: "6.5%", label: "lieuacte", align: "center" },
 ];
 
-// Estimation MAJORÉE de la hauteur d'une ligne (mm) : on compte combien de
-// lignes prend le pire texte des colonnes étroites (capacité en caractères
-// déduite des largeurs % sur ~267mm utiles, police 12 majorée à
-// ~1,95mm/caractère — calibrée Arial ; Agency FB plus condensée : reste
-// majorante).
-function estRowHeightMm(s: StudentWithClass | null): number {
-  if (!s) return ROW_MM;
-  const lines = (cpl: number, text: string) =>
-    text ? Math.max(1, Math.ceil(text.length / cpl)) : 1;
-  const max = Math.max(
-    lines(8, cell(s.last_name).toUpperCase()),      // nom (7,5% — MAJUSCULES)
-    lines(21, s.first_name ? titleCasePrenoms(s.first_name) : ""), // prenoms
-    lines(18, fmtDateLieuNaissance(s)),             // date et lieu de naissance
-    lines(15, cell(s.father_name)),                 // père (12,5%)
-    lines(14, cell(s.mother_name)),                 // mère (11,5%)
-    lines(9, cell(s.nationality)),                  // nationalité (7,5%)
-    lines(9, cell(s.matricule)),                    // matricule (7%)
-    lines(6, cell(s.acte_number)),                  // nacte (4,5%)
-    lines(8, fmtDateActe(s?.acte_date)),            // date de l'acte (6,5%)
-    lines(8, cell(s.acte_place)),                   // lieuacte (6,5%)
-  );
-  return ROW_MM + (Math.min(max, 4) - 1) * LINE_MM;
-}
-
 // AUCUNE ligne vide de complétion (demande utilisateur : « annuler les
 // lignes qui ne comportent pas d'écriture ») — une page ne contient que
 // les lignes des élèves réels.
 type DocPage = StudentWithClass[];
 
-// Découpe la classe en pages : QUOTAS FIXES (15 lignes page 1, 25
-// suivantes — demande utilisateur) sous budget de hauteur, la DERNIÈRE
-// page réservant la zone signature. La dernière page est décidée AVANT
-// de remplir une page intermédiaire : si les élèves restants tiennent
-// au-dessus de la signature, c'est la dernière page ; sinon on remplit
-// une page pleine (15/25) en gardant au moins 1 élève pour la fin
-// (jamais de chevauchement tableau / « LE DIRECTEUR »).
+// Découpe la classe en pages à QUOTAS COMPTÉS : 15 lignes sur la page 1,
+// 25 sur les suivantes (demande utilisateur — comptées, sans aucune
+// estimation de hauteur). La DERNIÈRE page porte la zone signature :
+// elle reçoit au plus SIGN_CAP lignes pour que « LE DIRECTEUR » + 30mm
+// + NOM restent ajustés à la page ; si les lignes restantes dépassent
+// ce plafond sans pouvoir remplir une page entière (reste entre
+// SIGN_CAP+1 et 25), la page courante rend toutes les lignes sauf UNE —
+// la dernière page n'est jamais chevauchée ni vide.
 function buildPages(students: StudentWithClass[]): DocPage[] {
-  const heights = students.map(estRowHeightMm);
+  const n = students.length;
+  if (n === 0) return [[]]; // page d'en-tête + signature même à effectif nul
   const pages: DocPage[] = [];
   let i = 0;
-
-  while (i < students.length) {
-    const first = pages.length === 0;
-    const budget = first ? BUDGET_FIRST : BUDGET_MID;
-    const cap = first ? ROWS_FIRST : ROWS_MID;
-
-    // 1) Les élèves restants tiennent-ils sur CETTE page en tant que
-    //    DERNIÈRE page (zone signature déduite, ≤ 25 lignes) ?
-    const lastBudget = budget - SIGN_ZONE_MM;
-    let j = i;
-    let usedLast = 0;
-    while (
-      j < students.length &&
-      j - i < ROWS_MID &&
-      usedLast + heights[j] <= lastBudget
-    ) {
-      usedLast += heights[j];
-      j++;
-    }
-    if (j >= students.length) {
-      pages.push(students.slice(i, j));
+  while (i < n) {
+    const quota = pages.length === 0 ? ROWS_FIRST : ROWS_MID;
+    const remaining = n - i;
+    if (remaining <= quota) {
+      if (remaining <= SIGN_CAP) {
+        // Dernière page : toutes les lignes restantes + zone signature.
+        pages.push(students.slice(i));
+      } else {
+        // Reste trop plein pour la signature : cette page rend toutes
+        // les lignes sauf UNE, la dernière page reçoit la ligne restante
+        // ET la zone signature (ajustée à la page).
+        pages.push(students.slice(i, n - 1));
+        pages.push(students.slice(n - 1));
+      }
       break;
     }
-
-    // 2) Page pleine : quota 15 (page 1) ou 25 (suivantes), budget complet.
-    let k = i;
-    let used = 0;
-    while (k < students.length && k - i < cap && used + heights[k] <= budget) {
-      used += heights[k];
-      k++;
-    }
-    if (k === i) k = i + 1; // garde-fou : ≥1 élève/page
-    // Toujours garder ≥1 élève pour la dernière page (zone signature).
-    if (k >= students.length) k = students.length - 1;
-    pages.push(students.slice(i, k));
-    i = k;
+    // Page pleine au quota exact : 15 (page 1) puis 25 (suivantes).
+    pages.push(students.slice(i, i + quota));
+    i += quota;
   }
   return pages;
 }
@@ -353,34 +312,49 @@ async function armoiriesBase64(): Promise<string> {
 
 // Modèle WORD (.doc) — HTML MSO A4 PAYSAGE fidèle au document imprimé :
 // en-tête institutionnel complet (tableau 3 colonnes sans bordures), titre
-// encadré, tableau 12 colonnes bordé (thead répété à chaque page par Word),
-// signature « LE DIRECTEUR » et pied « ELEVES (n) ». Aucune ligne vide : Word
-// pagine naturellement.
+// encadré, UNE table 12 colonnes bordée par page selon les MÊMES QUOTAS
+// 15/25 que le modèle PDF (saut de page Word explicite entre les tables,
+// le <br> empêche aussi Word de fusionner les tables adjacentes),
+// signature « LE DIRECTEUR » (NOM 30 mm plus bas) et pied « ELEVES (n) ».
+// Aucune ligne vide.
 async function buildWordHtml(o: CandidatsExportData): Promise<string> {
   const armoiries = await armoiriesBase64();
   const iep = o.iep;
   const th = COLS.map((c) => `<th>${escHtml(c.label)}</th>`).join("");
   const colgroup = COLS.map((c) => `<col style="width:${c.w}">`).join("");
-  const body = o.students
-    .map((s, i) => {
-      const red = s.gender === "F" ? ` style="color:#dc2626"` : "";
-      const td = (v: string, extra = "") => `<td${extra}>${escHtml(v)}</td>`;
-      return (
-        `<tr>` +
-        td(String(i + 1)) +
-        td(cell(s.matricule)) +
-        td(cell(s.last_name).toUpperCase(), red) +
-        td(s.first_name ? titleCasePrenoms(s.first_name) : "", red) +
-        td(cell(s.gender)) +
-        td(fmtDateLieuNaissance(s)) +
-        td(cell(s.nationality)) +
-        td(cell(s.father_name)) +
-        td(cell(s.mother_name)) +
-        td(cell(s.acte_number)) +
-        td(fmtDateActe(s.acte_date)) +
-        td(cell(s.acte_place)) +
-        `</tr>`
-      );
+  // Pages QUOTAS 15/25 — numérotation continue des lignes d'une page à
+  // l'autre (identique au modèle PDF).
+  let numero = 0;
+  const tables = buildPages(o.students)
+    .map((rows, p) => {
+      const body = rows
+        .map((s) => {
+          numero++;
+          const red = s.gender === "F" ? ` style="color:#dc2626"` : "";
+          const td = (v: string, extra = "") => `<td${extra}>${escHtml(v)}</td>`;
+          return (
+            `<tr>` +
+            td(String(numero)) +
+            td(cell(s.matricule)) +
+            td(cell(s.last_name).toUpperCase(), red) +
+            td(s.first_name ? titleCasePrenoms(s.first_name) : "", red) +
+            td(cell(s.gender)) +
+            td(fmtDateLieuNaissance(s)) +
+            td(cell(s.nationality)) +
+            td(cell(s.father_name)) +
+            td(cell(s.mother_name)) +
+            td(cell(s.acte_number)) +
+            td(fmtDateActe(s.acte_date)) +
+            td(cell(s.acte_place)) +
+            `</tr>`
+          );
+        })
+        .join("");
+      const brk =
+        p === 0
+          ? ""
+          : `<br clear=all style='mso-special-character:line-break;page-break-before:always'>`;
+      return `${brk}<table class=doc><colgroup>${colgroup}</colgroup><thead class=rep><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
     })
     .join("");
   return `<!DOCTYPE html>
@@ -399,7 +373,7 @@ table.hdr td { border:none; vertical-align:top; font-size:12px; line-height:1.3;
 table.doc { border-collapse:collapse; width:100%; table-layout:fixed; }
 table.doc td, table.doc th { border:1px solid #000; padding:0 3px; font-size:12px; vertical-align:middle; overflow-wrap:break-word; }
 table.doc th { font-weight:bold; text-align:center; height:8mm; }
-table.doc td { height:6.6mm; } /* lignes denses 6,6mm — quotas 15/25 (demande utilisateur) */
+table.doc td { height:6.4mm; } /* lignes 6,4mm — quotas comptés 15/25 (demande utilisateur) */
 thead.rep { display:table-header-group; }
 .titre { display:inline-block; border:2px solid #000; padding:7px 20px 8px; font-size:16px; font-weight:bold; text-align:center; line-height:1.35; }
 .sig { font-weight:bold; text-decoration:underline; margin-top:24pt; }
@@ -434,11 +408,7 @@ ${armoiries ? `<p><img src="${armoiries}" width="56" height="56" alt=""></p>` : 
 </td>
 </tr></table>
 <p style="height:3mm"></p>
-<table class=doc>
-<colgroup>${colgroup}</colgroup>
-<thead class=rep><tr>${th}</tr></thead>
-<tbody>${body}</tbody>
-</table>
+${tables}
 <p class=sig>LE DIRECTEUR</p>
 ${o.directeur.trim() ? `<p class=signame>${escHtml(o.directeur.trim().toUpperCase())}</p>` : ""}
 <p class=pied>ELEVES (${o.total})</p>
@@ -450,7 +420,8 @@ ${o.directeur.trim() ? `<p class=signame>${escHtml(o.directeur.trim().toUpperCas
 // Modèle EXCEL (.xlsx) — classeur mis en page (exceljs, import dynamique) :
 // en-tête officiel fusionné + armoiries, tableau 12 colonnes bordé (filles en
 // rouge), pied « ELEVES (n) », signature « LE DIRECTEUR », impression paysage
-// ajustée à 1 page de large avec répétition de la ligne d'en-têtes.
+// ajustée à 1 page de large avec répétition de la ligne d'en-têtes, et
+// SAUTS DE PAGE aux MÊMES QUOTAS 15/25 que le modèle PDF (rowBreaks).
 const EXCEL_BORDER = { style: "thin" as const, color: { argb: "FF000000" } };
 const EXCEL_BOX = {
   top: EXCEL_BORDER,
@@ -557,6 +528,28 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
     });
   });
 
+  // Sauts de page = QUOTAS COMPTÉS 15/25 (demande utilisateur) — les
+  // MÊMES pages que le modèle PDF : 15 lignes sur la 1re page imprimée,
+  // 25 sur les suivantes ; la dernière (≤ 18 lignes) garde la place de
+  // la zone signature (LE DIRECTEUR + 30 mm + NOM) sous le tableau.
+  // Ligne 9 = en-têtes du tableau (répétée à l'impression), données à
+  // partir de la ligne 10 → un saut après la ligne 9 + lignes cumulées.
+  const excelPages = buildPages(o.students);
+  const breaks: Array<{ id: number; max: number; min: number; man: number }> = [];
+  let done = 0;
+  for (let p = 0; p < excelPages.length - 1; p++) {
+    done += excelPages[p].length;
+    breaks.push({ id: 9 + done, max: 16383, min: 0, man: 1 });
+  }
+  // exceljs 4.x sérialise bien rowBreaks (WorksheetModel.rowBreaks →
+  // <rowBreaks><brk id max min man/></rowBreaks>) mais ne l'expose pas
+  // dans le type public Worksheet — cast ciblé.
+  (
+    ws as Worksheet & {
+      rowBreaks: Array<{ id: number; max: number; min: number; man: number }>;
+    }
+  ).rowBreaks = breaks;
+
   const rEnd = 10 + o.students.length;
   ws.mergeCells(rEnd + 1, 1, rEnd + 1, 12);
   const foot = ws.getCell(rEnd + 1, 1);
@@ -658,9 +651,10 @@ export function CandidatesListDocument({
   const iep = data.iep;
   const annee = cepeExamYear();
 
-  // Découpage en pages DENSIFIÉES : 15 lignes page 1, 25 suivantes
-  // (demande utilisateur) — AUCUNE ligne vide ; la zone « LE DIRECTEUR »
-  // + 30 mm + NOM reste réservée sur la dernière page (demande utilisateur).
+  // Découpage en pages à QUOTAS COMPTÉS : 15 lignes page 1, 25 suivantes
+  // (demande utilisateur) — AUCUNE ligne vide ; la dernière page (≤ 18
+  // lignes) garde la place de « LE DIRECTEUR » + 30 mm + NOM, ajustés à
+  // la page (demande utilisateur).
   const pages = buildPages(students);
   const lastPageIdx = pages.length - 1;
 
@@ -915,8 +909,7 @@ export function CandidatesListDocument({
                 </div>
               )}
 
-              {/* Espace entre en-tête et tableau — 3mm sur TOUTES les pages
-                  (GAP_FIRST_MM = GAP_MM = 3) */}
+              {/* Espace entre en-tête et tableau — 3mm sur TOUTES les pages */}
               <div style={{ height: "3mm" }} />
 
               {/* --- Tableau 12 colonnes (modèle + révisions utilisateur) --- */}
