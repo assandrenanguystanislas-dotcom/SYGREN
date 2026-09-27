@@ -13,8 +13,7 @@
 //     Date et lieu de naissance | IO IA IS IAS | Classe | Échelon |
 //     Date entrée F.P | Fonction | Dates (Entrée DREN | Entrée IEP |
 //     Arrivée au poste) | Cours | Effectif (F|G|T) | Redoublants (F|G|T)
-//     | Contact | Emargement — avec une ligne vide supplémentaire (le
-//     modèle) ;
+//     | Contact | Emargement ;
 //   - N° ordre ; noms des femmes EN ROUGE (N.B du modèle) ;
 //   - Ligne TOTAL CALCULÉE : somme des effectifs et des redoublants
 //     saisis (colonne sans aucune donnée → case vide, comme les « # »
@@ -113,6 +112,15 @@
 //   première ligne du N.B ; le NOM du Directeur passe APRÈS la ligne
 //   « (A RETOURNER EN 03 EXEMPLAIRES) » — colonne de gauche (zone de
 //   signature) ; N.B et mention restent CENTRÉS (3 modèles).
+//
+// v12 — CADRE DU TITRE PLUS GRAND + LIGNES INUTILES SUPPRIMÉES (demande
+//   utilisateur, module Utilisateurs) :
+//   - boîte « ETAT NOMINATIF DU PERSONNEL » agrandie (police 22px,
+//     paddings élargis, bordure 2.6px, rayon 12px) dans les 3 modèles
+//     (PDF/écran, Word, Excel — Excel : police 18, rangée 30pt) ;
+//   - la ligne vierge numérotée héritée du modèle papier (fin de
+//     tableau, sans aucune donnée) est RETIRÉE des 3 modèles : le
+//     tableau se termine par la ligne TOTAL.
 //
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
@@ -449,19 +457,21 @@ export function PersonnelDocument({
         <OfficialDocHeader iep={data.iep} variant="plan" size="xs" />
 
         {/* --- Boîte du titre (bord arrondi VERT DRAPEAU, fond pastel
-            orange — inspiration bulletins individuels) --- */}
+            orange — inspiration bulletins individuels) — v12 : cadre
+            PLUS GRAND (demande utilisateur). --- */}
         <div style={{ textAlign: "center", margin: "2px 0 4px" }}>
           <span
             style={{
               display: "inline-block",
-              border: `2.2px solid ${CI_GREEN}`,
-              // v10 — boîte du titre allégée (en-tête trop espacé).
-              borderRadius: "10px",
-              padding: "3px 22px 4px",
+              border: `2.6px solid ${CI_GREEN}`,
+              // v12 — cadre du titre PLUS GRAND (police 22px, paddings
+              // élargis — demande utilisateur).
+              borderRadius: "12px",
+              padding: "8px 40px 9px",
               // Police ARIAL (héritée du document — demande utilisateur).
-              fontSize: "15px",
+              fontSize: "22px",
               fontWeight: 700,
-              letterSpacing: "1px",
+              letterSpacing: "1.5px",
               lineHeight: 1.25,
               color: INK,
               background: CI_ORANGE_BG,
@@ -619,16 +629,9 @@ export function PersonnelDocument({
             {staff.map((s, i) => (
               <StaffRow key={s.id} s={s} n={i + 1} />
             ))}
-            {/* Ligne supplémentaire vierge (le modèle garde une ligne libre) */}
-            <tr>
-              <td style={td}>{staff.length + 1}</td>
-              <td style={tdLeft}>&nbsp;</td>
-              {Array.from({ length: 19 }, (_, k) => (
-                <td key={k} style={td}>
-                  &nbsp;
-                </td>
-              ))}
-            </tr>
+            {/* v12 — ligne vierge du modèle RETIRÉE (demande utilisateur :
+                plus de lignes inutiles — le tableau se termine par la
+                ligne TOTAL). */}
             {/* --- Ligne TOTAL (calculée, fond gris, gras — modèle) --- */}
             <tr>
               <td colSpan={9} style={{ border: "none", padding: 0 }} />
@@ -889,7 +892,8 @@ const EXPORT_COL_WIDTHS = [
 // boîte du titre, tableau 21 colonnes (entêtes CLASSE / ÉCHELON / COURS
 // remis à l'HORIZONTALE, texte court — Word ne rend pas l'écriture
 // verticale ; thead répété à chaque page via display:table-header-group),
-// ligne vierge du modèle, TOTAL calculé, signature « Le Directeur » + NOM,
+// TOTAL calculé (v12 — ligne vierge du modèle retirée), signature « Le
+// Directeur » + NOM,
 // N.B (femmes en rouge) et mention « (A RETOURNER EN 03 EXEMPLAIRES) ».
 async function buildWordHtml(o: ExportData): Promise<string> {
   const armoiries = await armoiriesBase64();
@@ -970,13 +974,8 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     })
     .join("");
 
-  // Ligne supplémentaire vierge (le modèle garde une ligne libre).
-  const emptyRow =
-    `<tr>` +
-    `<td style="${td}">${o.staff.length + 1}</td>` +
-    `<td style="${tdL}">&nbsp;</td>` +
-    Array.from({ length: 19 }, () => `<td style="${td}">&nbsp;</td>`).join("") +
-    `</tr>`;
+  // v12 — ligne vierge du modèle RETIRÉE (demande utilisateur : plus de
+  // lignes inutiles — le tableau se termine par la ligne TOTAL).
 
   // Ligne TOTAL calculée — même structure que le PDF : libellé sous les
   // colonnes DATES, effectifs puis redoublants F/G/T, fond pastel vert.
@@ -1027,7 +1026,7 @@ ${armoiries ? `<img src="${armoiries}" width="38" height="38" alt="">` : ""}
     styles: `
 table.hdr { border-collapse:collapse; width:100%; }
 table.hdr td { border:none; vertical-align:top; font-size:9.5px; line-height:1.25; }
-.titre { display:inline-block; border:2.2px solid #009E60; background:#FDEBDA; border-radius:10px; padding:3px 22px 4px; font-size:15px; font-weight:bold; letter-spacing:1px; line-height:1.25; text-align:center; }
+.titre { display:inline-block; border:2.6px solid #009E60; background:#FDEBDA; border-radius:12px; padding:8px 40px 9px; font-size:22px; font-weight:bold; letter-spacing:1.5px; line-height:1.25; text-align:center; }
 table.doc { border-collapse:collapse; width:100%; table-layout:fixed; }
 table.doc td, table.doc th { overflow-wrap:break-word; }
 thead.rep { display:table-header-group; }
@@ -1046,7 +1045,6 @@ ${header}
 <thead class=rep><tr>${headTop}</tr>${headSub}</thead>
 <tbody>
 ${body}
-${emptyRow}
 ${totalRow}
 </tbody>
 </table>
@@ -1158,15 +1156,17 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     11,
   );
   merged(4, "République de Côte d'Ivoire — Union-Discipline-Travail", 11, true);
-  merged(5, "ETAT NOMINATIF DU PERSONNEL", 14, true);
+  // v12 — titre PLUS GRAND (demande utilisateur) : police 18, rangée 30pt.
+  merged(5, "ETAT NOMINATIF DU PERSONNEL", 18, true);
   for (let col = 1; col <= 21; col++) ws.getCell(5, col).border = BOX;
   // v10 — en-tête resserré (au moins 9 lignes sur la première page) :
-  // hauteurs explicites compactes pour les rangées 1-5.
+  // hauteurs explicites compactes pour les rangées 1-5 (v12 : rangée 5
+  // remontée à 30 pour le cadre agrandi).
   ws.getRow(1).height = 16;
   ws.getRow(2).height = 14;
   ws.getRow(3).height = 13;
   ws.getRow(4).height = 13;
-  ws.getRow(5).height = 20;
+  ws.getRow(5).height = 30;
 
   // Ligne Ecole (gauche) / Année scolaire (droite).
   ws.mergeCells(6, 1, 6, 9);
@@ -1275,19 +1275,11 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     });
   });
 
-  // --- Ligne vierge du modèle (une ligne libre numérotée) ---
-  const rEmpty = HEAD_END + 1 + o.staff.length;
-  const emptyRow = ws.getRow(rEmpty);
-  emptyRow.values = [o.staff.length + 1, ...Array<string>(20).fill("")];
-  emptyRow.height = 28.3; // v10 — 10 mm (ligne numérotée)
-  emptyRow.eachCell({ includeEmpty: true }, (c) => {
-    c.border = BOX;
-    c.font = font(10);
-    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-  });
-
   // --- TOTAL calculé (fond pastel vert, gras — comme le PDF) ---
-  const rTotal = rEmpty + 1;
+  // v12 — la ligne vierge du modèle est RETIRÉE (demande utilisateur :
+  // plus de lignes inutiles) — le TOTAL suit directement la dernière
+  // ligne agent.
+  const rTotal = HEAD_END + 1 + o.staff.length;
   const totals: Array<number | null> = [
     sumCol(o.staff.map((s) => s.effectif_f)),
     sumCol(o.staff.map((s) => s.effectif_g)),
