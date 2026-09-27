@@ -141,7 +141,9 @@ func errStaffDate(field string) error {
 
 // ListStaffRecords retourne les lignes du fichier du personnel.
 // Query : ?q=recherche (nom, matricule, contact, lieu de naissance,
-// nom d'école) et ?sector_id= filtrage par secteur. Tri : ordre de
+// nom d'école), ?sector_id= filtrage par secteur et ?school_id=
+// filtrage par école (Task 65 — bouton de sélection des écoles du
+// module Fichier du personnel). Tri : ordre de
 // saisie (created_at), le N° affiché = position dans la liste.
 func ListStaffRecords(w http.ResponseWriter, r *http.Request) {
 	query := database.DB.Model(&models.StaffRecord{})
@@ -157,6 +159,11 @@ func ListStaffRecords(w http.ResponseWriter, r *http.Request) {
 	}
 	if sectorID := r.URL.Query().Get("sector_id"); sectorID != "" {
 		query = query.Where("sector_id = ?", sectorID)
+	}
+	// Task 65 — filtrage par école : même mécanique que le secteur,
+	// combiné en ET (une école appartient à un secteur).
+	if schoolID := r.URL.Query().Get("school_id"); schoolID != "" {
+		query = query.Where("school_id = ?", schoolID)
 	}
 	var records []models.StaffRecord
 	if err := query.Order("created_at ASC").Find(&records).Error; err != nil {

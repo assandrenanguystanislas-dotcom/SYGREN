@@ -19,6 +19,12 @@
 // NOMINATIF DU PERSONNEL (agents des dossiers ajoutés après le seed —
 // ils manquaient au fichier). INSERT-only + idempotent.
 //
+// Task 65 — bouton de SÉLECTION DES ÉCOLES : à côté du filtre Secteur,
+// un sélecteur hybride (bande déroulante + saisie des premières
+// lettres/code — SchoolCombobox) filtre le fichier par école ; entrée
+// « Toutes les écoles » pour lever le filtre. Le filtrage est
+// serveur-side (?school_id=), combiné en ET avec recherche et secteur.
+//
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
 import { useMemo, useState } from "react";
@@ -117,6 +123,8 @@ export function StaffDataView() {
 
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState(UNSET);
+  // Task 65 — filtre par école ("" = toutes les écoles).
+  const [schoolFilter, setSchoolFilter] = useState("");
   // Classement du fichier par secteur : un simple CLIC sur l'en-tête
   // SECTEUR du tableau bascule (re-clic = ordre initial du fichier).
   const [bySector, setBySector] = useState(false);
@@ -127,11 +135,12 @@ export function StaffDataView() {
   const [exporting, setExporting] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["staff-records", search, sectorFilter],
+    queryKey: ["staff-records", search, sectorFilter, schoolFilter],
     queryFn: () =>
       staffDataApi.list(
         search.trim() || undefined,
         sectorFilter !== UNSET ? sectorFilter : undefined,
+        schoolFilter || undefined,
       ),
   });
 
@@ -428,6 +437,21 @@ export function StaffDataView() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            {/* Task 65 — BOUTON DE SÉLECTION DES ÉCOLES : même sélecteur
+                hybride que le formulaire (bande déroulante complète +
+                saisie des premières lettres ou du code ministériel).
+                « Toutes les écoles » (en tête de liste) lève le filtre. */}
+            <div className="w-[280px] min-w-[240px]">
+              <SchoolCombobox
+                id="staff-school-filter"
+                schools={schoolsData?.schools ?? []}
+                value={schoolFilter}
+                onChange={(schoolId) => setSchoolFilter(schoolId)}
+                allowEmpty
+                emptyLabel="Toutes les écoles"
+                placeholder="Toutes les écoles"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -448,7 +472,7 @@ export function StaffDataView() {
             <div className="py-12 text-center">
               <IdCard className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">
-                {search || sectorFilter !== UNSET
+                {search || sectorFilter !== UNSET || schoolFilter
                   ? "Aucune ligne ne correspond à ces critères."
                   : "Le fichier du personnel est vide. Ajoutez le premier agent."}
               </p>

@@ -872,10 +872,13 @@ export const parentsApi = {
 // Fichier Excel à compléter : CRUD des lignes (14 colonnes) + pré-rempli
 // côté backend depuis les dossiers des agents.
 export const staffDataApi = {
-  list: (q?: string, sectorId?: string) => {
+  // Task 65 — schoolId : filtrage par école (bouton de sélection des
+  // écoles), combiné en ET avec la recherche et le secteur.
+  list: (q?: string, sectorId?: string, schoolId?: string) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (sectorId) params.set("sector_id", sectorId);
+    if (schoolId) params.set("school_id", schoolId);
     const qs = params.toString();
     return apiFetch<{ staff_records: StaffRecord[]; count: number }>(
       `/api/staff-records${qs ? `?${qs}` : ""}`,
