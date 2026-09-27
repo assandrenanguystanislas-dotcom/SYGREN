@@ -19,6 +19,16 @@
 // NOMINATIF DU PERSONNEL (agents des dossiers ajoutés après le seed —
 // ils manquaient au fichier). INSERT-only + idempotent.
 //
+// Task 66 — en-tête ÉCOLES interactif (le bouton de sélection d'écoles
+// de la Task 65 est ANNULÉ — revert 189fb60) : comme pour SECTEUR, la
+// colonne ÉCOLES se SURVOLE (une couleur apparaît) et un simple clic
+// CLASSE tout le fichier par école en ORDRE ALPHABÉTIQUE — les écoles
+// du secteur DEMANDÉ quand un secteur est choisi dans le filtre (le
+// filtrage serveur ne laisse que ses lignes) ; bandeau vert par école
+// (agents + effectif) et blocs alternés blanc/vert pâle ; re-clic =
+// ordre initial du fichier. Les classements secteur / école
+// s'excluent mutuellement.
+//
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
 import { useMemo, useState } from "react";
@@ -120,6 +130,10 @@ export function StaffDataView() {
   // Classement du fichier par secteur : un simple CLIC sur l'en-tête
   // SECTEUR du tableau bascule (re-clic = ordre initial du fichier).
   const [bySector, setBySector] = useState(false);
+  // Task 66 — classement par ÉCOLE (clic sur l'en-tête ÉCOLES) :
+  // ordre alphabétique des écoles ; mutuellement exclusif avec le
+  // classement par secteur.
+  const [bySchool, setBySchool] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StaffRecord | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY);
@@ -214,11 +228,29 @@ export function StaffDataView() {
     [records],
   );
 
-  // Affichage : ordre du fichier (défaut) ou classé par secteur (clic sur
-  // l'en-tête SECTEUR). Tri STABLE : au sein d'un même secteur, l'ordre
-  // initial de saisie est conservé ; les lignes sans secteur passent à la
-  // fin, sous le bandeau « SANS SECTEUR ».
+  // Affichage : ordre du fichier (défaut), classé par secteur (clic sur
+  // l'en-tête SECTEUR) ou classé par ÉCOLE en ordre alphabétique (clic
+  // sur l'en-tête ÉCOLES — Task 66). Tri STABLE : au sein d'un même
+  // groupe, l'ordre initial de saisie est conservé ; les lignes sans
+  // secteur / sans école passent à la fin, sous leur bandeau.
   const visibleRecords = useMemo(() => {
+    // Task 66 — tri des ÉCOLES par ordre alphabétique (locale fr).
+    // Quand un secteur est DEMANDÉ dans le filtre, la liste ne contient
+    // déjà que les lignes de ce secteur (filtrage serveur) : le tri
+    // donne donc les écoles DU SECTEUR DEMANDÉ. Sans secteur choisi,
+    // toutes les écoles du fichier sont classées alphabétiquement.
+    if (bySchool) {
+      const schoolName = (r: StaffRecord) =>
+        r.school_id ? (schoolNames.get(r.school_id) ?? null) : null;
+      return [...records].sort((a, b) => {
+        const na = schoolName(a);
+        const nb = schoolName(b);
+        if (!na && !nb) return 0;
+        if (!na) return 1;
+        if (!nb) return -1;
+        return na.localeCompare(nb, "fr");
+      });
+    }
     if (!bySector) return records;
     const sectorName = (r: StaffRecord) =>
       r.sector_id ? (sectorNames.get(r.sector_id) ?? null) : null;
@@ -230,31 +262,32 @@ export function StaffDataView() {
       if (!nb) return -1;
       return na.localeCompare(nb, "fr");
     });
-  }, [records, bySector, sectorNames]);
+  }, [records, bySector, bySchool, sectorNames, schoolNames]);
 
-  // Stats par secteur des lignes AFFICHÉES (bandeaux de groupe) :
-  // nombre d'agents + effectif cumulé du secteur.
+  // Stats par GROUPE des lignes AFFICHÉES (bandeaux de groupe) : nombre
+  // d'agents + effectif cumulé — groupe = école (Task 66) ou secteur
+  // selon le classement actif.
   const groupStats = useMemo(() => {
     const m = new Map<string, { count: number; effectif: number }>();
     for (const r of visibleRecords) {
-      const k = r.sector_id ?? "__none__";
+      const k = groupKeyOf(r, bySchool);
       const cur = m.get(k) ?? { count: 0, effectif: 0 };
       cur.count += 1;
       cur.effectif += typeof r.effectif === "number" ? r.effectif : 0;
       m.set(k, cur);
     }
     return m;
-  }, [visibleRecords]);
+  }, [visibleRecords, bySchool]);
 
-  // Alternance visuelle des BLOCS de secteurs : parité du bloc pour chaque
+  // Alternance visuelle des BLOCS de groupes : parité du bloc pour chaque
   // ligne affichée (les blocs consécutifs s'alternent fond blanc / fond
-  // vert très pâle — chaque secteur forme un bloc distinct).
+  // vert très pâle — chaque école / secteur forme un bloc distinct).
   const blockParity = useMemo(() => {
     const parity = new Map<string, boolean>();
     let idx = -1;
     let prev: string | null = null;
     for (const r of visibleRecords) {
-      const k = r.sector_id ?? "__none__";
+      const k = groupKeyOf(r, bySchool);
       if (k !== prev) {
         idx += 1;
         prev = k;
@@ -262,7 +295,7 @@ export function StaffDataView() {
       parity.set(r.id, idx % 2 === 1);
     }
     return parity;
-  }, [visibleRecords]);
+  }, [visibleRecords, bySchool]);
 
   function openCreate() {
     setEditing(null);
@@ -321,7 +354,9 @@ export function StaffDataView() {
     try {
       // Export dans l'ordre AFFICHÉ : si le fichier est classé par
       // secteur, le classeur reproduit les BLOCS par secteur (bandeau
-      // + alternance de fond) secteur par secteur.
+      // + alternance de fond) secteur par secteur ; classé par école
+      // (Task 66), le classeur suit l'ordre alphabétique des écoles
+      // affiché (sans bandeaux).
       await exportExcelAsync(
         visibleRecords,
         totalEffectif,
@@ -462,10 +497,14 @@ export function StaffDataView() {
                     <TableHead>
                       {/* En-tête SECTEUR interactif : surbrillance au survol,
                           un simple clic CLASSE tout le fichier par secteur
-                          (re-clic = retour à l'ordre initial du fichier). */}
+                          (re-clic = retour à l'ordre initial du fichier).
+                          Exclusif avec le classement par école (Task 66). */}
                       <button
                         type="button"
-                        onClick={() => setBySector((v) => !v)}
+                        onClick={() => {
+                          setBySector((v) => !v);
+                          setBySchool(false);
+                        }}
                         title={
                           bySector
                             ? "Revenir à l'ordre initial du fichier"
@@ -485,7 +524,38 @@ export function StaffDataView() {
                         />
                       </button>
                     </TableHead>
-                    <TableHead>Écoles</TableHead>
+                    <TableHead>
+                      {/* Task 66 — En-tête ÉCOLES interactif (comme
+                          SECTEUR) : la couleur apparaît au SURVOL, un
+                          simple clic MET LES ÉCOLES PAR ORDRE
+                          ALPHABÉTIQUE — celles du secteur DEMANDÉ quand
+                          un secteur est choisi dans le filtre (re-clic
+                          = retour à l'ordre initial du fichier). */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBySchool((v) => !v);
+                          setBySector(false);
+                        }}
+                        title={
+                          bySchool
+                            ? "Revenir à l'ordre initial du fichier"
+                            : "Mettre les écoles par ordre alphabétique (selon le secteur demandé)"
+                        }
+                        className={cn(
+                          "-mx-2 -my-1 inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-primary/10 hover:text-primary",
+                          bySchool && "bg-primary/10 text-primary",
+                        )}
+                      >
+                        Écoles
+                        <ChevronDown
+                          className={cn(
+                            "h-3 w-3 opacity-60 transition-transform",
+                            bySchool && "rotate-180",
+                          )}
+                        />
+                      </button>
+                    </TableHead>
                     <TableHead>Nom et prénom</TableHead>
                     <TableHead className="text-center">Sexe</TableHead>
                     <TableHead>Date de naissance</TableHead>
@@ -509,12 +579,13 @@ export function StaffDataView() {
                   {visibleRecords.flatMap((rec, i) => {
                     const isFemale = rec.sexe === "F";
                     // Bandeau de groupe : inséré avant la 1re ligne de
-                    // chaque secteur quand le fichier est classé par
-                    // secteur (clic sur l'en-tête SECTEUR).
-                    const sectorKey = rec.sector_id ?? "__none__";
-                    const prevSectorKey =
+                    // chaque école (Task 66) ou de chaque secteur quand
+                    // le classement correspondant est actif (clic sur
+                    // l'en-tête ÉCOLES / SECTEUR).
+                    const groupKey = groupKeyOf(rec, bySchool);
+                    const prevGroupKey =
                       i > 0
-                        ? (visibleRecords[i - 1].sector_id ?? "__none__")
+                        ? groupKeyOf(visibleRecords[i - 1], bySchool)
                         : null;
                     const row = (
                       <TableRow
@@ -609,22 +680,26 @@ export function StaffDataView() {
                         )}
                       </TableRow>
                     );
-                    // Bandeaux + blocs UNIQUEMENT quand le classement
-                    // par secteur est actif (clic sur l'en-tête
-                    // SECTEUR) ; vue par défaut = fichier intact.
-                    if (!bySector || sectorKey === prevSectorKey)
+                    // Bandeaux + blocs UNIQUEMENT quand un classement
+                    // est actif (clic sur l'en-tête ÉCOLES ou SECTEUR) ;
+                    // vue par défaut = fichier intact.
+                    if ((!bySector && !bySchool) || groupKey === prevGroupKey)
                       return [row];
-                    const st = groupStats.get(sectorKey);
-                    const label = rec.sector_id
-                      ? (sectorNames.get(rec.sector_id) ?? "SECTEUR")
-                      : "SANS SECTEUR — À COMPLÉTER";
+                    const st = groupStats.get(groupKey);
+                    const label = bySchool
+                      ? rec.school_id
+                        ? (schoolNames.get(rec.school_id) ?? "ÉCOLE")
+                        : "SANS ÉCOLE — À COMPLÉTER"
+                      : rec.sector_id
+                        ? (sectorNames.get(rec.sector_id) ?? "SECTEUR")
+                        : "SANS SECTEUR — À COMPLÉTER";
                     return [
-                      // Bandeau VERT du secteur : fond vert franc
-                      // (vert drapeau ivoirien, identique à l'export
-                      // Excel), texte blanc — chaque secteur forme un
-                      // bloc immédiatement identifiable.
+                      // Bandeau VERT du groupe (école ou secteur) : fond
+                      // vert franc (vert drapeau ivoirien, identique à
+                      // l'export Excel), texte blanc — chaque groupe
+                      // forme un bloc immédiatement identifiable.
                       <TableRow
-                        key={`sec-${sectorKey}`}
+                        key={`grp-${groupKey}`}
                         className="bg-[#009E60] hover:bg-[#009E60]"
                       >
                         <TableCell colSpan={colCount} className="py-2">
@@ -945,6 +1020,11 @@ export function StaffDataView() {
       />
     </div>
   );
+}
+
+/** Clé de groupe active pour les bandeaux : école (Task 66) ou secteur. */
+function groupKeyOf(r: StaffRecord, bySchool: boolean): string {
+  return (bySchool ? r.school_id : r.sector_id) ?? "__none__";
 }
 
 /** Ancienneté affichée : saisie libre, sinon calculée depuis l'entrée FP. */
