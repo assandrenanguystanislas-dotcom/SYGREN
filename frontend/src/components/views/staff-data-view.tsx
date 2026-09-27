@@ -29,6 +29,10 @@
 // initial du fichier. Le bouton de sélection d'écoles de la Task 65
 // reste ANNULÉ (revert 189fb60).
 //
+// Task 68 — l'export Excel reproduit ce classement à l'identique :
+// bandeaux de secteur + SOUS-BANDEAUX d'écoles (fond vert pâle,
+// liseré vert, agents + effectif) dans chaque bloc de secteur.
+//
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
 import { useMemo, useState, type ReactElement } from "react";
@@ -377,14 +381,16 @@ export function StaffDataView() {
       // secteur, le classeur reproduit les BLOCS par secteur (bandeau
       // + alternance de fond) secteur par secteur ; avec le classement
       // ÉCOLES (Task 67), le classeur suit l'ordre affiché — secteurs
-      // puis écoles alphabétiques dans chaque secteur (bandeaux de
-      // secteur conservés).
+      // puis écoles alphabétiques dans chaque secteur — et reproduit
+      // aussi les SOUS-BANDEAUX d'écoles (Task 68), comme dans le
+      // tableau de l'appli.
       await exportExcelAsync(
         visibleRecords,
         totalEffectif,
         sectorNames,
         schoolNames,
         bySector,
+        bySchool,
       );
     } finally {
       setExporting(false);
@@ -1133,6 +1139,7 @@ async function exportExcelAsync(
   sectorNames?: Map<string, string>,
   schoolNames?: Map<string, string>,
   grouped = false, // classement par secteur actif → bandeaux + blocs
+  schoolGrouped = false, // classement ÉCOLES actif → sous-bandeaux d'écoles
 ): Promise<void> {
   const { Workbook } = await import("exceljs");
   const wb = new Workbook();
@@ -1191,6 +1198,13 @@ async function exportExcelAsync(
   const BANNER_BG = { argb: "FF009E60" };
   const BANNER_TEXT = { argb: "FFFFFFFF" };
   const BLOCK_BG = { argb: "FFE6F4EB" };
+  // Sous-bandeaux d'ÉCOLES (classement ÉCOLES actif — Task 68) :
+  // mêmes couleurs que le tableau de l'appli (fond #D8EFE2, texte
+  // #00794A ; stats #00794A à 80 % ≈ #2B9068 sur le fond pâle).
+  const SUB_BG = { argb: "FFD8EFE2" };
+  const SUB_TEXT = { argb: "FF00794A" };
+  const SUB_STATS = { argb: "FF2B9068" };
+  const SUB_LEFT = { style: "thick" as const, color: GREEN }; // liseré
   const border = { style: "thin" as const, color: GREEN };
   const BOX = { top: border, left: border, bottom: border, right: border };
   const HEADERS = [
@@ -1245,12 +1259,27 @@ async function exportExcelAsync(
   // Lignes du fichier — N° = ordre d'affichage, femmes en rouge
   // (convention de l'État nominatif du personnel). Classement par
   // secteur actif : un BANDEAU VERT s'insère devant chaque secteur et
-  // les blocs consécutifs alternent leur fond blanc / vert très pâle
-  // (visuel identique au tableau de l'appli).
+  // les blocs consécutifs alternent leur fond blanc / vert très pâle.
+  // Classement ÉCOLES actif (Task 68) : DANS chaque bloc secteur, un
+  // SOUS-BANDEAU VERT PÂLE s'insère devant la 1re ligne de chaque
+  // école (agents + effectif) — visuel identique au tableau de l'appli.
   let rIdx = row + 1;
   let agentNo = 0;
   let blockIdx = -1;
   let prevKey: string | null = null;
+  let prevSchoolKey: string | null = null;
+  // Stats des sous-bandeaux d'écoles (agents + effectif par école),
+  // calculées sur les lignes affichées — même convention que l'appli.
+  const schoolStatMap = new Map<string, { count: number; effectif: number }>();
+  if (schoolGrouped) {
+    for (const rec of records) {
+      const k = rec.school_id ?? "__none__";
+      const cur = schoolStatMap.get(k) ?? { count: 0, effectif: 0 };
+      cur.count += 1;
+      cur.effectif += typeof rec.effectif === "number" ? rec.effectif : 0;
+      schoolStatMap.set(k, cur);
+    }
+  }
   for (const rec of records) {
     const sectorKey = rec.sector_id ?? "__none__";
     if (grouped && sectorKey !== prevKey) {
@@ -1272,6 +1301,57 @@ async function exportExcelAsync(
       }
       bannerRow.height = 20;
       rIdx += 1;
+      // Nouveau secteur : la mémoire des écoles repart à zéro (une
+      // même école ne peut théoriquement appartenir qu'à un secteur,
+      // mais le sous-bandeau doit se réafficher si les données
+      // contenaient une telle anomalie).
+      prevSchoolKey = null;
+    }
+    // Sous-bandeau VERT PÂLE de l'école (Task 68) : dans le bloc du
+    // secteur, chaque école s'annonce par une ligne claire à liseré
+    // vert épais — « NOM DE L'ÉCOLE   N agent(s) · effectif X » —
+    // copie conforme du sous-bandeau du tableau de l'appli.
+    if (grouped && schoolGrouped) {
+      const schoolKey = rec.school_id ?? "__none__";
+      if (schoolKey !== prevSchoolKey) {
+        prevSchoolKey = schoolKey;
+        const st = schoolStatMap.get(schoolKey);
+        const label = rec.school_id
+          ? (schoolNames?.get(rec.school_id) ?? "ÉCOLE").toUpperCase()
+          : "SANS ÉCOLE — À COMPLÉTER";
+        const count = st?.count ?? 1;
+        const suffix = `${count} agent${count > 1 ? "s" : ""}${
+          st && st.effectif > 0 ? ` · effectif ${st.effectif}` : ""
+        }`;
+        const subRow = ws.getRow(rIdx);
+        ws.mergeCells(rIdx, 1, rIdx, 15);
+        const subCell = ws.getCell(rIdx, 1);
+        subCell.value = {
+          richText: [
+            {
+              font: { name: "Arial", size: 9, bold: true, color: SUB_TEXT },
+              text: label,
+            },
+            {
+              font: { name: "Arial", size: 9, color: SUB_STATS },
+              text: `   ${suffix}`,
+            },
+          ],
+        };
+        subCell.alignment = { horizontal: "left", vertical: "middle" };
+        for (let col = 1; col <= 15; col++) {
+          const c = ws.getCell(rIdx, col);
+          c.fill = { type: "pattern", pattern: "solid", fgColor: SUB_BG };
+          c.border = {
+            top: border,
+            bottom: border,
+            ...(col === 1 ? { left: SUB_LEFT } : {}),
+            ...(col === 15 ? { right: border } : {}),
+          };
+        }
+        subRow.height = 18;
+        rIdx += 1;
+      }
     }
     agentNo += 1;
     const shade =
