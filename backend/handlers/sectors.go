@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 
 	"sygren-api/database"
@@ -488,154 +489,214 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		schoolIDs[i] = s.ID
 	}
 
-	// Statistiques des écoles du secteur (demande utilisateur session 27 :
-	// « ajouter des statistiques des écoles » à la vue Mon Secteur) — mêmes
-	// agrégats GROUP BY que la liste des écoles, même piège gorm : une slice
-	// DISTINCTE par Scan (gorm réutilise la slice passée en paramètre).
-	classCounts := make(map[string]int64, len(schools))
-	studentCounts := make(map[string]int64, len(schools))
+	// v14 — STATISTIQUES D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL
+	// (demande utilisateur : « annuler le calcul par niveaux — je veux
+	// que l'administrateur et le conseiller sachent le nombre total
+	// d'enseignants, de niveaux et d'élèves à travers l'état nominatif
+	// du personnel »). Fini le comptage sur les classes standard
+	// auto-créées (6 niveaux fantômes) et la table des inscrits : les
+	// chiffres viennent des DOSSIERS du personnel (users) et des
+	// niveaux déclarés sans enseignant (staff_level_reports) — les
+	// mêmes que la feuille « ÉTAT NOMINATIF DU PERSONNEL ».
+	//
+	// Règles (identiques à la feuille, handlers/personnel.go) :
+	//   - ENSEIGNANTS : agents (directeur/enseignant) tenant un cours
+	//     — champ explicite du dossier (users.cours) d'abord, sinon
+	//     classe affectée (classes.teacher_id) ;
+	//   - NIVEAUX : cours distincts tenus par ces agents + cours
+	//     déclarés « sans enseignant » — une école à 1, 2, 3 niveaux
+	//     affiche 1, 2, 3 niveaux ; les niveaux sans enseignant
+	//     comptent aussi (ils existent, avec leurs élèves) ;
+	//   - ÉLÈVES : somme des effectifs T (à défaut F+G) des dossiers
+	//     et des lignes déclarées — une ligne déclarée dont le cours
+	//     est déjà tenu est ignorée (le dossier reprend la main,
+	//     comme sur la feuille).
+
+	// Agents (directeur + enseignant) des écoles du secteur — dossiers.
+	var agents []models.User
 	if len(schoolIDs) > 0 {
-		type idCount struct {
-			SchoolID string `json:"school_id"`
-			Count    int64  `json:"count"`
-		}
-		var classRows []idCount
-		if err := database.DB.Model(&models.Class{}).
-			Select("school_id", "COUNT(*) AS count").
-			Where("school_id IN ?", schoolIDs).
-			Group("school_id").
-			Scan(&classRows).Error; err != nil {
-			log.Println("[conseiller] compteur classes:", err)
-		}
-		for _, row := range classRows {
-			classCounts[row.SchoolID] = row.Count
-		}
-
-		var studentRows []idCount
-		if err := database.DB.Model(&models.Student{}).
-			Joins("JOIN classes ON classes.id = students.class_id").
-			Select("classes.school_id AS school_id", "COUNT(*) AS count").
-			Where("classes.school_id IN ?", schoolIDs).
-			Group("classes.school_id").
-			Scan(&studentRows).Error; err != nil {
-			log.Println("[conseiller] compteur élèves:", err)
-		}
-		for _, row := range studentRows {
-			studentCounts[row.SchoolID] = row.Count
-		}
+		database.DB.
+			Where("school_id IN ? AND role IN ?", schoolIDs,
+				[]string{models.RoleDirector, models.RoleTeacher}).
+			Order("full_name ASC").
+			Find(&agents)
 	}
 
-	// Répartition Garçons / Filles par école + détail CLASSES actives du
-	// secteur (session 31 — « éléments qui l'accompagnent » de Mon
-	// Secteur) : le conseiller déplie une école pour voir ses classes
-	// (niveau, titulaire, effectif G/F) sans quitter son périmètre strict.
-	garconsBySchool := make(map[string]int64, len(schools))
-	fillesBySchool := make(map[string]int64, len(schools))
-	classStudentCounts := make(map[string]int64)
-	classGarcons := make(map[string]int64)
-	classFilles := make(map[string]int64)
-	type classRow struct {
-		ID        string
-		SchoolID  string
-		Name      string
-		Level     string
-		TeacherID *string
-	}
-	var classDetail []classRow
+	// Cours tenus via les classes affectées (une seule requête).
+	var heldClasses []models.Class
 	if len(schoolIDs) > 0 {
-		type genderCount struct {
-			SchoolID string
-			ClassID  string
-			Gender   string
-			Count    int64
+		database.DB.
+			Where("school_id IN ? AND teacher_id IS NOT NULL", schoolIDs).
+			Find(&heldClasses)
+	}
+	classNameByTeacher := make(map[string]string, len(heldClasses))
+	for _, c := range heldClasses {
+		if c.TeacherID == nil {
+			continue
 		}
-		var genderRows []genderCount
-		if err := database.DB.Model(&models.Student{}).
-			Joins("JOIN classes ON classes.id = students.class_id").
-			Select("classes.school_id AS school_id", "students.class_id AS class_id", "students.gender AS gender", "COUNT(*) AS count").
-			Where("classes.school_id IN ?", schoolIDs).
-			Group("classes.school_id, students.class_id, students.gender").
-			Scan(&genderRows).Error; err != nil {
-			log.Println("[conseiller] répartition G/F:", err)
+		classNameByTeacher[*c.TeacherID] = c.Name
+	}
+
+	// Niveaux déclarés SANS enseignant (staff_level_reports).
+	var levelReports []models.StaffLevelReport
+	if len(schoolIDs) > 0 {
+		database.DB.Where("school_id IN ?", schoolIDs).Find(&levelReports)
+	}
+	levelReportsBySchool := make(map[string][]models.StaffLevelReport)
+	for _, rep := range levelReports {
+		levelReportsBySchool[rep.SchoolID] = append(levelReportsBySchool[rep.SchoolID], rep)
+	}
+
+	effInt := func(p *int) int {
+		if p == nil {
+			return 0
 		}
-		for _, row := range genderRows {
-			switch row.Gender {
-			case "M":
-				garconsBySchool[row.SchoolID] += row.Count
-				classGarcons[row.ClassID] = row.Count
-			case "F":
-				fillesBySchool[row.SchoolID] += row.Count
-				classFilles[row.ClassID] = row.Count
+		return *p
+	}
+	// Effectif TOTAL d'une ligne de dossier : T saisi, sinon F+G
+	// (convention v9 du dossier personnel : T = F + G).
+	effTotal := func(f, g, t *int) int {
+		if t != nil {
+			return *t
+		}
+		return effInt(f) + effInt(g)
+	}
+
+	// Calcul par école.
+	type nomStats struct {
+		teachers      int               // agents tenant un cours
+		held          map[string]string // cours → titulaire (1er agent, tri nom)
+		eff           map[string][3]int // cours → [F, G, T] cumulés (agents)
+		fil, gar, ele int               // totaux école côté agents
+	}
+	stats := make(map[string]*nomStats, len(schools))
+	for _, s := range schools {
+		stats[s.ID] = &nomStats{
+			held: make(map[string]string),
+			eff:  make(map[string][3]int),
+		}
+	}
+	for _, u := range agents {
+		if u.SchoolID == nil {
+			continue
+		}
+		st, ok := stats[*u.SchoolID]
+		if !ok {
+			continue
+		}
+		cours := ""
+		if u.Cours != nil && strings.TrimSpace(*u.Cours) != "" {
+			cours = strings.ToUpper(strings.TrimSpace(*u.Cours))
+		} else if n, ok := classNameByTeacher[u.ID]; ok {
+			cours = strings.ToUpper(strings.TrimSpace(n))
+		}
+		if cours == "" {
+			continue // agent sans cours tenu (adjoint administratif…)
+		}
+		f, g := effInt(u.EffectifF), effInt(u.EffectifG)
+		t := effTotal(u.EffectifF, u.EffectifG, u.EffectifT)
+		st.teachers++
+		st.fil += f
+		st.gar += g
+		st.ele += t
+		if _, seen := st.held[cours]; !seen {
+			st.held[cours] = u.FullName
+		}
+		agg := st.eff[cours]
+		agg[0] += f
+		agg[1] += g
+		agg[2] += t
+		st.eff[cours] = agg
+	}
+
+	// Détail par niveau (ordre pédagogique classRank — personnel.go) :
+	// cours tenus d'abord, puis les niveaux déclarés SANS enseignant
+	// dont le cours n'est pas déjà tenu (le dossier reprend la main).
+	type nomNiveau struct {
+		Cours     string `json:"cours"`
+		Titulaire string `json:"titulaire,omitempty"`
+		Filles    int    `json:"filles"`
+		Garcons   int    `json:"garcons"`
+		Total     int    `json:"total"`
+		Vacant    bool   `json:"vacant,omitempty"`
+	}
+	niveauxBySchool := make(map[string][]nomNiveau, len(schools))
+	var totalTeachers, totalLevels, totalStudents, totalFil, totalGar int
+	for _, s := range schools {
+		st := stats[s.ID]
+		niveaux := make([]nomNiveau, 0, len(st.held)+len(levelReportsBySchool[s.ID]))
+		for cours, titulaire := range st.held {
+			agg := st.eff[cours]
+			niveaux = append(niveaux, nomNiveau{
+				Cours:     cours,
+				Titulaire: titulaire,
+				Filles:    agg[0],
+				Garcons:   agg[1],
+				Total:     agg[2],
+			})
+		}
+		for _, rep := range levelReportsBySchool[s.ID] {
+			cours := strings.ToUpper(strings.TrimSpace(rep.Cours))
+			if cours == "" {
+				continue
 			}
-			classStudentCounts[row.ClassID] += row.Count
-		}
-
-		if err := database.DB.Model(&models.Class{}).
-			Select("id", "school_id", "name", "level", "teacher_id").
-			Where("school_id IN ? AND active = ?", schoolIDs, true).
-			Order("name ASC").
-			Scan(&classDetail).Error; err != nil {
-			log.Println("[conseiller] classes du secteur:", err)
-		}
-	}
-
-	// Noms des titulaires (comptes rattachés aux classes du secteur).
-	teacherNames := make(map[string]string)
-	teacherIDs := make([]string, 0)
-	for _, c := range classDetail {
-		if c.TeacherID != nil && *c.TeacherID != "" {
-			teacherIDs = append(teacherIDs, *c.TeacherID)
-		}
-	}
-	if len(teacherIDs) > 0 {
-		var teachers []models.User
-		if err := database.DB.Select("id", "full_name").
-			Where("id IN ?", teacherIDs).Find(&teachers).Error; err == nil {
-			for _, t := range teachers {
-				teacherNames[t.ID] = t.FullName
+			if _, taken := st.held[cours]; taken {
+				continue // cours déjà tenu : le dossier fait foi
 			}
+			f, g := effInt(rep.EffectifF), effInt(rep.EffectifG)
+			t := effTotal(rep.EffectifF, rep.EffectifG, rep.EffectifT)
+			niveaux = append(niveaux, nomNiveau{
+				Cours:   cours,
+				Filles:  f,
+				Garcons: g,
+				Total:   t,
+				Vacant:  true,
+			})
+			st.fil += f
+			st.gar += g
+			st.ele += t
 		}
-	}
-
-	// Classes groupées par école — slice NON nil par école (piège gorm/JSON
-	// session 27 : une slice nil se sérialise `null` et casse le front).
-	classesBySchool := make(map[string][]map[string]interface{}, len(schools))
-	for _, c := range classDetail {
-		teacherName := ""
-		if c.TeacherID != nil {
-			teacherName = teacherNames[*c.TeacherID]
-		}
-		classesBySchool[c.SchoolID] = append(classesBySchool[c.SchoolID], map[string]interface{}{
-			"id":            c.ID,
-			"name":          c.Name,
-			"level":         c.Level,
-			"teacher_name":  teacherName,
-			"student_count": classStudentCounts[c.ID],
-			"garcons":       classGarcons[c.ID],
-			"filles":        classFilles[c.ID],
+		sort.SliceStable(niveaux, func(i, j int) bool {
+			ri, rj := classRank(niveaux[i].Cours), classRank(niveaux[j].Cours)
+			if ri != rj {
+				return ri < rj
+			}
+			return niveaux[i].Cours < niveaux[j].Cours
 		})
+		niveauxBySchool[s.ID] = niveaux
+
+		totalTeachers += st.teachers
+		totalLevels += len(niveaux)
+		totalStudents += st.ele
+		totalFil += st.fil
+		totalGar += st.gar
 	}
 
-	var totalClasses, totalStudents int64
 	schoolsView := make([]map[string]interface{}, 0, len(schools))
 	for _, s := range schools {
-		totalClasses += classCounts[s.ID]
-		totalStudents += studentCounts[s.ID]
+		niveaux := niveauxBySchool[s.ID]
+		if niveaux == nil {
+			niveaux = []nomNiveau{}
+		}
+		st := stats[s.ID]
 		schoolsView = append(schoolsView, map[string]interface{}{
 			"id":     s.ID,
 			"code":   s.Code,
 			"name":   s.Name,
 			"status": s.Status,
-			// Statistiques par école (cartes Mon Secteur)
-			"class_count":   classCounts[s.ID],
-			"student_count": studentCounts[s.ID],
-			"garcons":       garconsBySchool[s.ID],
-			"filles":        fillesBySchool[s.ID],
+			// v14 — totaux d'après l'ÉTAT NOMINATIF DU PERSONNEL
+			// (enseignants titulaires d'un cours, niveaux réels —
+			// tenus + déclarés sans enseignant — et élèves).
+			"nom_teachers": st.teachers,
+			"nom_levels":   len(niveaux),
+			"nom_students": st.ele,
+			"nom_filles":   st.fil,
+			"nom_garcons":  st.gar,
+			// Détail dépliable : les niveaux RÉELS de l'école
+			// (cours, titulaire, effectifs) — remplace la liste
+			// des classes standard auto-créées (calcul annulé).
+			"niveaux": niveaux,
 		})
-		if classesBySchool[s.ID] == nil {
-			classesBySchool[s.ID] = []map[string]interface{}{}
-		}
-		schoolsView[len(schoolsView)-1]["classes"] = classesBySchool[s.ID]
 	}
 
 	// Personnel du secteur : directeurs ET adjoints au directeur ACTIFS des
@@ -678,11 +739,18 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		},
 		"schools": schoolsView,
 		"staff":   staffView,
-		"counts": map[string]int64{
-			"schools":  int64(len(schools)),
-			"staff":    int64(len(staffView)),
-			"classes":  totalClasses,
+		// v14 — totaux du SECTEUR d'après l'ÉTAT NOMINATIF DU
+		// PERSONNEL (demande utilisateur) : l'administrateur et le
+		// conseiller y lisent directement le nombre total
+		// d'enseignants, de niveaux et d'élèves.
+		"counts": map[string]int{
+			"schools":  len(schools),
+			"staff":    len(staffView),
+			"teachers": totalTeachers,
+			"levels":   totalLevels,
 			"students": totalStudents,
+			"filles":   totalFil,
+			"garcons":  totalGar,
 		},
 	})
 }

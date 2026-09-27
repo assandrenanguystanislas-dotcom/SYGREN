@@ -33,7 +33,6 @@ import type {
   PersonnelSheet,
   StaffLevelReport,
   LevelReportInput,
-  EtatNominatifTeacher,
   EvaluationSession,
   SessionWithDetails,
   SessionExemption,
@@ -718,10 +717,11 @@ export const levelReportsApi = {
     apiFetch<{
       level_reports: StaffLevelReport[];
       count: number;
-      /** v13 — calcul des enseignants et des niveaux d'après l'état
-       *  nominatif : agents titulaires d'un cours + cours tenus
-       *  (cours UPPER → nom du titulaire). */
-      teachers: EtatNominatifTeacher[];
+      /** v14 — calcul du dialog ANNULÉ (demande utilisateur) : le
+       *  serveur renvoie seulement les cours tenus (cours UPPER → nom
+       *  du titulaire) pour ne proposer QUE les cours réellement
+       *  libres ; les totaux enseignants/niveaux/élèves se lisent à
+       *  travers l'état nominatif (document + vue Mon Secteur). */
       held: Record<string, string>;
     }>(
       `/api/schools/${encodeURIComponent(schoolId)}/level-reports`,

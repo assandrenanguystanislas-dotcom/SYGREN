@@ -29,6 +29,20 @@
  * est aussi utile à la supervision (dialog admin/inspector) — le backend
  * borne chaque rôle de toute façon.
  *
+ * v14 — TOTAUX D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL (demande utilisateur :
+ * « annuler le calcul par niveaux — je veux que l'administrateur et le
+ * conseiller sachent le nombre total d'enseignants, de niveaux et d'élèves
+ * à travers l'état nominatif du personnel ») :
+ *   - les badges d'en-tête et les cartes écoles affichent ENSEIGNANTS /
+ *     NIVEAUX / ÉLÈVES calculés côté serveur d'après les dossiers du
+ *     personnel + les niveaux déclarés sans enseignant (plus de comptage
+ *     sur les classes standard auto-créées — 6 niveaux fantômes — ni sur
+ *     les inscrits) ; une école à 1, 2, 3 niveaux affiche 1, 2, 3
+ *     niveaux, les niveaux sans enseignant comptent aussi ;
+ *   - le détail dépliable d'une école montre les NIVEAUX RÉELS (cours,
+ *     titulaire, effectifs F/G/T, totaux) au lieu de la liste des
+ *     classes standard.
+ *
  * Lecture seule : composant de CONSULTATION (autorité hiérarchique),
  * la gestion des comptes reste réservée à l'administration.
  */
@@ -52,6 +66,7 @@ import {
 import type {
   ConseillerStaffMember,
   ConseillerStaffResponse,
+  SectorNiveau,
   SectorSchool,
 } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
@@ -114,20 +129,30 @@ export function SectorOverview({
   const directors = staff.filter((m) => m.role === "director").length;
   const adjoints = staff.length - directors;
 
-  // Statistiques des écoles (session 27) : élèves et classes cumulés
-  // du secteur (affichés dans l'en-tête et sur chaque carte école).
-  const totalStudents = schools.reduce(
-    (acc, s) => acc + (s.student_count ?? 0),
-    0,
-  );
-  const totalClasses = schools.reduce(
-    (acc, s) => acc + (s.class_count ?? 0),
-    0,
-  );
+  // v14 — TOTAUX D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL (demande
+  // utilisateur) : enseignants (agents tenant un cours), niveaux réels
+  // (tenus + déclarés sans enseignant) et élèves (effectifs des
+  // dossiers + lignes déclarées). Calculés côté serveur ; repli local
+  // sur la somme des écoles si besoin.
+  const totalTeachers =
+    data.counts?.teachers ??
+    schools.reduce((acc, s) => acc + (s.nom_teachers ?? 0), 0);
+  const totalNiveaux =
+    data.counts?.levels ??
+    schools.reduce((acc, s) => acc + (s.nom_levels ?? 0), 0);
+  const totalEleves =
+    data.counts?.students ??
+    schools.reduce((acc, s) => acc + (s.nom_students ?? 0), 0);
 
-  // École dépliée (détail classes / effectifs G-F) — session 31.
+  // École dépliée (détail des NIVEAUX RÉELS — v14) — session 31.
   const expanded =
     schools.find((s) => s.id === expandedSchool) ?? null;
+
+  /** Somme d'une colonne du détail des niveaux (fallback si absent). */
+  const sumNiveaux = (
+    niveaux: SectorNiveau[] | undefined,
+    pick: (n: SectorNiveau) => number,
+  ): number => (niveaux ?? []).reduce((acc, n) => acc + pick(n), 0);
 
   return (
     <div className="space-y-4">
@@ -159,12 +184,18 @@ export function SectorOverview({
                 <GraduationCap className="w-3 h-3" />
                 {adjoints} adjoint(s)
               </Badge>
-              <Badge variant="secondary" className="gap-1">
+              {/* v14 — TOTAUX D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL */}
+              <Badge variant="secondary" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
                 <Users className="w-3 h-3" />
-                {totalStudents} élève(s)
+                {totalTeachers} enseignant(s)
               </Badge>
-              <Badge variant="secondary" className="gap-1">
-                {totalClasses} classe(s)
+              <Badge variant="secondary" className="gap-1 border-sky-200 bg-sky-50 text-sky-700">
+                <BookOpen className="w-3 h-3" />
+                {totalNiveaux} niveau(x)
+              </Badge>
+              <Badge variant="secondary" className="gap-1 border-amber-200 bg-amber-50 text-amber-700">
+                <GraduationCap className="w-3 h-3" />
+                {totalEleves} élève(s)
               </Badge>
             </div>
           </div>
@@ -180,7 +211,8 @@ export function SectorOverview({
           </CardTitle>
           <CardDescription>
             Les établissements dont relèvent vos directeurs et leurs adjoints.
-            Cliquez sur une école pour voir ses classes et leurs effectifs.
+            Cliquez sur une école pour voir ses NIVEAUX RÉELS et leurs
+            effectifs d&apos;après l&apos;état nominatif du personnel.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -215,18 +247,25 @@ export function SectorOverview({
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {/* v14 — totaux d'après l'ÉTAT NOMINATIF DU PERSONNEL */}
                       <Badge
                         variant="outline"
                         className="text-[10px] gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"
                       >
                         <Users className="w-3 h-3" />
-                        {s.student_count ?? 0} élève(s)
+                        {s.nom_teachers ?? 0} enseignant(s)
                       </Badge>
                       <Badge
                         variant="outline"
-                        className="text-[10px] border-sky-200 bg-sky-50 text-sky-700"
+                        className="text-[10px] gap-1 border-sky-200 bg-sky-50 text-sky-700"
                       >
-                        {s.class_count ?? 0} classe(s)
+                        {s.nom_levels ?? 0} niveau(s)
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] gap-1 border-amber-200 bg-amber-50 text-amber-700"
+                      >
+                        {s.nom_students ?? 0} élève(s)
                       </Badge>
                       <ChevronDown
                         className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
@@ -238,8 +277,11 @@ export function SectorOverview({
                 ))}
               </div>
 
-              {/* Détail de l'école dépliée : classes + effectifs G/F
-                  (élément qui accompagne le module — session 31). */}
+              {/* v14 — Détail de l'école dépliée : les NIVEAUX RÉELS,
+                  calculés d'après l'ÉTAT NOMINATIF DU PERSONNEL (cours
+                  tenus par les agents + niveaux déclarés sans enseignant)
+                  — remplace la liste des classes standard auto-créées
+                  (calcul annulé, demande utilisateur). */}
               {expanded && (
                 <div className="rounded-lg border border-primary/25 bg-muted/20 p-3 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -253,65 +295,108 @@ export function SectorOverview({
                     <div className="flex items-center gap-1.5 sm:ml-auto">
                       <Badge
                         variant="outline"
-                        className="text-[10px] border-sky-200 bg-sky-50 text-sky-700"
+                        className="text-[10px] border-emerald-200 bg-emerald-50 text-emerald-700"
                       >
-                        {(expanded.garcons ?? 0)} garçon(s)
+                        {expanded.nom_teachers ?? 0} enseignant(s)
                       </Badge>
                       <Badge
                         variant="outline"
                         className="text-[10px] border-pink-200 bg-pink-50 text-pink-700"
                       >
-                        {(expanded.filles ?? 0)} fille(s)
+                        {(expanded.nom_filles ?? 0)} fille(s)
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] border-sky-200 bg-sky-50 text-sky-700"
+                      >
+                        {(expanded.nom_garcons ?? 0)} garçon(s)
                       </Badge>
                     </div>
                   </div>
-                  {(expanded.classes ?? []).length === 0 ? (
+                  {(expanded.niveaux ?? []).length === 0 ? (
                     <p className="text-xs text-muted-foreground italic py-2 text-center">
-                      Aucune classe active dans cette école.
+                      Aucun niveau tenu par un agent ni niveau déclaré — les
+                      données se saisissent dans les dossiers du personnel
+                      (module Utilisateurs) et via « Niveaux sans enseignant ».
                     </p>
                   ) : (
                     <div className="rounded-md border overflow-hidden bg-card">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
-                            <TableHead>Classe</TableHead>
+                            <TableHead>Niveau (cours)</TableHead>
                             <TableHead>Titulaire</TableHead>
-                            <TableHead className="text-center">G</TableHead>
                             <TableHead className="text-center">F</TableHead>
+                            <TableHead className="text-center">G</TableHead>
                             <TableHead className="text-center">Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {expanded.classes!.map((c) => (
-                            <TableRow key={c.id}>
+                          {expanded.niveaux!.map((n) => (
+                            <TableRow key={n.cours}>
                               <TableCell className="font-medium">
                                 <span className="flex items-center gap-1.5">
                                   <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
-                                  {c.name}
+                                  {n.cours}
+                                  {n.vacant && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[9px] border-rose-200 bg-rose-50 text-rose-700"
+                                    >
+                                      sans enseignant
+                                    </Badge>
+                                  )}
                                 </span>
                               </TableCell>
                               <TableCell className="text-sm">
-                                {c.teacher_name || (
-                                  <span className="text-muted-foreground">
-                                    Non affecté
+                                {n.titulaire || (
+                                  <span className="italic text-muted-foreground">
+                                    — sans enseignant —
                                   </span>
                                 )}
                               </TableCell>
                               <TableCell className="text-center text-sm">
-                                {c.garcons}
+                                {n.filles}
                               </TableCell>
                               <TableCell className="text-center text-sm">
-                                {c.filles}
+                                {n.garcons}
                               </TableCell>
                               <TableCell className="text-center text-sm font-semibold">
-                                {c.student_count}
+                                {n.total}
                               </TableCell>
                             </TableRow>
                           ))}
+                          {/* Totaux de l&apos;école (état nominatif) */}
+                          <TableRow className="bg-emerald-50/60 font-semibold">
+                            <TableCell
+                              colSpan={2}
+                              className="text-xs uppercase tracking-wide text-emerald-800"
+                            >
+                              Total — {expanded.nom_teachers ?? 0} enseignant
+                              {(expanded.nom_teachers ?? 0) > 1 ? "s" : ""} ·{" "}
+                              {(expanded.niveaux ?? []).length} niveau
+                              {(expanded.niveaux ?? []).length > 1 ? "x" : ""}
+                            </TableCell>
+                            <TableCell className="text-center text-sm">
+                              {sumNiveaux(expanded.niveaux, (n) => n.filles)}
+                            </TableCell>
+                            <TableCell className="text-center text-sm">
+                              {sumNiveaux(expanded.niveaux, (n) => n.garcons)}
+                            </TableCell>
+                            <TableCell className="text-center text-sm font-bold text-emerald-800">
+                              {sumNiveaux(expanded.niveaux, (n) => n.total)}
+                            </TableCell>
+                          </TableRow>
                         </TableBody>
                       </Table>
                     </div>
                   )}
+                  <p className="text-[10px] text-muted-foreground">
+                    Calcul d&apos;après l&apos;ÉTAT NOMINATIF DU PERSONNEL :
+                    un niveau existe s&apos;il est tenu par un agent ou
+                    déclaré sans enseignant — une école à 1, 2, 3 niveaux
+                    affiche 1, 2, 3 niveaux.
+                  </p>
                 </div>
               )}
             </>

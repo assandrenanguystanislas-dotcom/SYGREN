@@ -482,30 +482,25 @@ export interface SectorWithStats extends Sector {
   conseillers: string[]; // noms des conseillers affectés
 }
 
-/** Classe active d'une école du secteur (détail dépliable — session 31). */
-export interface SectorSchoolClass {
-  id: string;
-  name: string;
-  level: string;
-  teacher_name?: string;
-  student_count: number;
-  garcons: number;
-  filles: number;
-}
-
-/** École du secteur (vue conseiller — champs affichables uniquement). */
+/** École du secteur (vue conseiller — champs affichables uniquement).
+ *  v14 — les statistiques viennent de l'ÉTAT NOMINATIF DU PERSONNEL
+ *  (demande utilisateur : « l'administrateur et le conseiller doivent
+ *  connaître le nombre total d'enseignants, de niveaux et d'élèves à
+ *  travers l'état nominatif ») — plus de calcul par classes/niveaux
+ *  auto-créés ni par inscrits. */
 export interface SectorSchool {
   id: string;
   code: string;
   name: string;
   status: string;
-  /** v27 — statistiques de l'école (cartes « Mon Secteur ») */
-  class_count?: number;
-  student_count?: number;
-  /** v31 — éléments qui accompagnent le module Mon Secteur */
-  garcons?: number;
-  filles?: number;
-  classes?: SectorSchoolClass[];
+  /** v14 — totaux d'après l'ÉTAT NOMINATIF DU PERSONNEL */
+  nom_teachers?: number; // agents (directeur/enseignant) tenant un cours
+  nom_levels?: number; // niveaux réels : tenus + déclarés sans enseignant
+  nom_students?: number; // somme des effectifs T des dossiers + lignes déclarées
+  nom_filles?: number;
+  nom_garcons?: number;
+  /** v14 — détail dépliable : les niveaux RÉELS de l'école */
+  niveaux?: SectorNiveau[];
 }
 
 /** Personnel du secteur : directeurs + adjoints au directeur ACTIFS. */
@@ -521,12 +516,22 @@ export interface ConseillerStaffMember {
   school_code?: string;
 }
 
-/** Réponse GET /api/conseiller/staff (vue « Mon Secteur »). */
+/** Réponse GET /api/conseiller/staff (vue « Mon Secteur »).
+ *  v14 — counts : totaux du SECTEUR d'après l'ÉTAT NOMINATIF DU
+ *  PERSONNEL (enseignants / niveaux / élèves — plus classes/inscrits). */
 export interface ConseillerStaffResponse {
   sector: { id: string; name: string; iep_id: string } | null;
   schools: SectorSchool[];
   staff: ConseillerStaffMember[];
-  counts?: { schools: number; staff: number; classes?: number; students?: number };
+  counts?: {
+    schools: number;
+    staff: number;
+    teachers?: number;
+    levels?: number;
+    students?: number;
+    filles?: number;
+    garcons?: number;
+  };
 }
 
 export interface ConseillerWithSector extends User {
@@ -622,11 +627,17 @@ export interface LevelReportInput {
   redoublant_t?: number | null;
 }
 
-/** v13 — un agent qui tient un cours dans l'état nominatif de l'école
- *  (calcul des enseignants et des niveaux d'après la feuille). */
-export interface EtatNominatifTeacher {
-  name: string;
+/** v14 — un NIVEAU RÉEL d'une école (vue « Mon Secteur » / supervision,
+ *  calcul d'après l'ÉTAT NOMINATIF DU PERSONNEL) : cours tenu par un
+ *  agent (titulaire + effectifs du dossier) ou déclaré SANS enseignant
+ *  (vacant — effectifs saisis via « Niveaux sans enseignant »). */
+export interface SectorNiveau {
   cours: string;
+  titulaire?: string; // vide si vacant
+  filles: number;
+  garcons: number;
+  total: number;
+  vacant?: boolean;
 }
 
 /** Données complètes du document « ÉTAT NOMINATIF DU PERSONNEL ».

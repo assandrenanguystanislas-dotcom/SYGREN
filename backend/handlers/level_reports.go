@@ -10,10 +10,22 @@ package handlers
 // (demande utilisateur) : « il y a des écoles où l'on rencontre des
 // niveaux sans enseignants ou même des écoles à 1, 2, 3 niveaux — il
 // faut tenir compte de l'état nominatif pour faire le calcul des
-// enseignants et des niveaux ». La liste (GET) renvoie désormais les
-// enseignants titulaires d'un cours et les cours tenus, résolus comme
-// sur la feuille ; l'interface affiche le calcul et ne propose à la
-// déclaration que les cours réellement SANS enseignant.
+// enseignants et des niveaux ». La liste (GET) renvoyait les
+// enseignants titulaires d'un cours et les cours tenus ; l'interface
+// affichait le calcul et ne proposait à la déclaration que les cours
+// réellement SANS enseignant.
+//
+// v14 — LE CALCUL EST ANNULÉ (demande utilisateur) : « il faut annuler
+// le calcul des niveaux — je veux que l'administrateur et le conseiller
+// sachent le nombre total d'enseignants, de niveaux et d'élèves à
+// travers l'état nomINATIF DU PERSONNEL ». La bande de calcul disparaît
+// du dialog ; les TOTAUX (enseignants / niveaux / élèves) sont désormais
+// visibles par l'admin et le conseiller à travers l'état nominatif :
+// document « ÉTAT NOMINATIF DU PERSONNEL » (synthèse sous le tableau,
+// PDF/écran · Word · Excel) et vue « Mon Secteur » / supervision
+// (handlers/sectors.go : statistiques d'après l'état nominatif). Ce
+// fichier conserve la SAISIE v12 (effectifs/redoublants des niveaux
+// sans titulaire) et le refus des cours déjà tenus (held).
 //
 // Les effectifs/redoublants de l'état nominatif vivent normalement sur
 // le DOSSIER de l'enseignant (users.effectif_* / redoublant_*, via le
@@ -117,28 +129,8 @@ func canManageLevelReports(w http.ResponseWriter, r *http.Request, school models
 // Résolution IDENTIQUE à la feuille (personnel.go) : champ explicite du
 // dossier (users.cours) d'abord, sinon classe affectée (classes.teacher_id).
 func heldCoursByName(schoolID string) map[string]string {
-	_, held := etatNominatifTeachers(schoolID)
-	return held
-}
+	held := make(map[string]string)
 
-// EtatNominatifTeacher — un agent qui tient un cours dans l'état
-// nominatif de l'école (v13 — calcul des enseignants et des niveaux).
-type EtatNominatifTeacher struct {
-	Name  string `json:"name"`
-	Cours string `json:"cours"`
-}
-
-// etatNominatifTeachers — CALCUL D'APRÈS L'ÉTAT NOMINATIF (v13) :
-// les agents (directeur / enseignant) de l'école qui TIENNENT un cours,
-// chacun avec le cours tenu — le champ EXPLICITE du dossier personnel
-// (users.cours) prime sur la classe affectée, exactement comme la
-// résolution de la feuille (personnel.go) — ainsi que le map des cours
-// tenus (cours → nom du titulaire, un seul titulaire retenu par cours).
-// Les écoles n'ayant qu'une partie des niveaux (voire des niveaux sans
-// enseignant) sont ainsi reflétées FIDÈLEMENT : un niveau n'existe que
-// si un agent le tient OU si l'école l'a déclaré sans enseignant
-// (staff_level_reports).
-func etatNominatifTeachers(schoolID string) ([]EtatNominatifTeacher, map[string]string) {
 	var staff []models.User
 	database.DB.
 		Where("school_id = ? AND role IN ?", schoolID,
@@ -159,8 +151,6 @@ func etatNominatifTeachers(schoolID string) ([]EtatNominatifTeacher, map[string]
 		classNameByTeacher[*c.TeacherID] = c.Name
 	}
 
-	teachers := make([]EtatNominatifTeacher, 0, len(staff))
-	held := make(map[string]string)
 	for _, u := range staff {
 		cours := ""
 		if u.Cours != nil && strings.TrimSpace(*u.Cours) != "" {
@@ -171,12 +161,11 @@ func etatNominatifTeachers(schoolID string) ([]EtatNominatifTeacher, map[string]
 		if cours == "" {
 			continue // agent sans cours tenu (directeur, adjoint administratif…)
 		}
-		teachers = append(teachers, EtatNominatifTeacher{Name: u.FullName, Cours: cours})
 		if _, ok := held[cours]; !ok {
-			held[cours] = u.FullName
+			held[cours] = u.FullName // un seul titulaire retenu par cours
 		}
 	}
-	return teachers, held
+	return held
 }
 
 // ListLevelReports — GET /api/schools/{schoolID}/level-reports
@@ -207,18 +196,19 @@ func ListLevelReports(w http.ResponseWriter, r *http.Request) {
 	// Ordre pédagogique côté serveur (l'interface affiche tel quel).
 	sortLevelReports(reports)
 
-	// v13 — CALCUL D'APRÈS L'ÉTAT NOMINATIF : les enseignants qui tiennent
-	// un cours (avec le cours tenu) et le map des cours tenus — l'interface
-	// en déduit les niveaux réels de l'école (tenus + sans enseignant) et
-	// ne propose à la déclaration QUE les cours réellement libres.
-	teachers, held := etatNominatifTeachers(school.ID)
+	// v14 — CALCUL ANNULÉ (demande utilisateur) : le serveur renvoie
+	// seulement les cours tenus (held) — le dialog ne propose à la
+	// déclaration QUE les cours réellement libres, sans bande de
+	// calcul. Les TOTAUX (enseignants / niveaux / élèves) sont
+	// consultés à travers l'état nominatif : synthèse du document
+	// « ÉTAT NOMINATIF DU PERSONNEL » et statistiques de la vue
+	// « Mon Secteur » / supervision (handlers/sectors.go).
+	held := heldCoursByName(school.ID)
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"level_reports": reports,
 		"count":         len(reports),
-		// v13 — calcul enseignants / niveaux d'après l'état nominatif.
-		"teachers": teachers,
-		"held":     held,
+		"held":          held,
 	})
 }
 
