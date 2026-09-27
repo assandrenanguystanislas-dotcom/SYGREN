@@ -26,6 +26,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
@@ -242,4 +244,153 @@ func DeleteStaffRecord(w http.ResponseWriter, r *http.Request) {
 		"full_name": rec.FullName,
 	})
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// staffSyncAgent — agent de l'état nominatif à reporter dans le fichier.
+type staffSyncAgent struct {
+	ID            string
+	FullName      string
+	Phone         *string
+	SectorID      *string
+	SchoolID      *string
+	Matricule     *string
+	Sexe          *string
+	DateNaissance *time.Time
+	LieuNaissance *string
+	Categorie     *string
+	DateEntreeFP  *time.Time
+	Cours         *string
+	Fonction      *string
+	EffectifF     *int
+	EffectifG     *int
+	EffectifT     *int
+}
+
+// staffSyncNormKey — clé de comparaison (minuscules, espaces réduits).
+func staffSyncNormKey(s string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(s))), " ")
+}
+
+// SyncStaffRecords — POST /api/staff-records/sync (Task 64 — demande
+// utilisateur : « il y a des agents qui sont dans l'état nominatif qu'on
+// ne retrouve pas dans le fichier du personnel »).
+//
+// Le fichier du personnel est pré-rempli ONE-SHOT au démarrage (seed
+// Task 55) : tout agent ajouté (ou réactivé) APRÈS ce seed manque au
+// fichier. Ce complément, déclenchable à tout moment (bouton du module),
+// ajoute chaque agent de l'ÉTAT NOMINATIF absent du fichier — même
+// population et même mapping que le seed :
+//   - population : comptes directeur + enseignant (actifs comme
+//     suspendus — un agent en congé figure sur la feuille) ;
+//   - rattachement : même matricule, ou même école + même nom (clés
+//     normalisées) — jamais de mise à jour ni de suppression des lignes
+//     existantes (le fichier appartient à ses utilisateurs) ;
+//   - mapping : secteur du dossier, sinon celui de l'école ; effectif du
+//     cours tenu (T, sinon F+G) ; contact = téléphone du dossier.
+//
+// Idempotent : un second appel sans nouveaux agents ne crée rien.
+func SyncStaffRecords(w http.ResponseWriter, r *http.Request) {
+	var agents []staffSyncAgent
+	if err := database.DB.Model(&models.User{}).
+		Select("id, full_name, phone, sector_id, school_id, matricule, sexe, date_naissance, lieu_naissance, categorie, date_entree_fp, cours, fonction, effectif_f, effectif_g, effectif_t").
+		Where("role IN ? AND deleted_at IS NULL",
+			[]string{models.RoleDirector, models.RoleTeacher}).
+		Order("full_name ASC").
+		Scan(&agents).Error; err != nil {
+		middleware.JSONError(w, "erreur lecture des dossiers du personnel", http.StatusInternalServerError)
+		return
+	}
+
+	var recs []models.StaffRecord
+	if err := database.DB.Find(&recs).Error; err != nil {
+		middleware.JSONError(w, "erreur lecture du fichier du personnel", http.StatusInternalServerError)
+		return
+	}
+	// Clés des lignes existantes : matricule (global) et école+nom.
+	matKeys := make(map[string]bool, len(recs))
+	nameSchoolKeys := make(map[string]bool, len(recs))
+	for _, rec := range recs {
+		if m := staffSyncNormKey(derefStr(rec.Matricule)); m != "" {
+			matKeys[m] = true
+		}
+		nameSchoolKeys[normNameSchoolKey(staffSyncNormKey(rec.FullName), rec.SchoolID)] = true
+	}
+
+	// Secteur de chaque école (déduction comme au seed).
+	schoolSector := map[string]*string{}
+	var schools []models.School
+	if err := database.DB.Select("id, sector_id").Find(&schools).Error; err == nil {
+		for _, sc := range schools {
+			schoolSector[sc.ID] = sc.SectorID
+		}
+	}
+
+	created := 0
+	for _, a := range agents {
+		if m := staffSyncNormKey(derefStr(a.Matricule)); m != "" && matKeys[m] {
+			continue // même matricule : déjà dans le fichier
+		}
+		if nameSchoolKeys[normNameSchoolKey(staffSyncNormKey(a.FullName), a.SchoolID)] {
+			continue // même école + même nom : déjà dans le fichier
+		}
+		sectorID := a.SectorID
+		if sectorID == nil && a.SchoolID != nil {
+			sectorID = schoolSector[*a.SchoolID]
+		}
+		rec := models.StaffRecord{
+			SectorID:      sectorID,
+			SchoolID:      a.SchoolID,
+			FullName:      a.FullName,
+			Sexe:          a.Sexe,
+			DateNaissance: a.DateNaissance,
+			LieuNaissance: a.LieuNaissance,
+			Categorie:     a.Categorie,
+			Matricule:     a.Matricule,
+			DateEntreeFP:  a.DateEntreeFP,
+			Cours:         a.Cours,
+			Fonction:      a.Fonction,
+			Contact:       a.Phone,
+		}
+		// EFFECTIF — total du cours tenu (T), sinon F+G.
+		if a.EffectifT != nil && *a.EffectifT > 0 {
+			rec.Effectif = a.EffectifT
+		} else if a.EffectifF != nil || a.EffectifG != nil {
+			sum := 0
+			if a.EffectifF != nil {
+				sum += *a.EffectifF
+			}
+			if a.EffectifG != nil {
+				sum += *a.EffectifG
+			}
+			rec.Effectif = &sum
+		}
+		if err := database.DB.Create(&rec).Error; err != nil {
+			middleware.JSONError(w, "erreur ajout de l'agent au fichier", http.StatusInternalServerError)
+			return
+		}
+		if m := staffSyncNormKey(derefStr(a.Matricule)); m != "" {
+			matKeys[m] = true
+		}
+		nameSchoolKeys[normNameSchoolKey(staffSyncNormKey(a.FullName), a.SchoolID)] = true
+		created++
+	}
+
+	LogAction(r, "staff_records.synced", "staff_record", nil, map[string]interface{}{
+		"agents": len(agents), "created": created, "existing": len(recs),
+	})
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"status":   "ok",
+		"agents":   len(agents),
+		"created":  created,
+		"existing": len(recs),
+	})
+}
+
+// normNameSchoolKey — clé « nom @ école » (école vide = "_").
+func normNameSchoolKey(name string, schoolID *string) string {
+	sid := "_"
+	if schoolID != nil && *schoolID != "" {
+		sid = *schoolID
+	}
+	return name + "@" + sid
 }

@@ -15,16 +15,22 @@
 // d'entrée FP (le champ « Ancienneté » du formulaire sert aux cas
 // particuliers : reprise, stage, etc.).
 //
+// Task 64 — bouton « Synchroniser » : complète le fichier depuis l'ÉTAT
+// NOMINATIF DU PERSONNEL (agents des dossiers ajoutés après le seed —
+// ils manquaient au fichier). INSERT-only + idempotent.
+//
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   IdCard,
   Plus,
   Pencil,
   Trash2,
   Loader2,
+  RefreshCw,
   Search,
   FileSpreadsheet,
   ChevronDown,
@@ -170,6 +176,30 @@ export function StaffDataView() {
     invalidateKeys: [["staff-records"]],
     successMessage: "Ligne supprimée du fichier du personnel",
     actionLabel: "Suppression",
+  });
+
+  // Task 64 — SYNCHRONISATION depuis l'État nominatif du personnel :
+  // ajoute les agents des dossiers (directeurs + adjoints) absents du
+  // fichier (ajoutés après le seed one-shot). Idempotent.
+  const queryClient = useQueryClient();
+  const syncMut = useMutation({
+    mutationFn: () => staffDataApi.sync(),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["staff-records"] });
+      toast.success(
+        res.created > 0
+          ? `${res.created} agent(s) ajouté(s) depuis l'État nominatif du personnel`
+          : "Fichier déjà à jour — aucun agent à ajouter",
+        {
+          description: `État nominatif : ${res.agents} agent(s) — Fichier : ${res.existing + res.created} ligne(s)`,
+        },
+      );
+    },
+    onError: (error) => {
+      toast.error("Synchronisation échouée", {
+        description: error instanceof Error ? error.message : "Erreur inattendue",
+      });
+    },
   });
 
   const records = useMemo(() => data?.staff_records ?? [], [data]);
@@ -344,6 +374,22 @@ export function StaffDataView() {
                 )}
                 Exporter Excel
               </Button>
+              {canManage && (
+                <Button
+                  variant="outline"
+                  onClick={() => syncMut.mutate()}
+                  disabled={syncMut.isPending}
+                  className="shadow-sm"
+                  title="Ajouter au fichier les agents présents dans l'État nominatif du personnel mais absents du fichier"
+                >
+                  {syncMut.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-1.5" />
+                  )}
+                  Synchroniser
+                </Button>
+              )}
               {canManage && (
                 <Button onClick={openCreate} className="shadow-sm">
                   <Plus className="w-4 h-4 mr-1.5" />

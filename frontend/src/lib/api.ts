@@ -895,6 +895,14 @@ export const staffDataApi = {
     apiFetch<{ status: string }>(`/api/staff-records/${id}`, {
       method: "DELETE",
     }),
+  // Task 64 — complète le fichier depuis l'ÉTAT NOMINATIF DU PERSONNEL
+  // (agents ajoutés après le seed one-shot manquent au fichier) :
+  // INSERT-only, idempotent — jamais de mise à jour des lignes existantes.
+  sync: () =>
+    apiFetch<{ status: string; agents: number; created: number; existing: number }>(
+      "/api/staff-records/sync",
+      { method: "POST" },
+    ),
 };
 
 // === v2 — Portail Parent (module "parent-portal") ===

@@ -279,7 +279,7 @@ function buildStats(role: Role, d: StatsData): StatCard[] {
       // des niveaux déclarés sans enseignant.
       return [
         { label: "Écoles du secteur", value: String(d.conseillerSchoolCount), hint: "mon périmètre de suivi", icon: <School className="w-5 h-5" />, tone: "orange" },
-        { label: "Enseignants", value: String(d.conseillerTeacherCount), hint: "état nominatif — titulaires d'un cours", icon: <Users className="w-5 h-5" />, tone: "green" },
+        { label: "Enseignants", value: String(d.conseillerTeacherCount), hint: "état nominatif — directeurs + adjoints", icon: <Users className="w-5 h-5" />, tone: "green" },
         { label: "Niveaux", value: String(d.conseillerLevelCount), hint: "état nominatif — tenus + sans enseignant", icon: <BookOpen className="w-5 h-5" />, tone: "neutral" },
         { label: "Élèves", value: String(d.conseillerStudentCount), hint: "état nominatif — effectifs du personnel", icon: <Network className="w-5 h-5" />, tone: "orange" },
       ];

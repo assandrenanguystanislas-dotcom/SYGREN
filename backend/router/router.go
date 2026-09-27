@@ -169,6 +169,9 @@ func New(cfg *config.Config) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireModule(models.ModuleStaffData, "write"))
 			r.Post("/api/staff-records", handlers.CreateStaffRecord)
+			// Task 64 — complément du fichier depuis l'ÉTAT
+			// NOMINATIF (agents ajoutés après le seed one-shot).
+			r.Post("/api/staff-records/sync", handlers.SyncStaffRecords)
 			r.Put("/api/staff-records/{id}", handlers.UpdateStaffRecord)
 			r.Delete("/api/staff-records/{id}", handlers.DeleteStaffRecord)
 		})

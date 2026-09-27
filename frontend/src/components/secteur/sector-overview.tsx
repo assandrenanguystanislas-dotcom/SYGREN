@@ -129,11 +129,12 @@ export function SectorOverview({
   const directors = staff.filter((m) => m.role === "director").length;
   const adjoints = staff.length - directors;
 
-  // v14 — TOTAUX D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL (demande
-  // utilisateur) : enseignants (agents tenant un cours), niveaux réels
-  // (tenus + déclarés sans enseignant) et élèves (effectifs des
-  // dossiers + lignes déclarées). Calculés côté serveur ; repli local
-  // sur la somme des écoles si besoin.
+  // v15 — TOTAUX D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL (demande
+  // utilisateur) : ENSEIGNANTS = DIRECTEURS + ADJOINTS (tous les agents
+  // de la feuille, avec ou sans cours), niveaux réels (tenus + déclarés
+  // sans enseignant) et élèves (effectifs des dossiers + lignes
+  // déclarées). Calculés côté serveur ; repli local sur la somme des
+  // écoles si besoin.
   const totalTeachers =
     data.counts?.teachers ??
     schools.reduce((acc, s) => acc + (s.nom_teachers ?? 0), 0);
@@ -184,8 +185,8 @@ export function SectorOverview({
                 <GraduationCap className="w-3 h-3" />
                 {adjoints} adjoint(s)
               </Badge>
-              {/* v14 — TOTAUX D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL */}
-              <Badge variant="secondary" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
+              {/* v15 — TOTAUX D'APRÈS L'ÉTAT NOMINATIF DU PERSONNEL */}
+              <Badge variant="secondary" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700" title="Directeurs + adjoints — tous les agents de l'état nominatif">
                 <Users className="w-3 h-3" />
                 {totalTeachers} enseignant(s)
               </Badge>
@@ -247,7 +248,7 @@ export function SectorOverview({
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {/* v14 — totaux d'après l'ÉTAT NOMINATIF DU PERSONNEL */}
+                      {/* v15 — ENSEIGNANTS = directeurs + adjoints (état nominatif) */}
                       <Badge
                         variant="outline"
                         className="text-[10px] gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"

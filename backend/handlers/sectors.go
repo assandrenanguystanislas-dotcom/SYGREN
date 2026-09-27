@@ -499,10 +499,12 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 	// niveaux déclarés sans enseignant (staff_level_reports) — les
 	// mêmes que la feuille « ÉTAT NOMINATIF DU PERSONNEL ».
 	//
-	// Règles (identiques à la feuille, handlers/personnel.go) :
-	//   - ENSEIGNANTS : agents (directeur/enseignant) tenant un cours
-	//     — champ explicite du dossier (users.cours) d'abord, sinon
-	//     classe affectée (classes.teacher_id) ;
+	// Règles (v15 — demande utilisateur : « les enseignants sont les
+	// directeurs et les adjoints — le nombre total d'enseignants est
+	// la somme des directeurs et des adjoints ») :
+	//   - ENSEIGNANTS : TOUS les agents de la feuille de l'école
+	//     (directeurs + adjoints) — chacun compte, qu'il tienne ou
+	//     non un cours ;
 	//   - NIVEAUX : cours distincts tenus par ces agents + cours
 	//     déclarés « sans enseignant » — une école à 1, 2, 3 niveaux
 	//     affiche 1, 2, 3 niveaux ; les niveaux sans enseignant
@@ -564,7 +566,7 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 
 	// Calcul par école.
 	type nomStats struct {
-		teachers      int               // agents tenant un cours
+		teachers      int               // ENSEIGNANTS = directeurs + adjoints (tous les agents)
 		held          map[string]string // cours → titulaire (1er agent, tri nom)
 		eff           map[string][3]int // cours → [F, G, T] cumulés (agents)
 		fil, gar, ele int               // totaux école côté agents
@@ -584,6 +586,11 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
+		// v15 — ENSEIGNANTS = DIRECTEURS + ADJOINTS (demande
+		// utilisateur) : chaque agent de la feuille compte — un
+		// directeur sans cours ou un adjoint administratif fait
+		// partie du personnel de son école.
+		st.teachers++
 		cours := ""
 		if u.Cours != nil && strings.TrimSpace(*u.Cours) != "" {
 			cours = strings.ToUpper(strings.TrimSpace(*u.Cours))
@@ -591,11 +598,11 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 			cours = strings.ToUpper(strings.TrimSpace(n))
 		}
 		if cours == "" {
-			continue // agent sans cours tenu (adjoint administratif…)
+			continue // sans cours tenu : compté comme enseignant,
+			// mais aucun niveau ni effectif à agréger
 		}
 		f, g := effInt(u.EffectifF), effInt(u.EffectifG)
 		t := effTotal(u.EffectifF, u.EffectifG, u.EffectifT)
-		st.teachers++
 		st.fil += f
 		st.gar += g
 		st.ele += t
@@ -684,9 +691,10 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 			"code":   s.Code,
 			"name":   s.Name,
 			"status": s.Status,
-			// v14 — totaux d'après l'ÉTAT NOMINATIF DU PERSONNEL
-			// (enseignants titulaires d'un cours, niveaux réels —
-			// tenus + déclarés sans enseignant — et élèves).
+			// v15 — totaux d'après l'ÉTAT NOMINATIF DU
+			// PERSONNEL : ENSEIGNANTS = directeurs + adjoints
+			// (tous les agents de la feuille), niveaux réels
+			// (tenus + déclarés sans enseignant) et élèves.
 			"nom_teachers": st.teachers,
 			"nom_levels":   len(niveaux),
 			"nom_students": st.ele,
