@@ -19,19 +19,19 @@
 // NOMINATIF DU PERSONNEL (agents des dossiers ajoutés après le seed —
 // ils manquaient au fichier). INSERT-only + idempotent.
 //
-// Task 66 — en-tête ÉCOLES interactif (le bouton de sélection d'écoles
-// de la Task 65 est ANNULÉ — revert 189fb60) : comme pour SECTEUR, la
-// colonne ÉCOLES se SURVOLE (une couleur apparaît) et un simple clic
-// CLASSE tout le fichier par école en ORDRE ALPHABÉTIQUE — les écoles
-// du secteur DEMANDÉ quand un secteur est choisi dans le filtre (le
-// filtrage serveur ne laisse que ses lignes) ; bandeau vert par école
-// (agents + effectif) et blocs alternés blanc/vert pâle ; re-clic =
-// ordre initial du fichier. Les classements secteur / école
-// s'excluent mutuellement.
+// Task 67 — écoles par ordre alphabétique DANS LEUR SECTEUR (la Task
+// 66 classait les écoles sans tenir compte des secteurs — remplacée) :
+// un clic sur SECTEUR affiche les secteurs (bandeaux verts) ; un clic
+// sur ÉCOLES range AUTOMATIQUEMENT, DANS CHAQUE SECTEUR (ex : BADIA),
+// les écoles du secteur par ORDRE ALPHABÉTIQUE sous un sous-bandeau
+// vert pâle (agents + effectif par école). Re-clic sur ÉCOLES =
+// retour au classement par secteur ; re-clic sur SECTEUR = ordre
+// initial du fichier. Le bouton de sélection d'écoles de la Task 65
+// reste ANNULÉ (revert 189fb60).
 //
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -130,9 +130,9 @@ export function StaffDataView() {
   // Classement du fichier par secteur : un simple CLIC sur l'en-tête
   // SECTEUR du tableau bascule (re-clic = ordre initial du fichier).
   const [bySector, setBySector] = useState(false);
-  // Task 66 — classement par ÉCOLE (clic sur l'en-tête ÉCOLES) :
-  // ordre alphabétique des écoles ; mutuellement exclusif avec le
-  // classement par secteur.
+  // Task 67 — classement des ÉCOLES par ordre alphabétique (clic sur
+  // l'en-tête ÉCOLES) : niveau 2 DANS le classement par secteur —
+  // bySchool implique bySector.
   const [bySchool, setBySchool] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StaffRecord | null>(null);
@@ -229,20 +229,27 @@ export function StaffDataView() {
   );
 
   // Affichage : ordre du fichier (défaut), classé par secteur (clic sur
-  // l'en-tête SECTEUR) ou classé par ÉCOLE en ordre alphabétique (clic
-  // sur l'en-tête ÉCOLES — Task 66). Tri STABLE : au sein d'un même
-  // groupe, l'ordre initial de saisie est conservé ; les lignes sans
-  // secteur / sans école passent à la fin, sous leur bandeau.
+  // l'en-tête SECTEUR), ou HIÉRARCHIQUE secteur → écoles alphabétiques
+  // (clic sur ÉCOLES — Task 67). Tri STABLE : à rang égal, l'ordre
+  // initial de saisie est conservé ; les lignes sans secteur / sans
+  // école passent à la fin de leur niveau, sous leur bandeau.
   const visibleRecords = useMemo(() => {
-    // Task 66 — tri des ÉCOLES par ordre alphabétique (locale fr).
-    // Quand un secteur est DEMANDÉ dans le filtre, la liste ne contient
-    // déjà que les lignes de ce secteur (filtrage serveur) : le tri
-    // donne donc les écoles DU SECTEUR DEMANDÉ. Sans secteur choisi,
-    // toutes les écoles du fichier sont classées alphabétiquement.
+    // Task 67 — classement HIÉRARCHIQUE : secteurs (ordre alphabétique)
+    // puis, DANS CHAQUE SECTEUR, écoles par ordre alphabétique (locale
+    // fr). Quand un secteur est DEMANDÉ dans le filtre, la liste ne
+    // contient déjà que ses lignes (filtrage serveur) : le tri s'applique
+    // alors aux écoles DE CE SECTEUR (ex : BADIA → ses écoles de A à Z).
     if (bySchool) {
+      const sectorName = (r: StaffRecord) =>
+        r.sector_id ? (sectorNames.get(r.sector_id) ?? null) : null;
       const schoolName = (r: StaffRecord) =>
         r.school_id ? (schoolNames.get(r.school_id) ?? null) : null;
       return [...records].sort((a, b) => {
+        const sa = sectorName(a);
+        const sb = sectorName(b);
+        if (!sa && sb) return 1;
+        if (sa && !sb) return -1;
+        if (sa && sb && sa !== sb) return sa.localeCompare(sb, "fr");
         const na = schoolName(a);
         const nb = schoolName(b);
         if (!na && !nb) return 0;
@@ -264,30 +271,44 @@ export function StaffDataView() {
     });
   }, [records, bySector, bySchool, sectorNames, schoolNames]);
 
-  // Stats par GROUPE des lignes AFFICHÉES (bandeaux de groupe) : nombre
-  // d'agents + effectif cumulé — groupe = école (Task 66) ou secteur
-  // selon le classement actif.
-  const groupStats = useMemo(() => {
+  // Stats des bandeaux de NIVEAU 1 (secteurs) des lignes AFFICHÉES :
+  // nombre d'agents + effectif cumulé du secteur.
+  const sectorStats = useMemo(() => {
     const m = new Map<string, { count: number; effectif: number }>();
     for (const r of visibleRecords) {
-      const k = groupKeyOf(r, bySchool);
+      const k = r.sector_id ?? "__none__";
       const cur = m.get(k) ?? { count: 0, effectif: 0 };
       cur.count += 1;
       cur.effectif += typeof r.effectif === "number" ? r.effectif : 0;
       m.set(k, cur);
     }
     return m;
-  }, [visibleRecords, bySchool]);
+  }, [visibleRecords]);
 
-  // Alternance visuelle des BLOCS de groupes : parité du bloc pour chaque
-  // ligne affichée (les blocs consécutifs s'alternent fond blanc / fond
-  // vert très pâle — chaque école / secteur forme un bloc distinct).
+  // Stats des sous-bandeaux de NIVEAU 2 (écoles — Task 67) des lignes
+  // AFFICHÉES : nombre d'agents + effectif cumulé de l'école.
+  const schoolStats = useMemo(() => {
+    const m = new Map<string, { count: number; effectif: number }>();
+    for (const r of visibleRecords) {
+      const k = r.school_id ?? "__none__";
+      const cur = m.get(k) ?? { count: 0, effectif: 0 };
+      cur.count += 1;
+      cur.effectif += typeof r.effectif === "number" ? r.effectif : 0;
+      m.set(k, cur);
+    }
+    return m;
+  }, [visibleRecords]);
+
+  // Alternance visuelle des BLOCS de secteurs (niveau 1) : parité du
+  // bloc pour chaque ligne affichée (les blocs consécutifs s'alternent
+  // fond blanc / fond vert très pâle — chaque secteur forme un bloc
+  // distinct ; les écoles restent DANS le bloc de leur secteur).
   const blockParity = useMemo(() => {
     const parity = new Map<string, boolean>();
     let idx = -1;
     let prev: string | null = null;
     for (const r of visibleRecords) {
-      const k = groupKeyOf(r, bySchool);
+      const k = r.sector_id ?? "__none__";
       if (k !== prev) {
         idx += 1;
         prev = k;
@@ -295,7 +316,7 @@ export function StaffDataView() {
       parity.set(r.id, idx % 2 === 1);
     }
     return parity;
-  }, [visibleRecords, bySchool]);
+  }, [visibleRecords]);
 
   function openCreate() {
     setEditing(null);
@@ -354,9 +375,10 @@ export function StaffDataView() {
     try {
       // Export dans l'ordre AFFICHÉ : si le fichier est classé par
       // secteur, le classeur reproduit les BLOCS par secteur (bandeau
-      // + alternance de fond) secteur par secteur ; classé par école
-      // (Task 66), le classeur suit l'ordre alphabétique des écoles
-      // affiché (sans bandeaux).
+      // + alternance de fond) secteur par secteur ; avec le classement
+      // ÉCOLES (Task 67), le classeur suit l'ordre affiché — secteurs
+      // puis écoles alphabétiques dans chaque secteur (bandeaux de
+      // secteur conservés).
       await exportExcelAsync(
         visibleRecords,
         totalEffectif,
@@ -498,7 +520,8 @@ export function StaffDataView() {
                       {/* En-tête SECTEUR interactif : surbrillance au survol,
                           un simple clic CLASSE tout le fichier par secteur
                           (re-clic = retour à l'ordre initial du fichier).
-                          Exclusif avec le classement par école (Task 66). */}
+                          Depuis le classement ÉCOLES (Task 67), un clic
+                          remonte à l'ordre initial. */}
                       <button
                         type="button"
                         onClick={() => {
@@ -525,22 +548,31 @@ export function StaffDataView() {
                       </button>
                     </TableHead>
                     <TableHead>
-                      {/* Task 66 — En-tête ÉCOLES interactif (comme
-                          SECTEUR) : la couleur apparaît au SURVOL, un
-                          simple clic MET LES ÉCOLES PAR ORDRE
-                          ALPHABÉTIQUE — celles du secteur DEMANDÉ quand
-                          un secteur est choisi dans le filtre (re-clic
-                          = retour à l'ordre initial du fichier). */}
+                      {/* Task 67 — En-tête ÉCOLES interactif (la couleur
+                          apparaît au SURVOL) : dans le classement par
+                          secteur, un clic RANGE LES ÉCOLES DE CHAQUE
+                          SECTEUR PAR ORDRE ALPHABÉTIQUE (sous-bandeau
+                          par école). Re-clic = retour au classement par
+                          secteur seul. */}
                       <button
                         type="button"
                         onClick={() => {
-                          setBySchool((v) => !v);
-                          setBySector(false);
+                          if (bySchool) {
+                            // Re-clic : on remonte au classement par
+                            // secteur seul (les écoles reprennent leur
+                            // ordre de saisie dans chaque secteur).
+                            setBySchool(false);
+                          } else {
+                            // Le classement des écoles vit DANS le
+                            // classement par secteur.
+                            setBySchool(true);
+                            setBySector(true);
+                          }
                         }}
                         title={
                           bySchool
-                            ? "Revenir à l'ordre initial du fichier"
-                            : "Mettre les écoles par ordre alphabétique (selon le secteur demandé)"
+                            ? "Revenir au classement par secteur"
+                            : "Ranger les écoles de chaque secteur par ordre alphabétique"
                         }
                         className={cn(
                           "-mx-2 -my-1 inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 transition-colors hover:bg-primary/10 hover:text-primary",
@@ -578,14 +610,19 @@ export function StaffDataView() {
                 <TableBody>
                   {visibleRecords.flatMap((rec, i) => {
                     const isFemale = rec.sexe === "F";
-                    // Bandeau de groupe : inséré avant la 1re ligne de
-                    // chaque école (Task 66) ou de chaque secteur quand
-                    // le classement correspondant est actif (clic sur
-                    // l'en-tête ÉCOLES / SECTEUR).
-                    const groupKey = groupKeyOf(rec, bySchool);
-                    const prevGroupKey =
+                    // Bandeaux hiérarchiques (Task 67) : niveau 1 =
+                    // SECTEUR (classement par secteur actif), niveau 2
+                    // = ÉCOLE (classement ÉCOLES actif). Chaque bandeau
+                    // s'insère devant la 1re ligne de son groupe.
+                    const sectorKey = rec.sector_id ?? "__none__";
+                    const prevSectorKey =
                       i > 0
-                        ? groupKeyOf(visibleRecords[i - 1], bySchool)
+                        ? (visibleRecords[i - 1].sector_id ?? "__none__")
+                        : null;
+                    const schoolKey = rec.school_id ?? "__none__";
+                    const prevSchoolKey =
+                      i > 0
+                        ? (visibleRecords[i - 1].school_id ?? "__none__")
                         : null;
                     const row = (
                       <TableRow
@@ -680,42 +717,79 @@ export function StaffDataView() {
                         )}
                       </TableRow>
                     );
-                    // Bandeaux + blocs UNIQUEMENT quand un classement
-                    // est actif (clic sur l'en-tête ÉCOLES ou SECTEUR) ;
-                    // vue par défaut = fichier intact.
-                    if ((!bySector && !bySchool) || groupKey === prevGroupKey)
-                      return [row];
-                    const st = groupStats.get(groupKey);
-                    const label = bySchool
-                      ? rec.school_id
-                        ? (schoolNames.get(rec.school_id) ?? "ÉCOLE")
-                        : "SANS ÉCOLE — À COMPLÉTER"
-                      : rec.sector_id
+                    // Bandeaux : niveau 1 = SECTEUR dès que le
+                    // classement par secteur est actif (il l'est aussi
+                    // quand les écoles sont classées — bySchool implique
+                    // bySector) ; niveau 2 = ÉCOLE quand le classement
+                    // ÉCOLES est actif (Task 67). Vue par défaut =
+                    // fichier intact, aucun bandeau.
+                    if (!bySector) return [row];
+
+                    const nodes: ReactElement[] = [];
+
+                    // Bandeau VERT du secteur : fond vert franc (vert
+                    // drapeau ivoirien, identique à l'export Excel),
+                    // texte blanc — chaque secteur forme un bloc
+                    // immédiatement identifiable.
+                    if (sectorKey !== prevSectorKey) {
+                      const st = sectorStats.get(sectorKey);
+                      const label = rec.sector_id
                         ? (sectorNames.get(rec.sector_id) ?? "SECTEUR")
                         : "SANS SECTEUR — À COMPLÉTER";
-                    return [
-                      // Bandeau VERT du groupe (école ou secteur) : fond
-                      // vert franc (vert drapeau ivoirien, identique à
-                      // l'export Excel), texte blanc — chaque groupe
-                      // forme un bloc immédiatement identifiable.
-                      <TableRow
-                        key={`grp-${groupKey}`}
-                        className="bg-[#009E60] hover:bg-[#009E60]"
-                      >
-                        <TableCell colSpan={colCount} className="py-2">
-                          <span className="text-xs font-bold uppercase tracking-wider text-white">
-                            {label}
-                          </span>
-                          <span className="ml-2 text-xs text-white/85">
-                            {st?.count ?? 1} agent{(st?.count ?? 1) > 1 ? "s" : ""}
-                            {st && st.effectif > 0
-                              ? ` · effectif ${st.effectif}`
-                              : ""}
-                          </span>
-                        </TableCell>
-                      </TableRow>,
-                      row,
-                    ];
+                      nodes.push(
+                        <TableRow
+                          key={`sec-${sectorKey}`}
+                          className="bg-[#009E60] hover:bg-[#009E60]"
+                        >
+                          <TableCell colSpan={colCount} className="py-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-white">
+                              {label}
+                            </span>
+                            <span className="ml-2 text-xs text-white/85">
+                              {st?.count ?? 1} agent{(st?.count ?? 1) > 1 ? "s" : ""}
+                              {st && st.effectif > 0
+                                ? ` · effectif ${st.effectif}`
+                                : ""}
+                            </span>
+                          </TableCell>
+                        </TableRow>,
+                      );
+                    }
+
+                    // Sous-bandeau VERT PÂLE de l'école (Task 67) : dans
+                    // le bloc du secteur, chaque école s'annonce par un
+                    // bandeau clair à liseré vert — les écoles du
+                    // secteur se lisent de A à Z.
+                    if (bySchool && schoolKey !== prevSchoolKey) {
+                      const st = schoolStats.get(schoolKey);
+                      const label = rec.school_id
+                        ? (schoolNames.get(rec.school_id) ?? "ÉCOLE")
+                        : "SANS ÉCOLE — À COMPLÉTER";
+                      nodes.push(
+                        <TableRow
+                          key={`sch-${sectorKey}-${schoolKey}`}
+                          className="bg-[#D8EFE2] hover:bg-[#D8EFE2]"
+                        >
+                          <TableCell
+                            colSpan={colCount}
+                            className="border-l-4 border-[#009E60] py-1.5"
+                          >
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-[#00794A]">
+                              {label}
+                            </span>
+                            <span className="ml-2 text-[11px] text-[#00794A]/80">
+                              {st?.count ?? 1} agent{(st?.count ?? 1) > 1 ? "s" : ""}
+                              {st && st.effectif > 0
+                                ? ` · effectif ${st.effectif}`
+                                : ""}
+                            </span>
+                          </TableCell>
+                        </TableRow>,
+                      );
+                    }
+
+                    nodes.push(row);
+                    return nodes;
                   })}
                 </TableBody>
               </Table>
@@ -1020,11 +1094,6 @@ export function StaffDataView() {
       />
     </div>
   );
-}
-
-/** Clé de groupe active pour les bandeaux : école (Task 66) ou secteur. */
-function groupKeyOf(r: StaffRecord, bySchool: boolean): string {
-  return (bySchool ? r.school_id : r.sector_id) ?? "__none__";
 }
 
 /** Ancienneté affichée : saisie libre, sinon calculée depuis l'entrée FP. */
