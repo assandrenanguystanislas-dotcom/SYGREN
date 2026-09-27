@@ -122,6 +122,13 @@
 //     tableau, sans aucune donnée) est RETIRÉE des 3 modèles : le
 //     tableau se termine par la ligne TOTAL.
 //
+// v15 — LIGNE « TOTAUX D'APRÈS LE PRÉSENT ÉTAT NOMINATIF » RETIRÉE
+//   (demande utilisateur) : la bande de synthèse ajoutée en v14 sous le
+//   tableau (enseignants / niveaux / élèves) est SUPPRIMÉE des 3
+//   modèles — le document se termine par la ligne TOTAL puis le pied de
+//   page (N.B / signature) ; les totaux restent consultables dans Mon
+//   Secteur / supervision et sur le tableau de bord conseiller.
+//
 // Données : /api/reports/personnel?school_id=… (source unique — le
 // document ne recalcule rien de plus que les totaux affichés).
 // Impression 100 % navigateur A4 paysage (route dédiée /personnel-doc,
@@ -356,28 +363,6 @@ export function PersonnelDocument({
   const totalRedF = sumCol(staff.map((s) => s.redoublant_f));
   const totalRedG = sumCol(staff.map((s) => s.redoublant_g));
   const totalRedT = sumCol(staff.map((s) => s.redoublant_t));
-
-  // v14 — SYNTHÈSE DES TOTAUX D'APRÈS LE PRÉSENT ÉTAT NOMINATIF
-  // (demande utilisateur : « annuler le calcul par niveaux — je veux
-  // que l'administrateur et le conseiller sachent le nombre total
-  // d'enseignants, de niveaux et d'élèves à travers l'état nominatif du
-  // personnel »). Calculée sur les lignes de la feuille :
-  //   - ENSEIGNANTS : agents (lignes non vacantes) tenant un cours
-  //     (colonne COURS remplie — résolution serveur : dossier sinon
-  //     classe affectée) ;
-  //   - NIVEAUX : cours distincts de la feuille (tenus + déclarés sans
-  //     enseignant) — une école à 1, 2, 3 niveaux affiche 1, 2, 3 ;
-  //   - ÉLÈVES : total des effectifs T (ligne TOTAL).
-  const totalEnseignants = staff.filter(
-    (s) => !s.vacant && (s.class_name ?? "").trim() !== "",
-  ).length;
-  const totalNiveaux = new Set(
-    staff
-      .map((s) => (s.class_name ?? "").trim().toUpperCase())
-      .filter(Boolean),
-  ).size;
-  const totalEleves = totalEffT ?? 0;
-
   // v6 — données partagées par les modèles Word / Excel (mêmes en-têtes
   // d'origine que le PDF : école, IEP, année scolaire, directeur).
   const exportData: ExportData = {
@@ -390,10 +375,6 @@ export function PersonnelDocument({
     iepPhone: data.iep?.inspector_phone ?? "",
     iepEmail: data.iep?.inspector_email ?? "",
     directeur: directeurName,
-    // v14 — synthèse des totaux d'après le présent état nominatif.
-    enseignants: totalEnseignants,
-    niveaux: totalNiveaux,
-    eleves: totalEleves,
   };
 
   // Modèle WORD (.doc) — HTML MSO A4 paysage fidèle au document imprimé
@@ -693,29 +674,9 @@ export function PersonnelDocument({
           </tbody>
         </table>
 
-        {/* v14 — SYNTHÈSE DES TOTAUX (calculée d'après le présent état
-            nominatif) : enseignants / niveaux / élèves — lisible
-            directement par l'administrateur et le conseiller. */}
-        <div
-          style={{
-            marginTop: "8px",
-            textAlign: "center",
-            border: `1.6px solid ${CI_GREEN}`,
-            borderRadius: "8px",
-            padding: "5px 14px",
-            background: CI_GREEN_BG,
-            fontSize: "12px",
-            fontWeight: 700,
-            color: CI_GREEN_TEXT,
-            letterSpacing: "0.4px",
-            ...PRINT_COLOR_STYLE,
-          }}
-        >
-          TOTAUX D&apos;APRÈS LE PRÉSENT ÉTAT NOMINATIF :{" "}
-          {totalEnseignants} enseignant{totalEnseignants > 1 ? "s" : ""} ·{" "}
-          {totalNiveaux} niveau{totalNiveaux > 1 ? "x" : ""} · {totalEleves}{" "}
-          élève{totalEleves > 1 ? "s" : ""}
-        </div>
+        {/* v15 — la bande « TOTAUX D'APRÈS LE PRÉSENT ÉTAT NOMINATIF »
+            a été RETIRÉE (demande utilisateur) : le tableau se termine
+            par la ligne TOTAL, suivi du pied de page. */}
 
         {/* --- N.B + mention + signature (modèle reçu) — v11.1 :
              « Le Directeur » EN HAUT À GAUCHE, sur la MÊME LIGNE que la
@@ -887,11 +848,6 @@ interface ExportData {
   iepPhone: string;
   iepEmail: string;
   directeur: string;
-  // v14 — synthèse des totaux (enseignants / niveaux / élèves) calculée
-  // d'après le présent état nominatif — reprise par Word et Excel.
-  enseignants: number;
-  niveaux: number;
-  eleves: number;
 }
 
 /** « 12/05/1980 à DABOU » — même logique que la cellule PDF (date seule,
@@ -1102,9 +1058,6 @@ ${body}
 ${totalRow}
 </tbody>
 </table>
-<p style="margin:6px 0 0 0; text-align:center; font-weight:bold; font-size:10pt; color:#00734A; background:#E4F4ED; border:1.5pt solid #009E60; border-radius:8px; padding:4px 8pt; letter-spacing:0.4px;">
-TOTAUX D'APR&Egrave;S LE PR&Eacute;SENT &Eacute;TAT NOMINATIF : ${o.enseignants} enseignant(s) &middot; ${o.niveaux} niveau(x) &middot; ${o.eleves} &eacute;l&egrave;ve(s)
-</p>
 <div style="margin-top:10px;">
 <table class=sig><tr>
 <td style="width:25%;">
@@ -1362,34 +1315,16 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN_BG };
   }
 
-  // v14 — SYNTHÈSE DES TOTAUX d'après le présent état nominatif
-  // (enseignants / niveaux / élèves) — lisible par l'administrateur et
-  // le conseiller, dans les 3 modèles.
-  const rSynthese = rTotal + 1;
-  merged(
-    rSynthese,
-    `TOTAUX D'APRÈS LE PRÉSENT ÉTAT NOMINATIF : ${o.enseignants} enseignant(s) · ${o.niveaux} niveau(x) · ${o.eleves} élève(s)`,
-    10,
-    true,
-  );
-  ws.getRow(rSynthese).height = 18;
-  for (let col = 1; col <= 21; col++) {
-    const c = ws.getCell(rSynthese, col);
-    c.border = BOX;
-    c.font = font(10, true, GREEN_TXT.argb);
-    c.alignment = { horizontal: "center", vertical: "middle" };
-    c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN_BG };
-  }
-
   // --- Pied de page (v11.1 — fidèle aux modèles PDF / Word) :
   // « Le Directeur » EN HAUT À GAUCHE (colonnes 1-3), sur la MÊME
   // RANGÉE que la première ligne du N.B ; N.B (3 lignes, « femmes » en
   // rouge) et mention « (A RETOURNER EN 03 EXEMPLAIRES) » CENTRÉS
   // (colonnes 4-19) ; NOM du Directeur (caractère d'imprimerie) dans
   // la colonne de gauche, APRÈS la ligne de la mention (zone de
-  // signature). v14 : la synthèse des totaux occupe la rangée
-  // rTotal+1 — le N.B suit après une rangée libre. ---
-  const rNb = rTotal + 3;
+  // signature). v15 : la rangée de synthèse des totaux (v14) a été
+  // RETIRÉE — le pied de page suit la ligne TOTAL après une rangée
+  // libre. ---
+  const rNb = rTotal + 2;
   // Libellé signature (colonne gauche, fusion 1-3).
   ws.mergeCells(rNb, 1, rNb, 3);
   const sigLabel = ws.getCell(rNb, 1);
