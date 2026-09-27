@@ -7,6 +7,16 @@
  * pour tous les niveaux — permettre de faire spécialement pour ces
  * écoles : je remplirai seulement les effectifs et les redoublants ».
  *
+ * v13 — CALCUL DES ENSEIGNANTS ET DES NIVEAUX D'APRÈS L'ÉTAT NOMINATIF
+ * (demande utilisateur) : « il y a des écoles où l'on rencontre des
+ * niveaux sans enseignants ou même des écoles à 1, 2, 3 niveaux — il
+ * faut tenir compte de l'état nominatif pour faire le calcul des
+ * enseignants et des niveaux ». Le serveur renvoie les agents titulaires
+ * d'un cours et les cours tenus (résolution de la feuille) ; le dialog
+ * affiche le calcul (enseignants · niveaux tenus · niveaux sans
+ * enseignant) et ne propose à la déclaration QUE les cours réellement
+ * libres.
+ *
  * Une ligne = un cours (PS MS GS · CP1..CM2 · RPL · MAC) sans agent
  * titulaire. Seuls l'EFFECTIF (F/G) et les REDOUBLANTS (F/G) se
  * saisissent — le TOTAL T est calculé automatiquement (T = F + G, même
@@ -17,7 +27,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Layers, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, Calculator, Layers, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { levelReportsApi } from "@/lib/api";
 import { useCrudMutation } from "@/lib/use-crud-mutation";
@@ -84,9 +94,20 @@ export function LevelReportsDialog({
   );
 
   const reports = data?.level_reports ?? [];
-  // Cours pas encore saisis (une seule ligne par école + cours).
+  // v13 — CALCUL D'APRÈS L'ÉTAT NOMINATIF : enseignants titulaires d'un
+  // cours + cours tenus (résolution serveur identique à la feuille).
+  const teachers = data?.teachers ?? [];
+  const held = data?.held ?? {};
+  const heldKeys = new Set(Object.keys(held));
+  const reportKeys = new Set(
+    reports.map((r) => String(r.cours).toUpperCase()),
+  );
+  // Niveaux TENUS, dans l'ordre pédagogique de la bande déroulante.
+  const tenus = COURS_OPTIONS.filter((c) => heldKeys.has(c));
+  // Cours réellement SANS enseignant à déclarer : ni tenus par un agent
+  // (état nominatif), ni déjà déclarés (une seule ligne par école + cours).
   const remaining = COURS_OPTIONS.filter(
-    (c) => !reports.some((r) => String(r.cours).toUpperCase() === c),
+    (c) => !heldKeys.has(c) && !reportKeys.has(c),
   );
 
   async function onDelete() {
@@ -123,6 +144,48 @@ export function LevelReportsDialog({
             compris — impression PDF, Word et Excel.
           </p>
 
+          {/* === v13 — CALCUL D'APRÈS L'ÉTAT NOMINATIF === */}
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-2.5 space-y-1">
+            <p className="text-[11px] font-semibold flex items-center gap-1.5">
+              <Calculator className="w-3.5 h-3.5 text-primary" />
+              Calcul d&apos;après l&apos;État nominatif
+              {schoolName ? (
+                <span className="font-normal text-muted-foreground">
+                  — {schoolName}
+                </span>
+              ) : null}
+            </p>
+            {teachers.length === 0 && tenus.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                Aucun enseignant ne tient de cours dans cette école — tous
+                les niveaux existants sont à déclarer ci-dessous.
+              </p>
+            ) : (
+              <>
+                <p className="text-[11px]">
+                  <span className="font-semibold">{teachers.length}</span>{" "}
+                  enseignant{(teachers.length > 1) ? "s" : ""} titulaire
+                  {(teachers.length > 1) ? "s" : ""} d&apos;un cours
+                  {tenus.length > 0 ? (
+                    <span className="text-muted-foreground">
+                      {" "}({tenus.length} niveau
+                      {(tenus.length > 1) ? "x" : ""} tenu
+                      {(tenus.length > 1) ? "s" : ""} : {tenus.join(", ")})
+                    </span>
+                  ) : null}
+                  .
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {reports.length === 0
+                    ? "Aucun niveau sans enseignant déclaré pour l'instant."
+                    : `${reports.length} niveau${reports.length > 1 ? "x" : ""} sans enseignant : ${reports
+                        .map((r) => String(r.cours).toUpperCase())
+                        .join(", ")}`}
+                </p>
+              </>
+            )}
+          </div>
+
           {/* === Ajout d'un niveau sans titulaire === */}
           {remaining.length > 0 ? (
             <AddLevelForm
@@ -132,7 +195,8 @@ export function LevelReportsDialog({
             />
           ) : (
             <p className="text-[11px] text-muted-foreground border border-dashed rounded-md p-2.5 text-center">
-              Tous les cours ont déjà une ligne (ou sont tenus par un agent).
+              Tous les cours libres sont déjà déclarés — les autres niveaux
+              sont tenus par un agent de l&apos;école.
             </p>
           )}
 

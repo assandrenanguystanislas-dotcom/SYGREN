@@ -33,6 +33,7 @@ import type {
   PersonnelSheet,
   StaffLevelReport,
   LevelReportInput,
+  EtatNominatifTeacher,
   EvaluationSession,
   SessionWithDetails,
   SessionExemption,
@@ -714,7 +715,15 @@ export const teachersApi = {
 
 export const levelReportsApi = {
   list: (schoolId: string) =>
-    apiFetch<{ level_reports: StaffLevelReport[]; count: number }>(
+    apiFetch<{
+      level_reports: StaffLevelReport[];
+      count: number;
+      /** v13 — calcul des enseignants et des niveaux d'après l'état
+       *  nominatif : agents titulaires d'un cours + cours tenus
+       *  (cours UPPER → nom du titulaire). */
+      teachers: EtatNominatifTeacher[];
+      held: Record<string, string>;
+    }>(
       `/api/schools/${encodeURIComponent(schoolId)}/level-reports`,
     ),
   /** Création OU mise à jour (une ligne par école + cours). */

@@ -622,6 +622,13 @@ export interface LevelReportInput {
   redoublant_t?: number | null;
 }
 
+/** v13 — un agent qui tient un cours dans l'état nominatif de l'école
+ *  (calcul des enseignants et des niveaux d'après la feuille). */
+export interface EtatNominatifTeacher {
+  name: string;
+  cours: string;
+}
+
 /** Données complètes du document « ÉTAT NOMINATIF DU PERSONNEL ».
  *  annee_scolaire = "2025 2026" (rentrée en cours). */
 export interface PersonnelSheet {
