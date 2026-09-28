@@ -45,6 +45,8 @@ import type {
   EndOfYearSheet,
   EvalType,
   AnnualResult,
+  PalmaresEvent,
+  PalmaresData,
   ReportCard,
   DashboardData,
   Setting,
@@ -1191,6 +1193,22 @@ export const computationApi = {
   getStudentAnnual: (studentId: string, year?: number) =>
     apiFetch<AnnualResult>(
       `/api/computation/student/${studentId}/annual${year ? `?year=${year}` : ""}`,
+    ),
+
+  // === Palmarès — TOP 10 par niveau et par sexe (Task 70) ===
+
+  /** Événements d'évaluation classables du périmètre de l'utilisateur
+   *  (sessions terminées groupées par type + numéro + année). */
+  getPalmaresEvents: () =>
+    apiFetch<{ events: PalmaresEvent[]; count: number }>(
+      "/api/computation/palmares/events",
+    ),
+
+  /** Top 10 PAR NIVEAU (CP1..CM2) et PAR SEXE (FILLES / GARÇONS) de
+   *  l'événement demandé — moyennes précalculées, rangs partagés. */
+  getPalmares: (evalType: string, evalNumber: number, year: number) =>
+    apiFetch<PalmaresData>(
+      `/api/computation/palmares?eval_type=${encodeURIComponent(evalType)}&eval_number=${evalNumber}&year=${year}`,
     ),
 };
 

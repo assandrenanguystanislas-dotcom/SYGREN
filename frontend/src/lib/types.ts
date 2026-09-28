@@ -740,6 +740,39 @@ export interface SessionResults {
   statistics: ClassStatistics;
 }
 
+// === Palmarès — TOP 10 par niveau et par sexe (Task 70) ===
+// Colonnes demandées : MATRICULE ; ECOLE ; SECTEUR ; NOM ET PRENOMS ;
+// MOYENNE ; RANG — rangs partagés en cas d'égalité (1, 2, 2, 4...),
+// top 10 (les ex-æquo de la 10e place sont retenus).
+export interface PalmaresEntry {
+  rank: number;
+  matricule: string;
+  school: string;
+  sector: string;
+  full_name: string; // NOM + prénoms
+  average: number;
+  average_scale: number; // 10 (CP1..CE2) ou 20 (CM1/CM2)
+}
+
+export interface PalmaresLevel {
+  level: string; // CP1 | CP2 | CE1 | CE2 | CM1 | CM2 (ordre scolaire)
+  filles: PalmaresEntry[];
+  garcons: PalmaresEntry[];
+}
+
+export interface PalmaresEvent {
+  eval_type: EvalType;
+  eval_number: number;
+  year: number;
+  schools: number; // écoles participantes
+}
+
+export interface PalmaresData {
+  event: PalmaresEvent & { students: number } | null;
+  levels: PalmaresLevel[];
+  message?: string; // renseigné si aucune session terminée pour l'événement
+}
+
 export interface SessionSummary {
   session_id: string;
   month: number;

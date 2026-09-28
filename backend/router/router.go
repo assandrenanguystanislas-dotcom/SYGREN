@@ -320,6 +320,13 @@ func New(cfg *config.Config) http.Handler {
 		r.Get("/api/computation/session/{id}", handlers.GetSessionResults)
 		r.Get("/api/computation/student/{id}/annual", handlers.GetStudentAnnualResults)
 
+		// === Palmarès — TOP 10 par niveau (CP1..CM2) et par sexe
+		// (FILLES / GARÇONS) après chaque composition / examen blanc
+		// (Task 70). Read-only for all authed (RBAC par périmètre
+		// dans les handlers — même convention que /api/computation).
+		r.Get("/api/computation/palmares/events", handlers.ListPalmaresEvents)
+		r.Get("/api/computation/palmares", handlers.GetPalmares)
+
 		// === PDA IEPP — Plan d'Action Pluriannuel (compositions mensuelles
 		// + examens blancs CE/CM) ===
 		// Reproduction du document officiel « SUIVI DU PLAN D'ACTION

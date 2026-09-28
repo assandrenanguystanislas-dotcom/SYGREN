@@ -73,6 +73,7 @@ import { EntityCombobox } from "@/components/entity-combobox";
 import { PdaView } from "./pda-view";
 import { PdaTimelineView } from "./pda-timeline-view";
 import { EndOfYearView } from "./end-of-year-view";
+import { PalmaresView } from "./palmares-view";
 
 function ResultsRankingView() {
   const user = useAuthStore((s) => s.user);
@@ -884,7 +885,16 @@ function ErrorState({ message }: { message: string }) {
 // « Fin d'année » : document officiel « RESULTATS DE FIN D'ANNEE » — âge,
 //   scolarités, moyennes (compositions / composition de passage / annuelle),
 //   décision du conseil des maîtres + tableau récapitulatif G/F/T.
-type ResultsTab = "classement" | "pda" | "timeline" | "fin-annee";
+// « Palmarès » (Task 70) : TOP 10 par niveau (CP1..CM2) et par sexe
+//   (1 tableau FILLES + 1 tableau GARÇONS) après chaque composition et
+//   examen blanc — moyennes précalculées, classement inter-écoles du
+//   périmètre, exports PDF + Excel.
+type ResultsTab =
+  | "classement"
+  | "palmares"
+  | "pda"
+  | "timeline"
+  | "fin-annee";
 
 export function ResultsView({
   initialTab,
@@ -907,6 +917,10 @@ export function ResultsView({
           <Trophy className="w-3.5 h-3.5" />
           Classement
         </TabsTrigger>
+        <TabsTrigger value="palmares" className="gap-1.5">
+          <Medal className="w-3.5 h-3.5" />
+          Palmarès
+        </TabsTrigger>
         <TabsTrigger value="pda" className="gap-1.5">
           <FileText className="w-3.5 h-3.5" />
           Plan d&apos;action IEPP
@@ -922,6 +936,9 @@ export function ResultsView({
       </TabsList>
       <TabsContent value="classement" className="space-y-4">
         <ResultsRankingView />
+      </TabsContent>
+      <TabsContent value="palmares" className="space-y-4">
+        <PalmaresView />
       </TabsContent>
       <TabsContent value="pda" className="space-y-4">
         <PdaView />
