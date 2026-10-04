@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Users,
   Plus,
@@ -41,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -65,6 +67,14 @@ import {
   convertGender,
 } from "@/components/import-students-dialog";
 import { cn } from "@/lib/utils";
+// Task 73 — SÉLECTION DE LIGNES (cases à cocher) : hook partagé + barre
+// d'actions orange (suppression en masse de la sélection ; mêmes
+// boutons que le Fichier du personnel — Task 72).
+import { SelectionActionsBar } from "@/components/selection-actions-bar";
+import {
+  deleteRowsInBatches,
+  useRowSelection,
+} from "@/lib/use-row-selection";
 
 interface FormData {
   class_id: string;
@@ -248,6 +258,8 @@ export function StudentsView() {
   const [deleteTarget, setDeleteTarget] = useState<StudentWithClass | null>(
     null,
   );
+  // Task 73 — confirmation de la SUPPRESSION EN MASSE des élèves cochés.
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   // Saisie assistée : lignes parsées du fichier + index courant. Non null =
   // le formulaire « Inscrire un élève » est pré-rempli depuis le fichier ;
@@ -341,6 +353,57 @@ export function StudentsView() {
     actionLabel: "Suppression",
   });
 
+  // === Task 73 — SÉLECTION DE LIGNES (cases à cocher) ===
+  // Ids des élèves AFFICHÉS (recherche locale courante) ; la sélection
+  // suit la vue : les élèves disparus du dernier chargement réussi
+  // sont décochés automatiquement (suppression, filtre). Câblé AVANT
+  // les retours anticipés Loading/Error (règles des hooks).
+  const allStudents = data?.students ?? [];
+  const filtered = allStudents.filter((s) => {
+    const mat = s.matricule ?? "";
+    const matchSearch =
+      !search ||
+      s.first_name.toLowerCase().includes(search.toLowerCase()) ||
+      s.last_name.toLowerCase().includes(search.toLowerCase()) ||
+      mat.toLowerCase().includes(search.toLowerCase());
+    return matchSearch;
+  });
+  const visibleIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
+  const selection = useRowSelection(visibleIds, !!data);
+
+  // Task 73 — SUPPRESSION EN MASSE des élèves cochés : DELETE élève
+  // par élève (endpoint existant) PAR LOTS de 25 requêtes ; bilan
+  // succès / échecs toasté. Invalidation élèves + classes + écoles
+  // (comptages), comme la suppression simple.
+  const bulkDeleteMut = useMutation({
+    mutationFn: (ids: string[]) =>
+      deleteRowsInBatches(ids, (id) => studentsApi.delete(id)),
+    onSuccess: ({ ok, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["classes"] });
+      queryClient.invalidateQueries({ queryKey: ["schools"] });
+      selection.clearSelection();
+      setConfirmBulkDelete(false);
+      if (failed === 0) {
+        toast.success(
+          ok === 1 ? "1 élève supprimé" : `${ok} élèves supprimés`,
+        );
+      } else {
+        toast.warning(`${ok} élève(s) supprimé(s) — ${failed} échec(s)`, {
+          description:
+            "Certains élèves ont peut-être déjà été retirés — actualisez la page.",
+        });
+      }
+    },
+    onError: (error) => {
+      setConfirmBulkDelete(false);
+      toast.error("Suppression en masse échouée", {
+        description:
+          error instanceof Error ? error.message : "Erreur inattendue",
+      });
+    },
+  });
+
   function openCreate() {
     setForm(EMPTY);
     setEditing(null);
@@ -431,7 +494,6 @@ export function StudentsView() {
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState message={(error as Error).message} />;
 
-  const allStudents = data?.students ?? [];
   const classes = classesData?.classes ?? [];
   const schools = (schoolsData?.schools ?? []) as SchoolWithStats[];
   // Cascade stricte : admin et conseiller doivent choisir une école avant de
@@ -485,24 +547,19 @@ export function StudentsView() {
     setQueueIdx(0);
   }
 
-  // Filtrage local : uniquement la recherche texte (le filtre école/classe est
-  // déjà appliqué côté backend via les query params studentsApi.list(classId)
-  // et le RBAC du handler ListStudents).
-  const filtered = allStudents.filter((s) => {
-    const mat = s.matricule ?? "";
-    const matchSearch =
-      !search ||
-      s.first_name.toLowerCase().includes(search.toLowerCase()) ||
-      s.last_name.toLowerCase().includes(search.toLowerCase()) ||
-      mat.toLowerCase().includes(search.toLowerCase());
-    return matchSearch;
-  });
-
   // Pour le directeur, on récupère le nom de son école (pour l'afficher
   // dans le filtre désactivé).
   const directorSchoolName = isDirector
     ? schools.find((s) => s.id === user?.school_id)?.name ?? "Mon école"
     : "";
+
+  // Task 73 — aperçu des élèves cochés (confirmation de suppression en
+  // masse) : les 3 premiers noms par ordre d'affichage.
+  const selectedNamesSample = filtered
+    .filter((s) => selection.selected.has(s.id))
+    .slice(0, 3)
+    .map((s) => `${s.first_name} ${s.last_name}`)
+    .join(", ");
 
   return (
     <div className="space-y-4">
@@ -673,6 +730,18 @@ export function StudentsView() {
               </div>
             </div>
           )}
+
+          {/* Task 73 — BARRE D'ACTION DE LA SÉLECTION : visible dès
+              qu'au moins un élève est coché — suppression en masse
+              (admin + directeur) avec confirmation préalable. */}
+          {canManage && selection.count > 0 && (
+            <SelectionActionsBar
+              label={`${selection.count} élève${selection.count > 1 ? "s" : ""} sélectionné${selection.count > 1 ? "s" : ""} sur ${filtered.length} affiché${filtered.length > 1 ? "s" : ""}`}
+              deleting={bulkDeleteMut.isPending}
+              onDelete={() => setConfirmBulkDelete(true)}
+              onClear={selection.clearSelection}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -728,6 +797,35 @@ export function StudentsView() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {canManage && (
+                      <TableHead className="w-[40px] text-center">
+                        {/* Task 73 — « tout sélectionner » : coche tous
+                            les élèves AFFICHÉS (recherche + filtres) ;
+                            état indéterminé si la sélection est
+                            partielle, re-clic = tout décocher. */}
+                        <Checkbox
+                          checked={
+                            selection.allSelected
+                              ? true
+                              : selection.someSelected
+                                ? "indeterminate"
+                                : false
+                          }
+                          onCheckedChange={() => selection.toggleAllVisible()}
+                          disabled={filtered.length === 0}
+                          aria-label={
+                            selection.allSelected
+                              ? "Tout désélectionner"
+                              : "Tout sélectionner"
+                          }
+                          title={
+                            selection.allSelected
+                              ? "Tout désélectionner"
+                              : "Tout sélectionner"
+                          }
+                        />
+                      </TableHead>
+                    )}
                     <TableHead>Matricule</TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead>Prénom</TableHead>
@@ -746,6 +844,20 @@ export function StudentsView() {
                 <TableBody>
                   {filtered.map((s) => (
                     <TableRow key={s.id} className="hover:bg-muted/40">
+                      {canManage && (
+                        <TableCell className="text-center">
+                          {/* Task 73 — case de SÉLECTION de l'élève :
+                              cochée → la barre orange d'actions
+                              apparaît au-dessus du tableau. */}
+                          <Checkbox
+                            checked={selection.selected.has(s.id)}
+                            onCheckedChange={(v) =>
+                              selection.toggleOne(s.id, v === true)
+                            }
+                            aria-label={`Sélectionner ${s.first_name} ${s.last_name}`}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>
                         <span
                           className={`font-mono text-xs px-2 py-1 rounded ${
@@ -1273,6 +1385,29 @@ export function StudentsView() {
         icon={Trash2}
         onConfirm={onDelete}
         loading={deleteMut.isPending}
+      />
+
+      {/* Task 73 — confirmation de la SUPPRESSION EN MASSE des élèves
+          cochés : le compte total + les 3 premiers noms rappelés
+          pour éviter toute erreur de sélection. */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onOpenChange={setConfirmBulkDelete}
+        title="Supprimer les élèves sélectionnés ?"
+        description={
+          selection.count > 0
+            ? `${selection.count} élève${selection.count > 1 ? "s" : ""} sera${
+                selection.count > 1 ? "nt" : ""
+              } définitivement supprimé${selection.count > 1 ? "s" : ""}${
+                selectedNamesSample ? ` : ${selectedNamesSample}` : ""
+              }.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={Trash2}
+        onConfirm={() => bulkDeleteMut.mutate([...selection.selected])}
+        loading={bulkDeleteMut.isPending}
       />
 
       {/* === Import Excel d'élèves (bulk + saisie assistée) ===

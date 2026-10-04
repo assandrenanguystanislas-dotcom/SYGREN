@@ -46,7 +46,7 @@
 //
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -59,7 +59,6 @@ import {
   Search,
   FileSpreadsheet,
   ChevronDown,
-  X,
 } from "lucide-react";
 
 import { staffDataApi, sectorsApi, schoolsApi } from "@/lib/api";
@@ -77,6 +76,14 @@ import {
   XLSX_MIME,
 } from "@/lib/doc-export";
 import { cn } from "@/lib/utils";
+// Task 73 — primitives partagées de la SÉLECTION (hook + barre orange)
+// : unifient la barre inline de la Task 72 avec les vues Élèves et
+// Parents, et fiabilisent la suppression en masse (lots de 25).
+import { SelectionActionsBar } from "@/components/selection-actions-bar";
+import {
+  deleteRowsInBatches,
+  useRowSelection,
+} from "@/lib/use-row-selection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -166,10 +173,10 @@ export function StaffDataView() {
   const [form, setForm] = useState<FormData>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<StaffRecord | null>(null);
   const [exporting, setExporting] = useState(false);
-  // Task 72 — lignes COCHÉES du fichier (ids) : la barre d'actions
-  // orange permet d'exporter la sélection (Super Admin) ou de la
-  // supprimer en une fois (admin + inspector).
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Task 72/73 — lignes COCHÉES du fichier (hook partagé de
+  // sélection, voir plus bas) + confirmation de la SUPPRESSION EN
+  // MASSE. La barre d'actions orange permet d'exporter la sélection
+  // (Super Admin) ou de la supprimer en une fois (admin + inspector).
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -248,21 +255,16 @@ export function StaffDataView() {
     },
   });
 
-  // Task 72 — SUPPRESSION EN MASSE des lignes cochées : DELETE ligne
-  // par ligne (endpoint existant) en parallèle ; le bilan compte les
-  // succès / échecs — une ligne déjà retirée par ailleurs ne bloque
-  // pas la suppression des autres.
+  // Task 72/73 — SUPPRESSION EN MASSE des lignes cochées : DELETE
+  // ligne par ligne (endpoint existant) PAR LOTS de 25 requêtes ; le
+  // bilan compte les succès / échecs — une ligne déjà retirée par
+  // ailleurs ne bloque pas la suppression des autres.
   const bulkDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const results = await Promise.allSettled(
-        ids.map((id) => staffDataApi.delete(id)),
-      );
-      const ok = results.filter((r) => r.status === "fulfilled").length;
-      return { ok, failed: results.length - ok };
-    },
+    mutationFn: (ids: string[]) =>
+      deleteRowsInBatches(ids, (id) => staffDataApi.delete(id)),
     onSuccess: ({ ok, failed }) => {
       queryClient.invalidateQueries({ queryKey: ["staff-records"] });
-      setSelected(new Set());
+      selection.clearSelection();
       setConfirmBulkDelete(false);
       if (failed === 0) {
         toast.success(
@@ -287,21 +289,6 @@ export function StaffDataView() {
   });
 
   const records = useMemo(() => data?.staff_records ?? [], [data]);
-
-  // Task 72 — la sélection ne garde que les lignes du DERNIER
-  // chargement réussi : après une suppression (simple ou en masse),
-  // les ids disparus sont décochés automatiquement. Pendant un
-  // rechargement (data undefined — recherche, filtre de secteur), la
-  // sélection en cours est préservée telle quelle.
-  useEffect(() => {
-    if (!data) return;
-    setSelected((prev) => {
-      if (prev.size === 0) return prev;
-      const ids = new Set(records.map((r) => r.id));
-      const next = new Set([...prev].filter((id) => ids.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [data, records]);
 
   // Effectif TOTAL du fichier (somme des colonnes EFFECTIF renseignées).
   const totalEffectif = useMemo(
@@ -356,13 +343,17 @@ export function StaffDataView() {
     });
   }, [records, bySector, bySchool, sectorNames, schoolNames]);
 
-  // Task 72 — état de la case « tout sélectionner » (en-tête) : tout
-  // coché / partiel (indéterminé) / rien — calculé sur les lignes
-  // AFFICHÉES (ordre et filtres courants).
-  const allSelected =
-    visibleRecords.length > 0 &&
-    visibleRecords.every((r) => selected.has(r.id));
-  const someSelected = !allSelected && selected.size > 0;
+  // Task 72/73 — SÉLECTION DE LIGNES (hook partagé) : ids des lignes
+  // AFFICHÉES (ordre et filtres courants) ; la sélection suit la vue
+  // — les lignes disparues du dernier chargement réussi sont décochées
+  // automatiquement (suppression simple ou en masse, recherche,
+  // filtre de secteur). Pendant un rechargement (data undefined), la
+  // sélection en cours est préservée telle quelle.
+  const visibleIds = useMemo(
+    () => visibleRecords.map((r) => r.id),
+    [visibleRecords],
+  );
+  const selection = useRowSelection(visibleIds, !!data);
 
   // Stats des bandeaux de NIVEAU 1 (secteurs) des lignes AFFICHÉES :
   // nombre d'agents + effectif cumulé du secteur.
@@ -463,23 +454,6 @@ export function StaffDataView() {
     }
   }
 
-  // Task 72 — cocher / décocher une ligne ; « tout sélectionner »
-  // (case d'en-tête) coche toutes les lignes AFFICHÉES — recherche et
-  // filtre de secteur courants — et re-cliquer les décoche toutes.
-  function toggleOne(id: string, checked: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  function toggleAllVisible() {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(visibleRecords.map((r) => r.id)));
-  }
-
   async function handleExcel() {
     setExporting(true);
     try {
@@ -508,7 +482,7 @@ export function StaffDataView() {
   // réservé au Super Admin — Task 71) : nom de fichier suffixé
   // « -selection » et sous-titre du classeur marqué « SÉLECTION ».
   async function handleExcelSelection() {
-    const sel = visibleRecords.filter((r) => selected.has(r.id));
+    const sel = visibleRecords.filter((r) => selection.selected.has(r.id));
     if (sel.length === 0) return;
     setExporting(true);
     try {
@@ -540,7 +514,7 @@ export function StaffDataView() {
   // Task 72 — aperçu des noms cochés (confirmation de suppression en
   // masse) : les 3 premiers, par ordre d'affichage.
   const selectedNamesSample = visibleRecords
-    .filter((r) => selected.has(r.id))
+    .filter((r) => selection.selected.has(r.id))
     .slice(0, 3)
     .map((r) => r.full_name)
     .join(", ");
@@ -640,62 +614,19 @@ export function StaffDataView() {
             </Select>
           </div>
 
-          {/* Task 72 — BARRE D'ACTION DE LA SÉLECTION : visible dès
-              qu'au moins une ligne est cochée — « Exporter la sélection »
-              (Super Admin uniquement, Task 71) et « Supprimer la
-              sélection » en une fois (confirmation avant exécution). */}
-          {canManage && selected.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
-              <span className="text-sm font-semibold text-primary">
-                {selected.size} ligne{selected.size > 1 ? "s" : ""}
-                {" "}sélectionnée{selected.size > 1 ? "s" : ""}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                sur {visibleRecords.length} affichée
-                {visibleRecords.length > 1 ? "s" : ""}
-              </span>
-              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-                {canExport && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExcelSelection}
-                    disabled={exporting || bulkDeleteMut.isPending}
-                    className="shadow-sm"
-                  >
-                    {exporting ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-                    )}
-                    Exporter la sélection
-                  </Button>
-                )}
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setConfirmBulkDelete(true)}
-                  disabled={exporting || bulkDeleteMut.isPending}
-                  className="shadow-sm"
-                >
-                  {bulkDeleteMut.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4 mr-1.5" />
-                  )}
-                  Supprimer la sélection
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelected(new Set())}
-                  disabled={exporting || bulkDeleteMut.isPending}
-                >
-                  <X className="w-4 h-4 mr-1.5" />
-                  Désélectionner
-                </Button>
-              </div>
-            </div>
+          {/* Task 72/73 — BARRE D'ACTION DE LA SÉLECTION (composant
+              partagé) : visible dès qu'au moins une ligne est cochée —
+              « Exporter la sélection » (Super Admin uniquement, Task
+              71) et « Supprimer la sélection » en une fois. */}
+          {canManage && selection.count > 0 && (
+            <SelectionActionsBar
+              label={`${selection.count} ligne${selection.count > 1 ? "s" : ""} sélectionnée${selection.count > 1 ? "s" : ""} sur ${visibleRecords.length} affichée${visibleRecords.length > 1 ? "s" : ""}`}
+              exporting={exporting}
+              deleting={bulkDeleteMut.isPending}
+              onExport={canExport ? handleExcelSelection : undefined}
+              onDelete={() => setConfirmBulkDelete(true)}
+              onClear={selection.clearSelection}
+            />
           )}
         </CardContent>
       </Card>
@@ -734,21 +665,21 @@ export function StaffDataView() {
                             partielle, re-clic = tout décocher. */}
                         <Checkbox
                           checked={
-                            allSelected
+                            selection.allSelected
                               ? true
-                              : someSelected
+                              : selection.someSelected
                                 ? "indeterminate"
                                 : false
                           }
-                          onCheckedChange={() => toggleAllVisible()}
+                          onCheckedChange={() => selection.toggleAllVisible()}
                           disabled={visibleRecords.length === 0}
                           aria-label={
-                            allSelected
+                            selection.allSelected
                               ? "Tout désélectionner"
                               : "Tout sélectionner"
                           }
                           title={
-                            allSelected
+                            selection.allSelected
                               ? "Tout désélectionner"
                               : "Tout sélectionner"
                           }
@@ -883,9 +814,9 @@ export function StaffDataView() {
                                 cochée → la barre orange d'actions
                                 apparaît au-dessus du tableau. */}
                             <Checkbox
-                              checked={selected.has(rec.id)}
+                              checked={selection.selected.has(rec.id)}
                               onCheckedChange={(v) =>
-                                toggleOne(rec.id, v === true)
+                                selection.toggleOne(rec.id, v === true)
                               }
                               aria-label={`Sélectionner ${rec.full_name}`}
                             />
@@ -1355,10 +1286,10 @@ export function StaffDataView() {
         onOpenChange={setConfirmBulkDelete}
         title="Supprimer les lignes sélectionnées ?"
         description={
-          selected.size > 0
-            ? `${selected.size} ligne${selected.size > 1 ? "s" : ""} sera${
-                selected.size > 1 ? "nt" : ""
-              } définitivement retirée${selected.size > 1 ? "s" : ""} du fichier du personnel${
+          selection.count > 0
+            ? `${selection.count} ligne${selection.count > 1 ? "s" : ""} sera${
+                selection.count > 1 ? "nt" : ""
+              } définitivement retirée${selection.count > 1 ? "s" : ""} du fichier du personnel${
                 selectedNamesSample ? ` : ${selectedNamesSample}` : ""
               }.`
             : ""
@@ -1366,7 +1297,7 @@ export function StaffDataView() {
         confirmLabel="Supprimer"
         destructive
         icon={Trash2}
-        onConfirm={() => bulkDeleteMut.mutate([...selected])}
+        onConfirm={() => bulkDeleteMut.mutate([...selection.selected])}
         loading={bulkDeleteMut.isPending}
       />
     </div>

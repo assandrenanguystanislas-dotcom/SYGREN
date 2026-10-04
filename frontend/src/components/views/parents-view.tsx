@@ -10,7 +10,8 @@
 // Accès (matrice RBAC — module "users.parents") : admin + inspector.
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   UserRound,
   Plus,
@@ -32,8 +33,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { EntityDialog } from "@/components/entity-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+// Task 73 — SÉLECTION DE LIGNES (cases à cocher) : hook partagé + barre
+// d'actions orange (suppression en masse de la sélection ; mêmes
+// boutons que le Fichier du personnel — Task 72).
+import { SelectionActionsBar } from "@/components/selection-actions-bar";
+import {
+  deleteRowsInBatches,
+  useRowSelection,
+} from "@/lib/use-row-selection";
 import {
   Table,
   TableBody,
@@ -68,6 +78,8 @@ export function ParentsView() {
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  // Task 73 — confirmation de la SUPPRESSION EN MASSE des comptes cochés.
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["parents", search],
@@ -101,6 +113,46 @@ export function ParentsView() {
   });
 
   const parents = useMemo(() => data?.parents ?? [], [data]);
+
+  // Task 73 — SÉLECTION DE LIGNES (cases à cocher) : ids des comptes
+  // AFFICHÉS (recherche courante) ; la sélection suit la vue — les
+  // comptes disparus du dernier chargement réussi sont décochés
+  // automatiquement (suppression, recherche).
+  const visibleIds = useMemo(() => parents.map((p) => p.id), [parents]);
+  const selection = useRowSelection(visibleIds, !!data);
+
+  // Task 73 — SUPPRESSION EN MASSE des comptes parents cochés : DELETE
+  // compte par compte (endpoint existant) PAR LOTS de 25 requêtes ;
+  // bilan succès / échecs toasté.
+  const queryClient = useQueryClient();
+  const bulkDeleteMut = useMutation({
+    mutationFn: (ids: string[]) =>
+      deleteRowsInBatches(ids, (id) => parentsApi.delete(id)),
+    onSuccess: ({ ok, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["parents"] });
+      selection.clearSelection();
+      setConfirmBulkDelete(false);
+      if (failed === 0) {
+        toast.success(
+          ok === 1
+            ? "1 compte parent supprimé"
+            : `${ok} comptes parents supprimés`,
+        );
+      } else {
+        toast.warning(`${ok} compte(s) supprimé(s) — ${failed} échec(s)`, {
+          description:
+            "Certains comptes ont peut-être déjà été retirés — actualisez la page.",
+        });
+      }
+    },
+    onError: (error) => {
+      setConfirmBulkDelete(false);
+      toast.error("Suppression en masse échouée", {
+        description:
+          error instanceof Error ? error.message : "Erreur inattendue",
+      });
+    },
+  });
 
   function openCreate() {
     setEditing(null);
@@ -157,6 +209,14 @@ export function ParentsView() {
 
   const busy = createMut.isPending || updateMut.isPending;
 
+  // Task 73 — aperçu des comptes cochés (confirmation de suppression
+  // en masse) : les 3 premiers noms par ordre d'affichage.
+  const selectedNamesSample = parents
+    .filter((p) => selection.selected.has(p.id))
+    .slice(0, 3)
+    .map((p) => p.full_name)
+    .join(", ");
+
   return (
     <div className="space-y-4">
       {/* === En-tête + actions === */}
@@ -192,6 +252,18 @@ export function ParentsView() {
               className="pl-8"
             />
           </div>
+
+          {/* Task 73 — BARRE D'ACTION DE LA SÉLECTION : visible dès
+              qu'au moins un compte est coché — suppression en masse
+              (admin + inspector) avec confirmation préalable. */}
+          {canManage && selection.count > 0 && (
+            <SelectionActionsBar
+              label={`${selection.count} compte${selection.count > 1 ? "s" : ""} parent${selection.count > 1 ? "s" : ""} sélectionné${selection.count > 1 ? "s" : ""} sur ${parents.length} affiché${parents.length > 1 ? "s" : ""}`}
+              deleting={bulkDeleteMut.isPending}
+              onDelete={() => setConfirmBulkDelete(true)}
+              onClear={selection.clearSelection}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -221,6 +293,35 @@ export function ParentsView() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {canManage && (
+                      <TableHead className="w-[40px] text-center">
+                        {/* Task 73 — « tout sélectionner » : coche tous
+                            les comptes AFFICHÉS (recherche courante) ;
+                            état indéterminé si la sélection est
+                            partielle, re-clic = tout décocher. */}
+                        <Checkbox
+                          checked={
+                            selection.allSelected
+                              ? true
+                              : selection.someSelected
+                                ? "indeterminate"
+                                : false
+                          }
+                          onCheckedChange={() => selection.toggleAllVisible()}
+                          disabled={parents.length === 0}
+                          aria-label={
+                            selection.allSelected
+                              ? "Tout désélectionner"
+                              : "Tout sélectionner"
+                          }
+                          title={
+                            selection.allSelected
+                              ? "Tout désélectionner"
+                              : "Tout sélectionner"
+                          }
+                        />
+                      </TableHead>
+                    )}
                     <TableHead>Nom</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>
@@ -240,6 +341,20 @@ export function ParentsView() {
                 <TableBody>
                   {parents.map((p) => (
                     <TableRow key={p.id} className="hover:bg-muted/40">
+                      {canManage && (
+                        <TableCell className="text-center">
+                          {/* Task 73 — case de SÉLECTION du compte :
+                              cochée → la barre orange d'actions
+                              apparaît au-dessus du tableau. */}
+                          <Checkbox
+                            checked={selection.selected.has(p.id)}
+                            onCheckedChange={(v) =>
+                              selection.toggleOne(p.id, v === true)
+                            }
+                            aria-label={`Sélectionner ${p.full_name}`}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="font-medium">{p.full_name}</TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
@@ -443,6 +558,29 @@ export function ParentsView() {
         icon={Trash2}
         onConfirm={onDelete}
         loading={deleteMut.isPending}
+      />
+
+      {/* Task 73 — confirmation de la SUPPRESSION EN MASSE des comptes
+          cochés : le compte total + les 3 premiers noms rappelés
+          pour éviter toute erreur de sélection. */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onOpenChange={setConfirmBulkDelete}
+        title="Supprimer les comptes parents sélectionnés ?"
+        description={
+          selection.count > 0
+            ? `${selection.count} compte${selection.count > 1 ? "s" : ""} parent${
+                selection.count > 1 ? "s" : ""
+              } perdra${selection.count > 1 ? "ont" : "a"} l'accès au portail${
+                selectedNamesSample ? ` : ${selectedNamesSample}` : ""
+              }. Cette action est irréversible.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={Trash2}
+        onConfirm={() => bulkDeleteMut.mutate([...selection.selected])}
+        loading={bulkDeleteMut.isPending}
       />
     </div>
   );
