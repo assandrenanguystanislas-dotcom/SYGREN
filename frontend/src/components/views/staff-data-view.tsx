@@ -33,9 +33,20 @@
 // bandeaux de secteur + SOUS-BANDEAUX d'écoles (fond vert pâle,
 // liseré vert, agents + effectif) dans chaque bloc de secteur.
 //
+// Task 72 — BOUTONS DE SÉLECTION (cases à cocher) : chaque ligne du
+// fichier porte une case à cocher (plus une case « tout sélectionner »
+// dans l'en-tête, indéterminée quand la sélection est partielle) ;
+// dès qu'au moins une ligne est cochée, une BARRE ORANGE d'actions
+// permet d'EXPORTER LA SÉLECTION en classeur Excel (mêmes bandeaux
+// que l'export complet — Super Admin uniquement, Task 71) ou de
+// SUPPRIMER LA SÉLECTION en une fois (confirmation listant les noms,
+// suppression en masse ligne par ligne avec bilan succès/échecs).
+// La sélection suit la vue : elle ne porte que sur les lignes de la
+// recherche / du filtre courants et est nettoyée après suppression.
+//
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
-import { useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -48,6 +59,7 @@ import {
   Search,
   FileSpreadsheet,
   ChevronDown,
+  X,
 } from "lucide-react";
 
 import { staffDataApi, sectorsApi, schoolsApi } from "@/lib/api";
@@ -67,6 +79,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -153,6 +166,11 @@ export function StaffDataView() {
   const [form, setForm] = useState<FormData>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<StaffRecord | null>(null);
   const [exporting, setExporting] = useState(false);
+  // Task 72 — lignes COCHÉES du fichier (ids) : la barre d'actions
+  // orange permet d'exporter la sélection (Super Admin) ou de la
+  // supprimer en une fois (admin + inspector).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["staff-records", search, sectorFilter],
@@ -230,7 +248,60 @@ export function StaffDataView() {
     },
   });
 
+  // Task 72 — SUPPRESSION EN MASSE des lignes cochées : DELETE ligne
+  // par ligne (endpoint existant) en parallèle ; le bilan compte les
+  // succès / échecs — une ligne déjà retirée par ailleurs ne bloque
+  // pas la suppression des autres.
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const results = await Promise.allSettled(
+        ids.map((id) => staffDataApi.delete(id)),
+      );
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      return { ok, failed: results.length - ok };
+    },
+    onSuccess: ({ ok, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["staff-records"] });
+      setSelected(new Set());
+      setConfirmBulkDelete(false);
+      if (failed === 0) {
+        toast.success(
+          ok === 1
+            ? "1 ligne supprimée du fichier du personnel"
+            : `${ok} lignes supprimées du fichier du personnel`,
+        );
+      } else {
+        toast.warning(`${ok} ligne(s) supprimée(s) — ${failed} échec(s)`, {
+          description:
+            "Certaines lignes ont peut-être déjà été retirées — actualisez la page.",
+        });
+      }
+    },
+    onError: (error) => {
+      setConfirmBulkDelete(false);
+      toast.error("Suppression en masse échouée", {
+        description:
+          error instanceof Error ? error.message : "Erreur inattendue",
+      });
+    },
+  });
+
   const records = useMemo(() => data?.staff_records ?? [], [data]);
+
+  // Task 72 — la sélection ne garde que les lignes du DERNIER
+  // chargement réussi : après une suppression (simple ou en masse),
+  // les ids disparus sont décochés automatiquement. Pendant un
+  // rechargement (data undefined — recherche, filtre de secteur), la
+  // sélection en cours est préservée telle quelle.
+  useEffect(() => {
+    if (!data) return;
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const ids = new Set(records.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [data, records]);
 
   // Effectif TOTAL du fichier (somme des colonnes EFFECTIF renseignées).
   const totalEffectif = useMemo(
@@ -284,6 +355,14 @@ export function StaffDataView() {
       return na.localeCompare(nb, "fr");
     });
   }, [records, bySector, bySchool, sectorNames, schoolNames]);
+
+  // Task 72 — état de la case « tout sélectionner » (en-tête) : tout
+  // coché / partiel (indéterminé) / rien — calculé sur les lignes
+  // AFFICHÉES (ordre et filtres courants).
+  const allSelected =
+    visibleRecords.length > 0 &&
+    visibleRecords.every((r) => selected.has(r.id));
+  const someSelected = !allSelected && selected.size > 0;
 
   // Stats des bandeaux de NIVEAU 1 (secteurs) des lignes AFFICHÉES :
   // nombre d'agents + effectif cumulé du secteur.
@@ -384,6 +463,23 @@ export function StaffDataView() {
     }
   }
 
+  // Task 72 — cocher / décocher une ligne ; « tout sélectionner »
+  // (case d'en-tête) coche toutes les lignes AFFICHÉES — recherche et
+  // filtre de secteur courants — et re-cliquer les décoche toutes.
+  function toggleOne(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(visibleRecords.map((r) => r.id)));
+  }
+
   async function handleExcel() {
     setExporting(true);
     try {
@@ -407,10 +503,47 @@ export function StaffDataView() {
     }
   }
 
+  // Task 72 — export Excel des SEULES lignes cochées (dans l'ordre
+  // affiché, mêmes bandeaux secteur / écoles que l'export complet ;
+  // réservé au Super Admin — Task 71) : nom de fichier suffixé
+  // « -selection » et sous-titre du classeur marqué « SÉLECTION ».
+  async function handleExcelSelection() {
+    const sel = visibleRecords.filter((r) => selected.has(r.id));
+    if (sel.length === 0) return;
+    setExporting(true);
+    try {
+      const selEffectif = sel.reduce(
+        (sum, r) => sum + (typeof r.effectif === "number" ? r.effectif : 0),
+        0,
+      );
+      await exportExcelAsync(
+        sel,
+        selEffectif,
+        sectorNames,
+        schoolNames,
+        bySector,
+        bySchool,
+        "-selection",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const busy = createMut.isPending || updateMut.isPending;
 
-  // Nombre de colonnes du tableau (colSpan des bandeaux de groupe).
-  const colCount = 15 + (canManage ? 1 : 0);
+  // Nombre de colonnes du tableau (colSpan des bandeaux de groupe) —
+  // Task 72 : +1 pour la colonne de cases à cocher, +1 pour Actions
+  // (les deux n'existent que pour les rôles de gestion).
+  const colCount = 15 + (canManage ? 2 : 0);
+
+  // Task 72 — aperçu des noms cochés (confirmation de suppression en
+  // masse) : les 3 premiers, par ordre d'affichage.
+  const selectedNamesSample = visibleRecords
+    .filter((r) => selected.has(r.id))
+    .slice(0, 3)
+    .map((r) => r.full_name)
+    .join(", ");
 
   return (
     <div className="space-y-4">
@@ -506,6 +639,64 @@ export function StaffDataView() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Task 72 — BARRE D'ACTION DE LA SÉLECTION : visible dès
+              qu'au moins une ligne est cochée — « Exporter la sélection »
+              (Super Admin uniquement, Task 71) et « Supprimer la
+              sélection » en une fois (confirmation avant exécution). */}
+          {canManage && selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
+              <span className="text-sm font-semibold text-primary">
+                {selected.size} ligne{selected.size > 1 ? "s" : ""}
+                {" "}sélectionnée{selected.size > 1 ? "s" : ""}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                sur {visibleRecords.length} affichée
+                {visibleRecords.length > 1 ? "s" : ""}
+              </span>
+              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                {canExport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExcelSelection}
+                    disabled={exporting || bulkDeleteMut.isPending}
+                    className="shadow-sm"
+                  >
+                    {exporting ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                    )}
+                    Exporter la sélection
+                  </Button>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setConfirmBulkDelete(true)}
+                  disabled={exporting || bulkDeleteMut.isPending}
+                  className="shadow-sm"
+                >
+                  {bulkDeleteMut.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-1.5" />
+                  )}
+                  Supprimer la sélection
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelected(new Set())}
+                  disabled={exporting || bulkDeleteMut.isPending}
+                >
+                  <X className="w-4 h-4 mr-1.5" />
+                  Désélectionner
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -535,6 +726,35 @@ export function StaffDataView() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {canManage && (
+                      <TableHead className="w-[40px] text-center">
+                        {/* Task 72 — « tout sélectionner » : coche toutes
+                            les lignes AFFICHÉES (recherche + filtre) ;
+                            état indéterminé si la sélection est
+                            partielle, re-clic = tout décocher. */}
+                        <Checkbox
+                          checked={
+                            allSelected
+                              ? true
+                              : someSelected
+                                ? "indeterminate"
+                                : false
+                          }
+                          onCheckedChange={() => toggleAllVisible()}
+                          disabled={visibleRecords.length === 0}
+                          aria-label={
+                            allSelected
+                              ? "Tout désélectionner"
+                              : "Tout sélectionner"
+                          }
+                          title={
+                            allSelected
+                              ? "Tout désélectionner"
+                              : "Tout sélectionner"
+                          }
+                        />
+                      </TableHead>
+                    )}
                     <TableHead className="text-center w-[44px]">N°</TableHead>
                     <TableHead>
                       {/* En-tête SECTEUR interactif : surbrillance au survol,
@@ -657,6 +877,20 @@ export function StaffDataView() {
                             "bg-[#E6F4EB]",
                         )}
                       >
+                        {canManage && (
+                          <TableCell className="text-center">
+                            {/* Task 72 — case de SÉLECTION de la ligne :
+                                cochée → la barre orange d'actions
+                                apparaît au-dessus du tableau. */}
+                            <Checkbox
+                              checked={selected.has(rec.id)}
+                              onCheckedChange={(v) =>
+                                toggleOne(rec.id, v === true)
+                              }
+                              aria-label={`Sélectionner ${rec.full_name}`}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell className="text-center text-muted-foreground">
                           {i + 1}
                         </TableCell>
@@ -1112,6 +1346,29 @@ export function StaffDataView() {
         onConfirm={onDelete}
         loading={deleteMut.isPending}
       />
+
+      {/* Task 72 — confirmation de la SUPPRESSION EN MASSE des lignes
+          cochées : le compte total + les 3 premiers noms rappelés
+          pour éviter toute erreur de sélection. */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onOpenChange={setConfirmBulkDelete}
+        title="Supprimer les lignes sélectionnées ?"
+        description={
+          selected.size > 0
+            ? `${selected.size} ligne${selected.size > 1 ? "s" : ""} sera${
+                selected.size > 1 ? "nt" : ""
+              } définitivement retirée${selected.size > 1 ? "s" : ""} du fichier du personnel${
+                selectedNamesSample ? ` : ${selectedNamesSample}` : ""
+              }.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={Trash2}
+        onConfirm={() => bulkDeleteMut.mutate([...selected])}
+        loading={bulkDeleteMut.isPending}
+      />
     </div>
   );
 }
@@ -1154,6 +1411,7 @@ async function exportExcelAsync(
   schoolNames?: Map<string, string>,
   grouped = false, // classement par secteur actif → bandeaux + blocs
   schoolGrouped = false, // classement ÉCOLES actif → sous-bandeaux d'écoles
+  filenameSuffix = "", // Task 72 : « -selection » pour l'export de la sélection
 ): Promise<void> {
   const { Workbook } = await import("exceljs");
   const wb = new Workbook();
@@ -1254,7 +1512,9 @@ async function exportExcelAsync(
   row += 1;
   ws.mergeCells(row, 1, row, 15);
   c = ws.getCell(row, 1);
-  c.value = `${records.length} agent(s) — édité le ${todayStr}`;
+  c.value = `${records.length} agent(s)${
+    filenameSuffix ? " — SÉLECTION" : ""
+  } — édité le ${todayStr}`;
   c.font = font(10, false, "FF666666");
   c.alignment = { horizontal: "center", vertical: "middle" };
   row += 1;
@@ -1429,6 +1689,6 @@ async function exportExcelAsync(
   const buf = await wb.xlsx.writeBuffer();
   saveBlob(
     new Blob([buf], { type: XLSX_MIME }),
-    `fichier-du-personnel-${slugFile(todayStr)}.xlsx`,
+    `fichier-du-personnel-${slugFile(todayStr)}${filenameSuffix}.xlsx`,
   );
 }
