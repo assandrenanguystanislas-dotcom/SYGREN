@@ -45,6 +45,7 @@ import { useState, type CSSProperties } from "react";
 import { parentPortalApi, reportsApi } from "@/lib/api";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   buildWordShell,
   escHtml,
@@ -1092,6 +1093,10 @@ export function EndOfYearBulletin({
   // Impression : admin + inspector (documents internes) OU parent en mode
   // portail parent (bulletin individuel de son enfant uniquement).
   const canPrint = canPrintDocument(role, !!matricule);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp) — le parent (mode parent) garde
+  // l'impression papier du bulletin de son enfant, sans fichiers.
+  const canExport = canExportFiles(role);
   const parentMode = !!matricule;
   // Modèles Word/Excel : état d'export (« doc » | « xlsx » | null) —
   // useState PLACÉ AVANT LES RETOURS CONDITIONNELS (discipline React).
@@ -1218,6 +1223,7 @@ export function EndOfYearBulletin({
                d'impression inchangés (canPrint / PrintLockBadge). */
             <DocExportButtons
               canPrint
+              canExport={canExport}
               exporting={exporting}
               onPdf={() => window.print()}
               onWord={handleWord}

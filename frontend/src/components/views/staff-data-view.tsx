@@ -57,7 +57,13 @@ import type { StaffRecord } from "@/lib/types";
 import { computeAnciennete, formatDossierDate } from "@/lib/types";
 import { COURS_OPTIONS } from "@/components/personnel-dossier-fields";
 import { SchoolCombobox } from "@/components/school-combobox";
-import { saveBlob, XLSX_MIME, slugFile } from "@/lib/doc-export";
+import {
+  canExportFiles,
+  ExportLockBadge,
+  saveBlob,
+  slugFile,
+  XLSX_MIME,
+} from "@/lib/doc-export";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -128,6 +134,10 @@ const EMPTY: FormData = {
 export function StaffDataView() {
   const user = useAuthStore((s) => s.user);
   const canManage = user?.role === "admin" || user?.role === "inspector";
+  // Task 71 — production/transfert de FICHIERS (Excel) réservée au
+  // Super Admin (anti-fuite WhatsApp) — les autres rôles consultent le
+  // fichier du personnel sans pouvoir le télécharger.
+  const canExport = canExportFiles(user?.role);
 
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState(UNSET);
@@ -424,19 +434,23 @@ export function StaffDataView() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={handleExcel}
-                disabled={exporting || records.length === 0}
-                className="shadow-sm"
-              >
-                {exporting ? (
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                ) : (
-                  <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-                )}
-                Exporter Excel
-              </Button>
+              {canExport ? (
+                <Button
+                  variant="outline"
+                  onClick={handleExcel}
+                  disabled={exporting || records.length === 0}
+                  className="shadow-sm"
+                >
+                  {exporting ? (
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                  )}
+                  Exporter Excel
+                </Button>
+              ) : (
+                <ExportLockBadge />
+              )}
               {canManage && (
                 <Button
                   variant="outline"

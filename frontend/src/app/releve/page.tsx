@@ -22,6 +22,7 @@ import { CIArmoiriesWatermark } from "@/components/ci-decor";
 import { canPrintDocument, PrintLockBadge, PrintLockDocumentMessage, storeUrlTokenIfPresent, usePrintRole } from "@/lib/print-guard";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   buildWordShell,
   escHtml,
@@ -713,6 +714,10 @@ export default function RelevePage() {
   storeUrlTokenIfPresent();
   const role = usePrintRole();
   const canPrint = canPrintDocument(role, false);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp) — le PDF (impression papier)
+  // suit la politique print-guard inchangée.
+  const canExport = canExportFiles(role);
   const [data, setData] = useState<ReleveData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -867,6 +872,7 @@ export default function RelevePage() {
           {canPrint ? (
             <DocExportButtons
               canPrint
+              canExport={canExport}
               exporting={exporting}
               onPdf={() => window.print()}
               onWord={handleWord}

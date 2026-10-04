@@ -36,6 +36,7 @@ import { Loader2, X, AlertCircle, RefreshCw } from "lucide-react";
 import { parentPortalApi, reportsApi, computationApi } from "@/lib/api";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   buildWordShell,
   escHtml,
@@ -915,6 +916,10 @@ export default function BulletinsPage() {
       new URLSearchParams(window.location.search).has("matricule"),
   );
   const canPrint = canPrintDocument(role, parentMode);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp) — le PDF (impression papier)
+  // suit la politique print-guard inchangée.
+  const canExport = canExportFiles(role);
   const [meta, setMeta] = useState<{
     schoolName: string;
     sessionLabel: string;
@@ -1338,6 +1343,7 @@ export default function BulletinsPage() {
                  d'impression inchangés (canPrint / PrintLockBadge). */
               <DocExportButtons
                 canPrint
+                canExport={canExport}
                 exporting={exporting}
                 onPdf={() => window.print()}
                 onWord={handleWord}

@@ -74,6 +74,7 @@ import { Loader2, X } from "lucide-react";
 import { pdaApi } from "@/lib/api";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   buildWordShell,
   escHtml,
@@ -671,6 +672,9 @@ export function PdaPlanDocument({
   // GRISÉE (l'impression reste réservée à l'Admin IEP et au Super Admin).
   const printRole = usePrintRole();
   const canPrint = canPrintDocument(printRole, false);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp).
+  const canExport = canExportFiles(printRole);
   // État des exports Word/Excel (DOIT rester avant les retours conditionnels
   // — règles des Hooks React).
   const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
@@ -773,6 +777,7 @@ export function PdaPlanDocument({
           {canPrint ? (
             <DocExportButtons
               canPrint
+              canExport={canExport}
               exporting={exporting}
               onPdf={() => window.print()}
               onWord={handleWord}

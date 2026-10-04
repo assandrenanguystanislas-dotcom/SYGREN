@@ -28,6 +28,8 @@ import { toast } from "sonner";
 
 import { sessionsApi, computationApi, reportsApi, schoolsApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { canExportFiles, ExportLockBadge } from "@/lib/doc-export";
+import { canPrintInternal } from "@/lib/print-guard";
 import { monthLabel, SESSION_STATUS_CONFIG } from "@/lib/session-utils";
 import {
   classementFileBase,
@@ -88,6 +90,12 @@ function ResultsRankingView() {
   // sélecteur d'écoles (la liste GET /api/schools est bornée au secteur par
   // le backend).
   const isConseiller = user?.role === "conseiller";
+  // Task 71 — production/transfert de FICHIERS (Word / Excel) réservée au
+  // Super Admin (anti-fuite WhatsApp) ; le bouton PDF (impression papier
+  // via le dialogue navigateur) suit la politique print-guard (admin +
+  // admin IEP). Les autres rôles consultent sans exporter.
+  const canExport = canExportFiles(user?.role);
+  const canPrintClassement = canPrintInternal(user?.role);
   // admin/inspector/conseiller doivent choisir une école (cascade stricte)
   const needsSchoolSelect = isAdmin || isInspector || isConseiller;
 
@@ -540,52 +548,60 @@ function ResultsRankingView() {
                 </CardTitle>
                 {/* Task 27 — Exports du classement affiché (filtre classe
                     respecté) : PDF = impression navigateur, Word = .doc MSO,
-                    Excel = exceljs — lib/classement-exports.ts. Vue de
-                    travail : sans verrou d'impression (contrairement aux
-                    documents officiels). */}
+                    Excel = exceljs — lib/classement-exports.ts.
+                    Task 71 — production de fichiers (Word / Excel) réservée
+                    au Super Admin ; PDF (impression papier) réservé aux
+                    rôles print-guard (admin + admin IEP). */}
                 <div className="flex items-center gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={exporting !== null}
-                    onClick={handleExportPdf}
-                    title="Exporter le classement en PDF (impression navigateur)"
-                  >
-                    {exporting === "pdf" ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <FileDown className="w-4 h-4 mr-1.5" />
-                    )}
-                    PDF
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={exporting !== null}
-                    onClick={handleExportWord}
-                    title="Exporter le classement en Word (.doc)"
-                  >
-                    {exporting === "doc" ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <FileText className="w-4 h-4 mr-1.5" />
-                    )}
-                    Word
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={exporting !== null}
-                    onClick={handleExportExcel}
-                    title="Exporter le classement en Excel (.xlsx)"
-                  >
-                    {exporting === "xlsx" ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-                    )}
-                    Excel
-                  </Button>
+                  {canPrintClassement && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={exporting !== null}
+                      onClick={handleExportPdf}
+                      title="Exporter le classement en PDF (impression navigateur)"
+                    >
+                      {exporting === "pdf" ? (
+                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <FileDown className="w-4 h-4 mr-1.5" />
+                      )}
+                      PDF
+                    </Button>
+                  )}
+                  {canExport && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={exporting !== null}
+                        onClick={handleExportWord}
+                        title="Exporter le classement en Word (.doc)"
+                      >
+                        {exporting === "doc" ? (
+                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <FileText className="w-4 h-4 mr-1.5" />
+                        )}
+                        Word
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={exporting !== null}
+                        onClick={handleExportExcel}
+                        title="Exporter le classement en Excel (.xlsx)"
+                      >
+                        {exporting === "xlsx" ? (
+                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                        )}
+                        Excel
+                      </Button>
+                    </>
+                  )}
+                  {!canPrintClassement && !canExport && <ExportLockBadge />}
                 </div>
               </div>
             </CardHeader>

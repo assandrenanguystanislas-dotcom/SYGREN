@@ -63,6 +63,7 @@ import {
   PrintLockDocumentMessage,
   usePrintRole,
 } from "@/lib/print-guard";
+import { canExportFiles, ExportLockBadge } from "@/lib/doc-export";
 
 // POLICE AGENCY FB taille 12 (demande utilisateur) — Agency FB est une
 // police Windows standard ; Arial/Helvetica/Liberation Sans en secours
@@ -608,6 +609,10 @@ export function CandidatesListDocument({
   // CSS d'impression (contre-règle #liste-candidats-doc absente de
   // globals.css) — corrigé là-bas.
   const canPrint = canPrintDocument(role, false);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp) — le PDF (impression papier)
+  // suit la politique print-guard inchangée.
+  const canExport = canExportFiles(role);
   const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["liste-candidats", classId],
@@ -722,30 +727,36 @@ export function CandidatesListDocument({
                 <Printer className="w-4 h-4" />
                 PDF
               </button>
-              <button
-                onClick={handleWord}
-                disabled={exporting !== null}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:opacity-90 disabled:opacity-50"
-              >
-                {exporting === "doc" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <FileText className="w-4 h-4" />
-                )}
-                Word
-              </button>
-              <button
-                onClick={handleExcel}
-                disabled={exporting !== null}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-sm hover:opacity-90 disabled:opacity-50"
-              >
-                {exporting === "xlsx" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <FileSpreadsheet className="w-4 h-4" />
-                )}
-                Excel
-              </button>
+              {canExport ? (
+                <>
+                  <button
+                    onClick={handleWord}
+                    disabled={exporting !== null}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:opacity-90 disabled:opacity-50"
+                  >
+                    {exporting === "doc" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FileText className="w-4 h-4" />
+                    )}
+                    Word
+                  </button>
+                  <button
+                    onClick={handleExcel}
+                    disabled={exporting !== null}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-sm hover:opacity-90 disabled:opacity-50"
+                  >
+                    {exporting === "xlsx" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FileSpreadsheet className="w-4 h-4" />
+                    )}
+                    Excel
+                  </button>
+                </>
+              ) : (
+                <ExportLockBadge />
+              )}
             </>
           ) : (
             <PrintLockBadge />

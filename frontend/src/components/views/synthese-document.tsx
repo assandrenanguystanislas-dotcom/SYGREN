@@ -26,6 +26,7 @@ import { reportsApi } from "@/lib/api";
 import { monthLabel } from "@/lib/session-utils";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   buildWordShell,
   escHtml,
@@ -492,6 +493,9 @@ export function SyntheseDocument({
   // (le directeur consulte l'aperçu à l'écran, sans impression).
   const role = usePrintRole();
   const canPrint = canPrintDocument(role, false);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp).
+  const canExport = canExportFiles(role);
   // Modèle en cours de génération (Word/Excel) — désactive les boutons.
   const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
   const { data, isLoading, error } = useQuery({
@@ -643,6 +647,7 @@ export function SyntheseDocument({
           {canPrint ? (
             <DocExportButtons
               canPrint
+              canExport={canExport}
               exporting={exporting}
               onPdf={() => window.print()}
               onWord={handleWord}

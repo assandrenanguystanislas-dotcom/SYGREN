@@ -142,6 +142,7 @@ import { useState, type CSSProperties } from "react";
 import { reportsApi } from "@/lib/api";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   armoiriesBase64,
   buildWordShell,
@@ -311,6 +312,9 @@ export function PersonnelDocument({
   // GRISÉE (l'impression reste réservée à l'Admin IEP et au Super Admin).
   const printRole = usePrintRole();
   const canPrint = canPrintDocument(printRole, false);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp).
+  const canExport = canExportFiles(printRole);
 
   // v6 — 3 modèles d'impression : état du modèle en cours de génération
   // (spinner sur le bouton Word ou Excel pendant le téléchargement).
@@ -415,6 +419,7 @@ export function PersonnelDocument({
             // navigateur, Word .doc, Excel .xlsx).
             <DocExportButtons
               canPrint
+              canExport={canExport}
               exporting={exporting}
               onPdf={() => window.print()}
               onWord={handleWord}

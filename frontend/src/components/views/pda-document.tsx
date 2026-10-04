@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { pdaApi } from "@/lib/api";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   buildWordShell,
   escHtml,
@@ -416,6 +417,9 @@ export function PdaDocument({
   // GRISÉE (l'impression reste réservée à l'Admin IEP et au Super Admin).
   const printRole = usePrintRole();
   const canPrint = canPrintDocument(printRole, false);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp).
+  const canExport = canExportFiles(printRole);
 
   // === Remédiation (lignes 2-3 du tableau 3) — dérivation + override ===
   // Valeurs serveur dérivées de la synthèse ; override = saisie locale en
@@ -572,6 +576,7 @@ export function PdaDocument({
           {canPrint ? (
             <DocExportButtons
               canPrint
+              canExport={canExport}
               exporting={exporting}
               onPdf={() => window.print()}
               onWord={handleWord}

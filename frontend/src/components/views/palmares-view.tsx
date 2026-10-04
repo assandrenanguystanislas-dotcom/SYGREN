@@ -40,6 +40,9 @@ import {
 import { toast } from "sonner";
 
 import { computationApi } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
+import { canExportFiles, ExportLockBadge } from "@/lib/doc-export";
+import { canPrintInternal } from "@/lib/print-guard";
 import {
   EVAL_TYPE_LABELS,
   type PalmaresData,
@@ -205,6 +208,12 @@ export function PalmaresView() {
 
   // Exports (spinner par format — convention doc/xlsx du module).
   const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  // Task 71 — production/transfert de FICHIERS (Excel) réservée au Super
+  // Admin (anti-fuite WhatsApp) ; le bouton PDF (impression papier via le
+  // dialogue navigateur) suit la politique print-guard (admin + admin IEP).
+  const user = useAuthStore((s) => s.user);
+  const canExport = canExportFiles(user?.role);
+  const canPrintDoc = canPrintInternal(user?.role);
 
   async function handleExcel() {
     if (!data) return;
@@ -254,34 +263,39 @@ export function PalmaresView() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePdf}
-                disabled={!hasData || exporting !== null}
-                title="Imprimer ou enregistrer en PDF (boîte d'impression du navigateur)"
-              >
-                {exporting === "pdf" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Printer className="w-4 h-4" />
-                )}
-                PDF
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExcel}
-                disabled={!hasData || exporting !== null}
-                title="Classeur Excel — 2 feuilles FILLES / GARÇONS"
-              >
-                {exporting === "xlsx" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <FileSpreadsheet className="w-4 h-4" />
-                )}
-                Excel
-              </Button>
+              {canPrintDoc && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePdf}
+                  disabled={!hasData || exporting !== null}
+                  title="Imprimer ou enregistrer en PDF (boîte d'impression du navigateur)"
+                >
+                  {exporting === "pdf" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4" />
+                  )}
+                  PDF
+                </Button>
+              )}
+              {canExport && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExcel}
+                  disabled={!hasData || exporting !== null}
+                  title="Classeur Excel — 2 feuilles FILLES / GARÇONS"
+                >
+                  {exporting === "xlsx" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="w-4 h-4" />
+                  )}
+                  Excel
+                </Button>
+              )}
+              {!canPrintDoc && !canExport && <ExportLockBadge />}
             </div>
           </div>
 

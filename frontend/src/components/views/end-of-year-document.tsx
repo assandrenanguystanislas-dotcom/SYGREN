@@ -44,6 +44,7 @@ import { reportsApi } from "@/lib/api";
 import type { EndOfYearRow, EndOfYearSummaryRow } from "@/lib/types";
 import {
   DocExportButtons,
+  canExportFiles,
   XLSX_MIME,
   buildWordShell,
   escHtml,
@@ -693,6 +694,9 @@ export function EndOfYearDocument({
   // impriment ; le directeur consulte à l'écran, l'enseignant n'accède pas.
   const role = usePrintRole();
   const canPrint = canPrintDocument(role, false);
+  // Task 71 — production/transfert de fichiers (Word / Excel) réservée
+  // au Super Admin (anti-fuite WhatsApp).
+  const canExport = canExportFiles(role);
   const [exporting, setExporting] = useState<"doc" | "xlsx" | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["end-of-year", schoolId, classId, year],
@@ -793,6 +797,7 @@ export function EndOfYearDocument({
           {canPrint ? (
             <DocExportButtons
               canPrint
+              canExport={canExport}
               exporting={exporting}
               onPdf={() => window.print()}
               onWord={handleWord}
