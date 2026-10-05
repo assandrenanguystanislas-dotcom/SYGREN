@@ -1,7 +1,7 @@
 package handlers
 
 // === Listes nominatives du personnel (module « Fichier du personnel »,
-// Task 74 + affinages Task 75) ===
+// Task 74 + affinages Task 75/76) ===
 //
 // Deux documents officiels à l'échelle de l'IEP — même entête que
 // l'ÉTAT NOMINATIF DU PERSONNEL (bloc ministériel + République +
@@ -20,14 +20,22 @@ package handlers
 //     préscolaires publics (PRESCOLAIRE …), les écoles communautaires
 //     (EC …) et les privées (EPC/EPI/EPV …) sont EXCLUS ;
 //   - ORDRE ALPHABÉTIQUE des NOM ET PRENOMS (plus de regroupement
-//     par école) ;
-//   - colonne NIVEAU supplémentaire : cours tenu de l'agent (CM2
-//     pour les maîtres de CM2, cours du dossier ou de la classe
-//     affectée pour les directeurs, case vide sans cours).
+//     par école).
 //
-// Colonnes (ordre du modèle) : N° | NOM ET PRENOMS | MATRICULE |
-// DATE DE 1ERE PRISE DE SERVICE | ECOLE | CODE ECOLE | EFFECTIF |
-// NIVEAU | EMARGEMENT.
+// Affinages Task 76 (colonne NIVEAU repensée) :
+//   - MAÎTRES DE CM2 : la colonne NIVEAU est ANNULÉE (le document
+//     reprend ses 8 colonnes d'origine) ;
+//   - DIRECTEURS : NIVEAU = NOMBRE DE CLASSES DE L'ÉCOLE (classes
+//     actives — même convention que sessions.go, classes.active =
+//     true), case vide si l'école n'a aucune classe.
+//
+// Colonnes (ordre du modèle) :
+//   - directeurs : N° | NOM ET PRENOMS | MATRICULE | DATE DE 1ERE
+//     PRISE DE SERVICE | ECOLE | CODE ECOLE | EFFECTIF | NIVEAU |
+//     EMARGEMENT (9 colonnes) ;
+//   - maîtres CM2 : N° | NOM ET PRENOMS | MATRICULE | DATE DE 1ERE
+//     PRISE DE SERVICE | ECOLE | CODE ECOLE | EFFECTIF | EMARGEMENT
+//     (8 colonnes — sans NIVEAU).
 //
 // Conventions reprises de l'existant (aucune nouvelle règle) :
 //   - DATE DE 1ERE PRISE DE SERVICE = date d'entrée à la FONCTION
@@ -56,6 +64,7 @@ import (
         "fmt"
         "net/http"
         "sort"
+        "strconv"
         "strings"
         "time"
 
@@ -81,9 +90,9 @@ type PersonnelListRow struct {
         // calculé d'après l'état nominatif du personnel. nil = non
         // renseigné (case vide du document).
         Effectif *int `json:"effectif,omitempty"`
-        // NIVEAU — cours tenu de l'agent (Task 75) : « CM2 » pour les
-        // maîtres de CM2, cours du dossier (ou de la classe affectée)
-        // pour les directeurs ; nil = case vide (aucun cours tenu).
+        // NIVEAU — Task 76 : NOMBRE DE CLASSES DE L'ÉCOLE pour les
+        // directeurs (« 6 ») ; colonne ANNULÉE pour les maîtres de CM2
+        // (toujours nil — le document CM2 n'affiche pas la colonne).
         Niveau *string `json:"niveau,omitempty"`
         // Contexte dossier (fonction / cours tenu résolu) — utile au
         // document pour distinguer directeur titulaire CM2 et maître.
@@ -244,14 +253,39 @@ func resolveCoursTenu(u models.User, classNameByTeacher map[string]string) strin
         return ""
 }
 
-// niveauOrNil — NIVEAU de la colonne du document : nil (case vide)
-// quand l'agent ne tient aucun cours, sinon le cours résolu.
-func niveauOrNil(cours string) *string {
-        if strings.TrimSpace(cours) == "" {
+// classCountBySchool — NOMBRE DE CLASSES ACTIVES de chaque école
+// (convention sessions.go : classes.active = true). Alimente la
+// colonne NIVEAU des DIRECTEURS (Task 76 : le niveau d'un directeur
+// est le nombre de classes de son école).
+func classCountBySchool(schoolIDs []string) map[string]int {
+        out := make(map[string]int, len(schoolIDs))
+        if len(schoolIDs) == 0 {
+                return out
+        }
+        type cnt struct {
+                SchoolID string
+                N        int
+        }
+        var counts []cnt
+        database.DB.Model(&models.Class{}).
+                Select("school_id, COUNT(*) AS n").
+                Where("school_id IN ? AND active = ?", schoolIDs, true).
+                Group("school_id").
+                Scan(&counts)
+        for _, c := range counts {
+                out[c.SchoolID] = c.N
+        }
+        return out
+}
+
+// niveauDirecteur — NIVEAU d'un directeur (Task 76) : NOMBRE DE
+// CLASSES DE SON ÉCOLE (« 6 »), case vide si l'école n'en a aucune.
+func niveauDirecteur(n int) *string {
+        if n <= 0 {
                 return nil
         }
-        c := cours
-        return &c
+        s := strconv.Itoa(n)
+        return &s
 }
 
 // nomKey — clé de tri alphabétique d'un NOM ET PRENOMS : sans les
@@ -274,9 +308,11 @@ func sortRows(rows []PersonnelListRow) {
 //
 // Données des documents « LISTE NOMINATIVE DES DIRECTEURS D'ECOLE » et
 // « LISTE NOMINATIVE DES MAITRES DE CM2 » (module Fichier du personnel,
-// Task 74/75) : entête (IEP + année scolaire) + lignes N°/NOM/MATRICULE/
-// DATE DE 1ERE PRISE DE SERVICE/ECOLE/CODE ECOLE/EFFECTIF/NIVEAU/
-// EMARGEMENT — agents des EPP uniquement, ordre alphabétique.
+// Task 74/75/76) : entête (IEP + année scolaire) + lignes N°/NOM/
+// MATRICULE/DATE DE 1ERE PRISE DE SERVICE/ECOLE/CODE ECOLE/EFFECTIF/
+// [NIVEAU]/EMARGEMENT — agents des EPP uniquement, ordre alphabétique.
+// NIVEAU (Task 76) : nombre de classes de l'école pour les directeurs,
+// colonne annulée pour les maîtres de CM2.
 func GetPersonnelList(w http.ResponseWriter, r *http.Request) {
         kind := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("kind")))
         if kind != "directeurs" && kind != "cm2" {
@@ -312,6 +348,10 @@ func GetPersonnelList(w http.ResponseWriter, r *http.Request) {
         // EFFECTIF par école d'après l'état nominatif (directeurs) —
         // partagé avec le tri des maîtres CM2 (aucun surcoût notable).
         effectifBySchool := schoolEffectifs(schoolIDs)
+
+        // NIVEAU des directeurs (Task 76) : NOMBRE DE CLASSES ACTIVES
+        // de chaque école.
+        classCount := classCountBySchool(schoolIDs)
 
         // Classes affectées (cours tenu de repli — même résolution que
         // l'état nominatif).
@@ -372,9 +412,11 @@ func GetPersonnelList(w http.ResponseWriter, r *http.Request) {
                                         SchoolName:   school.Name,
                                         SchoolCode:   school.Code,
                                         Effectif:     eff,
-                                        Niveau:       niveauOrNil(coursTenu),
-                                        Fonction:     u.Fonction,
-                                        SchoolID:     school.ID,
+                                        // Task 76 — NIVEAU d'un directeur =
+                                        // NOMBRE DE CLASSES DE SON ÉCOLE.
+                                        Niveau:   niveauDirecteur(classCount[school.ID]),
+                                        Fonction: u.Fonction,
+                                        SchoolID: school.ID,
                                 })
                         case "cm2":
                                 // Une ligne par agent (enseignant OU directeur) tenant
@@ -398,10 +440,12 @@ func GetPersonnelList(w http.ResponseWriter, r *http.Request) {
                                         SchoolName:   school.Name,
                                         SchoolCode:   school.Code,
                                         Effectif:     eff,
-                                        Niveau:       &c,
-                                        Fonction:     u.Fonction,
-                                        Cours:        &c,
-                                        SchoolID:     school.ID,
+                                        // Task 76 — colonne NIVEAU ANNULÉE
+                                        // pour les maîtres de CM2 (nil).
+                                        Niveau:   nil,
+                                        Fonction: u.Fonction,
+                                        Cours:    &c,
+                                        SchoolID: school.ID,
                                 })
                         }
                 }

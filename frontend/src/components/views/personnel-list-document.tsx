@@ -2,25 +2,33 @@
 
 // === Documents « LISTE NOMINATIVE DES DIRECTEURS D'ECOLE » et
 // « LISTE NOMINATIVE DES MAITRES DE CM2 » (Task 74 + affinages
-// Task 75) ===
+// Task 75/76) ===
 //
 // Demande : « dans le module fichier du personnel, créer 2 fichiers —
 // 1 fichier nommé liste nominatif des directeurs d'école et 1 autre
 // nommé liste nominatif des maitres de cm2. Pour le faire, se servir
-// de l'entête de l'état nominatif. » — colonnes (Task 75) : N° ; NOM
-// ET PRENOMS ; MATRICULE ; DATE DE 1ERE PRISE DE SERVICE ; ECOLE ;
-// CODE ECOLE ; EFFECTIF ; NIVEAU ; EMARGEMENT.
+// de l'entête de l'état nominatif. » — colonnes (Task 76) :
+//   - DIRECTEURS : N° ; NOM ET PRENOMS ; MATRICULE ; DATE DE 1ERE
+//     PRISE DE SERVICE ; ECOLE ; CODE ECOLE ; EFFECTIF ; NIVEAU ;
+//     EMARGEMENT (9 colonnes) ;
+//   - MAITRES DE CM2 : idem SANS la colonne NIVEAU (8 colonnes —
+//     « la colonne NIVEAU doit être annulée pour les maîtres tenant
+//     le CM2 »).
 //
 // Affinages Task 75 :
 //   - SEULEMENT LES ENSEIGNANTS ISSUS DES EPP (filtre côté serveur :
 //     écoles dont le nom commence par « EPP ») ;
-//   - ORDRE ALPHABÉTIQUE des NOM ET PRENOMS (ordre serveur) ;
-//   - colonne NIVEAU (cours tenu — CM2 pour les maîtres, cours du
-//     dossier pour les directeurs, case vide sans cours) ;
-//   - sous la dernière ligne, À DROITE : « Fait à Dabou, le
-//     ............/.......... / 202.... » (ville dérivée de l'IEP) ;
+//   - ORDRE ALPHABÉTIQUE des NOM ET PRENOMS (ordre serveur).
+//
+// Affinages Task 76 :
+//   - colonne NIVEAU : ANNULÉE pour les maîtres de CM2 ; pour les
+//     directeurs elle porte le NOMBRE DE CLASSES DE L'ÉCOLE (« en ce
+//     qui concerne les directeurs, il s'agit du nombre de classe
+//     dans l'école » — calcul serveur) ;
+//   - « Fait à Dabou, le » : LA DATE DU JOUR est insérée (JJ/MM/AAAA)
+//     à la place des pointillés ;
 //   - signature : 15 MM entre « L'Inspecteur » et son nom (espace
-//     de signature).
+//     de signature, Task 75).
 //
 // Entête REPRISE DE L'ÉTAT NOMINATIF (personnel-document.tsx) :
 //   - en-tête institutionnel OfficialDocHeader (variante « plan »,
@@ -144,8 +152,10 @@ const tdNom: React.CSSProperties = {
   overflowWrap: "break-word",
 };
 
-// Largeurs des 9 colonnes du modèle (total 100 %).
-const COL_WIDTHS = [
+// Largeurs des colonnes du modèle (total 100 %) — 9 colonnes pour les
+// DIRECTEURS (avec NIVEAU), 8 colonnes pour les MAITRES DE CM2
+// (colonne NIVEAU ANNULÉE — Task 76).
+const COL_WIDTHS_9 = [
   "4%", // N°
   "20%", // NOM ET PRENOMS
   "9%", // MATRICULE
@@ -153,17 +163,30 @@ const COL_WIDTHS = [
   "23%", // ECOLE
   "8%", // CODE ECOLE
   "7%", // EFFECTIF
-  "6%", // NIVEAU (Task 75)
+  "6%", // NIVEAU (directeurs — nombre de classes, Task 76)
+  "12%", // EMARGEMENT
+];
+
+const COL_WIDTHS_8 = [
+  "4%", // N°
+  "21%", // NOM ET PRENOMS
+  "10%", // MATRICULE
+  "12%", // DATE DE 1ERE PRISE DE SERVICE
+  "25%", // ECOLE
+  "8%", // CODE ECOLE
+  "8%", // EFFECTIF
   "12%", // EMARGEMENT
 ];
 
 // Largeurs Excel (même ordre).
-const XLSX_COL_WIDTHS = [4.5, 28, 11, 12.5, 30, 10, 8.5, 7, 12];
+const XLSX_COL_WIDTHS_9 = [4.5, 28, 11, 12.5, 30, 10, 8.5, 7, 12];
+const XLSX_COL_WIDTHS_8 = [4.5, 30, 12, 13, 32, 10, 9, 12.5];
 
 /** Mention « Fait à … » (Task 75) : la ville est dérivée de l'IEP —
  *  région en priorité, sinon le nom de l'IEP sans le préfixe « IEP »
  *  ni le numéro final (IEP DABOU 1 → « Dabou »), 1re lettre capitale.
- *  Pointillés à compléter à la main : jour / mois, année « 202.... ». */
+ *  Task 76 : LA DATE DU JOUR remplace les pointillés (JJ/MM/AAAA —
+ *  « Fait à Dabou, le 05/10/2026 »). */
 function faitALigne(region?: string | null, name?: string | null): string {
   let raw = (region ?? "").trim();
   if (!raw) raw = (name ?? "").trim();
@@ -174,7 +197,7 @@ function faitALigne(region?: string | null, name?: string | null): string {
   const ville = raw
     ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()
     : "…………";
-  return `Fait à ${ville}, le ............/.......... / 202....`;
+  return `Fait à ${ville}, le ${todayFr()}`;
 }
 
 export function PersonnelListDocument({
@@ -234,6 +257,10 @@ export function PersonnelListDocument({
   const rows = data.rows;
   const titre = personnelListTitle(kind);
   const [t1, t2] = splitTitre(titre);
+  // Task 76 — colonne NIVEAU : DIRECTEURS uniquement (nombre de
+  // classes de l'école) ; ANNULÉE pour les maîtres de CM2.
+  const hasNiveau = kind === "directeurs";
+  const cols = hasNiveau ? COL_WIDTHS_9 : COL_WIDTHS_8;
 
   // Données partagées des modèles Word / Excel.
   const exportData: ExportData = {
@@ -377,7 +404,9 @@ export function PersonnelListDocument({
             </span>
           </div>
 
-          {/* --- Tableau : les 8 colonnes demandées --- */}
+          {/* --- Tableau : colonnes du modèle (9 directeurs — Task 76
+              : NIVEAU = nombre de classes ; 8 maîtres CM2 — NIVEAU
+              annulé) --- */}
           <table
             style={{
               width: "100%",
@@ -389,7 +418,7 @@ export function PersonnelListDocument({
             <colgroup>
               {/* Rendu en tableau : PAS de nœuds texte entre les <col>
                   (erreur d'hydratation React « whitespace text node »). */}
-              {COL_WIDTHS.map((w, i) => (
+              {cols.map((w, i) => (
                 <col key={i} style={{ width: w }} />
               ))}
             </colgroup>
@@ -406,7 +435,7 @@ export function PersonnelListDocument({
                 <th style={th}>ECOLE</th>
                 <th style={th}>CODE ECOLE</th>
                 <th style={th}>EFFECTIF</th>
-                <th style={th}>NIVEAU</th>
+                {hasNiveau && <th style={th}>NIVEAU</th>}
                 <th style={th}>EMARGEMENT</th>
               </tr>
             </thead>
@@ -429,14 +458,16 @@ export function PersonnelListDocument({
                   <td style={tdLeft}>{r.school_name}</td>
                   <td style={td}>{r.school_code}</td>
                   <td style={td}>{fmtNum(r.effectif)}</td>
-                  <td style={td}>{r.niveau ?? ""}</td>
+                  {/* NIVEAU : directeurs uniquement (nombre de classes
+                      de l'école — Task 76) ; annulé pour les CM2. */}
+                  {hasNiveau && <td style={td}>{r.niveau ?? ""}</td>}
                   {/* EMARGEMENT : case vide destinée à la signature. */}
                   <td style={td}>&nbsp;</td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ ...td, height: "30mm" }}>
+                  <td colSpan={cols.length} style={{ ...td, height: "30mm" }}>
                     Aucun agent dans le périmètre de ce document.
                   </td>
                 </tr>
@@ -467,7 +498,7 @@ export function PersonnelListDocument({
                   {fmtNum(data.total_effectif)}
                 </td>
                 <td style={{ border: "none", padding: 0 }} />
-                <td style={{ border: "none", padding: 0 }} />
+                {hasNiveau && <td style={{ border: "none", padding: 0 }} />}
               </tr>
             </tbody>
           </table>
@@ -560,6 +591,10 @@ async function buildWordHtml(o: ExportData): Promise<string> {
   const esc = escHtml;
   const titre = personnelListTitle(o.kind);
   const [t1, t2] = splitTitre(titre);
+  // Task 76 — NIVEAU : directeurs uniquement (nombre de classes),
+  // colonne annulée pour les maîtres de CM2.
+  const hasNiveau = o.kind === "directeurs";
+  const colW = hasNiveau ? COL_WIDTHS_9 : COL_WIDTHS_8;
 
   // Cellules du tableau (styles EN LIGNE — le convertisseur Word ignore
   // une partie des classes CSS) ; bordures vert drapeau comme le PDF.
@@ -581,7 +616,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `<th style="${th}">ECOLE</th>` +
     `<th style="${th}">CODE ECOLE</th>` +
     `<th style="${th}">EFFECTIF</th>` +
-    `<th style="${th}">NIVEAU</th>` +
+    (hasNiveau ? `<th style="${th}">NIVEAU</th>` : "") +
     `<th style="${th}">EMARGEMENT</th>` +
     `</tr>`;
 
@@ -597,7 +632,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
         `<td style="${tdL}">${esc(r.school_name)}</td>` +
         `<td style="${td}">${esc(r.school_code)}</td>` +
         `<td style="${td}">${esc(fmtNum(r.effectif))}</td>` +
-        `<td style="${td}">${esc(r.niveau ?? "")}</td>` +
+        (hasNiveau ? `<td style="${td}">${esc(r.niveau ?? "")}</td>` : "") +
         `<td style="${td}">&nbsp;</td>` +
         `</tr>`
       );
@@ -606,7 +641,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
 
   const emptyRow =
     o.rows.length === 0
-      ? `<tr><td colspan=9 style="${tdBase}">Aucun agent dans le p&eacute;rim&egrave;tre de ce document.</td></tr>`
+      ? `<tr><td colspan=${colW.length} style="${tdBase}">Aucun agent dans le p&eacute;rim&egrave;tre de ce document.</td></tr>`
       : "";
 
   // Ligne TOTAL (libellé sous ECOLE + CODE ECOLE, valeur sous EFFECTIF).
@@ -616,7 +651,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `<td colspan=2 style="${th}; background:#E4F4ED; color:#00734A;">TOTAL</td>` +
     `<td style="${tdBase}; height:18px; background:#E4F4ED; color:#00734A; font-weight:bold;">${esc(fmtNum(o.totalEffectif))}</td>` +
     `<td style="border:none;"></td>` +
-    `<td style="border:none;"></td>` +
+    (hasNiveau ? `<td style="border:none;"></td>` : "") +
     `</tr>`;
 
   // En-tête institutionnel — copie HTML de OfficialDocHeader (variante
@@ -668,7 +703,7 @@ ${header}
 <td style="font-size:10.5px; text-align:right; white-space:nowrap;"><span style="color:#00734A;">Ann&eacute;e scolaire</span>: ${esc(annee[0] ?? "")}&nbsp;&nbsp;${esc(annee[1] ?? "")}<br><span style="color:#00734A;">Date</span> : ${esc(todayFr())}</td>
 </tr></table>
 <table class=doc>
-<colgroup>${COL_WIDTHS.map((w) => `<col style="width:${w}">`).join("")}</colgroup>
+<colgroup>${colW.map((w) => `<col style="width:${w}">`).join("")}</colgroup>
 <thead class=rep>${head}</thead>
 <tbody>
 ${body}
@@ -689,14 +724,20 @@ ${inspecteur ? `<p style="margin:42.5pt 0 0; font-size:12px; font-weight:bold; t
 }
 
 // === MODÈLE EXCEL (.xlsx) — classeur mis en page (exceljs, import
-// dynamique) : en-tête institutionnel fusionné, tableau 9 colonnes bordé
-// vert (femmes en rouge), TOTAL en gras, signature « L'Inspecteur » ;
-// impression PAYSAGE ajustée à 1 page de large, entêtes répétés.
+// dynamique) : en-tête institutionnel fusionné, tableau bordé vert
+// (9 colonnes directeurs / 8 colonnes maîtres CM2 — Task 76, femmes
+// en rouge), TOTAL en gras, signature « L'Inspecteur » ; impression
+// PAYSAGE ajustée à 1 page de large, entêtes répétés.
 async function exportExcelAsync(o: ExportData): Promise<void> {
   const { Workbook } = await import("exceljs");
   const wb = new Workbook();
   wb.creator = "SYGREN";
   const titre = personnelListTitle(o.kind);
+  // Task 76 — NIVEAU : directeurs uniquement (nombre de classes),
+  // colonne annulée pour les maîtres de CM2.
+  const hasNiveau = o.kind === "directeurs";
+  const ncols = hasNiveau ? 9 : 8; // nombre de colonnes du tableau
+  const colWidths = hasNiveau ? XLSX_COL_WIDTHS_9 : XLSX_COL_WIDTHS_8;
 
   // Rangées d'entêtes du tableau (répétées à l'impression).
   const HEAD_ROW = 8;
@@ -714,7 +755,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       printTitlesRow: `${HEAD_ROW}:${HEAD_END}`,
     },
   });
-  ws.columns = XLSX_COL_WIDTHS.map((width) => ({ width }));
+  ws.columns = colWidths.map((width) => ({ width }));
 
   const font = (size: number, bold = false, argb?: string) => ({
     name: "Arial",
@@ -729,7 +770,8 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   const border = { style: "thin" as const, color: GREEN };
   const BOX = { top: border, left: border, bottom: border, right: border };
 
-  // Ligne fusionnée sur les 8 colonnes.
+  // Ligne fusionnée sur les colonnes d'entête (toutes sauf la dernière
+  // — EMARGEMENT pour les deux modèles).
   const merged = (
     row: number,
     text: string,
@@ -737,7 +779,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     bold = false,
     italic = false,
   ) => {
-    ws.mergeCells(row, 1, row, 8);
+    ws.mergeCells(row, 1, row, ncols - 1);
     const c = ws.getCell(row, 1);
     c.value = text;
     c.font = { name: "Arial", size, bold, italic };
@@ -761,7 +803,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   merged(4, "République de Côte d'Ivoire — Union-Discipline-Travail", 11, true);
   // Boîte du titre (bordée — même gabarit que l'état nominatif).
   merged(5, titre, 18, true);
-  for (let col = 1; col <= 8; col++) ws.getCell(5, col).border = BOX;
+  for (let col = 1; col <= ncols - 1; col++) ws.getCell(5, col).border = BOX;
   ws.getRow(1).height = 16;
   ws.getRow(2).height = 14;
   ws.getRow(3).height = 13;
@@ -787,7 +829,8 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   dateCell.alignment = { horizontal: "right", vertical: "middle" };
   ws.getRow(7).height = 12;
 
-  // --- Entête du tableau (1 rangée, les 9 colonnes du modèle) ---
+  // --- Entête du tableau (rangée unique — 9 colonnes directeurs /
+  // 8 colonnes maîtres CM2, Task 76) ---
   const headLabels = [
     "N°",
     "NOM ET PRENOMS",
@@ -796,7 +839,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     "ECOLE",
     "CODE ECOLE",
     "EFFECTIF",
-    "NIVEAU",
+    ...(hasNiveau ? ["NIVEAU"] : []),
     "EMARGEMENT",
   ];
   headLabels.forEach((label, k) => {
@@ -824,7 +867,9 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       r.school_name,
       r.school_code,
       fmtNum(r.effectif),
-      r.niveau ?? "", // NIVEAU — cours tenu (Task 75)
+      // NIVEAU : directeurs uniquement — nombre de classes de
+      // l'école (Task 76) ; annulé pour les maîtres de CM2.
+      ...(hasNiveau ? [r.niveau ?? ""] : []),
       "", // EMARGEMENT — case vide de signature
     ];
     row.height = 28.3; // 10 mm (comme l'état nominatif)
@@ -855,12 +900,12 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN_BG };
   }
 
-  // --- Mention « Fait à … » SOUS LA DERNIÈRE LIGNE, À DROITE (Task 75)
-  // --- puis signature « L'Inspecteur » + NOM (colonnes 5-8, à droite)
-  //     avec 15 MM (≈ 42,5 pt) entre le libellé et le NOM — espace de
-  //     signature (Task 75).
+  // --- Mention « Fait à … » SOUS LA DERNIÈRE LIGNE, À DROITE (Task 75,
+  //     date du jour Task 76) puis signature « L'Inspecteur » + NOM
+  //     (colonnes 5… dernière, à droite) avec 15 MM (≈ 42,5 pt) entre
+  //     le libellé et le NOM — espace de signature (Task 75).
   const rFait = rTotal + 2;
-  ws.mergeCells(rFait, 5, rFait, 9);
+  ws.mergeCells(rFait, 5, rFait, ncols);
   const faitCell = ws.getCell(rFait, 5);
   faitCell.value = faitALigne(o.iepRegion, o.iepName);
   faitCell.font = font(10);
@@ -868,7 +913,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   ws.getRow(rFait).height = 15;
 
   const rSig = rFait + 1;
-  ws.mergeCells(rSig, 5, rSig, 9);
+  ws.mergeCells(rSig, 5, rSig, ncols);
   const sigLabel = ws.getCell(rSig, 5);
   sigLabel.value = "L'Inspecteur";
   sigLabel.font = { ...font(11, true), underline: true };
@@ -876,7 +921,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   ws.getRow(rSig).height = 15;
   const inspecteur = (o.inspecteur || "").trim().toUpperCase();
   if (inspecteur) {
-    ws.mergeCells(rSig + 2, 5, rSig + 2, 9);
+    ws.mergeCells(rSig + 2, 5, rSig + 2, ncols);
     const sigName = ws.getCell(rSig + 2, 5);
     sigName.value = inspecteur;
     sigName.font = font(10, true);

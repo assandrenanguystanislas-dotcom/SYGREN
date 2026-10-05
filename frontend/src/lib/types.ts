@@ -667,9 +667,11 @@ export type PersonnelListKind = "directeurs" | "cm2";
  *  document), NOM ET PRENOMS, MATRICULE, DATE DE 1ERE PRISE DE SERVICE
  *  (entrée à la Fonction Publique du dossier), ECOLE, CODE ECOLE,
  *  EFFECTIF (école d'après l'état nominatif pour les directeurs ;
- *  effectif du cours tenu pour les maîtres de CM2), NIVEAU (cours
- *  tenu — Task 75) et EMARGEMENT (case vide du document, non
- *  sérialisée). Agents des EPP uniquement, ordre alphabétique. */
+ *  effectif du cours tenu pour les maîtres de CM2), NIVEAU (nombre
+ *  de classes de l'école — DIRECTEURS uniquement, Task 76 ; colonne
+ *  ANNULÉE pour les maîtres de CM2) et EMARGEMENT (case vide du
+ *  document, non sérialisée). Agents des EPP uniquement, ordre
+ *  alphabétique. */
 export interface PersonnelListRow {
   id: string;
   full_name: string;
@@ -679,7 +681,7 @@ export interface PersonnelListRow {
   school_name: string;
   school_code: string;
   effectif?: number | null; // nil côté backend = case vide
-  niveau?: string | null; // cours tenu (CM2, CE2…) — Task 75
+  niveau?: string | null; // nombre de classes (directeurs) — Task 76
   fonction?: string | null;
   cours?: string | null; // CM2 (résolu côté serveur)
   school_id?: string;

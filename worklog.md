@@ -5164,3 +5164,19 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK (route /personnel-list-doc présente).
 - Test fonctionnel SQLite local (test-lists-75.sh) : directeurs EPP 2/2 (exclus : directeur de préscolaire PUBLIC et d'école communautaire), ordre AGBE < ZOUMANIGUI, niveaux [CM2, vide] ; CM2 EPP 2/2 (maître EPP + directrice titulaire ; exclus maîtres CM2 d'école privée et communautaire), NIVEAU=CM2 partout ; kind invalide 400, sans token 401.
 - Vérification Neon lecture seule (verify_lists_75.py) : 74 écoles EPP ; document DIRECTEURS = 55 lignes (46 avec cours tenu, 9 sans), document MAITRES CM2 = 45 lignes, tri alphabétique vérifié sur les deux, 15 agents exclus par le filtre.
+
+---
+
+## Task 76 — Colonne NIVEAU repensée + date du jour (listes nominatives)
+
+**Demande** : « LA COLONNE NIVEAU DOIT ETRE ANNULE POUR LES MAITRES TENANT LE CM2. EN CEQUI CONCERNE LES DIRECTEURS, IL S'AGIT DU NOMBRE DE CLASSE DANS L'ECOLE. Fait à Dabou, le ............/.......... / 202.... METTRE LA DATE DU JOUR »
+
+### Changements
+- Backend (handlers/personnel_lists.go) : NIVEAU des DIRECTEURS = NOMBRE DE CLASSES ACTIVES de l'école (nouveau helper classCountBySchool — classes.active = true, même convention que sessions.go ; niveauDirecteur → "6", case vide si 0). Colonne NIVEAU ANNULÉE pour les maîtres de CM2 (Niveau = nil, non sérialisé). Le niveau "cours tenu" de la Task 75 est abandonné sur les deux documents ; EFFECTIF, filtre EPP et ordre alphabétique inchangés. 100 % lecture, aucune migration Neon.
+- Frontend (personnel-list-document.tsx) : colonne NIVEAU rendue UNIQUEMENT pour kind=directeurs (9 colonnes) — document CM2 revenu à 8 colonnes (COL_WIDTHS_8/XLSX_COL_WIDTHS_8, colspan TOTAL/cellule vide conditionnels, Word idem, Excel ncols=8|9 pilotant fusions et libellés). Mention « Fait à Dabou, le » : LA DATE DU JOUR (JJ/MM/AAAA — todayFr()) remplace les pointillés dans les 3 modèles (PDF/Word/Excel).
+- types.ts : commentaire PersonnelListRow.niveau mis à jour.
+
+### Vérifications
+- go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
+- Test fonctionnel SQLite (test-lists-76.sh) : NIVEAU = nb classes actives (4/6, puis 3 après désactivation d'une classe via le toggle officiel PUT {"active":false}) ; CM2 : champ niveau ABSENT de toutes les lignes ; filtre EPP + tri alphabétique inchangés ; 400/401/403 OK. NB découvert au passage : la création d'une école auto-crée ses 6 classes CP1..CM2.
+- Vérification Neon lecture seule (verify_lists_76.py) : les 74 écoles EPP ont exactement 6 classes actives → NIVEAU = 6 pour les 56 directeurs attendus (0 case vide) ; 46 maîtres CM2 sans colonne NIVEAU.
