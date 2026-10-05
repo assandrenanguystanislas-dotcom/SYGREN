@@ -5134,3 +5134,17 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 
 ### Vérifications
 - tsc --noEmit 0 erreur ; next build OK. Push → Vercel READY nouveau SHA, Render LIVE dd9dbcf (backend inchangé), front 200, /api/health 200.
+
+## Task 74 — Fichier du personnel : 2 listes nominatives (directeurs d'école / maîtres de CM2)
+
+**Demande** : « dans le module fichier du personnel, créer 2 fichiers. 1 fichier nommé liste nominatif des directeurs d'école et 1 autre nommé liste nominatif des maitres de cm2. pour le faire, se servir de l'entête de l'état nominatif. les documents doivent comporter les colonnes suivantes: N°; NOM ET PRENOMS; MATRICULE; DATE DE 1ERE PRISE DE SERVICE; ECOLE; CODE ECOLE; EFFECTIF; EMARGEMENT ».
+
+### Réalisation (backend + frontend — aucune migration Neon, endpoint 100 % lecture)
+- BACKEND (handlers/personnel_lists.go + route GET /api/reports/personnel-list?kind=directeurs|cm2) : périmètre admin (tout, ?iep_id= pour restreindre) / inspector (son IEP) — autres rôles 403 ; rows = N° implicite, full_name, sexe (femmes en rouge), matricule, date_entree_fp (DATE DE 1ERE PRISE DE SERVICE — entrée F.P du dossier), school_name/school_code, effectif, cours/fonction ; annee_scolaire + iep (entête) + total_effectif (ligne TOTAL).
+- DONNÉES (conventions existantes reprises à l'identique) : directeurs = users role=director (suspendus compris, supprimés exclus) ; maîtres de CM2 = agents (teacher OU directeur) dont le cours tenu (dossier users.cours EN PRIORITÉ, sinon classe affectée — même résolution que l'état nominatif) vaut CM2 ; EFFECTIF D'APRÈS L'ÉTAT NOMINATIF (v14/v15 Mon Secteur) : T saisi sinon F+G — pour les directeurs, effectif de TOUTE l'école (dossiers des agents + niveaux déclarés sans enseignant non déjà tenus), pour les maîtres CM2, effectif de leur cours ; tri école (alphabétique fr) puis nom.
+- FRONTEND : personnel-list-document.tsx (composant des 2 documents) — ENTÊTE de l'état nominatif (OfficialDocHeader plan/xs, boîte du titre verte bord arrondi fond pastel orange, ligne IEP / Année scolaire / Date du jour, armoiries en filigrane, tableau bordé vert, femmes en rouge, TOTAL, signature « L'Inspecteur » + nom de l'IEP) ; les 8 colonnes demandées dans l'ordre ; 3 modèles (PDF impression navigateur / Word .doc / Excel .xlsx exceljs — Word/Excel Super Admin Task 71, impression Admin IEP + Super Admin print-guard) ; route dédiée /personnel-list-doc (layout + print.css A4 paysage 5mm + page ?kind=) sur le pattern /personnel-doc ; staff-data-view : 2 boutons « Directeurs d'école » et « Maîtres de CM2 » dans la barre d'actions du module Fichier du personnel (window.open, nouvel onglet).
+
+### Vérifications
+- go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK (route /personnel-list-doc présente).
+- Test fonctionnel SQLite local (test-lists-74.sh) : directeurs 2/2 avec effectif école (20+12 vacant = 32 ; 25) et total 57 ; CM2 2/2 (maître titulaire 20 F+G, directrice titulaire CM2 25) et total 45 ; adjoint sans cours exclu ; directeurs titulaires CM2 inclus ; kind invalide 400, sans token 401, enseignant 403, iep_id inconnu → 200 vide.
+- Vérification Neon lecture seule (verify_lists_74.py) : 62 directeurs, 46 maîtres de CM2, IEP DABOU 1 (M. DOSSO LACINE — signature).

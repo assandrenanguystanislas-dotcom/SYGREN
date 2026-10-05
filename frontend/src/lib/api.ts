@@ -31,6 +31,8 @@ import type {
   InspectorWithDetails,
   PersonnelDossierInput,
   PersonnelSheet,
+  PersonnelListKind,
+  PersonnelListSheet,
   StaffLevelReport,
   LevelReportInput,
   EvaluationSession,
@@ -1239,6 +1241,23 @@ export const reportsApi = {
     apiFetch<PersonnelSheet>(
       `/api/reports/personnel?school_id=${encodeURIComponent(schoolId)}`,
     ),
+
+  /**
+   * Données des documents « LISTE NOMINATIVE DES DIRECTEURS D'ECOLE »
+   * et « LISTE NOMINATIVE DES MAITRES DE CM2 » (module Fichier du
+   * personnel, Task 74) — entête de l'état nominatif (IEP + année
+   * scolaire) et lignes N° / NOM ET PRENOMS / MATRICULE / DATE DE 1ERE
+   * PRISE DE SERVICE / ECOLE / CODE ECOLE / EFFECTIF / EMARGEMENT.
+   * RBAC : inspector = son IEP, admin = tout (?iep_id= pour
+   * restreindre) — périmètre contrôlé dans le handler.
+   */
+  personnelList: (kind: PersonnelListKind, iepId?: string) => {
+    const qs = new URLSearchParams({ kind });
+    if (iepId) qs.set("iep_id", iepId);
+    return apiFetch<PersonnelListSheet>(
+      `/api/reports/personnel-list?${qs.toString()}`,
+    );
+  },
 
   /**
    * Données du document « RESULTATS DE FIN D'ANNEE » (module Résultats →

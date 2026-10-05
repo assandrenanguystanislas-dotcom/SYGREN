@@ -44,12 +44,30 @@
 // La sélection suit la vue : elle ne porte que sur les lignes de la
 // recherche / du filtre courants et est nettoyée après suppression.
 //
+// Task 74 — DEUX FICHIERS NOMINATIFS (demande utilisateur : « dans le
+// module fichier du personnel, créer 2 fichiers — 1 fichier nommé
+// liste nominatif des directeurs d'école et 1 autre nommé liste
+// nominatif des maitres de cm2 … se servir de l'entête de l'état
+// nominatif … colonnes : N° ; NOM ET PRENOMS ; MATRICULE ; DATE DE
+// 1ERE PRISE DE SERVICE ; ECOLE ; CODE ECOLE ; EFFECTIF ; EMARGEMENT »)
+// : deux boutons de la barre d'actions ouvrent les documents sur leur
+// route dédiée /personnel-list-doc (même gabarit que /personnel-doc)
+// — ENTÊTE de l'état nominatif (bloc ministériel + République +
+// armoiries, boîte du titre verte, Année scolaire + Date du jour),
+// les 8 colonnes demandées, noms des femmes en rouge (N.B), ligne
+// TOTAL, signature « L'Inspecteur » ; données serveur
+// /api/reports/personnel-list (RBAC inspector = son IEP, admin =
+// tout) ; EFFECTIF d'après l'état nominatif (école entière pour les
+// directeurs, cours tenu CM2 pour les maîtres). 3 modèles (PDF /
+// Word / Excel) — Word et Excel réservés au Super Admin (Task 71).
+//
 // Accès (matrice RBAC — module "staff-data") : admin + inspector.
 
 import { useMemo, useState, type ReactElement } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  GraduationCap,
   IdCard,
   Plus,
   Pencil,
@@ -59,6 +77,7 @@ import {
   Search,
   FileSpreadsheet,
   ChevronDown,
+  Users,
 } from "lucide-react";
 
 import { staffDataApi, sectorsApi, schoolsApi } from "@/lib/api";
@@ -541,6 +560,31 @@ export function StaffDataView() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Task 74 — DEUX FICHIERS NOMINATIFS : listes établies par
+                  la circonscription avec l'ENTÊTE de l'état nominatif
+                  (routes dédiées /personnel-list-doc, nouvel onglet). */}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  window.open("/personnel-list-doc?kind=directeurs", "_blank")
+                }
+                className="shadow-sm"
+                title="Liste nominative des directeurs d'école — entête de l'état nominatif (N°, NOM ET PRENOMS, MATRICULE, DATE DE 1ERE PRISE DE SERVICE, ECOLE, CODE ECOLE, EFFECTIF, EMARGEMENT)"
+              >
+                <Users className="w-4 h-4 mr-1.5" />
+                Directeurs d&apos;école
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  window.open("/personnel-list-doc?kind=cm2", "_blank")
+                }
+                className="shadow-sm"
+                title="Liste nominative des maîtres de CM2 — entête de l'état nominatif (N°, NOM ET PRENOMS, MATRICULE, DATE DE 1ERE PRISE DE SERVICE, ECOLE, CODE ECOLE, EFFECTIF, EMARGEMENT)"
+              >
+                <GraduationCap className="w-4 h-4 mr-1.5" />
+                Maîtres de CM2
+              </Button>
               {canExport ? (
                 <Button
                   variant="outline"
