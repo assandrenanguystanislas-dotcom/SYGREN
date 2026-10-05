@@ -1,14 +1,26 @@
 "use client";
 
 // === Documents « LISTE NOMINATIVE DES DIRECTEURS D'ECOLE » et
-// « LISTE NOMINATIVE DES MAITRES DE CM2 » (Task 74) ===
+// « LISTE NOMINATIVE DES MAITRES DE CM2 » (Task 74 + affinages
+// Task 75) ===
 //
 // Demande : « dans le module fichier du personnel, créer 2 fichiers —
 // 1 fichier nommé liste nominatif des directeurs d'école et 1 autre
 // nommé liste nominatif des maitres de cm2. Pour le faire, se servir
-// de l'entête de l'état nominatif. Les documents doivent comporter
-// les colonnes suivantes : N° ; NOM ET PRENOMS ; MATRICULE ; DATE DE
-// 1ERE PRISE DE SERVICE ; ECOLE ; CODE ECOLE ; EFFECTIF ; EMARGEMENT. »
+// de l'entête de l'état nominatif. » — colonnes (Task 75) : N° ; NOM
+// ET PRENOMS ; MATRICULE ; DATE DE 1ERE PRISE DE SERVICE ; ECOLE ;
+// CODE ECOLE ; EFFECTIF ; NIVEAU ; EMARGEMENT.
+//
+// Affinages Task 75 :
+//   - SEULEMENT LES ENSEIGNANTS ISSUS DES EPP (filtre côté serveur :
+//     écoles dont le nom commence par « EPP ») ;
+//   - ORDRE ALPHABÉTIQUE des NOM ET PRENOMS (ordre serveur) ;
+//   - colonne NIVEAU (cours tenu — CM2 pour les maîtres, cours du
+//     dossier pour les directeurs, case vide sans cours) ;
+//   - sous la dernière ligne, À DROITE : « Fait à Dabou, le
+//     ............/.......... / 202.... » (ville dérivée de l'IEP) ;
+//   - signature : 15 MM entre « L'Inspecteur » et son nom (espace
+//     de signature).
 //
 // Entête REPRISE DE L'ÉTAT NOMINATIF (personnel-document.tsx) :
 //   - en-tête institutionnel OfficialDocHeader (variante « plan »,
@@ -132,20 +144,38 @@ const tdNom: React.CSSProperties = {
   overflowWrap: "break-word",
 };
 
-// Largeurs des 8 colonnes demandées (total 100 %).
+// Largeurs des 9 colonnes du modèle (total 100 %).
 const COL_WIDTHS = [
   "4%", // N°
-  "22%", // NOM ET PRENOMS
+  "20%", // NOM ET PRENOMS
   "9%", // MATRICULE
   "11%", // DATE DE 1ERE PRISE DE SERVICE
-  "25%", // ECOLE
+  "23%", // ECOLE
   "8%", // CODE ECOLE
   "7%", // EFFECTIF
-  "14%", // EMARGEMENT
+  "6%", // NIVEAU (Task 75)
+  "12%", // EMARGEMENT
 ];
 
 // Largeurs Excel (même ordre).
-const XLSX_COL_WIDTHS = [4.5, 30, 11, 12.5, 32, 10, 9, 13];
+const XLSX_COL_WIDTHS = [4.5, 28, 11, 12.5, 30, 10, 8.5, 7, 12];
+
+/** Mention « Fait à … » (Task 75) : la ville est dérivée de l'IEP —
+ *  région en priorité, sinon le nom de l'IEP sans le préfixe « IEP »
+ *  ni le numéro final (IEP DABOU 1 → « Dabou »), 1re lettre capitale.
+ *  Pointillés à compléter à la main : jour / mois, année « 202.... ». */
+function faitALigne(region?: string | null, name?: string | null): string {
+  let raw = (region ?? "").trim();
+  if (!raw) raw = (name ?? "").trim();
+  raw = raw
+    .replace(/^IEP\s+/i, "")
+    .replace(/[\s\d.\-]+$/, "")
+    .trim();
+  const ville = raw
+    ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()
+    : "…………";
+  return `Fait à ${ville}, le ............/.......... / 202....`;
+}
 
 export function PersonnelListDocument({
   kind,
@@ -376,12 +406,13 @@ export function PersonnelListDocument({
                 <th style={th}>ECOLE</th>
                 <th style={th}>CODE ECOLE</th>
                 <th style={th}>EFFECTIF</th>
+                <th style={th}>NIVEAU</th>
                 <th style={th}>EMARGEMENT</th>
               </tr>
             </thead>
             <tbody>
-              {/* Une ligne par agent — ordre : école (alphabétique) puis
-                  nom ; noms des femmes EN ROUGE (N.B du modèle). */}
+              {/* Une ligne par agent — ORDRE ALPHABÉTIQUE (Task 75) ;
+                  noms des femmes EN ROUGE (N.B du modèle). */}
               {rows.map((r, i) => (
                 <tr key={r.id}>
                   <td style={td}>{i + 1}</td>
@@ -398,13 +429,14 @@ export function PersonnelListDocument({
                   <td style={tdLeft}>{r.school_name}</td>
                   <td style={td}>{r.school_code}</td>
                   <td style={td}>{fmtNum(r.effectif)}</td>
+                  <td style={td}>{r.niveau ?? ""}</td>
                   {/* EMARGEMENT : case vide destinée à la signature. */}
                   <td style={td}>&nbsp;</td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ ...td, height: "30mm" }}>
+                  <td colSpan={9} style={{ ...td, height: "30mm" }}>
                     Aucun agent dans le périmètre de ce document.
                   </td>
                 </tr>
@@ -435,16 +467,30 @@ export function PersonnelListDocument({
                   {fmtNum(data.total_effectif)}
                 </td>
                 <td style={{ border: "none", padding: 0 }} />
+                <td style={{ border: "none", padding: 0 }} />
               </tr>
             </tbody>
           </table>
 
-          {/* --- Signature : les listes sont établies par la
-              circonscription — « L'Inspecteur » + NOM (caractère
-              d'imprimerie, comme « Le Directeur » de l'état nominatif). --- */}
+          {/* --- Mention « Fait à … » SOUS LA DERNIÈRE LIGNE, À DROITE
+              (Task 75), puis signature « L'Inspecteur » — les listes
+              sont établies par la circonscription — avec 15 MM entre
+              le libellé et le NOM du titulaire (espace de signature,
+              caractère d'imprimerie comme « Le Directeur »). --- */}
           <div
             style={{
-              marginTop: "14px",
+              marginTop: "8px",
+              fontSize: "12px",
+              textAlign: "right",
+              paddingRight: "2px",
+              color: INK,
+            }}
+          >
+            {faitALigne(data.iep?.region, data.iep?.name)}
+          </div>
+          <div
+            style={{
+              marginTop: "6px",
               display: "flex",
               justifyContent: "flex-end",
             }}
@@ -466,7 +512,8 @@ export function PersonnelListDocument({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.3px",
-                    marginTop: "4px",
+                    // 15 MM entre « L'Inspecteur » et son nom (Task 75).
+                    marginTop: "15mm",
                   }}
                 >
                   {exportData.inspecteur.trim()}
@@ -534,6 +581,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `<th style="${th}">ECOLE</th>` +
     `<th style="${th}">CODE ECOLE</th>` +
     `<th style="${th}">EFFECTIF</th>` +
+    `<th style="${th}">NIVEAU</th>` +
     `<th style="${th}">EMARGEMENT</th>` +
     `</tr>`;
 
@@ -549,6 +597,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
         `<td style="${tdL}">${esc(r.school_name)}</td>` +
         `<td style="${td}">${esc(r.school_code)}</td>` +
         `<td style="${td}">${esc(fmtNum(r.effectif))}</td>` +
+        `<td style="${td}">${esc(r.niveau ?? "")}</td>` +
         `<td style="${td}">&nbsp;</td>` +
         `</tr>`
       );
@@ -557,7 +606,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
 
   const emptyRow =
     o.rows.length === 0
-      ? `<tr><td colspan=8 style="${tdBase}">Aucun agent dans le p&eacute;rim&egrave;tre de ce document.</td></tr>`
+      ? `<tr><td colspan=9 style="${tdBase}">Aucun agent dans le p&eacute;rim&egrave;tre de ce document.</td></tr>`
       : "";
 
   // Ligne TOTAL (libellé sous ECOLE + CODE ECOLE, valeur sous EFFECTIF).
@@ -566,6 +615,7 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `<td colspan=4 style="border:none;"></td>` +
     `<td colspan=2 style="${th}; background:#E4F4ED; color:#00734A;">TOTAL</td>` +
     `<td style="${tdBase}; height:18px; background:#E4F4ED; color:#00734A; font-weight:bold;">${esc(fmtNum(o.totalEffectif))}</td>` +
+    `<td style="border:none;"></td>` +
     `<td style="border:none;"></td>` +
     `</tr>`;
 
@@ -594,6 +644,7 @@ ${armoiries ? `<img src="${armoiries}" width="38" height="38" alt="">` : ""}
 </tr></table>`;
 
   const inspecteur = (o.inspecteur || "").trim().toUpperCase();
+  const fait = faitALigne(o.iepRegion, o.iepName);
 
   return buildWordShell({
     title: `${titre} ${o.anneeScolaire}`,
@@ -626,9 +677,11 @@ ${totalRow}
 </tbody>
 </table>
 <table class=sig><tr>
-<td style="text-align:center; padding-top:14px;">
-<p style="margin:0; font-size:12px; font-weight:bold; text-decoration:underline;">L'Inspecteur</p>
-${inspecteur ? `<p style="margin:4px 0 0; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:0.3px;">${esc(inspecteur)}</p>` : ""}
+<td style="width:66%;"></td>
+<td style="width:34%; text-align:center; padding-top:12px; vertical-align:top;">
+<p style="margin:0; font-size:12px;">${esc(fait)}</p>
+<p style="margin:8px 0 0; font-size:12px; font-weight:bold; text-decoration:underline;">L'Inspecteur</p>
+${inspecteur ? `<p style="margin:42.5pt 0 0; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:0.3px;">${esc(inspecteur)}</p>` : ""}
 </td>
 </tr></table>
 `,
@@ -636,7 +689,7 @@ ${inspecteur ? `<p style="margin:4px 0 0; font-size:12px; font-weight:bold; text
 }
 
 // === MODÈLE EXCEL (.xlsx) — classeur mis en page (exceljs, import
-// dynamique) : en-tête institutionnel fusionné, tableau 8 colonnes bordé
+// dynamique) : en-tête institutionnel fusionné, tableau 9 colonnes bordé
 // vert (femmes en rouge), TOTAL en gras, signature « L'Inspecteur » ;
 // impression PAYSAGE ajustée à 1 page de large, entêtes répétés.
 async function exportExcelAsync(o: ExportData): Promise<void> {
@@ -734,7 +787,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   dateCell.alignment = { horizontal: "right", vertical: "middle" };
   ws.getRow(7).height = 12;
 
-  // --- Entête du tableau (1 rangée, les 8 colonnes demandées) ---
+  // --- Entête du tableau (1 rangée, les 9 colonnes du modèle) ---
   const headLabels = [
     "N°",
     "NOM ET PRENOMS",
@@ -743,6 +796,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     "ECOLE",
     "CODE ECOLE",
     "EFFECTIF",
+    "NIVEAU",
     "EMARGEMENT",
   ];
   headLabels.forEach((label, k) => {
@@ -770,7 +824,8 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
       r.school_name,
       r.school_code,
       fmtNum(r.effectif),
-      "",
+      r.niveau ?? "", // NIVEAU — cours tenu (Task 75)
+      "", // EMARGEMENT — case vide de signature
     ];
     row.height = 28.3; // 10 mm (comme l'état nominatif)
     row.eachCell({ includeEmpty: true }, (c, col) => {
@@ -800,9 +855,20 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     c.fill = { type: "pattern", pattern: "solid", fgColor: GREEN_BG };
   }
 
-  // --- Signature « L'Inspecteur » + NOM (colonnes 6-8, à droite) ---
-  const rSig = rTotal + 2;
-  ws.mergeCells(rSig, 5, rSig, 8);
+  // --- Mention « Fait à … » SOUS LA DERNIÈRE LIGNE, À DROITE (Task 75)
+  // --- puis signature « L'Inspecteur » + NOM (colonnes 5-8, à droite)
+  //     avec 15 MM (≈ 42,5 pt) entre le libellé et le NOM — espace de
+  //     signature (Task 75).
+  const rFait = rTotal + 2;
+  ws.mergeCells(rFait, 5, rFait, 9);
+  const faitCell = ws.getCell(rFait, 5);
+  faitCell.value = faitALigne(o.iepRegion, o.iepName);
+  faitCell.font = font(10);
+  faitCell.alignment = { horizontal: "right", vertical: "middle" };
+  ws.getRow(rFait).height = 15;
+
+  const rSig = rFait + 1;
+  ws.mergeCells(rSig, 5, rSig, 9);
   const sigLabel = ws.getCell(rSig, 5);
   sigLabel.value = "L'Inspecteur";
   sigLabel.font = { ...font(11, true), underline: true };
@@ -810,12 +876,14 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   ws.getRow(rSig).height = 15;
   const inspecteur = (o.inspecteur || "").trim().toUpperCase();
   if (inspecteur) {
-    ws.mergeCells(rSig + 1, 5, rSig + 1, 8);
-    const sigName = ws.getCell(rSig + 1, 5);
+    ws.mergeCells(rSig + 2, 5, rSig + 2, 9);
+    const sigName = ws.getCell(rSig + 2, 5);
     sigName.value = inspecteur;
     sigName.font = font(10, true);
     sigName.alignment = { horizontal: "center", vertical: "middle" };
-    ws.getRow(rSig + 1).height = 13;
+    // Rangée d'espacement = 15 MM entre « L'Inspecteur » et son nom.
+    ws.getRow(rSig + 1).height = 42.5; // 15 mm ≈ 42,5 pt
+    ws.getRow(rSig + 2).height = 13;
   }
 
   // --- Armoiries (meilleur effort — omises si indisponibles) ---

@@ -5148,3 +5148,19 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK (route /personnel-list-doc présente).
 - Test fonctionnel SQLite local (test-lists-74.sh) : directeurs 2/2 avec effectif école (20+12 vacant = 32 ; 25) et total 57 ; CM2 2/2 (maître titulaire 20 F+G, directrice titulaire CM2 25) et total 45 ; adjoint sans cours exclu ; directeurs titulaires CM2 inclus ; kind invalide 400, sans token 401, enseignant 403, iep_id inconnu → 200 vide.
 - Vérification Neon lecture seule (verify_lists_74.py) : 62 directeurs, 46 maîtres de CM2, IEP DABOU 1 (M. DOSSO LACINE — signature).
+
+## Task 75 — Listes nominatives : EPP uniquement, ordre alphabétique, colonne NIVEAU, « Fait à Dabou », signature 15 mm
+
+**Demande** : « PRENDRE EN COMPTE SEULEMENT LES ENSEIGNANTS ISSUS DES EPP. ETABLIR L'ORDRE ALPHABETIQUE. AJOUTER UNE COLONNE NOMME NIVEAU. METTRE EN DESSOUS DE LA DERNIERE LIGNE A DROITE FAIT A DABOU LE ........../ / 202.... METTRE 15 MM ENTRE L'INSPECTEUR ET SON NOM ».
+
+### Réalisation (backend + frontend — aucune migration Neon, endpoint 100 % lecture)
+- FILTRE EPP (personnel_lists.go) : seules les écoles dont le NOM commence par « EPP » restent dans le périmètre — identifiant EPP du système (les 74 écoles EPP* sont toutes status=public) ; exclus : 26 préscolaires publics (PRESCOLAIRE …), 12 écoles communautaires (EC …), 10 privées (EPC/EPI/EPV …) et SAINT MOÏSE — 15 agents exclus au total (Neon).
+- ORDRE ALPHABÉTIQUE : sortRows réécrit — tri des NOM ET PRENOMS insensible à la casse et sans espaces parasites (nomKey = lower+trim), tous écoles confondues (l'ordre par école de la Task 74 est abandonné) ; N° suit cet ordre.
+- COLONNE NIVEAU : champ Niveau (*string) sur PersonnelListRow — cours tenu résolu (dossier users.cours EN PRIORITÉ, sinon classe affectée) : « CM2 » pour les maîtres de CM2, cours du dossier pour les directeurs (46 avec cours, 9 cases vides sur Neon), case vide sans cours ; colonnes du document = N° | NOM ET PRENOMS | MATRICULE | DATE DE 1ERE PRISE DE SERVICE | ECOLE | CODE ECOLE | EFFECTIF | NIVEAU | EMARGEMENT (9 colonnes).
+- FRONTEND (personnel-list-document.tsx, 3 modèles) : COL_WIDTHS 9 colonnes (4/20/9/11/23/8/7/6/12 %), XLSX_COL_WIDTHS 9 valeurs, entête NIVEAU + cellule r.niveau (PDF/Word/Excel), colspan TOTAL et ligne vide ajustés (9) ; MENTION « Fait à Dabou, le ............/.......... / 202.... » SOUS LA DERNIÈRE LIGNE À DROITE — ville dérivée de l'IEP (région sinon nom sans préfixe IEP ni numéro final : IEP DABOU 1 → Dabou) ; SIGNATURE : 15 MM entre « L'Inspecteur » et son NOM (marginTop 15mm en HTML/PDF, margin-top 42.5pt en Word, rangée d'espacement 42,5 pt en Excel) ; bloc signature Word aligné à droite comme le PDF (table 66 %/34 %).
+- types.ts : PersonnelListRow.niveau (commentaire à jour).
+
+### Vérifications
+- go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK (route /personnel-list-doc présente).
+- Test fonctionnel SQLite local (test-lists-75.sh) : directeurs EPP 2/2 (exclus : directeur de préscolaire PUBLIC et d'école communautaire), ordre AGBE < ZOUMANIGUI, niveaux [CM2, vide] ; CM2 EPP 2/2 (maître EPP + directrice titulaire ; exclus maîtres CM2 d'école privée et communautaire), NIVEAU=CM2 partout ; kind invalide 400, sans token 401.
+- Vérification Neon lecture seule (verify_lists_75.py) : 74 écoles EPP ; document DIRECTEURS = 55 lignes (46 avec cours tenu, 9 sans), document MAITRES CM2 = 45 lignes, tri alphabétique vérifié sur les deux, 15 agents exclus par le filtre.
