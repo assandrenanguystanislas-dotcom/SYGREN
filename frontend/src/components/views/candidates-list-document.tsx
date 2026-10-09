@@ -26,6 +26,10 @@
 //     prenoms | sexe | date et lieu de naissance (fusion jj/mm/aaaa à
 //     {lieu}) | nationalite | nom et prénoms du père | nom et prénoms de
 //     la mère | nacte | date de l'acte | lieuacte ;
+//   - Révision 4 : N°, MATRICULE, NATIONALITE réduites au profit de
+//     NACTE — tous les numéros d'acte saisis tiennent sur une ligne
+//     (demande « diminuer les colonnes N° MATRICULE NATIONALITE pour
+//     que tous les éléments de NACTE puisse entrer ») ;
 //   - POLICE AGENCY FB, taille 12 (demande utilisateur) — Arial/Helvetica
 //     en secours si la police n'est pas installée sur le poste ;
 //   - AUCUNE ligne vide de complétion (demande utilisateur : « annuler les
@@ -203,24 +207,36 @@ function tdStyle(align: "left" | "center", red = false): CSSProperties {
 
 // Les 12 colonnes (fusion date+lieu de naissance, père/mère « nom et
 // prénoms », colonne DATE DE L'ACTE entre nacte et lieuacte).
-// Largeurs rééquilibrées (révision 2 puis 3 — demande utilisateur) :
+// Largeurs rééquilibrées (révisions 2 à 4 — demandes utilisateur) :
 // révision 3 : MATRICULE réduite (8% → 7%), LIEUACTE élargie
-// (5,5% → 6,5%). Libellés en minuscules comme le modèle.
+// (5,5% → 6,5%).
+// révision 4 : N°, MATRICULE et NATIONALITE réduites (3→2, 7→5,5,
+// 7,5→5,5) au profit de NACTE (4,5% → 9%) — demande « diminuer les
+// colonnes N° MATRICULE NATIONALITE pour que tous les éléments de
+// NACTE puisse entrer ». Calibrage sur les métriques RÉELLES Agency FB
+// 12px (sonde Neon + TTF) : le plus long nacte saisi « 4904 du
+// 02/07/2025 » (18 car.) = 82,6px ≤ 84,8px utiles à 9% ; matricule 10
+// car. = 47,1px ≤ 49,5px à 5,5% ; « BURKINABÈ » 41,9px et entête
+// « nationalite » gras 42,7px ≤ 49,5px à 5,5% ; « 99 » = 9,8px ≤ 14,2px
+// à 2% (un n° à 3 chiffres — classe agrégat de 445 élèves — revient
+// proprement sur 2 lignes, jamais perdu : pagination mesurée). Tableau
+// 267mm : 1% = 10,09px, padding cellule 6px. Libellés en minuscules
+// comme le modèle.
 const COLS: Array<{
   w: string;
   label: string;
   align: "left" | "center";
 }> = [
-  { w: "3%", label: "n°", align: "center" },
-  { w: "7%", label: "matricule", align: "center" },
+  { w: "2%", label: "n°", align: "center" },
+  { w: "5.5%", label: "matricule", align: "center" },
   { w: "7.5%", label: "nom", align: "left" },
   { w: "16.5%", label: "prenoms", align: "left" },
   { w: "3%", label: "sexe", align: "center" },
   { w: "14%", label: "date et lieu de naissance", align: "left" },
-  { w: "7.5%", label: "nationalite", align: "left" },
+  { w: "5.5%", label: "nationalite", align: "left" },
   { w: "12.5%", label: "nom et prénoms du père", align: "left" },
   { w: "11.5%", label: "nom et prénoms de la mère", align: "left" },
-  { w: "4.5%", label: "nacte", align: "center" },
+  { w: "9%", label: "nacte", align: "center" },
   { w: "6.5%", label: "date de l'acte", align: "center" },
   { w: "6.5%", label: "lieuacte", align: "center" },
 ];
@@ -524,7 +540,11 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
     },
   });
   // Révision 3 : matricule réduite (13 → 11), lieuacte élargie (13 → 15).
-  const colWidths = [4, 11, 15, 30, 5, 28, 14, 24, 22, 11, 13, 15];
+  // Révision 4 (même demande que le PDF) : n° 4 → 3, matricule 11 → 9,
+  // nationalite 14 → 10, NACTE 11 → 19 — les numéros d'acte saisis
+  // (« 4904 du 02/07/2025 », 18 car.) tiennent sur UNE ligne, Agency FB
+  // 10pt ≈ 69px pour 19 unités ≈ 138px (Calibri de secours ≈ 100px ✓).
+  const colWidths = [3, 9, 15, 30, 5, 28, 10, 24, 22, 19, 13, 15];
   ws.columns = colWidths.map((width) => ({ width }));
   const font = (size: number, bold = false, argb?: string) => ({
     name: "Agency FB",
