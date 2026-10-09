@@ -5180,3 +5180,22 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
 - Test fonctionnel SQLite (test-lists-76.sh) : NIVEAU = nb classes actives (4/6, puis 3 après désactivation d'une classe via le toggle officiel PUT {"active":false}) ; CM2 : champ niveau ABSENT de toutes les lignes ; filtre EPP + tri alphabétique inchangés ; 400/401/403 OK. NB découvert au passage : la création d'une école auto-crée ses 6 classes CP1..CM2.
 - Vérification Neon lecture seule (verify_lists_76.py) : les 74 écoles EPP ont exactement 6 classes actives → NIVEAU = 6 pour les 56 directeurs attendus (0 case vide) ; 46 maîtres CM2 sans colonne NIVEAU.
+
+---
+
+## Task 77 — Liste des candidats : colonnes N° / MATRICULE / NATIONALITE réduites, NACTE élargie
+
+**Demande** : « DIMINUER LES COLONNES N° MATRICULE NATIONALITE POUR QUE TOUS LES ELEMENTS DE NACTE PUISSE ENTRER ».
+
+### Calibrage (données réelles × métriques réelles de la police)
+- Sonde Neon lecture seule (scripts hors repo) : le NACTE (acte_number) le plus long SAISI = « 4904 du 02/07/2025 » (18 caractères — 43 candidats CM2 portent un acte de 16-18 car. de la forme « NNN du jj/mm/aaaa ») ; matricule max 10 car. (« 196254026U ») ; nationalités « IVOIRIENNE » / « BURKINABÈ » ≤ 11 car. (294/387 = Ivoirienne).
+- Métriques RÉELLES Agency FB 12px mesurées par fontTools sur les TTF (upem 2048) : acte 18 car. = 82,6px ; matricule 10 car. = 47,1px ; « BURKINABÈ » = 41,9px ; entête « nationalite » grasse = 42,7px ; « 99 » = 9,8px. Tableau 267mm → 1% = 10,09px, padding cellule 6px.
+
+### Changements (candidates-list-document.tsx — les 3 modèles suivent la même source)
+- COLS (PDF + Word, révision 4) : N° 3% → 2% ; MATRICULE 7% → 5,5% (49,5px utiles ≥ 47,1px) ; NATIONALITE 7,5% → 5,5% (≥ 41,9px données et 42,7px entête) ; NACTE 4,5% → 9% (84,8px utiles ≥ 82,6px — le plus long acte saisi tient sur UNE ligne). Somme exacte 100% (garde automatique en script). Colonnes nom / prenoms / parents / date-lieu de naissance / sexe / date de l'acte / lieuacte INCHANGÉES (les noms complets de la session 40 restent préservés).
+- Excel (révision 4) : colWidths n° 4 → 3, matricule 11 → 9, nationalite 14 → 10, NACTE 11 → 19 (18 car. sur une ligne même en Calibri de secours ; fitToWidth absorbe +1 unité).
+- Cas limite documenté : un n° à 3 chiffres (classe agrégat « CM2 » de 445 élèves) reviendrait proprement sur 2 lignes — jamais perdu : la pagination mesurée (fix précédent, commit d4ac890) remplit les pages selon la hauteur RÉELLE de chaque ligne et recalcule automatiquement avec les nouvelles largeurs.
+
+### Vérifications
+- tsc --noEmit 0 erreur ; next build OK (route /liste-candidats-doc) ; garde script : somme des 12 largeurs = 100% exactement.
+- Push 1f777f2 (auteur assandrenanguystanislas) ; Vercel READY vérifié PAR CONTENU : marqueur nouveau `w:"9%",label:"nacte"` présent dans les chunks déployés de /liste-candidats-doc, ancien `w:"4.5%"` ABSENT, marqueur Excel `22,19,13,15]` présent ; Render non impacté (0 fichier backend) — /api/health {"status":"ok"}.
