@@ -34,19 +34,28 @@
 //   - 3 modèles d'impression (demande utilisateur) : PDF (impression
 //     navigateur), WORD (.doc HTML MSO A4 paysage, en-tête + thead répété)
 //     et EXCEL (.xlsx exceljs : en-tête fusionné, tableau bordé, paysage) ;
-//   - Pagination à QUOTAS COMPTÉS (demande utilisateur) : 15 lignes sur
-//     la PREMIÈRE page, 25 sur les suivantes — respectées exactement
-//     (lignes 6,4mm, plus aucune estimation de hauteur) ; la signature
-//     « LE DIRECTEUR » (soulignée) vient JUSTE APRÈS LA DERNIÈRE LIGNE
-//     du tableau (plus ancrée en bas de page), NOM du directeur imprimé
-//     15 MM plus bas (espace de signature, demande utilisateur) ;
-//     « ELEVES (n) » en bas de CHAQUE page, numéro de page en haut au centre ;
+//   - Pagination MESURÉE — fix « le PDF n'affiche pas tous les noms à
+//     imprimer » : les quotas 15 lignes (page 1) / 25 (suivantes) restent
+//     la règle mais en MAXIMA, remplis selon la hauteur RÉELLE de chaque
+//     ligne (mesurée dans le navigateur à la largeur d'impression 267mm).
+//     L'ancien découpe comptait chaque ligne pour exactement 6,4mm : dès
+//     qu'un nom long revenait sur deux lignes, la page débordait de sa
+//     boîte 192mm à overflow:hidden et les DERNIÈRES lignes étaient
+//     rognées — d'où des noms manquants à l'impression. Désormais :
+//     minHeight + plus aucun overflow:hidden → aucune ligne rognable ;
+//     la signature « LE DIRECTEUR » (soulignée) vient juste après la
+//     dernière ligne du tableau, NOM du directeur 15 MM plus bas (espace
+//     de signature) ;
+//   - Numéro de page en haut au centre (comme le modèle) ; le pied
+//     « ELEVES (n) » du bas de page est SUPPRIMÉ (demande utilisateur :
+//     « enlever le nombre qui se trouve au bas des feuilles ») — idem
+//     modèles Word et Excel ;
 //   - Convention maison : noms/prénoms des FILLES en rouge (comme les
 //     tableaux de classement et « RESULTATS DE FIN D'ANNEE »).
 
 import { useQuery } from "@tanstack/react-query";
 import { FileSpreadsheet, FileText, Loader2, Printer, X } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 // Type seul (effacé au runtime) — le module exceljs reste importé
 // dynamiquement dans exportExcelAsync (chunk séparé).
@@ -71,32 +80,32 @@ import { canExportFiles, ExportLockBadge } from "@/lib/doc-export";
 const DOC_FONT =
   '"Agency FB", "Arial", "Helvetica", "Liberation Sans", sans-serif';
 
-// === Pagination à QUOTAS COMPTÉS (A4 paysage : zone imprimable 194mm,
-// boîte page 192mm — padding 6mm haut/bas → 180mm utiles) ===
-// Demande utilisateur : « LES 15 LIGNES SUR LA PREMIERE PAGE ET LES 25
-// SUR LES AUTRES PAGES NE SONT PAS RESPECTEES » — l'ancienne découpe
-// ESTIMAIT la hauteur de chaque ligne (majoration pour les textes qui
-// reviennent à la ligne) et sous-remplissait les pages (17 à 22 lignes
-// au lieu de 25). Désormais les pages sont COMPTÉES, sans aucune
-// estimation ; la géométrie garantit qu'elles tiennent :
-//   - ligne 6,4mm (police 12) ;
-//   - page 1    : en-tête (~50mm) + 3mm + en-têtes tableau (~8mm)
-//                 + 15 × 6,4mm ≈ 157mm ≤ 180mm ✓
-//   - suivantes : 3mm + ~8mm + 25 × 6,4mm ≈ 171mm ≤ 180mm ✓
-//   - dernière  : au plus SIGN_CAP lignes → le tableau + la zone
-//                 signature (« LE DIRECTEUR » juste après la dernière
-//                 ligne + 15mm + NOM ≈ 28mm au total) tiennent dans les
-//                 180mm utiles — « JUSTE APRES LA DERNIERE LIGNE NOUS
-//                 DEVONS AVOIR LE DIRECTEUR ET RESPECTER 15 MM POUR LE
-//                 NOM » (demande utilisateur) : si le reste de la liste
-//                 dépasse ce plafond sans remplir une page entière, la
-//                 page courante rend une ligne de moins (jamais de
-//                 chevauchement, jamais de page signature seule).
+// === Pagination MESURÉE (A4 paysage : zone imprimable 194mm, boîte page
+// 192mm — padding 6mm haut/bas → 180mm utiles) ===
+// Règle utilisateur conservée : 15 lignes sur la page 1, 25 sur les
+// suivantes, signature « LE DIRECTEUR » juste après la dernière ligne +
+// 15mm + NOM. Mais les lignes ne font pas toutes 6,4mm : un nom/prénoms
+// long revient sur deux lignes et la ligne du tableau s'ajuste (demande
+// session 40 : tous les noms écrits en entier). Le découpe précédent
+// comptait chaque ligne pour exactement 6,4mm : dès qu'une ligne
+// grandissait, la page débordait de sa boîte 192mm à overflow:hidden et
+// les dernières lignes étaient ROGNÉES (noms manquants à l'impression).
+// Désormais les pages sont remplies selon la hauteur RÉELLE de chaque
+// ligne (mesurée dans le navigateur à la largeur d'impression 267mm) :
+//   - page 1    : en-tête mesuré + 3mm + en-têtes tableau mesurés +
+//                 lignes ≤ 180mm utiles (et ≤ 15 lignes) ;
+//   - suivantes : 3mm + en-têtes + lignes ≤ 180mm (et ≤ 25 lignes) ;
+//   - dernière  : la zone signature mesurée est RÉSERVÉE — on n'y place
+//                 que ce qui tient avec elle (plafond 21 lignes conservé) ;
+//   - filet de sécurité : boîtes minHeight 192mm et plus aucun
+//                 overflow:hidden → AUCUNE ligne ne peut être rognée.
 const SIG_GAP_MM = 15;     // distance « LE DIRECTEUR » → NOM (demande utilisateur)
-const ROWS_FIRST = 15;     // quota de lignes page 1 (demande utilisateur)
-const ROWS_MID = 25;       // quota de lignes pages suivantes (demande utilisateur)
-const SIGN_CAP = 21;       // max de lignes sur la page signature (zone ~28mm en flux)
-const ROW_MM = 6.4;        // hauteur d'une ligne (police 12)
+const ROWS_FIRST = 15;     // quota MAX de lignes page 1 (demande utilisateur)
+const ROWS_MID = 25;       // quota MAX de lignes pages suivantes (demande utilisateur)
+const SIGN_CAP = 21;       // max de lignes sur la page signature (conservé)
+const ROW_MM = 6.4;        // hauteur nominale d'une ligne (police 12) — secours mesure
+const USABLE_MM = 180;     // 192mm boîte - padding 6mm × 2
+const MEASURE_W_MM = 267;  // largeur d'impression exacte : 281mm - padding 7mm × 2
 
 const ROW_HEIGHT = "6.4mm";
 
@@ -258,6 +267,67 @@ function buildPages(students: StudentWithClass[]): DocPage[] {
   return pages;
 }
 
+// Référence stable « liste vide » — évite de relancer la mesure du même
+// payload à chaque rendu.
+const EMPTY_STUDENTS: StudentWithClass[] = [];
+
+// Pagination MESURÉE : remplit chaque page selon les hauteurs RÉELLES
+// (mm) mesurées dans le navigateur — quotas 15/25 en MAXIMA, zone
+// signature réservée sur la dernière page. Garantit qu'aucune ligne ne
+// dépasse la boîte de page (donc qu'aucun nom n'est rogné à l'impression)
+// tout en conservant la règle utilisateur 15/25 quand les lignes sont
+// droites (6,4mm).
+function paginateMeasured(
+  students: StudentWithClass[],
+  heights: number[],
+  hHeader: number,
+  hThead: number,
+  hSig: number,
+): DocPage[] {
+  const n = students.length;
+  if (n === 0) return [[]]; // page d'en-tête + signature même à effectif nul
+  const h = (k: number) => heights[k] || ROW_MM; // secours si mesure absente
+  const sumFrom = (from: number) => {
+    let s = 0;
+    for (let k = from; k < n; k++) s += h(k);
+    return s;
+  };
+  // Capacités (mm) par type de page — planchers de sécurité.
+  const capFirst = Math.max(USABLE_MM - hHeader - 3 - hThead, 40);
+  const capMid = Math.max(USABLE_MM - 3 - hThead, 40);
+  const capSigFirst = Math.max(capFirst - hSig, 20);
+  const capSigMid = Math.max(capMid - hSig, 20);
+  const pages: DocPage[] = [];
+  let i = 0;
+  while (i < n) {
+    const isFirst = pages.length === 0;
+    const quota = isFirst ? ROWS_FIRST : ROWS_MID;
+    const capPage = isFirst ? capFirst : capMid;
+    const capSig = isFirst ? capSigFirst : capSigMid;
+    const remaining = n - i;
+    // Tout le reste tient sur cette page AVEC la zone signature → on
+    // termine ici (dernière page).
+    if (remaining <= SIGN_CAP && sumFrom(i) <= capSig) {
+      pages.push(students.slice(i));
+      break;
+    }
+    // Remplissage au quota / à la capacité réelle — on garde toujours au
+    // moins UNE ligne pour la page signature finale (jamais de tableau
+    // plein sans place pour « LE DIRECTEUR »).
+    const takeMax = Math.min(quota, remaining - 1);
+    let take = 0;
+    let used = 0;
+    while (take < takeMax && used + h(i + take) <= capPage) {
+      used += h(i + take);
+      take++;
+    }
+    if (take === 0) take = 1; // ligne plus haute que la page : jamais de ligne abandonnée
+    pages.push(students.slice(i, i + take));
+    i += take;
+  }
+  return pages;
+}
+
 // ============================================================ 3 MODÈLES ===
 
 interface CandidatsExportData {
@@ -274,6 +344,10 @@ interface CandidatsExportData {
   // Nom du directeur signataire (demande utilisateur : inscrit sous
   // « LE DIRECTEUR » dans les 3 modèles).
   directeur: string;
+  // Pages déjà calculées par la pagination mesurée du modèle PDF — les
+  // modèles Word et Excel reprennent EXACTEMENT les mêmes pages
+  // (fallback : quotas comptés 15/25).
+  pages?: DocPage[];
 }
 
 function escHtml(v: string): string {
@@ -315,11 +389,12 @@ async function armoiriesBase64(): Promise<string> {
 
 // Modèle WORD (.doc) — HTML MSO A4 PAYSAGE fidèle au document imprimé :
 // en-tête institutionnel complet (tableau 3 colonnes sans bordures), titre
-// encadré, UNE table 12 colonnes bordée par page selon les MÊMES QUOTAS
-// 15/25 que le modèle PDF (saut de page Word explicite entre les tables,
-// le <br> empêche aussi Word de fusionner les tables adjacentes),
-// signature « LE DIRECTEUR » (juste après la dernière ligne du tableau,
-// NOM 15 mm plus bas) et pied « ELEVES (n) ». Aucune ligne vide.
+// encadré, UNE table 12 colonnes bordée par page selon les MÊMES pages que
+// le modèle PDF (pagination mesurée partagée, fallback quotas 15/25 — saut
+// de page Word explicite entre les tables, le <br> empêche aussi Word de
+// fusionner les tables adjacentes), signature « LE DIRECTEUR » (juste
+// après la dernière ligne du tableau, NOM 15 mm plus bas). Aucune ligne
+// vide ; pied « ELEVES (n) » SUPPRIMÉ (demande utilisateur).
 async function buildWordHtml(o: CandidatsExportData): Promise<string> {
   const armoiries = await armoiriesBase64();
   const iep = o.iep;
@@ -328,7 +403,7 @@ async function buildWordHtml(o: CandidatsExportData): Promise<string> {
   // Pages QUOTAS 15/25 — numérotation continue des lignes d'une page à
   // l'autre (identique au modèle PDF).
   let numero = 0;
-  const tables = buildPages(o.students)
+  const tables = (o.pages ?? buildPages(o.students))
     .map((rows, p) => {
       const body = rows
         .map((s) => {
@@ -382,7 +457,6 @@ thead.rep { display:table-header-group; }
 .sig { font-weight:bold; text-decoration:underline; margin-top:3mm; } /* juste après la dernière ligne (demande utilisateur) */
 /* NOM 15 mm sous « LE DIRECTEUR » — espace de signature (demande utilisateur) */
 .signame { font-weight:bold; text-transform:uppercase; letter-spacing:0.3px; margin-top:${SIG_GAP_MM}mm; }
-.pied { text-align:center; margin-top:18pt; }
 </style>
 </head>
 <body>
@@ -414,7 +488,6 @@ ${armoiries ? `<p><img src="${armoiries}" width="56" height="56" alt=""></p>` : 
 ${tables}
 <p class=sig>LE DIRECTEUR</p>
 ${o.directeur.trim() ? `<p class=signame>${escHtml(o.directeur.trim().toUpperCase())}</p>` : ""}
-<p class=pied>ELEVES (${o.total})</p>
 </div>
 </body>
 </html>`;
@@ -422,9 +495,10 @@ ${o.directeur.trim() ? `<p class=signame>${escHtml(o.directeur.trim().toUpperCas
 
 // Modèle EXCEL (.xlsx) — classeur mis en page (exceljs, import dynamique) :
 // en-tête officiel fusionné + armoiries, tableau 12 colonnes bordé (filles en
-// rouge), pied « ELEVES (n) », signature « LE DIRECTEUR », impression paysage
-// ajustée à 1 page de large avec répétition de la ligne d'en-têtes, et
-// SAUTS DE PAGE aux MÊMES QUOTAS 15/25 que le modèle PDF (rowBreaks).
+// rouge), signature « LE DIRECTEUR » (pied « ELEVES (n) » SUPPRIMÉ — demande
+// utilisateur), impression paysage ajustée à 1 page de large avec répétition
+// de la ligne d'en-têtes, et SAUTS DE PAGE aux MÊMES pages que le modèle PDF
+// (pagination mesurée partagée, fallback quotas 15/25 — rowBreaks).
 const EXCEL_BORDER = { style: "thin" as const, color: { argb: "FF000000" } };
 const EXCEL_BOX = {
   top: EXCEL_BORDER,
@@ -450,7 +524,8 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
     },
   });
   // Révision 3 : matricule réduite (13 → 11), lieuacte élargie (13 → 15).
-  ws.columns = [4, 11, 15, 30, 5, 28, 14, 24, 22, 11, 13, 15].map((width) => ({ width }));
+  const colWidths = [4, 11, 15, 30, 5, 28, 14, 24, 22, 11, 13, 15];
+  ws.columns = colWidths.map((width) => ({ width }));
   const font = (size: number, bold = false, argb?: string) => ({
     name: "Agency FB",
     size,
@@ -506,7 +581,7 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
   o.students.forEach((s, i) => {
     const girl = s.gender === "F";
     const row = ws.getRow(10 + i);
-    row.values = [
+    const values = [
       i + 1,
       cell(s.matricule),
       cell(s.last_name).toUpperCase(),
@@ -520,7 +595,14 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
       fmtDateActe(s.acte_date),
       cell(s.acte_place),
     ];
-    row.height = 18;
+    row.values = values;
+    // Hauteur 18pt FIXÉE seulement si aucun texte ne risque de revenir à
+    // la ligne ; sinon hauteur AUTO (Excel ajuste la ligne) — un nom
+    // long n'est jamais coupé dans la cellule.
+    const mayWrap = values.some(
+      (v, idx) => String(v ?? "").length > colWidths[idx] * 0.9,
+    );
+    if (!mayWrap) row.height = 18;
     row.eachCell({ includeEmpty: true }, (c, col) => {
       c.border = EXCEL_BOX;
       c.font = font(10, false, girl && (col === 3 || col === 4) ? "FFDC2626" : undefined);
@@ -531,14 +613,13 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
     });
   });
 
-  // Sauts de page = QUOTAS COMPTÉS 15/25 (demande utilisateur) — les
-  // MÊMES pages que le modèle PDF : 15 lignes sur la 1re page imprimée,
-  // 25 sur les suivantes ; la dernière (≤ 21 lignes) garde la place de
-  // la zone signature (LE DIRECTEUR juste après la dernière ligne +
-  // 15 mm + NOM) sous le tableau.
+  // Sauts de page = MÊMES pages que le modèle PDF (pagination mesurée
+  // partagée — fallback QUOTAS COMPTÉS 15/25, demande utilisateur) ; la
+  // dernière garde la place de la zone signature (LE DIRECTEUR juste
+  // après la dernière ligne + 15 mm + NOM) sous le tableau.
   // Ligne 9 = en-têtes du tableau (répétée à l'impression), données à
   // partir de la ligne 10 → un saut après la ligne 9 + lignes cumulées.
-  const excelPages = buildPages(o.students);
+  const excelPages = o.pages ?? buildPages(o.students);
   const breaks: Array<{ id: number; max: number; min: number; man: number }> = [];
   let done = 0;
   for (let p = 0; p < excelPages.length - 1; p++) {
@@ -555,20 +636,17 @@ async function exportExcelAsync(o: CandidatsExportData): Promise<void> {
   ).rowBreaks = breaks;
 
   const rEnd = 10 + o.students.length;
-  ws.mergeCells(rEnd + 1, 1, rEnd + 1, 12);
-  const foot = ws.getCell(rEnd + 1, 1);
-  foot.value = `ELEVES (${o.total})`;
-  foot.font = font(11, true);
-  foot.alignment = { horizontal: "center" };
-  const dir = ws.getCell(rEnd + 2, 1); // JUSTE APRÈS la dernière ligne (sous le pied « ELEVES (n) »)
+  // Pied « ELEVES (n) » SUPPRIMÉ (demande utilisateur : « enlever le
+  // nombre qui se trouve au bas des feuilles »).
+  const dir = ws.getCell(rEnd + 1, 1); // JUSTE APRÈS la dernière ligne
   dir.value = "LE DIRECTEUR";
   dir.font = { name: "Agency FB", size: 11, bold: true, underline: true };
   // 15 mm d'espace de signature entre « LE DIRECTEUR » et son NOM
   // (demande utilisateur) — ligne intercalaire vide (43pt ≈ 15mm).
-  ws.getRow(rEnd + 3).height = Math.round((SIG_GAP_MM * 72) / 25.4);
+  ws.getRow(rEnd + 2).height = Math.round((SIG_GAP_MM * 72) / 25.4);
   // Nom du directeur signataire SOUS « LE DIRECTEUR » (demande utilisateur).
   if (o.directeur.trim()) {
-    const dirName = ws.getCell(rEnd + 4, 1);
+    const dirName = ws.getCell(rEnd + 3, 1);
     dirName.value = o.directeur.trim().toUpperCase();
     dirName.font = { name: "Agency FB", size: 10, bold: true };
   }
@@ -619,6 +697,45 @@ export function CandidatesListDocument({
     queryFn: () => studentsApi.candidates(classId),
   });
 
+  // Liste source — RÉFÉRENCE STABLE (structurellement partagée par
+  // react-query) : la mesure ne se relance que si la liste change vraiment.
+  const students: StudentWithClass[] = data?.students ?? EMPTY_STUDENTS;
+
+  // === Pagination MESURÉE en 2 passes (fix « le PDF n'affiche pas tous
+  // les noms ») === Passe 1 : rendu masqué à la largeur d'impression
+  // EXACTE (267mm) → mesure de l'en-tête, des en-têtes du tableau, de la
+  // zone signature et de CHAQUE ligne élève ; paginateMeasured() découpe
+  // alors les pages (quotas 15/25 en MAXIMA, signature réservée). Passe
+  // 2 : rendu du document paginé, conteneur de mesure démonté.
+  // useLayoutEffect → mesure + rendu final AVANT le premier paint.
+  const [layout, setLayout] = useState<{
+    for: StudentWithClass[];
+    pages: DocPage[];
+  } | null>(null);
+  const pages = layout && layout.for === students ? layout.pages : null;
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const root = measureRef.current;
+    if (!root) return; // chargement : pas de conteneur de mesure
+    const pxToMm = (px: number) => (px * 25.4) / 96;
+    const hHeader = pxToMm(
+      root.querySelector<HTMLElement>('[data-measure="header"]')?.offsetHeight ?? 0,
+    );
+    const hThead = pxToMm(
+      root.querySelector<HTMLElement>('[data-measure="thead"]')?.offsetHeight ?? 0,
+    );
+    const hSig = pxToMm(
+      root.querySelector<HTMLElement>('[data-measure="sig"]')?.offsetHeight ?? 0,
+    );
+    const heights = Array.from(
+      root.querySelectorAll<HTMLElement>('[data-measure="row"]'),
+    ).map((el) => pxToMm(el.offsetHeight));
+    setLayout({
+      for: students,
+      pages: paginateMeasured(students, heights, hHeader, hThead, hSig),
+    });
+  }, [students]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -651,21 +768,200 @@ export function CandidatesListDocument({
     );
   }
 
-  const students: StudentWithClass[] = data.students ?? [];
   const total = data.count ?? students.length;
   const garcons = students.filter((s) => s.gender === "M").length;
   const filles = students.filter((s) => s.gender === "F").length;
 
   const iep = data.iep;
   const annee = cepeExamYear();
+  const directeur = data.directeur ?? "";
 
-  // Découpage en pages à QUOTAS COMPTÉS : 15 lignes page 1, 25 suivantes
-  // (demande utilisateur) — AUCUNE ligne vide ; « LE DIRECTEUR » vient
-  // JUSTE APRÈS la dernière ligne de la DERNIÈRE page, NOM 15 mm plus
-  // bas (demande utilisateur) — dernière page ≤ 21 lignes pour tout
-  // tenir sur la page.
-  const pages = buildPages(students);
-  const lastPageIdx = pages.length - 1;
+  // Pages calculées par la pagination MESURÉE (null = passe 1 en cours) ;
+  // « LE DIRECTEUR » vient juste après la dernière ligne de la DERNIÈRE
+  // page, NOM 15 mm plus bas (demande utilisateur).
+  const lastPageIdx = pages ? pages.length - 1 : -1;
+
+  // === Blocs PARTAGÉS entre la passe de mesure et le rendu réel ===
+  // (une seule source de vérité : les mesures correspondent EXACTEMENT
+  // au document imprimé).
+
+  // En-tête institutionnel (page 1).
+  const headerBlock = (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: "6px",
+      }}
+    >
+      {/* Bloc ministériel + école (gauche) */}
+      <div style={{ width: "33%", fontSize: "12px", lineHeight: 1.3 }}>
+        <div>Ministère de l&apos;Education Nationale</div>
+        <div>Et de l&apos;Alphabétisation</div>
+        <div style={{ fontStyle: "italic", fontWeight: 700, marginTop: "1px" }}>
+          Direction Régionale de {iep?.region || "…………"}
+        </div>
+        <div style={{ fontStyle: "italic", fontWeight: 700 }}>
+          Inspection de l&apos;Enseignement
+        </div>
+        <div style={{ fontStyle: "italic", fontWeight: 700 }}>
+          Préscolaire et Primaire de {iep?.name || "…………"}
+        </div>
+        <div style={{ fontWeight: 700, marginTop: "1px" }}>
+          BP : {iep?.bp || "……"} / Tel : {iep?.inspector_phone || "…………"}
+        </div>
+        <div style={{ fontWeight: 700 }}>
+          Courriel :{" "}
+          <span
+            style={{
+              color: "#0563C1",
+              textDecoration: "underline",
+              ...PRINT_COLOR_STYLE,
+            }}
+          >
+            {iep?.inspector_email || "…………"}
+          </span>
+        </div>
+        <div style={{ fontWeight: 700, fontSize: "13px", marginTop: "5px" }}>
+          ECOLE : {data.school.name}
+        </div>
+        <div style={{ fontWeight: 700, fontSize: "12px" }}>
+          CODE: {data.school.code || "…………"}
+        </div>
+        <div style={{ fontWeight: 700, fontSize: "12px" }}>
+          CENTRE D&apos;EXAMEN: {data.exam_center || "…………"}
+        </div>
+      </div>
+
+      {/* Titre encadré (centre) */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          justifyContent: "center",
+          paddingTop: "14px",
+        }}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            border: "2px solid #000000",
+            borderRadius: "12px",
+            padding: "7px 20px 8px",
+            fontSize: "16px",
+            fontWeight: 700,
+            lineHeight: 1.35,
+            letterSpacing: "0.5px",
+            textAlign: "center",
+            color: INK,
+            boxShadow: "3px 3px 0 #bfbfbf",
+            ...PRINT_COLOR_STYLE,
+          }}
+        >
+          LISTE ALPHABETIQUE DES CANDIDATS
+          <br />
+          AU CEPE SESSION {annee}
+        </span>
+      </div>
+
+      {/* République + armoiries + effectifs + date (droite) */}
+      <div
+        style={{
+          width: "21%",
+          textAlign: "center",
+          fontSize: "12px",
+          lineHeight: 1.3,
+        }}
+      >
+        <div>République de Côte d&apos;Ivoire</div>
+        <div style={{ fontSize: "11.5px", padding: "1px 0" }}>
+          Union-Discipline-Travail
+        </div>
+        <img
+          src="/ci-coat-of-arms.png"
+          alt="Armoiries de la République de Côte d'Ivoire"
+          style={{ height: "42px", margin: "2px auto", display: "block" }}
+        />
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: "13px",
+            letterSpacing: "1.5px",
+            marginTop: "3px",
+          }}
+        >
+          G {garcons}&nbsp;&nbsp;F {filles}&nbsp;&nbsp;T {total}
+        </div>
+        <div style={{ fontWeight: 600, fontSize: "11.5px", marginTop: "1px" }}>
+          Date: {todayFr()}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Cellules d'en-tête du tableau (partagées mesure / rendu).
+  const headCells = (
+    <>
+      {COLS.map((c) => (
+        <th key={c.label} style={thStyle}>
+          {c.label}
+        </th>
+      ))}
+    </>
+  );
+  const tableHeadRow = <tr>{headCells}</tr>;
+
+  // Une ligne élève complète (numérotation continue d'une page à l'autre)
+  // — `measure` renseigné UNIQUEMENT dans la passe de mesure.
+  const renderRow = (s: StudentWithClass, numero: number, measure?: string) => (
+    <tr key={s.id} data-measure={measure} style={{ pageBreakInside: "avoid" }}>
+      <td style={tdStyle("center")}>{numero}</td>
+      <td style={tdStyle("center")}>{cell(s?.matricule)}</td>
+      <td style={tdStyle("left", s?.gender === "F")}>
+        {cell(s?.last_name).toUpperCase()}
+      </td>
+      <td style={tdStyle("left", s?.gender === "F")}>
+        {s?.first_name ? titleCasePrenoms(s.first_name) : ""}
+      </td>
+      <td style={tdStyle("center")}>{cell(s?.gender)}</td>
+      <td style={tdStyle("left")}>{fmtDateLieuNaissance(s)}</td>
+      <td style={tdStyle("left")}>{cell(s?.nationality)}</td>
+      <td style={tdStyle("left")}>{cell(s?.father_name)}</td>
+      <td style={tdStyle("left")}>{cell(s?.mother_name)}</td>
+      <td style={tdStyle("center")}>{cell(s?.acte_number)}</td>
+      <td style={tdStyle("center")}>{fmtDateActe(s?.acte_date)}</td>
+      <td style={tdStyle("center")}>{cell(s?.acte_place)}</td>
+    </tr>
+  );
+
+  // Signature « LE DIRECTEUR » + NOM (15 mm plus bas — demande
+  // utilisateur). paddingTop au lieu de marginTop : même rendu, aucune
+  // fusion de marges (mesure exacte en passe 1).
+  const sigBlock = (
+    <div
+      style={{
+        paddingTop: "3mm",
+        fontWeight: 700,
+        fontSize: "12px",
+        color: INK,
+        ...PRINT_COLOR_STYLE,
+      }}
+    >
+      <div style={{ textDecoration: "underline" }}>LE DIRECTEUR</div>
+      {directeur ? (
+        <div
+          style={{
+            marginTop: `${SIG_GAP_MM}mm`,
+            textTransform: "uppercase",
+            letterSpacing: "0.3px",
+          }}
+        >
+          {directeur}
+        </div>
+      ) : null}
+    </div>
+  );
 
   const exportData: CandidatsExportData = {
     students,
@@ -678,7 +974,8 @@ export function CandidatesListDocument({
     examCenter: data.exam_center ?? "",
     iep,
     annee,
-    directeur: data.directeur ?? "",
+    directeur,
+    pages: pages ?? undefined,
   };
 
   // Modèle WORD (.doc) — HTML MSO A4 paysage fidèle au document imprimé.
@@ -778,7 +1075,47 @@ export function CandidatesListDocument({
         className={`mx-auto my-3 ${canPrint ? "" : "print-locked"}`}
         style={{ width: "100%", maxWidth: "281mm", fontFamily: DOC_FONT, color: INK }}
       >
-        {pages.map((rows, pageIdx) => {
+        {pages === null ? (
+          /* Passe 1 — MESURE (invisible, largeur d'impression EXACTE
+             267mm) : les MÊMES blocs que le document réel pour des mesures
+             exactes ; démonté dès que les pages sont calculées. */
+          <div
+            ref={measureRef}
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: "-10000px",
+              top: 0,
+              width: `${MEASURE_W_MM}mm`,
+              visibility: "hidden",
+              background: "#ffffff",
+            }}
+          >
+            <div data-measure="header">{headerBlock}</div>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                tableLayout: "fixed",
+                color: INK,
+              }}
+            >
+              <colgroup>
+                {COLS.map((c) => (
+                  <col key={c.label} style={{ width: c.w }} />
+                ))}
+              </colgroup>
+              <thead>
+                <tr data-measure="thead">{headCells}</tr>
+              </thead>
+              <tbody>
+                {students.map((s, i) => renderRow(s, i + 1, "row"))}
+              </tbody>
+            </table>
+            <div data-measure="sig">{sigBlock}</div>
+          </div>
+        ) : (
+          pages.map((rows, pageIdx) => {
           const isFirst = pageIdx === 0;
           const isLast = pageIdx === lastPageIdx;
           return (
@@ -787,9 +1124,8 @@ export function CandidatesListDocument({
               className={`candidats-page bg-white shadow-lg print:shadow-none ${!isLast ? "mb-4 print:mb-0" : ""}`}
               style={{
                 position: "relative",
-                height: "192mm", // < zone imprimable 194mm — ÉVITE la page blanche de débordement
+                minHeight: "192mm", // < zone imprimable 194mm — s'ADAPTE si une ligne mesurée est plus haute (plus aucun rognage)
                 padding: "6mm 7mm",
-                overflow: "hidden",
                 pageBreakAfter: isLast ? "auto" : "always",
                 breakAfter: isLast ? "auto" : "page",
               }}
@@ -809,120 +1145,9 @@ export function CandidatesListDocument({
                 {pageIdx + 1}
               </div>
 
-              {/* --- En-tête complet : page 1 uniquement --- */}
-              {isFirst && (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: "6px",
-                  }}
-                >
-                  {/* Bloc ministériel + école (gauche) */}
-                  <div style={{ width: "33%", fontSize: "12px", lineHeight: 1.3 }}>
-                    <div>Ministère de l&apos;Education Nationale</div>
-                    <div>Et de l&apos;Alphabétisation</div>
-                    <div style={{ fontStyle: "italic", fontWeight: 700, marginTop: "1px" }}>
-                      Direction Régionale de {iep?.region || "…………"}
-                    </div>
-                    <div style={{ fontStyle: "italic", fontWeight: 700 }}>
-                      Inspection de l&apos;Enseignement
-                    </div>
-                    <div style={{ fontStyle: "italic", fontWeight: 700 }}>
-                      Préscolaire et Primaire de {iep?.name || "…………"}
-                    </div>
-                    <div style={{ fontWeight: 700, marginTop: "1px" }}>
-                      BP : {iep?.bp || "……"} / Tel : {iep?.inspector_phone || "…………"}
-                    </div>
-                    <div style={{ fontWeight: 700 }}>
-                      Courriel :{" "}
-                      <span
-                        style={{
-                          color: "#0563C1",
-                          textDecoration: "underline",
-                          ...PRINT_COLOR_STYLE,
-                        }}
-                      >
-                        {iep?.inspector_email || "…………"}
-                      </span>
-                    </div>
-                    <div style={{ fontWeight: 700, fontSize: "13px", marginTop: "5px" }}>
-                      ECOLE : {data.school.name}
-                    </div>
-                    <div style={{ fontWeight: 700, fontSize: "12px" }}>
-                      CODE: {data.school.code || "…………"}
-                    </div>
-                    <div style={{ fontWeight: 700, fontSize: "12px" }}>
-                      CENTRE D&apos;EXAMEN: {data.exam_center || "…………"}
-                    </div>
-                  </div>
-
-                  {/* Titre encadré (centre) */}
-                  <div
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      justifyContent: "center",
-                      paddingTop: "14px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-block",
-                        border: "2px solid #000000",
-                        borderRadius: "12px",
-                        padding: "7px 20px 8px",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        lineHeight: 1.35,
-                        letterSpacing: "0.5px",
-                        textAlign: "center",
-                        color: INK,
-                        boxShadow: "3px 3px 0 #bfbfbf",
-                        ...PRINT_COLOR_STYLE,
-                      }}
-                    >
-                      LISTE ALPHABETIQUE DES CANDIDATS
-                      <br />
-                      AU CEPE SESSION {annee}
-                    </span>
-                  </div>
-
-                  {/* République + armoiries + effectifs + date (droite) */}
-                  <div
-                    style={{
-                      width: "21%",
-                      textAlign: "center",
-                      fontSize: "12px",
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    <div>République de Côte d&apos;Ivoire</div>
-                    <div style={{ fontSize: "11.5px", padding: "1px 0" }}>
-                      Union-Discipline-Travail
-                    </div>
-                    <img
-                      src="/ci-coat-of-arms.png"
-                      alt="Armoiries de la République de Côte d'Ivoire"
-                      style={{ height: "42px", margin: "2px auto", display: "block" }}
-                    />
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: "13px",
-                        letterSpacing: "1.5px",
-                        marginTop: "3px",
-                      }}
-                    >
-                      G {garcons}&nbsp;&nbsp;F {filles}&nbsp;&nbsp;T {total}
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: "11.5px", marginTop: "1px" }}>
-                      Date: {todayFr()}
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* --- En-tête complet : page 1 uniquement (bloc partagé
+                  headerBlock — mesuré à l'identique en passe 1) --- */}
+              {isFirst && headerBlock}
 
               {/* Espace entre en-tête et tableau — 3mm sur TOUTES les pages */}
               <div style={{ height: "3mm" }} />
@@ -941,90 +1166,25 @@ export function CandidatesListDocument({
                     <col key={c.label} style={{ width: c.w }} />
                   ))}
                 </colgroup>
-                <thead>
-                  <tr>
-                    {COLS.map((c) => (
-                      <th key={c.label} style={thStyle}>
-                        {c.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
+                <thead>{tableHeadRow}</thead>
                 <tbody>
-                  {rows.map((s, i) => {
-                    const numero = idxOffset(pages, pageIdx) + i + 1;
-                    const isGirl = s?.gender === "F";
-                    return (
-                      <tr key={s.id} style={{ pageBreakInside: "avoid" }}>
-                        <td style={tdStyle("center")}>{numero}</td>
-                        <td style={tdStyle("center")}>{cell(s?.matricule)}</td>
-                        <td style={tdStyle("left", isGirl)}>
-                          {cell(s?.last_name).toUpperCase()}
-                        </td>
-                        <td style={tdStyle("left", isGirl)}>
-                          {s?.first_name ? titleCasePrenoms(s.first_name) : ""}
-                        </td>
-                        <td style={tdStyle("center")}>{cell(s?.gender)}</td>
-                        <td style={tdStyle("left")}>{fmtDateLieuNaissance(s)}</td>
-                        <td style={tdStyle("left")}>{cell(s?.nationality)}</td>
-                        <td style={tdStyle("left")}>{cell(s?.father_name)}</td>
-                        <td style={tdStyle("left")}>{cell(s?.mother_name)}</td>
-                        <td style={tdStyle("center")}>{cell(s?.acte_number)}</td>
-                        <td style={tdStyle("center")}>{fmtDateActe(s?.acte_date)}</td>
-                        <td style={tdStyle("center")}>{cell(s?.acte_place)}</td>
-                      </tr>
-                    );
-                  })}
+                  {rows.map((s, i) => renderRow(s, idxOffset(pages, pageIdx) + i + 1))}
                 </tbody>
               </table>
 
               {/* Signature « LE DIRECTEUR » + NOM du directeur signataire
                   (demande utilisateur) — EN FLUX, JUSTE APRÈS la dernière
-                  ligne du tableau de la DERNIÈRE page (plus ancrée en bas
-                  de page) : le NOM est imprimé 15 mm SOUS « LE DIRECTEUR »
-                  (espace de signature, demande utilisateur). */}
-              {isLast && (
-                <div
-                  style={{
-                    marginTop: "3mm",
-                    fontWeight: 700,
-                    fontSize: "12px",
-                    color: INK,
-                    ...PRINT_COLOR_STYLE,
-                  }}
-                >
-                  <div style={{ textDecoration: "underline" }}>LE DIRECTEUR</div>
-                  {data.directeur ? (
-                    <div
-                      style={{
-                        marginTop: `${SIG_GAP_MM}mm`,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.3px",
-                      }}
-                    >
-                      {data.directeur}
-                    </div>
-                  ) : null}
-                </div>
-              )}
+                  ligne du tableau de la DERNIÈRE page : le NOM est imprimé
+                  15 mm SOUS « LE DIRECTEUR » (espace de signature). */}
+              {isLast && sigBlock}
 
-              {/* Pied de page « ELEVES (n) » — CHAQUE page (comme le modèle) */}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "2mm",
-                  left: 0,
-                  right: 0,
-                  textAlign: "center",
-                  fontSize: "12px",
-                  color: INK,
-                }}
-              >
-                ELEVES ({total})
-              </div>
+              {/* Pied « ELEVES (n) » SUPPRIMÉ de toutes les pages
+                  (demande utilisateur : « enlever le nombre qui se trouve
+                  au bas des feuilles »). */}
             </div>
           );
-        })}
+          })
+        )}
       </div>
     </div>
   );
