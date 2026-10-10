@@ -47,8 +47,11 @@ interface FormData {
 
 const EMPTY: FormData = { school_id: "", name: "", teacher_id: null };
 
-// Badge color by class level
+// Badge color by class level (PS/MS/GS = maternelle — rose/violet)
 const LEVEL_COLORS: Record<string, string> = {
+  PS: "bg-pink-100 text-pink-700 border-pink-200",
+  MS: "bg-purple-100 text-purple-700 border-purple-200",
+  GS: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200",
   CP: "bg-blue-100 text-blue-700 border-blue-200",
   CE: "bg-amber-100 text-amber-700 border-amber-200",
   CM: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -186,7 +189,7 @@ export function ClassesView() {
             <div>
               <h2 className="font-semibold text-base">Classes</h2>
               <p className="text-xs text-muted-foreground">
-                {classes.length} classe(s) · CP1 → CM2
+                {classes.length} classe(s) · PS → CM2
               </p>
             </div>
           </div>
@@ -204,7 +207,9 @@ export function ClassesView() {
       ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {classes.map((c, i) => {
-            const level = (c.name.match(/^(CP|CE|CM)/)?.[0] ?? "CP") as string;
+            const level = (
+              c.name.match(/^(PS|MS|GS|CP|CE|CM)/)?.[0] ?? "CP"
+            ) as string;
             return (
               <Card
                 key={c.id}
@@ -273,7 +278,7 @@ export function ClassesView() {
           description={
             editing
               ? "Modifiez le nom ou l'affectation de l'enseignant."
-              : "Créez une nouvelle classe (CP1 à CM2)."
+              : "Créez une nouvelle classe (maternelle PS/MS/GS et primaire CP1 à CM2)."
           }
           icon={BookOpen}
           loading={createMut.isPending || updateMut.isPending}
@@ -425,7 +430,7 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         <p className="text-sm font-medium">Aucune classe créée</p>
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           {onCreate
-            ? "Créez vos classes de CP1 à CM2."
+            ? "Créez vos classes — maternelle (PS, MS, GS) et primaire (CP1 à CM2)."
             : "Les classes apparaîtront ici une fois créées."}
         </p>
         {onCreate && (

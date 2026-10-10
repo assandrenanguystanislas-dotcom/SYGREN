@@ -231,7 +231,20 @@ export const SCHOOL_STATUS_LABELS: Record<SchoolStatus, string> = {
 };
 
 export type ClassLevel = "CP" | "CE" | "CM";
-export type ClassName = "CP1" | "CP2" | "CE1" | "CE2" | "CM1" | "CM2";
+// Demande utilisateur : « rendre disponibles les différentes classes dans
+// le formulaire partie classe (CP1-CP2-CE1-CE2-CM1-PS-GS-MS) » — les 3
+// sections de la maternelle (PS/MS/GS) rejoignent la primaire (CP1→CM2),
+// cohérent avec les COURS du dossier personnel (même liste).
+export type ClassName =
+  | "PS"
+  | "MS"
+  | "GS"
+  | "CP1"
+  | "CP2"
+  | "CE1"
+  | "CE2"
+  | "CM1"
+  | "CM2";
 
 export interface SchoolClass {
   id: string;
@@ -989,9 +1002,16 @@ export interface ApiError {
   error: string;
 }
 
-// Listes valides (cahier des charges §3 — école primaire ivoirienne)
-export const CLASS_NAMES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"] as const;
+// Listes valides (ordre pédagogique : maternelle PS · MS · GS puis
+// primaire CP1 → CM2 — demande utilisateur, voir ClassName).
+export const CLASS_NAMES = [
+  "PS", "MS", "GS", "CP1", "CP2", "CE1", "CE2", "CM1", "CM2",
+] as const;
 export const CLASS_LEVELS = ["CP", "CE", "CM"] as const;
+// Les 9 niveaux standard du formulaire d'inscription (partie Classe) :
+// chaque niveau y est TOUJOURS disponible — présent dans l'école →
+// sélection immédiate, absent → création à la volée puis sélection.
+export const STANDARD_CLASS_LEVELS = CLASS_NAMES;
 
 // === Architecture D — Dynamic RBAC + Audit ===
 

@@ -28,6 +28,10 @@ import type {
   ClassWithDetails,
   SchoolWithStats,
 } from "@/lib/types";
+// Demande utilisateur : « rendre disponibles les différentes classes dans
+// le formulaire partie classe (CP1-CP2-CE1-CE2-CM1-PS-GS-MS) » — les 9
+// niveaux standard (maternelle + primaire) toujours accessibles.
+import { STANDARD_CLASS_LEVELS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -275,6 +279,9 @@ export function StudentsView() {
   // suivante (le fichier guide la saisie jusqu'à épuisement).
   const [importQueue, setImportQueue] = useState<ParsedStudent[] | null>(null);
   const [queueIdx, setQueueIdx] = useState(0);
+  // Accès rapide aux niveaux (partie Classe) : niveau en cours de création
+  // à la volée (spinner sur la chip correspondante, autres désactivées).
+  const [creatingLevel, setCreatingLevel] = useState<string | null>(null);
   // Task 53 — dialog « Changement d'école » (élève à transférer).
   const [transferTarget, setTransferTarget] = useState<TransferPerson | null>(
     null,
@@ -518,6 +525,41 @@ export function StudentsView() {
       /* toastée */
     }
   }
+  // === Accès rapide aux NIVEAUX (partie Classe du formulaire) ===
+  // Demande : « rendre disponibles les différentes classes dans le
+  // formulaire partie classe (CP1-CP2-CE1-CE2-CM1-PS-GS-MS) ». Les 9
+  // niveaux standard sont TOUJOURS proposés : déjà créés dans l'école →
+  // un clic sélectionne la classe ; absent → un clic CRÉE la classe
+  // (POST /api/classes — droit classes:write = admin + direction, les
+  // chips ne sont rendues qu'à canManage) puis la sélectionne. L'école
+  // cible = filtre courant (directeur : son école figée ; admin : école
+  // choisie). L'enseignant reste dans SA classe (pas de chips).
+  async function quickLevel(lv: string) {
+    const existing = classes.find((c) => c.name.toUpperCase() === lv);
+    if (existing) {
+      setForm((f) => ({ ...f, class_id: existing.id }));
+      return;
+    }
+    if (!chipSchoolId || creatingLevel) return;
+    setCreatingLevel(lv);
+    try {
+      const created = await classesApi.create({
+        school_id: chipSchoolId,
+        name: lv,
+      });
+      queryClient.invalidateQueries({ queryKey: ["classes"] });
+      setForm((f) => ({ ...f, class_id: created.id }));
+      toast.success(`Classe ${lv} créée`, {
+        description: "Le nouvel élève sera inscrit dans cette classe.",
+      });
+    } catch (err) {
+      toast.error(`Création de la classe ${lv} échouée`, {
+        description: err instanceof Error ? err.message : "Erreur inattendue",
+      });
+    } finally {
+      setCreatingLevel(null);
+    }
+  }
 
   // État de chargement (uniquement si une requête est réellement en cours)
   if (isLoading) return <LoadingState />;
@@ -541,6 +583,10 @@ export function StudentsView() {
       : isTeacher && classes.length === 1
         ? classes[0].id
         : "";
+
+  // École cible des chips de niveaux : le directeur a son école figée dans
+  // schoolFilter ; l'admin doit avoir choisi une école (cascade stricte).
+  const chipSchoolId = hasSchoolSelected ? schoolFilter : "";
 
   // Ouvre la route dédiée /liste-candidats-doc dans un nouvel onglet avec
   // le token — même pattern que les autres documents officiels. Accessible
@@ -1121,6 +1167,55 @@ export function StudentsView() {
                       </p>
                     )}
                   </>
+                )}
+                {/* Demande : « rendre disponibles les différentes classes
+                    dans le formulaire partie classe (CP1-CP2-CE1-CE2-CM1-
+                    PS-GS-MS) » — les 9 niveaux TOUJOURS accessibles : déjà
+                    créés → sélection immédiate ; absents → création à la
+                    volée puis sélection (droit classes:write = admin +
+                    direction). L'enseignant reste dans sa classe. */}
+                {canManage && !editing && chipSchoolId && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[11px] text-muted-foreground shrink-0">
+                      Niveaux :
+                    </span>
+                    {STANDARD_CLASS_LEVELS.map((lv) => {
+                      const existing = classes.find(
+                        (c) => c.name.toUpperCase() === lv,
+                      );
+                      const isSelected =
+                        !!existing && form.class_id === existing.id;
+                      const busy = creatingLevel === lv;
+                      return (
+                        <button
+                          key={lv}
+                          type="button"
+                          disabled={!!creatingLevel}
+                          onClick={() => quickLevel(lv)}
+                          title={
+                            existing
+                              ? `Sélectionner la classe ${lv}`
+                              : `Créer la classe ${lv} puis l'affecter à l'élève`
+                          }
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-60",
+                            isSelected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : existing
+                                ? "border-border bg-background hover:bg-muted"
+                                : "border-dashed border-primary/50 text-primary/80 hover:bg-primary/5",
+                          )}
+                        >
+                          {busy ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            !existing && <Plus className="w-3 h-3" />
+                          )}
+                          {lv}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}

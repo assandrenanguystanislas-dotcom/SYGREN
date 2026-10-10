@@ -177,8 +177,18 @@ type CreateClassRequest struct {
 	AbandonsFilles  *int `json:"abandons_filles,omitempty"`
 }
 
-// ValidClassNames — classes autorisées (cahier des charges §3 Module 1)
+// ValidClassNames — classes autorisées. Primaire CP1→CM2 (cahier des
+// charges §3 Module 1) + maternelle PS/MS/GS (demande utilisateur :
+// « rendre disponibles les différentes classes dans le formulaire partie
+// classe (CP1-CP2-CE1-CE2-CM1-PS-GS-MS) » — les écoles maternelles
+// inscrivent leurs élèves dans PS, MS ou GS, cohérent avec les COURS du
+// dossier personnel qui admettent déjà PS/MS/GS). La valeur = Level.
+// NB : les niveaux maternelle n'ont pas de barème de notation (CP/10,
+// CE/30, CM/50) ni de matières — la saisie de notes ne les concerne pas,
+// tout le calcul retombe proprement sur ses defaults (aucune classe
+// maternelle dans les palmarès/synthèses tant qu'aucune note n'existe).
 var ValidClassNames = map[string]string{
+	"PS": "PS", "MS": "MS", "GS": "GS",
 	"CP1": "CP", "CP2": "CP",
 	"CE1": "CE", "CE2": "CE",
 	"CM1": "CM", "CM2": "CM",
@@ -198,7 +208,7 @@ func CreateClass(w http.ResponseWriter, r *http.Request) {
 	// Valide le nom de classe
 	level, ok := ValidClassNames[req.Name]
 	if !ok {
-		middleware.JSONError(w, "nom de classe invalide (CP1, CP2, CE1, CE2, CM1, CM2)", http.StatusBadRequest)
+		middleware.JSONError(w, "nom de classe invalide (PS, MS, GS, CP1, CP2, CE1, CE2, CM1, CM2)", http.StatusBadRequest)
 		return
 	}
 	// Vérifier que l'école existe réellement en base (évite les classes orphelines)
