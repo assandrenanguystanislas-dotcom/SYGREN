@@ -109,11 +109,17 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
   });
   const classes: ClassWithDetails[] = classesData?.classes ?? [];
 
-  // Auto-sélection de la classe de l'enseignant (1 seule classe enseignée).
-  // Dérivé : on prend la classe choisie explicitement, sinon la classe
-  // enseignée si l'utilisateur est teacher, sinon "all".
+  // Auto-sélection de la classe de l'enseignant (adjoint(e) au directeur).
+  // v26 — le backend renvoie SES classes uniquement : affectation explicite
+  // (teacher_id) OU repli sur le cours tenu du dossier (users.cours — ex :
+  // cours=CP1 → classe CP1 de son école). Priorité à la classe explicitement
+  // affectée, sinon la première de ses classes ; il peut basculer entre SES
+  // classes dans la liste déroulante ci-dessous (jamais les autres).
   const teacherClassId = useMemo(
-    () => (isTeacher ? classes.find((c) => c.teacher_id === user?.id)?.id : undefined),
+    () =>
+      isTeacher
+        ? (classes.find((c) => c.teacher_id === user?.id) ?? classes[0])?.id
+        : undefined,
     [classes, isTeacher, user?.id],
   );
   const classFilter: string = explicitClassFilter ?? teacherClassId ?? "all";
@@ -532,7 +538,9 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
           <CardContent className="py-12 text-center">
             <p className="text-sm">Aucun élève à afficher.</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Vérifiez le filtre classe ou les exemptions de la session.
+              {isTeacher && classes.length === 0
+                ? "Aucune classe ne correspond à votre cours tenu — demandez au directeur de vérifier le champ COURS de votre dossier (ex. CP1) ou de vous affecter une classe."
+                : "Vérifiez le filtre classe ou les exemptions de la session."}
             </p>
           </CardContent>
         </Card>

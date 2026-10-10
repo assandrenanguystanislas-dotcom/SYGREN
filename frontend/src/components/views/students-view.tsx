@@ -320,16 +320,17 @@ export function StudentsView() {
         schoolId: hasSchoolSelected ? schoolFilter : undefined,
       }),
     // enabled si : admin ou conseiller a choisi une école, OU director (son
-    // école est figée), OU teacher (le backend filtre par teacher_id — pas
-    // besoin d'école). Le conseiller ne reçoit que les classes de son
-    // secteur (handler ListClasses v6).
+    // école est figée), OU teacher (le backend renvoie SES classes —
+    // teacher_id ou repli cours tenu du dossier — pas besoin d'école). Le
+    // conseiller ne reçoit que les classes de son secteur (ListClasses v6).
     enabled: isTeacher || (isDirector && !!user?.school_id) || ((isAdmin || isConseiller) && hasSchoolSelected),
   });
 
   // === Élèves : le backend filtre déjà par rôle (RBAC) ===
   // - admin : doit avoir choisi une école (sinon pas de liste — cascade stricte)
   // - director : élèves de son école (école figée)
-  // - teacher : élèves de sa classe (teacher_id = classes.teacher_id)
+  // - teacher : élèves de SES classes (teacher_id OU repli cours tenu du
+  //   dossier users.cours — cf. teacherClassCondition, helpers.go)
   // - conseiller (v8) : élèves des écoles de SON secteur — cascade stricte
   //   comme l'admin : il choisit d'abord une école de son secteur.
   // On passe classFilter au backend pour filtrer côté serveur (plus performant

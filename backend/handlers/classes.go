@@ -66,9 +66,14 @@ func ListClasses(w http.ResponseWriter, r *http.Request) {
 			database.DB.Model(&models.School{}).
 				Select("id").Where("sector_id = ?", sectorID))
 	case "teacher":
-		// L'enseignant ne voit que sa classe
-		userID := ctxUserID(r)
-		query = query.Where("teacher_id = ?", userID)
+		// v26 — l'adjoint(e) au directeur voit SES classes : affectation
+		// explicite (classes.teacher_id) OU repli sur le cours tenu de son
+		// dossier (users.cours = nom de la classe, même école — cf.
+		// teacherClassCondition : 4 classes sur 754 ont un teacher_id, la
+		// vraie affectation vit dans le dossier). Il ne voit JAMAIS les
+		// autres classes de l'école.
+		cond, args := teacherClassCondition(ctxUserID(r))
+		query = query.Where(cond, args...)
 	}
 
 	var classes []models.Class

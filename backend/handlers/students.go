@@ -61,8 +61,12 @@ func ListStudents(w http.ResponseWriter, r *http.Request) {
 			database.DB.Model(&models.School{}).
 				Select("id").Where("sector_id = ?", sectorID))
 	case "teacher":
-		userID := ctxUserID(r)
-		query = query.Where("classes.teacher_id = ?", userID)
+		// v26 — « les adjoints au directeur ont leurs élèves » : élèves des
+		// classes dont il est titulaire (classes.teacher_id) OU, repli,
+		// classe ACTIVE de son école portant le nom du COURS TENU de son
+		// dossier (users.cours — cf. teacherClassCondition dans helpers.go).
+		cond, args := teacherClassCondition(ctxUserID(r))
+		query = query.Where(cond, args...)
 	}
 
 	if classFilter != "" {

@@ -5199,3 +5199,28 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - tsc --noEmit 0 erreur ; next build OK (route /liste-candidats-doc) ; garde script : somme des 12 largeurs = 100% exactement.
 - Push 1f777f2 (auteur assandrenanguystanislas) ; Vercel READY vérifié PAR CONTENU : marqueur nouveau `w:"9%",label:"nacte"` présent dans les chunks déployés de /liste-candidats-doc, ancien `w:"4.5%"` ABSENT, marqueur Excel `22,19,13,15]` présent ; Render non impacté (0 fichier backend) — /api/health {"status":"ok"}.
+
+---
+
+## Task 78 — Les adjoints au directeur ont leurs élèves ; chaque enseignant note SES élèves ; le directeur toute l'école
+
+**Demande** : « dans le module eleves permettre a ce que les adjoints au directeur aient leurs eleves afin que lors des saisies des notes, chaque enseignant soit capable de donner des notes a ses eleves. exemple l'enseignant de cp1 a ses eleves et ainsi de suite. le directeur a tous les eleves de l'ecole ».
+
+### Cause racine (sonde Neon lecture seule)
+- Dans SYGREN le rôle `teacher` = l'adjoint(e) au directeur. Le scoping existant ne passait QUE par `classes.teacher_id` : or 4 classes actives sur 754 seulement ont un titulaire affecté, tandis que 286 enseignants actifs sur 295 (cours renseigné) ont un COURS TENU du dossier (`users.cours`) qui correspond au nom d'une classe active de leur école — la vraie affectation vit dans le dossier. Résultat : l'adjoint ne voyait NI sa classe, NI ses élèves (module Élèves) et ne pouvait saisir aucune note. À l'inverse, `UpsertGrade`/`BulkUpsertGrades` ne vérifiaient PAS l'appartenance de la classe : un adjoint pouvait noter n'importe quel élève de l'école.
+
+### Changements
+- Backend (handlers/helpers.go) : 3 helpers — `teacherCoursScope` (cours + école du dossier), `teacherClassCondition` (condition SQL parenthésée : `classes.teacher_id = ?` OU `classes.school_id = ? ET UPPER(TRIM(classes.name)) = UPPER(cours)`), `teacherOwnsClass` (contrôle en mémoire pour la saisie). Même résolution que `resolveClassTeacherName` (documents) et `heldCoursByName` (état nominatif).
+- Backend (handlers/classes.go) : `ListClasses` teacher → condition ci-dessus (l'adjoint voit SES classes, jamais les autres).
+- Backend (handlers/students.go) : `ListStudents` teacher → même condition (les élèves de SES classes).
+- Backend (handlers/grades.go) : `UpsertGrade` + `BulkUpsertGrades` — un teacher qui n'est pas titulaire de la classe de l'élève reçoit 403 (« vous ne saisissez que les notes des élèves de votre classe » / « l'élève … n'est pas de votre classe ») ; lot mixte refusé AVANT la transaction (0 note partielle). `getSessionForUser` teacher : le repli d'accès à la session utilise aussi la condition (JWT sans school_id). Directeur : TOUTE son école (contrôle élève ∈ école de la session inchangé) ; admin : tout.
+- Frontend (grades-view.tsx) : auto-sélection de la classe de l'enseignant = classe explicitement affectée sinon 1ère de SES classes (le backend n'en renvoie que ses classes) ; bascule possible entre ses classes ; état vide spécifique quand aucune classe ne correspond au cours tenu (« demandez au directeur de vérifier le champ COURS de votre dossier »).
+- Frontend (students-view.tsx) : commentaires du scoping mis à jour (comportement inchangé — le filtrage est backend).
+
+### Cas limites couverts
+- 9 enseignants actifs sans correspondance (cours MAC/RPL hors nomenclature des classes, école orpheline, école sans classe maternelle MS/GS) : restent à liste vide avec message explicatif ; 2 écoles où 2 enseignants partagent le même cours : les deux voient la classe (priorité à l'affectation explicite `teacher_id`) ; 0 doublon de nom de classe active par école (repli non ambigu).
+
+### Vérifications
+- go build + go vet 0 erreur (gofmt ne signale que personnel_lists.go, préexistant, non touché) ; tsc --noEmit 0 erreur ; next build OK.
+- Test fonctionnel SQLite jetable (chaîne réelle chi + handlers réels) 10/10 PASS : ListClasses teacher(cours=CP1) → 1 classe CP1 ; ListStudents teacher → 2 élèves CP1 ; ListStudents director → 4 élèves école ; UpsertGrade teacher son élève 200 / autre classe 403 ; Bulk mixte 403 + 0 note écrite ; director autre classe de son école 200 ; teacher sans school_id JWT → accès session via repli cours 200 ; teacher sans cours → 0/0 ; Bulk sur ses élèves 200.
+- Aucune migration Neon (champs existants users.cours / users.school_id / classes.teacher_id — 100 % lecture).

@@ -174,3 +174,71 @@ func resolveClassTeacherName(cls models.Class) string {
 	}
 	return teacherName
 }
+
+// === Scoping « les élèves de MON cours » (adjoints au directeur) ===
+//
+// Demande utilisateur : « permettre à ce que les adjoints au directeur
+// aient leurs élèves afin que lors des saisies des notes, chaque
+// enseignant soit capable de donner des notes à ses élèves — l'enseignant
+// de CP1 a ses élèves et ainsi de suite — le directeur a tous les élèves
+// de l'école ».
+//
+// Dans SYGREN le rôle teacher = l'adjoint(e) au directeur. Or la vraie
+// affectation d'un adjoint à son cours vit dans le DOSSIER (users.cours,
+// bande déroulante CP1..CM2 — cf. handlers/personnel.go) : sur Neon,
+// 4 classes actives sur 754 seulement ont un teacher_id affecté, contre
+// 286 enseignants actifs dont le cours tenu correspond au nom d'une
+// classe active de leur école. Le scoping des classes/élèves/notes suit
+// donc la MÊME résolution que resolveClassTeacherName ci-dessus :
+//  1. PRIORITÉ : affectation explicite (classes.teacher_id = utilisateur) ;
+//  2. REPLI : classe ACTIVE de la MÊME école dont le nom correspond au
+//     cours tenu du dossier (UPPER(classes.name) = UPPER(users.cours)).
+//
+// Aucune migration Neon (champs existants, 100 % lecture du dossier).
+
+// teacherCoursScope retourne le cours tenu (users.cours, nettoyé) et
+// l'école (users.school_id) du dossier de l'utilisateur — "" si absents.
+func teacherCoursScope(userID string) (cours, schoolID string) {
+	if strings.TrimSpace(userID) == "" {
+		return "", ""
+	}
+
+	var u models.User
+	if err := database.DB.Select("cours, school_id").First(&u, "id = ?", userID).Error; err != nil {
+		return "", ""
+	}
+
+	if u.Cours != nil {
+		cours = strings.TrimSpace(*u.Cours)
+	}
+	if u.SchoolID != nil {
+		schoolID = strings.TrimSpace(*u.SchoolID)
+	}
+	return cours, schoolID
+}
+
+// teacherClassCondition construit la condition SQL « classes enseignées
+// par cet utilisateur » (priorité teacher_id, repli cours tenu du dossier
+// dans la même école). La clause est parenthésée : elle s'enchîne sans
+// ambiguïté avec les autres filtres (AND). École ou cours absents du
+// dossier → repli impossible → teacher_id seul (comportement historique).
+func teacherClassCondition(userID string) (string, []interface{}) {
+	cours, schoolID := teacherCoursScope(userID)
+	if cours != "" && schoolID != "" {
+		return "(classes.teacher_id = ? OR (classes.school_id = ? AND UPPER(TRIM(classes.name)) = UPPER(?)))",
+			[]interface{}{userID, schoolID, strings.ToUpper(cours)}
+	}
+	return "classes.teacher_id = ?", []interface{}{userID}
+}
+
+// teacherOwnsClass — contrôle EN MÉMOIRE (handlers de saisie des notes) :
+// l'enseignant ne note que les élèves de SA classe (teacher_id ou repli
+// cours tenu dans la même école). Le directeur/admin ne passe PAS ici.
+func teacherOwnsClass(userID string, cls models.Class) bool {
+	if cls.TeacherID != nil && *cls.TeacherID == userID {
+		return true
+	}
+	cours, schoolID := teacherCoursScope(userID)
+	return cours != "" && schoolID != "" && cls.SchoolID == schoolID &&
+		strings.EqualFold(strings.TrimSpace(cls.Name), cours)
+}

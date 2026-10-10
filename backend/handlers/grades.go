@@ -119,11 +119,14 @@ func getSessionForUser(r *http.Request, sessionID string) (*models.EvaluationSes
 		if schoolID != "" && session.SchoolID == schoolID {
 			return &session, nil
 		}
-		// Fallback : chercher une classe enseignée par cet utilisateur dans
-		// l'école de la session
+		// Fallback (v26) : chercher une classe enseignée par cet utilisateur
+		// dans l'école de la session — même résolution que le scoping des
+		// classes/élèves (teacher_id OU cours tenu du dossier, cf.
+		// teacherClassCondition).
+		cond, condArgs := teacherClassCondition(ctxUserID(r))
 		var count int64
 		database.DB.Model(&models.Class{}).
-			Where("teacher_id = ? AND school_id = ?", ctxUserID(r), session.SchoolID).
+			Where("school_id = ? AND "+cond, append([]interface{}{session.SchoolID}, condArgs...)...).
 			Count(&count)
 		if count == 0 {
 			return nil, fmt.Errorf("accès refusé : vous n'êtes pas adjoint(e) au directeur dans cette école")
@@ -189,6 +192,15 @@ func UpsertGrade(w http.ResponseWriter, r *http.Request) {
 	// Vérifier que la classe de l'élève n'est pas exemptée
 	if isExempted(session.ID, cls.ID, cls.Level) {
 		middleware.JSONError(w, "la classe de cet élève est exemptée de cette session", http.StatusForbidden)
+		return
+	}
+
+	// v26 — « chaque enseignant donne des notes à SES élèves » : l'adjoint(e)
+	// au directeur ne saisit que dans SA classe (teacher_id ou repli cours
+	// tenu du dossier — cf. teacherOwnsClass). Le directeur garde TOUTE son
+	// école (contrôle élève ∈ école de la session ci-dessus), l'admin tout.
+	if ctxRole(r) == "teacher" && !teacherOwnsClass(ctxUserID(r), cls) {
+		middleware.JSONError(w, "accès refusé : vous ne saisissez que les notes des élèves de votre classe", http.StatusForbidden)
 		return
 	}
 
@@ -310,6 +322,13 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
 		}
 		if c.SchoolID != session.SchoolID {
 			middleware.JSONError(w, fmt.Sprintf("l'élève %s n'appartient pas à l'école de la session", g.StudentID), http.StatusBadRequest)
+			return
+		}
+		// v26 — « chaque enseignant donne des notes à SES élèves » : comme
+		// UpsertGrade, l'adjoint(e) au directeur ne note que les élèves de
+		// sa classe (le directeur garde toute l'école, l'admin tout).
+		if ctxRole(r) == "teacher" && !teacherOwnsClass(ctxUserID(r), c) {
+			middleware.JSONError(w, fmt.Sprintf("accès refusé : l'élève %s n'est pas de votre classe", g.StudentID), http.StatusForbidden)
 			return
 		}
 		studentCache[g.StudentID] = studentCtx{
