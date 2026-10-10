@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -232,6 +232,14 @@ export function StudentsView() {
   // sur des inscriptions » : le CONSEILLER corrige les élèves des écoles
   // de SON secteur (scope backend : élève ET classe cible du secteur).
   const canEdit = canManage || isTeacher || isConseiller;
+  // INSCRIPTION (bouton « Inscrire un élève ») : admin + director + TEACHER
+  // (demande utilisateur : « dans le module élèves, inscrire un élève, la
+  // case des matricules n'apparaît pas — il faut ajouter »). Le tenant du
+  // cours inscrit dans SA classe : la case MATRICULE (Ministère) lui est
+  // désormais proposée à la CRÉATION (le backend CreateStudent l'accepte
+  // déjà pour tous les rôles students:write). Le CONSEILLER n'inscrit pas
+  // (403 backend — il corrige seulement les inscriptions existantes).
+  const canCreate = canManage || isTeacher;
   // Task 53 — CHANGEMENT D'ÉCOLE : l'élève a changé d'établissement.
   // admin : toutes les écoles ; conseiller : les écoles de SON secteur
   // (la liste des écoles est déjà scopée par le backend). Le tenant du
@@ -403,6 +411,27 @@ export function StudentsView() {
       });
     },
   });
+
+  // Le tenant du cours (teacher) : son sélecteur de classe est masqué (il
+  // n'a qu'une classe — chargée par le backend via teacher_id). On pré-remplit
+  // donc class_id automatiquement à l'ouverture du formulaire d'inscription,
+  // sinon le backend refuse la création (« class_id requis »).
+  // NB : hook AVANT les retours anticipés Loading/Error (règles des hooks) —
+  // on lit classesData directement (classes n'existe qu'après ces retours).
+  const teacherClasses = classesData?.classes;
+  useEffect(() => {
+    if (
+      isTeacher &&
+      dialogOpen &&
+      !editing &&
+      !importQueue &&
+      !form.class_id &&
+      teacherClasses &&
+      teacherClasses.length === 1
+    ) {
+      setForm((f) => (f.class_id ? f : { ...f, class_id: teacherClasses[0].id }));
+    }
+  }, [isTeacher, dialogOpen, editing, importQueue, form.class_id, teacherClasses]);
 
   function openCreate() {
     setForm(EMPTY);
@@ -604,24 +633,27 @@ export function StudentsView() {
                 <FileText className="w-4 h-4 mr-1.5" />
                 Liste des candidats
               </Button>
+              {/* Demande utilisateur : le tenant du cours doit aussi pouvoir
+                  inscrire (le bouton était réservé admin + directeur) —
+                  l'import Excel reste un flux direction/admin. */}
+              {canCreate && (
+                <Button onClick={openCreate} size="sm" className="shadow-sm">
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Inscrire un élève
+                </Button>
+              )}
               {canManage && (
-                <>
-                  <Button onClick={openCreate} size="sm" className="shadow-sm">
-                    <Plus className="w-4 h-4 mr-1.5" />
-                    Inscrire un élève
-                  </Button>
-                  <Button
-                    onClick={() => setImportOpen(true)}
-                    size="sm"
-                    variant="outline"
-                    disabled={!schoolFilter}
-                    className="shadow-sm"
-                    title={!schoolFilter ? "Sélectionnez d'abord une école" : "Importer un fichier Excel d'élèves"}
-                  >
-                    <Upload className="w-4 h-4 mr-1.5" />
-                    Importer Excel
-                  </Button>
-                </>
+                <Button
+                  onClick={() => setImportOpen(true)}
+                  size="sm"
+                  variant="outline"
+                  disabled={!schoolFilter}
+                  className="shadow-sm"
+                  title={!schoolFilter ? "Sélectionnez d'abord une école" : "Importer un fichier Excel d'élèves"}
+                >
+                  <Upload className="w-4 h-4 mr-1.5" />
+                  Importer Excel
+                </Button>
               )}
             </div>
           </div>
@@ -781,7 +813,7 @@ export function StudentsView() {
         </Card>
       ) : filtered.length === 0 ? (
         allStudents.length === 0 ? (
-          <EmptyState onCreate={canEdit ? openCreate : undefined} />
+          <EmptyState onCreate={canCreate ? openCreate : undefined} />
         ) : (
           <Card className="border-dashed">
             <CardContent className="py-10 text-center text-muted-foreground">
@@ -1030,7 +1062,12 @@ export function StudentsView() {
                 </Button>
               </div>
             )}
-            {!isTeacher && (
+            {/* Demande utilisateur : « la case des matricules n'apparaît
+                pas — il faut ajouter ». Visible à la CRÉATION pour TOUS les
+                rôles (y compris le tenant du cours — le backend CreateStudent
+                accepte le matricule). En MODIFICATION, le matricule reste
+                figé pour le tenant du cours (backend l'ignore) → masqué. */}
+            {(!isTeacher || !editing) && (
               <div className="space-y-1.5">
                 <Label htmlFor="student-matricule">Matricule (Ministère)</Label>
                 <Input
@@ -1046,24 +1083,44 @@ export function StudentsView() {
                 </p>
               </div>
             )}
-            {!isTeacher && (
+            {/* Classe : la création l'affiche pour TOUS les rôles. Le tenant
+                du cours n'a qu'une classe (pré-remplie automatiquement) →
+                affichée en lecture seule ; plusieurs classes → combobox.
+                La modification reste masquée pour le tenant du cours (classe
+                figée côté backend — inchangé). */}
+            {(!isTeacher || !editing) && (
               <div className="space-y-1.5">
                 <Label htmlFor="student-class">Classe</Label>
-                {/* v11 — bande déroulante + recherche (nom de classe ou
-                    d'école) ; l'école reste affichée à droite de la ligne */}
-                <ClassCombobox
-                  id="student-class"
-                  classes={classes}
-                  value={form.class_id}
-                  onChange={(v) => setForm({ ...form, class_id: v })}
-                  withSchoolName
-                  placeholder="Choisir une classe…"
-                  emptyText="Aucune classe disponible."
-                />
-                {classes.length === 0 && (
-                  <p className="text-xs text-destructive">
-                    Aucune classe disponible — créez-en une d'abord.
-                  </p>
+                {isTeacher && classes.length === 1 ? (
+                  <Input
+                    id="student-class"
+                    value={
+                      classes[0].school_name
+                        ? `${classes[0].name} — ${classes[0].school_name}`
+                        : classes[0].name
+                    }
+                    disabled
+                    className="bg-muted/50 text-muted-foreground"
+                  />
+                ) : (
+                  <>
+                    {/* v11 — bande déroulante + recherche (nom de classe ou
+                        d'école) ; l'école reste affichée à droite de la ligne */}
+                    <ClassCombobox
+                      id="student-class"
+                      classes={classes}
+                      value={form.class_id}
+                      onChange={(v) => setForm({ ...form, class_id: v })}
+                      withSchoolName
+                      placeholder="Choisir une classe…"
+                      emptyText="Aucune classe disponible."
+                    />
+                    {classes.length === 0 && (
+                      <p className="text-xs text-destructive">
+                        Aucune classe disponible — créez-en une d'abord.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
