@@ -15,7 +15,7 @@
 // de téléphone comme code ET mot de passe.
 
 import { useState } from "react";
-import { Loader2, UserPlus, School, Phone, Lock, Info } from "lucide-react";
+import { Loader2, UserPlus, School, Phone, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { authApi } from "@/lib/api";
@@ -40,12 +40,14 @@ interface RegisterAccessDialogProps {
   onRegistered?: (schoolCode: string, phone: string) => void;
 }
 
+// v27 — plus de champ mot de passe : le mot de passe STANDARD = numéro de
+// téléphone est GARANTI par le backend (les mots de passe personnalisés saisis
+// à la création étaient oubliés → « code école + téléphone ne passent pas »).
 const EMPTY_FORM = {
   school_code: "",
   full_name: "",
   phone: "",
   email: "",
-  password: "",
 };
 
 export function RegisterAccessDialog({
@@ -80,8 +82,7 @@ export function RegisterAccessDialog({
         full_name: form.full_name.trim(),
         phone: form.phone.trim(),
         email: form.email.trim() || undefined,
-        // Vide → mot de passe standard = numéro de téléphone (backend)
-        password: form.password || undefined,
+        // v27 — le backend impose le mot de passe STANDARD = téléphone.
       });
       toast.success("Accès créés avec succès", {
         description:
@@ -175,7 +176,8 @@ export function RegisterAccessDialog({
               autoComplete="tel"
             />
             <p className="text-[11px] text-muted-foreground">
-              Sert d&apos;identifiant et de mot de passe standard.
+              Sert d&apos;identifiant ET de mot de passe standard (modifiable
+              ensuite via «&nbsp;Modifier votre mot de passe&nbsp;»).
             </p>
           </div>
 
@@ -189,22 +191,6 @@ export function RegisterAccessDialog({
               placeholder="vous@exemple.ci"
               disabled={loading}
               autoComplete="email"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="reg-password">
-              <Lock className="w-3 h-3 inline mr-1 -mt-0.5" />
-              Mot de passe (optionnel)
-            </Label>
-            <Input
-              id="reg-password"
-              type="password"
-              value={form.password}
-              onChange={(e) => set("password", e.target.value)}
-              placeholder="Laisser vide → votre numéro de téléphone"
-              disabled={loading}
-              autoComplete="new-password"
             />
           </div>
 

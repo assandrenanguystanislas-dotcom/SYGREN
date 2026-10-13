@@ -1,16 +1,16 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
+        "encoding/json"
+        "net/http"
 
-	"github.com/go-chi/chi/v5"
-	"gorm.io/gorm"
+        "github.com/go-chi/chi/v5"
+        "gorm.io/gorm"
 
-	"sygren-api/database"
-	"sygren-api/middleware"
-	"sygren-api/models"
-	"sygren-api/utils"
+        "sygren-api/database"
+        "sygren-api/middleware"
+        "sygren-api/models"
+        "sygren-api/utils"
 )
 
 // === Teachers — Gestion des enseignants (comptes utilisateurs + affectation) ===
@@ -21,22 +21,22 @@ import (
 
 // TeacherWithDetails — enseignant enrichi
 type TeacherWithDetails struct {
-	models.User
-	SchoolName string  `json:"school_name,omitempty"`
-	ClassName  *string `json:"class_name,omitempty"`
+        models.User
+        SchoolName string  `json:"school_name,omitempty"`
+        ClassName  *string `json:"class_name,omitempty"`
 }
 
 // ListTeachers returns teachers (role=teacher) filtered by scope.
 //
 // Query params :
 //
-//	include_directors=true  → inclut aussi les directeurs d'école dans la
-//	réponse (un directeur peut tenir une classe comme enseignant, cahier
-//	des charges §3 Module 1 — règle "director can hold a class").
-//	Le frontend utilise ce flag pour alimenter le dropdown d'affectation
-//	de classe (classes-view.tsx). Sans ce flag, la réponse ne contient que
-//	les enseignants (utilisateurs avec role=teacher) — utilisé par la vue
-//	"Utilisateurs → Enseignants".
+//      include_directors=true  → inclut aussi les directeurs d'école dans la
+//      réponse (un directeur peut tenir une classe comme enseignant, cahier
+//      des charges §3 Module 1 — règle "director can hold a class").
+//      Le frontend utilise ce flag pour alimenter le dropdown d'affectation
+//      de classe (classes-view.tsx). Sans ce flag, la réponse ne contient que
+//      les enseignants (utilisateurs avec role=teacher) — utilisé par la vue
+//      "Utilisateurs → Enseignants".
 //
 // Le champ `class_name` est peuplé pour tous les users retournés (y compris
 // directeurs si include_directors=true). C'est utile pour :
@@ -44,316 +44,319 @@ type TeacherWithDetails struct {
 //     dropdown disponible),
 //   - afficher le nom de l'enseignant affecté à une classe (lookup par ID).
 func ListTeachers(w http.ResponseWriter, r *http.Request) {
-	role := ctxRole(r)
-	includeDirectors := r.URL.Query().Get("include_directors") == "true"
+        role := ctxRole(r)
+        includeDirectors := r.URL.Query().Get("include_directors") == "true"
 
-	var query *gorm.DB
-	if includeDirectors {
-		query = database.DB.Model(&models.User{}).
-			Where("role IN ?", []string{models.RoleTeacher, models.RoleDirector})
-	} else {
-		query = database.DB.Model(&models.User{}).Where("role = ?", models.RoleTeacher)
-	}
+        var query *gorm.DB
+        if includeDirectors {
+                query = database.DB.Model(&models.User{}).
+                        Where("role IN ?", []string{models.RoleTeacher, models.RoleDirector})
+        } else {
+                query = database.DB.Model(&models.User{}).Where("role = ?", models.RoleTeacher)
+        }
 
-	// Isolation des données (demande utilisateur) : l'enseignant ne voit
-	// que SON PROPRE compte, le directeur les agents de SON école, l'admin
-	// IEP ceux de SON IEP ; le parent n'a aucun accès au personnel.
-	switch role {
-	case "director":
-		schoolID := ctxSchoolID(r)
-		if schoolID == "" {
-			jsonResponse(w, http.StatusOK, map[string]interface{}{"teachers": []interface{}{}, "count": 0})
-			return
-		}
-		query = query.Where("school_id = ?", schoolID)
-	case "teacher":
-		// Isolation : l'enseignant ne voit que sa propre fiche.
-		query = query.Where("id = ?", ctxUserID(r))
-	case "inspector":
-		iepID := ctxIEPID(r)
-		if iepID == "" {
-			jsonResponse(w, http.StatusOK, map[string]interface{}{"teachers": []interface{}{}, "count": 0})
-			return
-		}
-		query = query.
-			Joins("JOIN schools ON schools.id = users.school_id").
-			Where("schools.iep_id = ?", iepID)
-	case models.RoleParent:
-		middleware.JSONError(w, "accès refusé : le personnel n'est pas accessible depuis ce compte", http.StatusForbidden)
-		return
-	}
+        // Isolation des données (demande utilisateur) : l'enseignant ne voit
+        // que SON PROPRE compte, le directeur les agents de SON école, l'admin
+        // IEP ceux de SON IEP ; le parent n'a aucun accès au personnel.
+        switch role {
+        case "director":
+                schoolID := ctxSchoolID(r)
+                if schoolID == "" {
+                        jsonResponse(w, http.StatusOK, map[string]interface{}{"teachers": []interface{}{}, "count": 0})
+                        return
+                }
+                query = query.Where("school_id = ?", schoolID)
+        case "teacher":
+                // Isolation : l'enseignant ne voit que sa propre fiche.
+                query = query.Where("id = ?", ctxUserID(r))
+        case "inspector":
+                iepID := ctxIEPID(r)
+                if iepID == "" {
+                        jsonResponse(w, http.StatusOK, map[string]interface{}{"teachers": []interface{}{}, "count": 0})
+                        return
+                }
+                query = query.
+                        Joins("JOIN schools ON schools.id = users.school_id").
+                        Where("schools.iep_id = ?", iepID)
+        case models.RoleParent:
+                middleware.JSONError(w, "accès refusé : le personnel n'est pas accessible depuis ce compte", http.StatusForbidden)
+                return
+        }
 
-	var teachers []models.User
-	if err := query.Order("full_name ASC").Find(&teachers).Error; err != nil {
-		middleware.JSONError(w, "erreur récupération adjoint(e)s au directeur", http.StatusInternalServerError)
-		return
-	}
+        var teachers []models.User
+        if err := query.Order("full_name ASC").Find(&teachers).Error; err != nil {
+                middleware.JSONError(w, "erreur récupération adjoint(e)s au directeur", http.StatusInternalServerError)
+                return
+        }
 
-	result := make([]TeacherWithDetails, 0, len(teachers))
-	for _, t := range teachers {
-		var d TeacherWithDetails
-		d.User = t
-		// Nom de l'école
-		if t.SchoolID != nil {
-			var school models.School
-			if err := database.DB.First(&school, "id = ?", *t.SchoolID).Error; err == nil {
-				d.SchoolName = school.Name
-			}
-		}
-		// Nom de la classe affectée
-		var cls models.Class
-		if err := database.DB.First(&cls, "teacher_id = ?", t.ID).Error; err == nil {
-			n := cls.Name
-			d.ClassName = &n
-		}
-		result = append(result, d)
-	}
+        result := make([]TeacherWithDetails, 0, len(teachers))
+        for _, t := range teachers {
+                var d TeacherWithDetails
+                d.User = t
+                // Nom de l'école
+                if t.SchoolID != nil {
+                        var school models.School
+                        if err := database.DB.First(&school, "id = ?", *t.SchoolID).Error; err == nil {
+                                d.SchoolName = school.Name
+                        }
+                }
+                // Nom de la classe affectée
+                var cls models.Class
+                if err := database.DB.First(&cls, "teacher_id = ?", t.ID).Error; err == nil {
+                        n := cls.Name
+                        d.ClassName = &n
+                }
+                result = append(result, d)
+        }
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"teachers": result,
-		"count":    len(result),
-	})
+        jsonResponse(w, http.StatusOK, map[string]interface{}{
+                "teachers": result,
+                "count":    len(result),
+        })
 }
 
 // CreateTeacherRequest — payload pour créer un compte enseignant
 type CreateTeacherRequest struct {
-	FullName string  `json:"full_name"`
-	Phone    *string `json:"phone,omitempty"`
-	Email    *string `json:"email,omitempty"`
-	Password string  `json:"password"`
-	SchoolID *string `json:"school_id,omitempty"`
-	// Dossier personnel (état nominatif) — optionnel, voir personnel.go
-	Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
+        FullName string  `json:"full_name"`
+        Phone    *string `json:"phone,omitempty"`
+        Email    *string `json:"email,omitempty"`
+        Password string  `json:"password"`
+        SchoolID *string `json:"school_id,omitempty"`
+        // Dossier personnel (état nominatif) — optionnel, voir personnel.go
+        Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
 }
 
 // CreateTeacher creates a teacher account (cahier des charges §3 Module 1).
 func CreateTeacher(w http.ResponseWriter, r *http.Request) {
-	var req CreateTeacherRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
-		return
-	}
-	if req.FullName == "" {
-		middleware.JSONError(w, "full_name requis", http.StatusBadRequest)
-		return
-	}
-	// Au moins un identifiant de connexion (téléphone OU email — cahier des charges §4.1)
-	if (req.Phone == nil || *req.Phone == "") && (req.Email == nil || *req.Email == "") {
-		middleware.JSONError(w, "au moins un email ou téléphone est requis", http.StatusBadRequest)
-		return
-	}
-	// Task 25 — mot de passe STANDARD = numéro de téléphone : si aucun
-	// mot de passe n'est fourni à la création, on utilise le téléphone.
-	// L'utilisateur pourra le modifier à tout moment via « Modifier votre
-	// mot de passe ».
-	if req.Password == "" {
-		if req.Phone == nil || *req.Phone == "" {
-			middleware.JSONError(w,
-				"mot de passe requis (ou renseignez un téléphone : le mot de passe standard est le numéro de téléphone)",
-				http.StatusBadRequest)
-			return
-		}
-		req.Password = *req.Phone
-	}
+        var req CreateTeacherRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
+                return
+        }
+        if req.FullName == "" {
+                middleware.JSONError(w, "full_name requis", http.StatusBadRequest)
+                return
+        }
+        // Au moins un identifiant de connexion (téléphone OU email — cahier des charges §4.1)
+        if (req.Phone == nil || *req.Phone == "") && (req.Email == nil || *req.Email == "") {
+                middleware.JSONError(w, "au moins un email ou téléphone est requis", http.StatusBadRequest)
+                return
+        }
+        // Task 25 — mot de passe STANDARD = numéro de téléphone — v27 :
+        // DÉSORMAIS TOUJOURS. Diagnostic 2026-10-13 : des adjoints créés avec
+        // un mot de passe personnalisé (champ « password » des écrans de
+        // création) ne pouvaient plus se connecter au standard « code école +
+        // téléphone ». Le téléphone est donc REQUIS (identifiant + mot de
+        // passe standard) et le mot de passe à la création lui est TOUJOURS
+        // égal — modifiable ensuite via « Modifier votre mot de passe ».
+        // (req.Password éventuellement transmis est ignoré — compat API.)
+        if req.Phone == nil || *req.Phone == "" {
+                middleware.JSONError(w,
+                        "téléphone requis : il sert d'identifiant ET de mot de passe standard (modifiable ensuite via « Modifier votre mot de passe »)",
+                        http.StatusBadRequest)
+                return
+        }
+        _ = req.Password
+        req.Password = *req.Phone
 
-	// Vérifier l'unicité du téléphone/email
-	if req.Email != nil && *req.Email != "" {
-		var count int64
-		database.DB.Model(&models.User{}).Where("email = ?", *req.Email).Count(&count)
-		if count > 0 {
-			middleware.JSONError(w, "cet email est déjà utilisé", http.StatusConflict)
-			return
-		}
-	}
-	if req.Phone != nil && *req.Phone != "" {
-		var count int64
-		database.DB.Model(&models.User{}).Where("phone = ?", *req.Phone).Count(&count)
-		if count > 0 {
-			middleware.JSONError(w, "ce numéro de téléphone est déjà utilisé", http.StatusConflict)
-			return
-		}
-	}
+        // Vérifier l'unicité du téléphone/email
+        if req.Email != nil && *req.Email != "" {
+                var count int64
+                database.DB.Model(&models.User{}).Where("email = ?", *req.Email).Count(&count)
+                if count > 0 {
+                        middleware.JSONError(w, "cet email est déjà utilisé", http.StatusConflict)
+                        return
+                }
+        }
+        if req.Phone != nil && *req.Phone != "" {
+                var count int64
+                database.DB.Model(&models.User{}).Where("phone = ?", *req.Phone).Count(&count)
+                if count > 0 {
+                        middleware.JSONError(w, "ce numéro de téléphone est déjà utilisé", http.StatusConflict)
+                        return
+                }
+        }
 
-	// Vérifier que l'école a un directeur rattaché (cahier des charges).
-	// On ne peut pas créer un enseignant dans une école sans directeur.
-	if req.SchoolID != nil && *req.SchoolID != "" {
-		var directorCount int64
-		database.DB.Model(&models.User{}).
-			Where("school_id = ? AND role = ?", *req.SchoolID, models.RoleDirector).
-			Count(&directorCount)
-		if directorCount == 0 {
-			middleware.JSONError(w,
-				"impossible de créer un adjoint au directeur : cette école n'a pas de directeur rattaché. "+
-					"Veuillez d'abord créer le compte directeur de cette école.",
-				http.StatusConflict)
-			return
-		}
-	}
+        // Vérifier que l'école a un directeur rattaché (cahier des charges).
+        // On ne peut pas créer un enseignant dans une école sans directeur.
+        if req.SchoolID != nil && *req.SchoolID != "" {
+                var directorCount int64
+                database.DB.Model(&models.User{}).
+                        Where("school_id = ? AND role = ?", *req.SchoolID, models.RoleDirector).
+                        Count(&directorCount)
+                if directorCount == 0 {
+                        middleware.JSONError(w,
+                                "impossible de créer un adjoint au directeur : cette école n'a pas de directeur rattaché. "+
+                                        "Veuillez d'abord créer le compte directeur de cette école.",
+                                http.StatusConflict)
+                        return
+                }
+        }
 
-	// Restauration (correctif accès) : si un enseignant SUPPRIMÉ
-	// (soft-delete) porte déjà ce téléphone/email, on le restaure.
-	if restored, ok := restoreSoftDeletedUser(models.RoleTeacher, req.FullName, req.Phone, req.Email, req.SchoolID, req.Password, nil); ok {
-		if req.Personnel != nil {
-			if err := req.Personnel.applyTo(restored); err != nil {
-				middleware.JSONError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			if err := database.DB.Unscoped().Save(restored).Error; err != nil {
-				middleware.JSONError(w, "erreur mise à jour adjoint au directeur restauré", http.StatusInternalServerError)
-				return
-			}
-		}
-		restored.Password = ""
-		jsonResponse(w, http.StatusCreated, restored)
-		return
-	}
+        // Restauration (correctif accès) : si un enseignant SUPPRIMÉ
+        // (soft-delete) porte déjà ce téléphone/email, on le restaure.
+        if restored, ok := restoreSoftDeletedUser(models.RoleTeacher, req.FullName, req.Phone, req.Email, req.SchoolID, req.Password, nil); ok {
+                if req.Personnel != nil {
+                        if err := req.Personnel.applyTo(restored); err != nil {
+                                middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+                                return
+                        }
+                        if err := database.DB.Unscoped().Save(restored).Error; err != nil {
+                                middleware.JSONError(w, "erreur mise à jour adjoint au directeur restauré", http.StatusInternalServerError)
+                                return
+                        }
+                }
+                restored.Password = ""
+                jsonResponse(w, http.StatusCreated, restored)
+                return
+        }
 
-	hashed, err := utils.HashPassword(req.Password)
-	if err != nil {
-		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
-		return
-	}
+        hashed, err := utils.HashPassword(req.Password)
+        if err != nil {
+                middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
+                return
+        }
 
-	teacher := models.User{
-		FullName: req.FullName,
-		Phone:    req.Phone,
-		Email:    req.Email,
-		Password: hashed,
-		Role:     models.RoleTeacher,
-		SchoolID: req.SchoolID,
-		Active:   true,
-	}
-	if req.Personnel != nil {
-		if err := req.Personnel.applyTo(&teacher); err != nil {
-			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
-	if err := database.DB.Create(&teacher).Error; err != nil {
-		middleware.JSONError(w, "erreur création adjoint au directeur", http.StatusInternalServerError)
-		return
-	}
-	// Ne pas renvoyer le hash
-	teacher.Password = ""
-	jsonResponse(w, http.StatusCreated, teacher)
+        teacher := models.User{
+                FullName: req.FullName,
+                Phone:    req.Phone,
+                Email:    req.Email,
+                Password: hashed,
+                Role:     models.RoleTeacher,
+                SchoolID: req.SchoolID,
+                Active:   true,
+        }
+        if req.Personnel != nil {
+                if err := req.Personnel.applyTo(&teacher); err != nil {
+                        middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+                        return
+                }
+        }
+        if err := database.DB.Create(&teacher).Error; err != nil {
+                middleware.JSONError(w, "erreur création adjoint au directeur", http.StatusInternalServerError)
+                return
+        }
+        // Ne pas renvoyer le hash
+        teacher.Password = ""
+        jsonResponse(w, http.StatusCreated, teacher)
 }
 
 // UpdateTeacher updates a teacher account.
 func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var req struct {
-		FullName string  `json:"full_name,omitempty"`
-		Phone    *string `json:"phone,omitempty"`
-		Email    *string `json:"email,omitempty"`
-		Password string  `json:"password,omitempty"`
-		SchoolID *string `json:"school_id,omitempty"`
-		Active   *bool   `json:"active,omitempty"`
-		// Dossier personnel (état nominatif) — nil = non touché,
-		// non-nil = mise à jour complète (voir personnel.go)
-		Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
-		return
-	}
-	var teacher models.User
-	if err := database.DB.First(&teacher, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "adjoint(e) au directeur introuvable", http.StatusNotFound)
-		return
-	}
+        id := chi.URLParam(r, "id")
+        var req struct {
+                FullName string  `json:"full_name,omitempty"`
+                Phone    *string `json:"phone,omitempty"`
+                Email    *string `json:"email,omitempty"`
+                Password string  `json:"password,omitempty"`
+                SchoolID *string `json:"school_id,omitempty"`
+                Active   *bool   `json:"active,omitempty"`
+                // Dossier personnel (état nominatif) — nil = non touché,
+                // non-nil = mise à jour complète (voir personnel.go)
+                Personnel *PersonnelDossierInput `json:"personnel,omitempty"`
+        }
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
+                return
+        }
+        var teacher models.User
+        if err := database.DB.First(&teacher, "id = ?", id).Error; err != nil {
+                middleware.JSONError(w, "adjoint(e) au directeur introuvable", http.StatusNotFound)
+                return
+        }
 
-	// v3 — Périmètre de modification : l'adjoint(e) au directeur ne modifie
-	// que SA PROPRE fiche (la lecture est déjà limitée à sa fiche par
-	// ListTeachers) ; il ne peut ni se réaffecter à une autre école, ni se
-	// désactiver lui-même.
-	if ctxRole(r) == models.RoleTeacher && id != ctxUserID(r) {
-		middleware.JSONError(w, "accès refusé : un adjoint(e) au directeur ne peut modifier que sa propre fiche", http.StatusForbidden)
-		return
-	}
-	if req.Personnel != nil {
-		if err := req.Personnel.applyTo(&teacher); err != nil {
-			middleware.JSONError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
-	if req.FullName != "" {
-		teacher.FullName = req.FullName
-	}
-	if req.Phone != nil {
-		teacher.Phone = req.Phone
-	}
-	if req.Email != nil {
-		teacher.Email = req.Email
-	}
-	if req.Password != "" {
-		hashed, err := utils.HashPassword(req.Password)
-		if err != nil {
-			middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
-			return
-		}
-		teacher.Password = hashed
-	}
-	if req.SchoolID != nil && *req.SchoolID != "" && ctxRole(r) != models.RoleTeacher {
-		// Vérifier que l'école a un directeur rattaché (cahier des charges).
-		var directorCount int64
-		database.DB.Model(&models.User{}).
-			Where("school_id = ? AND role = ?", *req.SchoolID, models.RoleDirector).
-			Count(&directorCount)
-		if directorCount == 0 {
-			middleware.JSONError(w,
-				"impossible d'affecter cet adjoint au directeur : cette école n'a pas de directeur rattaché.",
-				http.StatusConflict)
-			return
-		}
-		// Task 53 — CHANGEMENT D'ÉCOLE (l'agent change d'établissement) :
-		// si l'école cible diffère de l'école actuelle, on détache les
-		// classes qu'il tient encore (sinon il resterait titulaire d'un
-		// cours de son ancienne école — incohérence état nominatif) et on
-		// trace le transfert dans le journal d'audit.
-		previousSchoolID := ""
-		if teacher.SchoolID != nil {
-			previousSchoolID = *teacher.SchoolID
-		}
-		teacher.SchoolID = req.SchoolID
-		if previousSchoolID != *req.SchoolID {
-			database.DB.Model(&models.Class{}).
-				Where("teacher_id = ?", teacher.ID).
-				Update("teacher_id", nil)
-			LogAction(r, "user.school_transferred", "user", &teacher.ID, map[string]interface{}{
-				"from_school": previousSchoolID,
-				"to_school":   *req.SchoolID,
-			})
-		}
-	}
-	if req.Active != nil && ctxRole(r) != models.RoleTeacher {
-		teacher.Active = *req.Active
-	}
-	if err := database.DB.Save(&teacher).Error; err != nil {
-		middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
-		return
-	}
-	teacher.Password = ""
-	jsonResponse(w, http.StatusOK, teacher)
+        // v3 — Périmètre de modification : l'adjoint(e) au directeur ne modifie
+        // que SA PROPRE fiche (la lecture est déjà limitée à sa fiche par
+        // ListTeachers) ; il ne peut ni se réaffecter à une autre école, ni se
+        // désactiver lui-même.
+        if ctxRole(r) == models.RoleTeacher && id != ctxUserID(r) {
+                middleware.JSONError(w, "accès refusé : un adjoint(e) au directeur ne peut modifier que sa propre fiche", http.StatusForbidden)
+                return
+        }
+        if req.Personnel != nil {
+                if err := req.Personnel.applyTo(&teacher); err != nil {
+                        middleware.JSONError(w, err.Error(), http.StatusBadRequest)
+                        return
+                }
+        }
+        if req.FullName != "" {
+                teacher.FullName = req.FullName
+        }
+        if req.Phone != nil {
+                teacher.Phone = req.Phone
+        }
+        if req.Email != nil {
+                teacher.Email = req.Email
+        }
+        if req.Password != "" {
+                hashed, err := utils.HashPassword(req.Password)
+                if err != nil {
+                        middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
+                        return
+                }
+                teacher.Password = hashed
+        }
+        if req.SchoolID != nil && *req.SchoolID != "" && ctxRole(r) != models.RoleTeacher {
+                // Vérifier que l'école a un directeur rattaché (cahier des charges).
+                var directorCount int64
+                database.DB.Model(&models.User{}).
+                        Where("school_id = ? AND role = ?", *req.SchoolID, models.RoleDirector).
+                        Count(&directorCount)
+                if directorCount == 0 {
+                        middleware.JSONError(w,
+                                "impossible d'affecter cet adjoint au directeur : cette école n'a pas de directeur rattaché.",
+                                http.StatusConflict)
+                        return
+                }
+                // Task 53 — CHANGEMENT D'ÉCOLE (l'agent change d'établissement) :
+                // si l'école cible diffère de l'école actuelle, on détache les
+                // classes qu'il tient encore (sinon il resterait titulaire d'un
+                // cours de son ancienne école — incohérence état nominatif) et on
+                // trace le transfert dans le journal d'audit.
+                previousSchoolID := ""
+                if teacher.SchoolID != nil {
+                        previousSchoolID = *teacher.SchoolID
+                }
+                teacher.SchoolID = req.SchoolID
+                if previousSchoolID != *req.SchoolID {
+                        database.DB.Model(&models.Class{}).
+                                Where("teacher_id = ?", teacher.ID).
+                                Update("teacher_id", nil)
+                        LogAction(r, "user.school_transferred", "user", &teacher.ID, map[string]interface{}{
+                                "from_school": previousSchoolID,
+                                "to_school":   *req.SchoolID,
+                        })
+                }
+        }
+        if req.Active != nil && ctxRole(r) != models.RoleTeacher {
+                teacher.Active = *req.Active
+        }
+        if err := database.DB.Save(&teacher).Error; err != nil {
+                middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
+                return
+        }
+        teacher.Password = ""
+        jsonResponse(w, http.StatusOK, teacher)
 }
 
 // DeleteTeacher removes a teacher account (and unlinks its class).
 func DeleteTeacher(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	// v3 — un adjoint(e) ne supprime pas son propre compte (réservé au
-	// directeur de l'école, à l'Admin IEP et au Super Admin).
-	if ctxRole(r) == models.RoleTeacher {
-		middleware.JSONError(w, "accès refusé : un adjoint(e) au directeur ne peut pas supprimer son propre compte — contactez votre directeur", http.StatusForbidden)
-		return
-	}
-	// Délier les classes affectées
-	database.DB.Model(&models.Class{}).Where("teacher_id = ?", id).Update("teacher_id", nil)
-	if err := database.DB.Delete(&models.User{}, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
-		return
-	}
-	// Audit (Architecture D) — les suppressions n'étaient pas tracées.
-	LogAction(r, "user.deleted", "user", &id, map[string]interface{}{
-		"role": models.RoleTeacher, "classes_unlinked": true,
-	})
-	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+        id := chi.URLParam(r, "id")
+        // v3 — un adjoint(e) ne supprime pas son propre compte (réservé au
+        // directeur de l'école, à l'Admin IEP et au Super Admin).
+        if ctxRole(r) == models.RoleTeacher {
+                middleware.JSONError(w, "accès refusé : un adjoint(e) au directeur ne peut pas supprimer son propre compte — contactez votre directeur", http.StatusForbidden)
+                return
+        }
+        // Délier les classes affectées
+        database.DB.Model(&models.Class{}).Where("teacher_id = ?", id).Update("teacher_id", nil)
+        if err := database.DB.Delete(&models.User{}, "id = ?", id).Error; err != nil {
+                middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
+                return
+        }
+        // Audit (Architecture D) — les suppressions n'étaient pas tracées.
+        LogAction(r, "user.deleted", "user", &id, map[string]interface{}{
+                "role": models.RoleTeacher, "classes_unlinked": true,
+        })
+        jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

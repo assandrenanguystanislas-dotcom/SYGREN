@@ -170,14 +170,15 @@ export function DirectorsView() {
       if (editing) {
         await updateMut.mutateAsync([editing.id, form]);
       } else {
-        // Task 25 — mot de passe optionnel : s'il est vide, le backend
-        // applique le mot de passe STANDARD = numéro de téléphone.
+        // v27 — le backend GARANTIT le mot de passe STANDARD = numéro de
+        // téléphone à la création (les mots de passe personnalisés saisis à
+        // la création étaient oubliés → connexions impossibles). Aucun mot
+        // de passe n'est envoyé.
         await createMut.mutateAsync([
           {
             full_name: form.full_name,
             email: form.email || undefined,
             phone: form.phone || undefined,
-            password: form.password || undefined,
             school_id: form.school_id || undefined,
             personnel: form.personnel,
           },
@@ -494,27 +495,21 @@ export function DirectorsView() {
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground -mt-2">
-            Au moins un email OU un téléphone est requis (cahier des charges §4.1)
+            Le téléphone sert d&apos;identifiant ET de mot de passe standard
+            (modifiable ensuite via «&nbsp;Modifier votre mot de passe&nbsp;»)
           </p>
-          {!isTeacher && (
+          {/* v27 — champ mot de passe : ÉDITION UNIQUEMENT. À la création,
+              le standard (téléphone) est garanti par le backend. */}
+          {!isTeacher && editing && (
             <div className="space-y-1.5">
-              <Label htmlFor="director-password">
-                {editing ? "Nouveau mot de passe (optionnel)" : "Mot de passe (optionnel)"}
-              </Label>
+              <Label htmlFor="director-password">Nouveau mot de passe (optionnel)</Label>
               <Input
                 id="director-password"
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder={editing ? "Laisser vide pour ne pas changer" : "Laisser vide → téléphone"}
+                placeholder="Laisser vide pour ne pas changer"
               />
-              {!editing && (
-                <p className="text-[11px] text-muted-foreground">
-                  Mot de passe standard = numéro de téléphone. Le directeur
-                  pourra le modifier à tout moment via «&nbsp;Modifier votre mot
-                  de passe&nbsp;».
-                </p>
-              )}
             </div>
           )}
           {isStaffAdmin && (
