@@ -7,7 +7,6 @@ import (
 	"sygren-api/database"
 	"sygren-api/middleware"
 	"sygren-api/models"
-	"sygren-api/utils"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -112,21 +111,19 @@ func CreateInspector(w http.ResponseWriter, r *http.Request) {
 		// Pas de vérification d'unicité par IEP.
 	}
 
-	hashed, err := utils.HashPassword(req.Password)
-	if err != nil {
-		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
-		return
-	}
-
 	inspector := models.User{
 		FullName: req.FullName,
 		Phone:    req.Phone,
 		Email:    req.Email,
-		Password: hashed,
 		Role:     models.RoleInspector,
 		IEPID:    req.IEPID,
 		Service:  req.Service,
 		Active:   true,
+	}
+	// Copie en clair de contrôle maintenue (SetPassword)
+	if err := inspector.SetPassword(req.Password); err != nil {
+		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
+		return
 	}
 	if err := database.DB.Create(&inspector).Error; err != nil {
 		middleware.JSONError(w, "erreur création Admin IEP", http.StatusInternalServerError)
@@ -167,12 +164,11 @@ func UpdateInspector(w http.ResponseWriter, r *http.Request) {
 		inspector.Email = req.Email
 	}
 	if req.Password != "" {
-		hashed, err := utils.HashPassword(req.Password)
-		if err != nil {
+		// Copie en clair de contrôle maintenue (SetPassword)
+		if err := inspector.SetPassword(req.Password); err != nil {
 			middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
 			return
 		}
-		inspector.Password = hashed
 	}
 	if req.IEPID != nil {
 		// Plusieurs Admins IEP par IEP autorisés — pas de vérification d'unicité.

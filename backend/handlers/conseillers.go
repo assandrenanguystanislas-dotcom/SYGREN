@@ -10,7 +10,6 @@ import (
 	"sygren-api/database"
 	"sygren-api/middleware"
 	"sygren-api/models"
-	"sygren-api/utils"
 )
 
 // === Conseillers — Gestion des comptes conseillers pédagogiques (v5, session 26) ===
@@ -155,19 +154,17 @@ func CreateConseiller(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashed, err := utils.HashPassword(req.Password)
-	if err != nil {
-		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
-		return
-	}
-
 	conseiller := models.User{
 		FullName: req.FullName,
 		Phone:    req.Phone,
 		Email:    req.Email,
-		Password: hashed,
 		Role:     models.RoleConseiller,
 		Active:   true,
+	}
+	// Copie en clair de contrôle maintenue (SetPassword)
+	if err := conseiller.SetPassword(req.Password); err != nil {
+		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
+		return
 	}
 	if err := database.DB.Create(&conseiller).Error; err != nil {
 		middleware.JSONError(w, "erreur création conseiller", http.StatusInternalServerError)
@@ -213,12 +210,11 @@ func UpdateConseiller(w http.ResponseWriter, r *http.Request) {
 		conseiller.Email = req.Email
 	}
 	if req.Password != "" {
-		hashed, err := utils.HashPassword(req.Password)
-		if err != nil {
+		// Copie en clair de contrôle maintenue (SetPassword)
+		if err := conseiller.SetPassword(req.Password); err != nil {
 			middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
 			return
 		}
-		conseiller.Password = hashed
 	}
 	if req.Active != nil {
 		conseiller.Active = *req.Active

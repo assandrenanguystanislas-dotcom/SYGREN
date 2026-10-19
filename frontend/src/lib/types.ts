@@ -1093,6 +1093,31 @@ export interface AuditLogsResponse {
 // User vu par l'admin (GET /api/users) — même structure que User, plus rien de sensible
 export type UserAdminRow = User;
 
+/** CONTRÔLE ADMIN DES MOTS DE PASSE (GET /api/users/passwords — super admin
+ *  seul) : personnel des écoles (directeurs + adjoints au directeur) avec le
+ *  mot de passe EN CLAIR courant (copie users.password_visible maintenue par
+ *  le backend à CHAQUE définition du mot de passe — création standard
+ *  téléphone, changement volontaire, réinitialisation).
+ *  password_visible = null → mot de passe personnalisé inconnu de
+ *  l'administration (défini avant la fonctionnalité, non conforme au
+ *  standard) : redeviendra visible à la prochaine définition, ou ramené au
+ *  standard téléphone via la réinitialisation. */
+export interface UserPasswordRow {
+  id: string;
+  full_name: string;
+  role: Role;
+  fonction?: string | null;
+  phone?: string | null;
+  school_id?: string | null;
+  school_name?: string | null;
+  school_code?: string | null;
+  cours?: string | null;
+  password_visible?: string | null;
+  password_changed_at?: string | null;
+  must_change_password: boolean;
+  active: boolean;
+}
+
 // === PDA IEPP — Plan d'Action Pluriannuel (compositions + examens blancs) ===
 // Reproduction du document officiel « SUIVI DU PLAN D'ACTION PLURIANNUEL DE
 // L'IEPP ». Le plan suit les compositions mensuelles (notes dérivées du

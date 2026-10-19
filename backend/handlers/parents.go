@@ -10,7 +10,6 @@ import (
 	"sygren-api/database"
 	"sygren-api/middleware"
 	"sygren-api/models"
-	"sygren-api/utils"
 )
 
 // === Parents — Gestion des comptes parents (module Utilisateurs) ===
@@ -127,20 +126,18 @@ func CreateParent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashed, err := utils.HashPassword(req.Password)
-	if err != nil {
-		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
-		return
-	}
-
 	parent := models.User{
 		FullName:       req.FullName,
 		Phone:          req.Phone,
 		Email:          req.Email,
-		Password:       hashed,
 		Role:           models.RoleParent,
 		Active:         true,
 		ChildMatricule: req.ChildMatricule,
+	}
+	// Copie en clair de contrôle maintenue (SetPassword)
+	if err := parent.SetPassword(req.Password); err != nil {
+		middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
+		return
 	}
 	if err := database.DB.Create(&parent).Error; err != nil {
 		middleware.JSONError(w, "erreur création parent", http.StatusInternalServerError)
@@ -187,12 +184,11 @@ func UpdateParent(w http.ResponseWriter, r *http.Request) {
 		parent.ChildMatricule = req.ChildMatricule
 	}
 	if req.Password != "" {
-		hashed, err := utils.HashPassword(req.Password)
-		if err != nil {
+		// Copie en clair de contrôle maintenue (SetPassword)
+		if err := parent.SetPassword(req.Password); err != nil {
 			middleware.JSONError(w, "erreur hashage mot de passe", http.StatusInternalServerError)
 			return
 		}
-		parent.Password = hashed
 	}
 	if req.Active != nil {
 		parent.Active = *req.Active

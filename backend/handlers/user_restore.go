@@ -22,7 +22,6 @@ import (
 
 	"sygren-api/database"
 	"sygren-api/models"
-	"sygren-api/utils"
 
 	"gorm.io/gorm"
 )
@@ -51,18 +50,16 @@ func restoreSoftDeletedUser(role, fullName string, phone, email, schoolID *strin
 		return nil, false
 	}
 
-	hashed, err := utils.HashPassword(password)
-	if err != nil {
-		return nil, false
-	}
-
 	deleted.FullName = fullName
 	deleted.Phone = phone
 	deleted.Email = email
 	if schoolID != nil && *schoolID != "" {
 		deleted.SchoolID = schoolID
 	}
-	deleted.Password = hashed
+	// Copie en clair de contrôle maintenue (SetPassword)
+	if err := deleted.SetPassword(password); err != nil {
+		return nil, false
+	}
 	deleted.Active = true
 	deleted.MustChangePassword = false
 	if extra != nil {

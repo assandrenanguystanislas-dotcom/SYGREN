@@ -197,12 +197,11 @@ func ApproveResetRequest(w http.ResponseWriter, r *http.Request) {
 	if req.Method == "temp_password" {
 		// Option 1 : générer un mdp temporaire simple
 		tempPwd := generateTempPassword()
-		hash, err := utils.HashPassword(tempPwd)
-		if err != nil {
+		// Copie en clair de contrôle maintenue (SetPassword)
+		if err := user.SetPassword(tempPwd); err != nil {
 			middleware.JSONError(w, "erreur hash mot de passe", http.StatusInternalServerError)
 			return
 		}
-		user.Password = hash
 		user.MustChangePassword = true
 		database.DB.Save(&user)
 		resetReq.TempPassword = &tempPwd
@@ -231,12 +230,11 @@ func ApproveResetRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		phonePwd := *user.Phone
-		hash, err := utils.HashPassword(phonePwd)
-		if err != nil {
+		// Copie en clair de contrôle maintenue (SetPassword)
+		if err := user.SetPassword(phonePwd); err != nil {
 			middleware.JSONError(w, "erreur hash mot de passe", http.StatusInternalServerError)
 			return
 		}
-		user.Password = hash
 		// Le standard est CONNU de l'utilisateur → pas de changement forcé.
 		user.MustChangePassword = false
 		database.DB.Save(&user)
@@ -339,13 +337,13 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hasher + sauvegarder le nouveau
-	hash, err := utils.HashPassword(req.NewPassword)
-	if err != nil {
+	// Hasher + sauvegarder le nouveau — copie en clair de contrôle
+	// maintenue (SetPassword) : un mot de passe CHANGÉ par un directeur /
+	// adjoint devient visible au contrôle admin (demande utilisateur).
+	if err := user.SetPassword(req.NewPassword); err != nil {
 		middleware.JSONError(w, "erreur hash mot de passe", http.StatusInternalServerError)
 		return
 	}
-	user.Password = hash
 	user.MustChangePassword = false
 	database.DB.Save(&user)
 
@@ -394,12 +392,11 @@ func ResetPasswordWithToken(w http.ResponseWriter, r *http.Request) {
 		middleware.JSONError(w, "user introuvable", http.StatusNotFound)
 		return
 	}
-	hash, err := utils.HashPassword(req.NewPassword)
-	if err != nil {
+	// Copie en clair de contrôle maintenue (SetPassword)
+	if err := user.SetPassword(req.NewPassword); err != nil {
 		middleware.JSONError(w, "erreur hash", http.StatusInternalServerError)
 		return
 	}
-	user.Password = hash
 	user.MustChangePassword = false
 	database.DB.Save(&user)
 

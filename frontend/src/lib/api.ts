@@ -60,6 +60,7 @@ import type {
   AuditLogsResponse,
   AuditLog,
   UserAdminRow,
+  UserPasswordRow,
   // PDA IEPP — Plan d'Action Pluriannuel
   PdaExam,
   PdaResultsResponse,
@@ -1486,6 +1487,15 @@ export const usersAdminApi = {
   /** Liste tous les utilisateurs avec leur statut de suspension. */
   list: () =>
     apiFetch<{ users: UserAdminRow[]; admin_iep_services: string[] }>("/api/users"),
+
+  /** CONTRÔLE ADMIN DES MOTS DE PASSE — « faire apparaître les mots de
+   *  passe changés par les directeurs et des adjoints aux directeurs » :
+   *  personnel des écoles avec le mot de passe EN CLAIR courant
+   *  (super admin seul — module users-admin). */
+  passwords: () =>
+    apiFetch<{ users: UserPasswordRow[]; count: number; visible_count: number }>(
+      "/api/users/passwords",
+    ),
 
   /** Suspend un utilisateur (active=false, suspended_at, reason). */
   suspend: (id: string, reason?: string) =>

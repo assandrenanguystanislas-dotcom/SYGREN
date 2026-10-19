@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"sygren-api/utils"
 )
 
 // Role constants for RBAC
@@ -83,6 +85,21 @@ type User struct {
 	RedoublantF      *int       `json:"redoublant_f,omitempty"` // redoublants — Filles
 	RedoublantG      *int       `json:"redoublant_g,omitempty"` // redoublants — Garçons
 	RedoublantT      *int       `json:"redoublant_t,omitempty"` // redoublants — Total
+	// CONTRÔLE ADMIN DES MOTS DE PASSE (demande utilisateur : « désormais
+	// faire apparaître les mots de passe changés par les directeurs et des
+	// adjoints aux directeurs pour mieux contrôler leur travail ») —
+	// PasswordVisible : copie EN CLAIR du mot de passe courant, maintenue
+	// automatiquement à CHAQUE définition du mot de passe (création —
+	// standard téléphone, changement volontaire « Modifier votre mot de
+	// passe », réinitialisation admin / lien) via User.SetPassword.
+	// JAMAIS sérialisé ici (json:"-") : exposé UNIQUEMENT par
+	// GET /api/users/passwords (module users-admin — super admin seul),
+	// voir handlers/user_passwords.go. PasswordChangedAt : date de la
+	// dernière définition du mot de passe (NULL = initial antérieur à
+	// cette fonctionnalité, la copie est alors remplie par le backfill
+	// pour les comptes au standard téléphone).
+	PasswordVisible   *string    `gorm:"type:text" json:"-"`
+	PasswordChangedAt *time.Time `json:"-"`
 	// Architecture D — Suspension (Palier 1)
 	SuspendedAt     *time.Time     `gorm:"index" json:"suspended_at,omitempty"`
 	SuspendedByID   *string        `gorm:"type:text;index" json:"suspended_by_id,omitempty"`
@@ -97,6 +114,24 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == "" {
 		u.ID = uuid.NewString()
 	}
+	return nil
+}
+
+// SetPassword définit le hash bcrypt ET la copie en clair de contrôle
+// (PasswordVisible + PasswordChangedAt). À utiliser à CHAQUE définition
+// d'un mot de passe — création, changement volontaire, réinitialisation —
+// car le contrôle admin (« faire apparaître les mots de passe changés par
+// les directeurs et les adjoints ») repose sur cette copie.
+func (u *User) SetPassword(plain string) error {
+	hash, err := utils.HashPassword(plain)
+	if err != nil {
+		return err
+	}
+	u.Password = hash
+	p := plain
+	u.PasswordVisible = &p
+	now := time.Now()
+	u.PasswordChangedAt = &now
 	return nil
 }
 
