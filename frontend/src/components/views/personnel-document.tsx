@@ -141,6 +141,10 @@ import { useState, type CSSProperties } from "react";
 
 import { reportsApi } from "@/lib/api";
 import {
+  isBenevoleMatricule,
+  BENEVOLE_INK,
+} from "@/lib/benevole";
+import {
   DocExportButtons,
   canExportFiles,
   XLSX_MIME,
@@ -768,6 +772,11 @@ export function PersonnelDocument({
  *  est retiré à l'affichage. */
 function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
   const isWoman = s.sexe === "F";
+  // BÉNÉVOLES EN BLEU — « ils doivent être en bleu » : le nom de l'agent
+  // dont le matricule est « Bénévole » passe en bleu (prioritaire sur le
+  // rouge des femmes — un bénévole doit se repérer d'un coup d'œil).
+  const isBenevole = isBenevoleMatricule(s.matricule);
+  const nomColor = isBenevole ? BENEVOLE_INK : isWoman ? "#e00000" : INK;
   const isOfficial = /direct|adjoint/i.test(s.fonction ?? "");
   // Cellules de la ligne : ARIAL 10 pour le directeur et l'adjoint(e),
   // ARIAL 12 pour les autres agents.
@@ -795,7 +804,7 @@ function StaffRow({ s, n }: { s: PersonnelStaffRow; n: number }) {
           // v5 — ARIAL 10 sur les lignes directeur / adjoint(e).
           fontSize: isOfficial ? "10px" : "12px",
           textTransform: "uppercase",
-          color: isWoman ? "#e00000" : INK, // « écrire le nom des femmes en rouge »
+          color: nomColor, // bénévoles EN BLEU, femmes en rouge (N.B)
         }}
       >
         {s.full_name}
@@ -954,13 +963,19 @@ async function buildWordHtml(o: ExportData): Promise<string> {
     `</tr>`;
 
   // Une ligne agent (21 cellules) — NOM en caractère d'imprimerie,
-  // femmes EN ROUGE (N.B du modèle), lignes DIRECTEUR / ADJOINT(E) en
-  // 10px et CONTACT en 10px sans « +225 » (mêmes règles que le PDF).
+  // femmes EN ROUGE (N.B du modèle), BÉNÉVOLES EN BLEU (matricule
+  // « Bénévole » — prioritaire sur le rouge), lignes DIRECTEUR /
+  // ADJOINT(E) en 10px et CONTACT en 10px sans « +225 » (mêmes règles
+  // que le PDF).
   const body = o.staff
     .map((s, i) => {
       const official = /direct|adjoint/i.test(s.fonction ?? "");
       const sz = official ? " font-size:10px;" : "";
-      const nomColor = s.sexe === "F" ? "#e00000" : "#000000";
+      const nomColor = isBenevoleMatricule(s.matricule)
+        ? BENEVOLE_INK
+        : s.sexe === "F"
+          ? "#e00000"
+          : "#000000";
       return (
         `<tr>` +
         `<td style="${td}${sz}">${i + 1}</td>` +
@@ -1138,6 +1153,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   const GREEN_TXT = { argb: "FF00734A" };
   const GREEN_BG = { argb: "FFE4F4ED" };
   const RED = { argb: "FFE00000" };
+  const BLUE = { argb: "FF1D4ED8" }; // bénévoles EN BLEU (#1d4ed8)
   const border = { style: "thin" as const, color: GREEN };
   const BOX = { top: border, left: border, bottom: border, right: border };
 
@@ -1248,10 +1264,17 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     });
   }
 
-  // --- Lignes agents (une ligne par agent, femmes en rouge) ---
+  // --- Lignes agents (une ligne par agent, femmes en rouge,
+  //     BÉNÉVOLES en bleu) ---
   o.staff.forEach((s, i) => {
     const r = HEAD_END + 1 + i;
     const row = ws.getRow(r);
+    // Colonne NOM : bénévoles EN BLEU (prioritaire), femmes EN ROUGE.
+    const nomArgb = isBenevoleMatricule(s.matricule)
+      ? BLUE.argb
+      : s.sexe === "F"
+        ? RED.argb
+        : undefined;
     row.values = [
       i + 1,
       s.full_name.toUpperCase(), // caractère d'imprimerie (comme le PDF)
@@ -1280,8 +1303,8 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     row.height = 28.3;
     row.eachCell({ includeEmpty: true }, (c, col) => {
       c.border = BOX;
-      // Femmes EN ROUGE sur la colonne NOM (N.B du modèle).
-      c.font = font(10, col === 2, s.sexe === "F" && col === 2 ? RED.argb : undefined);
+      // Femmes EN ROUGE / bénévoles EN BLEU sur la colonne NOM.
+      c.font = font(10, col === 2, col === 2 ? nomArgb : undefined);
       c.alignment = {
         horizontal: col === 2 || col === 4 || col === 20 ? "left" : "center",
         vertical: "middle",

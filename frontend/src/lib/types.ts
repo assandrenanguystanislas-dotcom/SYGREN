@@ -508,6 +508,7 @@ export interface SectorSchool {
   status: string;
   /** v14 — totaux d'après l'ÉTAT NOMINATIF DU PERSONNEL */
   nom_teachers?: number; // agents (directeur/enseignant) tenant un cours
+  nom_benevoles?: number; // agents BÉNÉVOLES (matricule « Bénévole »)
   nom_levels?: number; // niveaux réels : tenus + déclarés sans enseignant
   nom_students?: number; // somme des effectifs T des dossiers + lignes déclarées
   nom_filles?: number;
@@ -540,6 +541,8 @@ export interface ConseillerStaffResponse {
     schools: number;
     staff: number;
     teachers?: number;
+    /** Agents BÉNÉVOLES du secteur (matricule « Bénévole ») — badge bleu. */
+    benevoles?: number;
     levels?: number;
     students?: number;
     filles?: number;
@@ -647,6 +650,8 @@ export interface LevelReportInput {
 export interface SectorNiveau {
   cours: string;
   titulaire?: string; // vide si vacant
+  /** Titulaire BÉNÉVOLE (matricule « Bénévole ») — nom affiché EN BLEU. */
+  titulaire_benevole?: boolean;
   filles: number;
   garcons: number;
   total: number;

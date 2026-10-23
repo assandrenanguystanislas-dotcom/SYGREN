@@ -60,6 +60,7 @@ import { Loader2, X } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 
 import { reportsApi } from "@/lib/api";
+import { isBenevoleMatricule, BENEVOLE_INK } from "@/lib/benevole";
 import {
   DocExportButtons,
   canExportFiles,
@@ -441,14 +442,20 @@ export function PersonnelListDocument({
             </thead>
             <tbody>
               {/* Une ligne par agent — ORDRE ALPHABÉTIQUE (Task 75) ;
-                  noms des femmes EN ROUGE (N.B du modèle). */}
+                  noms des femmes EN ROUGE (N.B du modèle), BÉNÉVOLES EN
+                  BLEU (matricule « Bénévole » — prioritaire sur le
+                  rouge, demande utilisateur). */}
               {rows.map((r, i) => (
                 <tr key={r.id}>
                   <td style={td}>{i + 1}</td>
                   <td
                     style={{
                       ...tdNom,
-                      color: r.sexe === "F" ? "#e00000" : INK,
+                      color: isBenevoleMatricule(r.matricule)
+                        ? BENEVOLE_INK
+                        : r.sexe === "F"
+                          ? "#e00000"
+                          : INK,
                     }}
                   >
                     {r.full_name}
@@ -622,7 +629,13 @@ async function buildWordHtml(o: ExportData): Promise<string> {
 
   const body = o.rows
     .map((r, i) => {
-      const nomColor = r.sexe === "F" ? "#e00000" : "#000000";
+      // BÉNÉVOLES EN BLEU (matricule « Bénévole » — prioritaire sur le
+      // rouge des femmes, demande utilisateur).
+      const nomColor = isBenevoleMatricule(r.matricule)
+        ? BENEVOLE_INK
+        : r.sexe === "F"
+          ? "#e00000"
+          : "#000000";
       return (
         `<tr>` +
         `<td style="${td}">${i + 1}</td>` +
@@ -767,6 +780,7 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
   const GREEN_TXT = { argb: "FF00734A" };
   const GREEN_BG = { argb: "FFE4F4ED" };
   const RED = { argb: "FFE00000" };
+  const BLUE = { argb: "FF1D4ED8" }; // bénévoles EN BLEU (#1d4ed8)
   const border = { style: "thin" as const, color: GREEN };
   const BOX = { top: border, left: border, bottom: border, right: border };
 
@@ -856,9 +870,16 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     });
   }
 
-  // --- Lignes agents (femmes EN ROUGE, noms en majuscules) ---
+  // --- Lignes agents (femmes EN ROUGE, BÉNÉVOLES EN BLEU — matricule
+  //     « Bénévole », noms en majuscules) ---
   o.rows.forEach((r, i) => {
     const row = ws.getRow(HEAD_END + 1 + i);
+    // Colonne NOM : bénévoles EN BLEU (prioritaire), femmes EN ROUGE.
+    const nomArgb = isBenevoleMatricule(r.matricule)
+      ? BLUE.argb
+      : r.sexe === "F"
+        ? RED.argb
+        : undefined;
     row.values = [
       i + 1,
       r.full_name.toUpperCase(), // caractère d'imprimerie
@@ -875,8 +896,8 @@ async function exportExcelAsync(o: ExportData): Promise<void> {
     row.height = 28.3; // 10 mm (comme l'état nominatif)
     row.eachCell({ includeEmpty: true }, (c, col) => {
       c.border = BOX;
-      // Femmes EN ROUGE sur la colonne NOM (N.B du modèle).
-      c.font = font(10, col === 2, r.sexe === "F" && col === 2 ? RED.argb : undefined);
+      // Femmes EN ROUGE / bénévoles EN BLEU sur la colonne NOM.
+      c.font = font(10, col === 2, col === 2 ? nomArgb : undefined);
       c.alignment = {
         horizontal: col === 2 || col === 5 ? "left" : "center",
         vertical: "middle",

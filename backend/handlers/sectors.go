@@ -426,6 +426,34 @@ type ConseillerStaffMember struct {
 //
 // Réponse : secteur + écoles du secteur + personnel (directeurs ET adjoints
 // au directeur ACTIFS des écoles du secteur).
+
+// unaccentUpper — majuscules SANS ACCENTS (BÉNÉVOLE → BENEVOLE) :
+// comparaison tolérante des matricules saisis au clavier français ou
+// sans clavier accents (accents français couverts — A/E/I/O/U/Y/N/C/Æ/Œ).
+func unaccentUpper(s string) string {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	return strings.NewReplacer(
+		"À", "A", "Á", "A", "Â", "A", "Ã", "A", "Ä", "A", "Å", "A", "Æ", "AE", "Ç", "C",
+		"È", "E", "É", "E", "Ê", "E", "Ë", "E", "Ì", "I", "Í", "I", "Î", "I", "Ï", "I",
+		"Ñ", "N", "Ò", "O", "Ó", "O", "Ô", "O", "Õ", "O", "Ö", "O", "Œ", "OE",
+		"Ù", "U", "Ú", "U", "Û", "U", "Ü", "U", "Ý", "Y", "Ÿ", "Y",
+	).Replace(s)
+}
+
+// isBenevoleMatricule — agent BÉNÉVOLE : matricule du dossier valant
+// « Bénévole / BÉNÉVOLE / BENEVOLE » (accents, casse et espaces
+// tolérés — la typo « BBENEVOLE » d'une saisie de terrain est
+// comprise aussi). Convention partagée avec le frontend
+// (frontend/src/lib/benevole.ts — même règle de normalisation) :
+// « tous les conseillers doivent connaître le nombre de bénévoles de
+// leurs secteurs respectifs — ils doivent être en bleu ».
+func isBenevoleMatricule(m *string) bool {
+	if m == nil || strings.TrimSpace(*m) == "" {
+		return false
+	}
+	return strings.Contains(unaccentUpper(*m), "BENEVOLE")
+}
+
 func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 	role := ctxRole(r)
 	var sectorID string
@@ -567,15 +595,18 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 	// Calcul par école.
 	type nomStats struct {
 		teachers      int               // ENSEIGNANTS = directeurs + adjoints (tous les agents)
+		benevoles     int               // BÉNÉVOLES (matricule « Bénévole »)
 		held          map[string]string // cours → titulaire (1er agent, tri nom)
+		heldBene      map[string]bool   // cours → titulaire bénévole ? (1er agent)
 		eff           map[string][3]int // cours → [F, G, T] cumulés (agents)
 		fil, gar, ele int               // totaux école côté agents
 	}
 	stats := make(map[string]*nomStats, len(schools))
 	for _, s := range schools {
 		stats[s.ID] = &nomStats{
-			held: make(map[string]string),
-			eff:  make(map[string][3]int),
+			held:     make(map[string]string),
+			heldBene: make(map[string]bool),
+			eff:      make(map[string][3]int),
 		}
 	}
 	for _, u := range agents {
@@ -591,6 +622,12 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		// directeur sans cours ou un adjoint administratif fait
 		// partie du personnel de son école.
 		st.teachers++
+		// BÉNÉVOLES (matricule « Bénévole ») — comptés à part :
+		// « tous les conseillers doivent connaître le nombre de
+		// bénévoles de leurs secteurs respectifs » (badge bleu).
+		if isBenevoleMatricule(u.Matricule) {
+			st.benevoles++
+		}
 		cours := ""
 		if u.Cours != nil && strings.TrimSpace(*u.Cours) != "" {
 			cours = strings.ToUpper(strings.TrimSpace(*u.Cours))
@@ -608,6 +645,7 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		st.ele += t
 		if _, seen := st.held[cours]; !seen {
 			st.held[cours] = u.FullName
+			st.heldBene[cours] = isBenevoleMatricule(u.Matricule)
 		}
 		agg := st.eff[cours]
 		agg[0] += f
@@ -622,24 +660,28 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 	type nomNiveau struct {
 		Cours     string `json:"cours"`
 		Titulaire string `json:"titulaire,omitempty"`
-		Filles    int    `json:"filles"`
-		Garcons   int    `json:"garcons"`
-		Total     int    `json:"total"`
-		Vacant    bool   `json:"vacant,omitempty"`
+		// Titulaire bénévole (matricule « Bénévole ») — le nom
+		// s'affiche EN BLEU dans la vue « Mon Secteur ».
+		TitulaireBenevole bool `json:"titulaire_benevole,omitempty"`
+		Filles            int  `json:"filles"`
+		Garcons           int  `json:"garcons"`
+		Total             int  `json:"total"`
+		Vacant            bool `json:"vacant,omitempty"`
 	}
 	niveauxBySchool := make(map[string][]nomNiveau, len(schools))
-	var totalTeachers, totalLevels, totalStudents, totalFil, totalGar int
+	var totalTeachers, totalLevels, totalStudents, totalFil, totalGar, totalBenevoles int
 	for _, s := range schools {
 		st := stats[s.ID]
 		niveaux := make([]nomNiveau, 0, len(st.held)+len(levelReportsBySchool[s.ID]))
 		for cours, titulaire := range st.held {
 			agg := st.eff[cours]
 			niveaux = append(niveaux, nomNiveau{
-				Cours:     cours,
-				Titulaire: titulaire,
-				Filles:    agg[0],
-				Garcons:   agg[1],
-				Total:     agg[2],
+				Cours:             cours,
+				Titulaire:         titulaire,
+				TitulaireBenevole: st.heldBene[cours],
+				Filles:            agg[0],
+				Garcons:           agg[1],
+				Total:             agg[2],
 			})
 		}
 		for _, rep := range levelReportsBySchool[s.ID] {
@@ -673,6 +715,7 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		niveauxBySchool[s.ID] = niveaux
 
 		totalTeachers += st.teachers
+		totalBenevoles += st.benevoles
 		totalLevels += len(niveaux)
 		totalStudents += st.ele
 		totalFil += st.fil
@@ -695,11 +738,12 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 			// PERSONNEL : ENSEIGNANTS = directeurs + adjoints
 			// (tous les agents de la feuille), niveaux réels
 			// (tenus + déclarés sans enseignant) et élèves.
-			"nom_teachers": st.teachers,
-			"nom_levels":   len(niveaux),
-			"nom_students": st.ele,
-			"nom_filles":   st.fil,
-			"nom_garcons":  st.gar,
+			"nom_teachers":  st.teachers,
+			"nom_benevoles": st.benevoles,
+			"nom_levels":    len(niveaux),
+			"nom_students":  st.ele,
+			"nom_filles":    st.fil,
+			"nom_garcons":   st.gar,
 			// Détail dépliable : les niveaux RÉELS de l'école
 			// (cours, titulaire, effectifs) — remplace la liste
 			// des classes standard auto-créées (calcul annulé).
@@ -752,13 +796,14 @@ func ConseillerStaff(w http.ResponseWriter, r *http.Request) {
 		// conseiller y lisent directement le nombre total
 		// d'enseignants, de niveaux et d'élèves.
 		"counts": map[string]int{
-			"schools":  len(schools),
-			"staff":    len(staffView),
-			"teachers": totalTeachers,
-			"levels":   totalLevels,
-			"students": totalStudents,
-			"filles":   totalFil,
-			"garcons":  totalGar,
+			"schools":   len(schools),
+			"staff":     len(staffView),
+			"teachers":  totalTeachers,
+			"benevoles": totalBenevoles,
+			"levels":    totalLevels,
+			"students":  totalStudents,
+			"filles":    totalFil,
+			"garcons":   totalGar,
 		},
 	})
 }

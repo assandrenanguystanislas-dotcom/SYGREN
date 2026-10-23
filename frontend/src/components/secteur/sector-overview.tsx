@@ -61,6 +61,7 @@ import {
   ChevronDown,
   BookOpen,
   FileText,
+  HeartHandshake,
 } from "lucide-react";
 
 import type {
@@ -155,6 +156,13 @@ export function SectorOverview({
   const totalEleves =
     data.counts?.students ??
     schools.reduce((acc, s) => acc + (s.nom_students ?? 0), 0);
+  // BÉNÉVOLES du secteur (matricule « Bénévole ») — « tous les
+  // conseillers doivent connaître le nombre de bénévoles de leurs
+  // secteurs respectifs — ils doivent être en bleu » : badge bleu du
+  // secteur + badge bleu par école + titulaires bénévoles en bleu.
+  const totalBenevoles =
+    data.counts?.benevoles ??
+    schools.reduce((acc, s) => acc + (s.nom_benevoles ?? 0), 0);
 
   // École dépliée (détail des NIVEAUX RÉELS — v14) — session 31.
   const expanded =
@@ -208,6 +216,15 @@ export function SectorOverview({
               <Badge variant="secondary" className="gap-1 border-amber-200 bg-amber-50 text-amber-700">
                 <GraduationCap className="w-3 h-3" />
                 {totalEleves} élève(s)
+              </Badge>
+              {/* BÉNÉVOLES — badge BLEU du secteur (demande utilisateur) */}
+              <Badge
+                variant="secondary"
+                className="gap-1 border-blue-300 bg-blue-50 text-blue-700"
+                title="Agents dont le matricule est « Bénévole » — ils figurent en bleu dans les documents"
+              >
+                <HeartHandshake className="w-3 h-3" />
+                {totalBenevoles} bénévole{(totalBenevoles > 1 ? "s" : "")}
               </Badge>
             </div>
           </div>
@@ -267,6 +284,15 @@ export function SectorOverview({
                         <Users className="w-3 h-3" />
                         {s.nom_teachers ?? 0} enseignant(s)
                       </Badge>
+                      {/* BÉNÉVOLES de l'école — badge BLEU (demande utilisateur) */}
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] gap-1 border-blue-300 bg-blue-50 text-blue-700"
+                        title="Agents dont le matricule est « Bénévole »"
+                      >
+                        <HeartHandshake className="w-3 h-3" />
+                        {s.nom_benevoles ?? 0} bénévole{(s.nom_benevoles ?? 0) > 1 ? "s" : ""}
+                      </Badge>
                       <Badge
                         variant="outline"
                         className="text-[10px] gap-1 border-sky-200 bg-sky-50 text-sky-700"
@@ -310,6 +336,14 @@ export function SectorOverview({
                         className="text-[10px] border-emerald-200 bg-emerald-50 text-emerald-700"
                       >
                         {expanded.nom_teachers ?? 0} enseignant(s)
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] border-blue-300 bg-blue-50 text-blue-700"
+                        title="Agents dont le matricule est « Bénévole »"
+                      >
+                        {expanded.nom_benevoles ?? 0} bénévole
+                        {(expanded.nom_benevoles ?? 0) > 1 ? "s" : ""}
                       </Badge>
                       <Badge
                         variant="outline"
@@ -361,10 +395,30 @@ export function SectorOverview({
                                 </span>
                               </TableCell>
                               <TableCell className="text-sm">
-                                {n.titulaire || (
+                                {n.titulaire ? (
+                                  <span
+                                    className={
+                                      n.titulaire_benevole
+                                        ? "font-medium text-blue-700"
+                                        : undefined
+                                    }
+                                  >
+                                    {n.titulaire}
+                                  </span>
+                                ) : (
                                   <span className="italic text-muted-foreground">
                                     — sans enseignant —
                                   </span>
+                                )}
+                                {/* BÉNÉVOLES EN BLEU — badge du titulaire
+                                    dont le matricule est « Bénévole » */}
+                                {n.titulaire_benevole && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-1.5 text-[9px] border-blue-300 bg-blue-50 text-blue-700"
+                                  >
+                                    bénévole
+                                  </Badge>
                                 )}
                               </TableCell>
                               <TableCell className="text-center text-sm">
