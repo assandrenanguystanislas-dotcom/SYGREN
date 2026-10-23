@@ -54,10 +54,13 @@ package handlers
 //     nominatif — un agent en congé reste un agent) ; les comptes
 //     supprimés sont exclus (soft-delete GORM).
 //
-// RBAC de périmètre (module staff-data — admin + inspector, même
-// convention que /api/reports/personnel) :
+// RBAC de périmètre (même convention que /api/reports/personnel) :
 //   - inspector : uniquement les écoles de son IEP ;
 //   - admin     : toutes les écoles (?iep_id=… pour restreindre) ;
+//   - Task 77 — conseiller : les écoles de SON SECTEUR (users.sector_id
+//     résolu serveur — convention v6 ; ?iep_id= ignoré, aucun élargissement
+//     possible ; consultation seule, impression toujours verrouillée côté
+//     frontend — print-guard) ;
 //   - les autres rôles : 403.
 
 import (
@@ -130,33 +133,60 @@ func anneeScolaireNow() string {
 }
 
 // personnelListScope — écoles du périmètre de l'appelant (admin :
-// toutes, filtrées par ?iep_id=… si fourni ; inspector : son IEP).
-// Retourne les écoles triées par nom et l'IEP de l'entête (celui du
-// périmètre — premier iep_id rencontré). Les autres rôles sont
-// refusés (403) : les listes vivent dans le module Fichier du
-// personnel (admin + inspector).
+// toutes, filtrées par ?iep_id=… si fourni ; inspector : son IEP ;
+// Task 77 — conseiller : les écoles de SON SECTEUR, périmètre forcé
+// côté serveur, ?iep_id= ignoré).
+// Retourne les écoles triées par nom et l'IEP de l'entête (celle du
+// périmètre — premier iep_id rencontré, ou celle du secteur pour un
+// conseiller). Les autres rôles sont refusés (403) : les listes
+// vivent dans le module Fichier du personnel (admin + inspector) et
+// dans la vue « Mon Secteur » du conseiller (Task 77).
 func personnelListScope(r *http.Request) ([]models.School, *models.IEP, int, string) {
         role := ctxRole(r)
+        var sectorID string
         switch role {
         case models.RoleAdmin, models.RoleInspector:
                 // OK — périmètre résolu plus bas.
+        case models.RoleConseiller:
+                // Task 77 — « les conseillers doivent voir les états
+                // nominatifs de leurs secteurs respectifs » : consultation
+                // des listes de SON secteur (users.sector_id, résolu serveur
+                // — même convention que /api/reports/personnel, v6). Le
+                // paramètre ?iep_id= est IGNORÉ pour ce rôle : un conseiller
+                // ne peut jamais élargir son périmètre.
+                sectorID = conseillerSectorID(r)
+                if sectorID == "" {
+                        return nil, nil, http.StatusForbidden, "aucun secteur rattaché à votre compte"
+                }
         default:
-                return nil, nil, http.StatusForbidden, "accès refusé : listes nominatives réservées à l'Admin IEP et au Super Admin"
+                return nil, nil, http.StatusForbidden, "accès refusé : listes nominatives réservées à l'Admin IEP, au Super Admin et aux conseillers (leur secteur)"
         }
 
         q := database.DB.Model(&models.School{})
         var iepID string
-        if role == models.RoleInspector {
+        switch role {
+        case models.RoleInspector:
                 iepID = ctxIEPID(r)
                 if iepID == "" {
                         return nil, nil, http.StatusForbidden, "aucune IEP rattachée à votre compte"
                 }
-        } else if v := strings.TrimSpace(r.URL.Query().Get("iep_id")); v != "" {
-                // Super Admin : restriction optionnelle à une IEP.
-                iepID = v
-        }
-        if iepID != "" {
                 q = q.Where("iep_id = ?", iepID)
+        case models.RoleAdmin:
+                if v := strings.TrimSpace(r.URL.Query().Get("iep_id")); v != "" {
+                        // Super Admin : restriction optionnelle à une IEP.
+                        iepID = v
+                        q = q.Where("iep_id = ?", iepID)
+                }
+        case models.RoleConseiller:
+                // Écoles du secteur. L'entête porte l'IEP DU SECTEUR (un
+                // secteur appartient à une seule IEP) — cohérente même si
+                // le secteur n'a aucune école (aucun plantage : First sur
+                // l'id du secteur, pas sur schools[0]).
+                q = q.Where("sector_id = ?", sectorID)
+                var sec models.Sector
+                if err := database.DB.Select("id, iep_id").First(&sec, "id = ?", sectorID).Error; err == nil {
+                        iepID = sec.IEPID
+                }
         }
         var schools []models.School
         if err := q.Order("name ASC").Find(&schools).Error; err != nil {

@@ -97,11 +97,22 @@ function fonctionLabel(m: ConseillerStaffMember): string {
 export function SectorOverview({
   data,
   welcomeLine,
+  showPersonnelLists = false,
 }: {
   data: ConseillerStaffResponse;
   /** Ligne d'accueil sous le nom du secteur (le conseiller reçoit
    *  « Bienvenue … », la supervision admin une ligne de consultation). */
   welcomeLine?: string;
+  /** Task 77 — boutons des DEUX listes nominatives du secteur
+   *  (« Directeurs d'école » / « Maîtres de CM2 » — /personnel-list-doc,
+   *  même entête que l'état nominatif). Activé UNIQUEMENT par la vue
+   *  conseiller : le backend borne le périmètre aux écoles du secteur
+   *  du compte (users.sector_id, ?iep_id= ignoré) et l'impression reste
+   *  verrouillée pour le conseiller (print-guard). La supervision
+   *  admin/inspector conserve ses accès dans le module Fichier du
+   *  personnel — les listes y sont établies à l'échelle de la
+   *  circonscription. */
+  showPersonnelLists?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
@@ -474,6 +485,40 @@ export function SectorOverview({
                   </Button>
                 );
               })()}
+              {/* Task 77 — DEUX LISTES NOMINATIVES DU SECTEUR (conseiller) :
+                  documents à l'échelle du secteur avec l'entête de l'état
+                  nominatif (IEP du secteur), périmètre = écoles EPP du
+                  secteur borné côté serveur ; consultation seule —
+                  l'impression reste verrouillée pour le conseiller
+                  (print-guard, même politique que l'état nominatif). */}
+              {showPersonnelLists && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    title="Liste nominative des directeurs d'école du secteur — entête de l'état nominatif (consultation — impression réservée à l'Admin IEP et au Super Admin)"
+                    onClick={() =>
+                      window.open("/personnel-list-doc?kind=directeurs", "_blank")
+                    }
+                  >
+                    <Users className="w-4 h-4 mr-1.5" />
+                    Directeurs d&apos;école
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    title="Liste nominative des maîtres de CM2 du secteur — entête de l'état nominatif (consultation — impression réservée à l'Admin IEP et au Super Admin)"
+                    onClick={() =>
+                      window.open("/personnel-list-doc?kind=cm2", "_blank")
+                    }
+                  >
+                    <GraduationCap className="w-4 h-4 mr-1.5" />
+                    Maîtres de CM2
+                  </Button>
+                </>
+              )}
             </div>
           )}
           {staff.length === 0 ? (

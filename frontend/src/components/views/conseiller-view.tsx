@@ -89,10 +89,14 @@ export function ConseillerView() {
 
   // Corps de la vue — composant partagé avec la supervision admin
   // (SectorViewDialog) : rendu identique à la spécification PNG.
+  // Task 77 — le conseiller voit en plus les DEUX listes nominatives
+  // de SON secteur (directeurs d'école / maîtres de CM2) : le backend
+  // borne le périmètre à son secteur, l'impression reste verrouillée.
   return (
     <SectorOverview
       data={data}
       welcomeLine={`Bienvenue ${user?.full_name ?? ""} — voici votre périmètre de suivi.`}
+      showPersonnelLists
     />
   );
 }
