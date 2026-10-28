@@ -54,8 +54,8 @@ type ReleveStudent struct {
 	Gender       string               `json:"gender"` // "M" ou "F" (F → rouge côté frontend)
 	Grades       []ReleveSubjectGrade `json:"grades"`
 	Total        float64              `json:"total"`         // somme des notes brutes
-	Average      float64              `json:"average"`       // moyenne sur l'échelle du niveau
-	AverageScale int                  `json:"average_scale"` // 10 (CP/CE) ou 20 (CM)
+	Average      float64              `json:"average"`       // moyenne = Total / Σ coefficients (échelle /10)
+	AverageScale int                  `json:"average_scale"` // 10 (tous niveaux — formule école)
 	HasAverage   bool                 `json:"has_average"`
 	Observation  string               `json:"observation"` // "A" (Admis) ou "R" (Refusé)
 }
@@ -204,8 +204,9 @@ func buildReleveData(session models.EvaluationSession, classID string) (ReleveDa
 	}
 
 	// 6. Seuil de réussite (configurable dans Settings — défaut 10/20).
-	// Converti proportionnellement selon l'échelle du niveau :
-	//   CP/CE (/10) → seuil / 2 ; CM (/20) → seuil inchangé.
+	// Converti proportionnellement selon l'échelle du niveau (/10 partout
+	// depuis la formule école Σ notes / Σ coefficients) :
+	//   seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2.
 	_, passThreshold, _ := GetSystemSettings()
 	scale := averageScaleForLevel(class.Level)
 	effectiveThreshold := passThreshold * scale / 20.0

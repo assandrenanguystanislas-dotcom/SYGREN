@@ -61,7 +61,7 @@ export async function fetchPreviousAverages(
       if (!r.has_average) continue;
       const key = (r.matricule || "").trim().toUpperCase();
       if (key && key !== "N/A") {
-        m.set(key, { average: r.average, scale: r.average_scale ?? 20 });
+        m.set(key, { average: r.average, scale: r.average_scale ?? 10 });
       }
     }
     return { averages: m, previousSession: prev };
@@ -118,7 +118,7 @@ export function computeEvolution(
   if (!matKey || matKey === "N/A" || !student.has_average) return NONE_EVO;
   const prev = prevLookup.get(matKey);
   if (!prev) return NONE_EVO;
-  const curScale = student.average_scale || 20;
+  const curScale = student.average_scale || 10;
   const cur20 = (student.average * 20) / curScale;
   const prev20 = (prev.average * 20) / prev.scale;
   const delta = ((cur20 - prev20) * curScale) / 20;

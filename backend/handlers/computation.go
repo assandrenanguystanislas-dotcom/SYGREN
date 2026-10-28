@@ -17,11 +17,13 @@ import (
 //
 // Calculs :
 //   - Moyenne par matière : la note elle-même (1 note par élève/matière/session)
-//   - Moyenne mensuelle (session) : moyenne pondérée par coefficient
-//     (Somme des notes×coef / Somme des coefs)
-//     Le cahier des charges stipule "Somme des notes / Nombre de matières",
-//     mais avec coef=1 par défaut les deux méthodes sont équivalentes.
-//     On utilise la pondération pour rester correct si coef != 1.
+//   - Moyenne mensuelle (session) — FORMULE OFFICIELLE de l'école
+//     (demande utilisateur) :
+//           Moyenne = Σ notes totales (brutes) / Σ coefficients
+//     Le coefficient n'entre QU'AU DÉNOMINATEUR ; les barèmes sont calibrés
+//     max = 10 × coef (CP tout /10 coef 1 ; CE /30 coef 3, Dictée /20 coef 2 ;
+//     CM /50 coef 5, Dictée et EPS /20 coef 2) — le résultat est donc
+//     naturellement sur /10 pour TOUS les niveaux (CP, CE et CM).
 //   - Moyenne annuelle : moyenne des moyennes mensuelles (sessions validées)
 //
 // Approche A — Une session couvre toute une école (CP1, CP2, ..., CM2).
@@ -46,7 +48,7 @@ type SubjectGrade struct {
 	Coefficient     float64 `json:"coefficient"`
 	Grade           float64 `json:"grade"`            // -1 si aucune note (valeur brute)
 	MaxScore        int     `json:"max_score"`        // barème (10, 20, 30, 50...)
-	NormalizedValue float64 `json:"normalized_value"` // note normalisée sur /20
+	NormalizedValue float64 `json:"normalized_value"` // note rapportée à l'échelle de la moyenne (informatif — n'entre plus dans la moyenne)
 	HasGrade        bool    `json:"has_grade"`
 	IsDraft         bool    `json:"is_draft"`
 }
@@ -107,24 +109,23 @@ type SessionResults struct {
 }
 
 // averageScaleForLevel retourne l'échelle de la moyenne pour un niveau donné.
-// CP et CE → /10, CM → /20 (cahier des charges §3 Module 2).
+// FORMULE ÉCOLE (demande utilisateur) : Moyenne = Σ notes / Σ coefficients —
+// les barèmes étant calibrés max = 10 × coef, le résultat est sur /10
+// pour TOUS les niveaux (CP, CE et CM — anciennement CM /20).
 func averageScaleForLevel(level string) float64 {
 	switch level {
-	case "CP", "CE":
+	case "CP", "CE", "CM":
 		return 10.0
-	case "CM":
-		return 20.0
 	default:
-		return 20.0
+		return 10.0
 	}
 }
 
 // getMention détermine la mention selon la moyenne et le niveau.
 // Les seuils sont lus depuis Settings (configurés sur /20) puis convertis
 // proportionnellement selon l'échelle du niveau :
-//   - CP/CE (moyenne /10) : seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2
-//     ex: Très Bien ≥ 16/20 → ≥ 8/10 pour CP/CE
-//   - CM (moyenne /20) : seuil_effectif = seuil_settings (inchangé)
+//   - CP/CE/CM (moyenne /10) : seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2
+//     ex: Très Bien ≥ 16/20 → ≥ 8/10 (identique pour tous les niveaux)
 func getMention(avg float64, level string) (label, color string) {
 	tresBien, bien, assezBien, passable, faible, insuffisant := GetMentionThresholds()
 	scale := averageScaleForLevel(level)
@@ -291,8 +292,8 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 			TotalSubjects: len(subjects),
 		}
 
-		totalWeighted := 0.0
-		totalCoef := 0.0
+		totalNotes := 0.0 // Σ notes brutes (« somme des notes totales »)
+		totalCoef := 0.0  // Σ coefficients des matières notées
 		gradedCount := 0
 		hasDrafts := false
 
@@ -312,14 +313,15 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 				sg.Grade = g.Value
 				sg.HasGrade = true
 				sg.IsDraft = g.IsDraft
-				// Normaliser la note sur l'échelle du niveau :
-				//   CP/CE → /10, CM → /20
-				//   normalized = value × averageScale / max_score
+				// Note rapportée à l'échelle de la moyenne — INFORMATIF
+				// uniquement (n'entre plus dans le calcul de la moyenne).
 				sg.NormalizedValue = g.Value * averageScale / float64(maxScore)
 				if g.IsDraft {
 					hasDrafts = true
 				}
-				totalWeighted += sg.NormalizedValue * sg.Coefficient
+				// FORMULE OFFICIELLE (demande utilisateur) :
+				//   Moyenne = Σ notes totales (brutes) / Σ coefficients
+				totalNotes += g.Value
 				totalCoef += sg.Coefficient
 				gradedCount++
 			}
@@ -329,7 +331,8 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 		sr.GradedCount = gradedCount
 		sr.HasDrafts = hasDrafts
 		if totalCoef > 0 && gradedCount > 0 {
-			sr.Average = totalWeighted / totalCoef
+			// Moyenne = Σ notes totales / Σ coefficients (formule école)
+			sr.Average = totalNotes / totalCoef
 			sr.HasAverage = true
 			// getMention prend le niveau pour convertir les seuils proportionnellement
 			sr.Mention, sr.MentionColor = getMention(sr.Average, cls.Level)
@@ -399,16 +402,15 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 	}
 
 	// 8. Statistiques agrégées au niveau de l'école (toutes classes confondues).
-	// Pour la conversion des seuils, on prend CM (/20) comme référence — les
-	// moyennes CP/CE sont déjà sur /10 mais leur mention a été calculée
-	// proportionnellement, donc la distribution reste cohérente.
+	// Échelle unique /10 (formule école) — les seuils Settings /20 sont
+	// convertis ×10/20 = ÷2, identiquement pour tous les niveaux.
 	stats := computeClassStatistics(results, "CM")
 
 	return &SessionResults{
 		SessionID:    session.ID,
 		ClassName:    "", // multi-classes
 		ClassLevel:   "", // multi-niveaux
-		AverageScale: 20, // défaut CM (compat)
+		AverageScale: 10, // échelle unique /10 (formule école Σ notes / Σ coefs)
 		SchoolName:   school.Name,
 		Month:        session.Month,
 		Year:         session.Year,
@@ -420,7 +422,8 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 
 // computeClassStatistics calcule les statistiques agrégées de la classe.
 // level est utilisé pour convertir proportionnellement les seuils de réussite/distinction
-// (configurés sur /20 dans Settings) selon l'échelle du niveau (CP/CE → /10, CM → /20).
+// (configurés sur /20 dans Settings) selon l'échelle du niveau — /10 partout
+// depuis la formule école (Σ notes / Σ coefficients).
 func computeClassStatistics(results []StudentResult, level string) ClassStatistics {
 	stats := ClassStatistics{
 		StudentCount:        len(results),

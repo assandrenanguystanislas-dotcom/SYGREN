@@ -201,7 +201,7 @@ export function StudentDetailDialog({
   // Si pas d'élève, on ne rend rien (le Dialog reste fermé côté parent).
   if (!student) return null;
 
-  const scale = student.average_scale ?? 20;
+  const scale = student.average_scale ?? 10;
   const passThreshold = scale / 2; // 5 pour /10, 10 pour /20
   const mentionClass =
     MENTION_COLOR_CLASSES[student.mention_color] ?? "";

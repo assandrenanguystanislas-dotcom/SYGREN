@@ -14,9 +14,9 @@ package handlers
 //   - conseiller         : les écoles de SON secteur (users.sector_id)
 //   - director / teacher : SON école
 //
-// Barèmes : les moyennes sont normalisées par niveau à la source
-// (CP1..CE2 → /10, CM1/CM2 → /20 — average_scale) : le classement
-// compare donc des élèves au MÊME barème dans chaque niveau.
+// Barèmes : échelle unique /10 à la source (formule école — Moyenne =
+// Σ notes totales / Σ coefficients, barèmes calibrés max = 10 × coef) :
+// le classement compare des moyennes homogènes.
 //
 // Rangs PARTAGÉS en cas d'égalité de moyenne (convention des
 // classements officiels : 1, 2, 2, 4...) ; seuls les rangs <= 10 sont
@@ -55,7 +55,7 @@ type palmaresEntry struct {
 	Sector       string  `json:"sector"`
 	FullName     string  `json:"full_name"` // NOM + prénoms (convention de l'appli)
 	Average      float64 `json:"average"`
-	AverageScale int     `json:"average_scale"` // 10 (CP1..CE2) ou 20 (CM1/CM2)
+	AverageScale int     `json:"average_scale"` // 10 (tous niveaux — formule école)
 }
 
 // palmaresLevel — les deux tableaux d'un niveau (FILLES / GARÇONS).

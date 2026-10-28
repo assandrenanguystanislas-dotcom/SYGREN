@@ -5276,3 +5276,23 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
 - Comportement attendu : moyenne CE1 Mathématiques pondérée ×3, CM1 ×5, CP1 ×1 ; Dictée ×2 en CE/CM, ×1 en CP ; EPS ×2 à l'exam blanc CM2 ; affichage en-tête grille cohérent par niveau.
+
+## Task 81 — Formule officielle de la moyenne de composition : Σ notes totales / Σ coefficients
+
+**Demande** : « ici la moyenne de la composition se calcule sur la base de la somme des notes totales / la somme totale des coefficients ».
+
+### Diagnostic
+- Les barèmes définis (Task 79) sont calibrés **max = 10 × coefficient** (CP tout /10 coef 1 ; CE /30 coef 3, Dictée /20 coef 2 ; CM /50 coef 5, Dictée et EPS /20 coef 2) : Σ notes brutes / Σ coefficients donne donc naturellement une moyenne **sur /10** pour TOUS les niveaux.
+- L'implémentation précédente normalisait chaque note (note × échelle / max) puis pondérait : Σ(note×échelle/max×coef) / Σcoef. Identique à la formule école pour CP/CE (échelle 10), mais CM était calculé ET affiché sur /20 (×2) — en décalage avec le calcul manuel de l'école (Total / Σ coef).
+- Consommateurs audités : computeSessionResults (moyenne, rangs, mentions, statistiques), releve + bulletin A5 (Total = Σ notes brutes déjà correct), palmarès (lit student_session_results), fin d'année (MoyenneCompositions/Passage/Annuelle dérivées des moyennes de sessions), évolution + détail élève (échelle lue depuis les données backend).
+
+### Changements
+- **computeSessionResults** (computation.go) : FORMULE OFFICIELLE — `totalNotes += g.Value` (note brute) et `sr.Average = totalNotes / totalCoef` ; le coefficient n'entre QU'AU DÉNOMINATEUR ; `NormalizedValue` conservé à titre informatif (n'entre plus dans la moyenne).
+- **averageScaleForLevel** : /10 pour TOUS les niveaux (CP, CE, CM — CM anciennement /20) ; mentions/seuils/réussite convertis ×10/20 automatiquement (aucun changement de valeur : 10/20 ≡ 5/10).
+- **AverageScale par défaut** (payload multi-classes) : 20 → 10 ; commentaires releve/palmarès/statistiques mis en cohérence.
+- **Frontend** : fallbacks d'échelle 20 → 10 (bulletins baremeOf, end-of-year-bulletin scaleOf, student-detail, evolution) ; commentaires de normalisation /20 mis à jour (moyenne ×2 pour tous les niveaux désormais).
+- **Neon AVANT push** : `DELETE FROM student_session_results` (554 lignes de moyennes précalculées selon l'ancienne formule) — le backfill au démarrage (BackfillStudentSessionResults, appelé au boot) recalcule toutes les sessions open/closed/validated avec la formule école.
+
+### Vérifications
+- go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
+- Exemple CM : notes 40/50 + 35/50 + 38/50 + 15/20 → Total 128, Σ coef 17, Moyenne 7,53/**10** (affichée /20 = 15,06 avant) ; CP/CE inchangés.

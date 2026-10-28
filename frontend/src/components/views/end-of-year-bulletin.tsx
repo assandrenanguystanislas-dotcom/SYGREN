@@ -14,8 +14,8 @@
 // classe (/api/reports/end-of-year — le document ne recalcule rien) :
 //   - Moyenne de la composition de Passage, Moyenne des compositions
 //     Mensuelles, Moyenne Annuelle = (MC + 2 × MCP)/3 — calculées par le
-//     backend (module Évaluations → Sessions), au barème du niveau
-//     (average_scale : « / 10 » CP-CE, « / 20 » CM) ;
+//     backend (module Évaluations → Sessions), sur l'échelle unique /10
+//     (formule école : Moyenne = Σ notes totales / Σ coefficients) ;
 //   - « Rang : X sur Y élèves. » — X = position de l'élève dans l'ORDRE DE
 //     MÉRITE (rows arrive trié : moyenne annuelle décroissante, N° = rang),
 //     Y = effectif de la classe (récapitulatif) ;
@@ -240,11 +240,11 @@ function MoyRow({
   );
 }
 
-/** Barème des moyennes du bulletin : donnée backend (average_scale) sinon
- *  déduit du niveau de la classe — 20 pour CM, 10 pour CP/CE. */
+/** Barème des moyennes du bulletin — /10 TOUS niveaux (formule école
+ *  Σ notes / Σ coefficients) : donnée backend (average_scale) sinon 10. */
 function scaleOf(data: EndOfYearSheet, row: EndOfYearRow): number {
   if (row.average_scale && row.average_scale > 0) return row.average_scale;
-  return (data.class.level || "").toUpperCase().startsWith("CM") ? 20 : 10;
+  return 10;
 }
 
 /** UN bulletin d'UN élève (demi-feuille « B5 » — deux élèves DIFFÉRENTS

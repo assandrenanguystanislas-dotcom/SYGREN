@@ -136,8 +136,8 @@ function fmtNum(v: number): string {
 //
 // Réplique EXACTEMENT getGeneralAppreciation du backend
 // (report_cards.go) : mêmes seuils (/20), mêmes textes. La moyenne est
-// normalisée sur /20 avant comparaison (le backend PDF avait le même bug
-// — corrigé au même moment — : seuils /20 vs moyenne /10 pour CP/CE).
+// normalisée sur /20 avant comparaison — /10 TOUS niveaux depuis la
+// formule école (Σ notes / Σ coefficients), donc moyenne × 2 partout.
 //
 // Retourne aussi le statut « négatif » : true si moyenne < seuil passant
 // (10/20 normalisés) ou aucune note → le texte s'affiche en ROUGE sur le
@@ -153,7 +153,7 @@ function appreciationFor(
       negative: true, // anomalie — attire l'œil en rouge
     };
   }
-  // Normalisation /20 (CP/CE : average × 2 ; CM : inchangée).
+  // Normalisation /20 (échelle /10 pour TOUS les niveaux — formule école).
   const avg20 = scale > 0 ? (avg * 20) / scale : avg;
   if (avg20 >= 16)
     return {
@@ -367,10 +367,10 @@ function safeSheetName(base: string): string {
     .slice(0, 31);
 }
 
-/** Barème de la moyenne d'un bulletin (10 CP/CE, 20 CM — donnée backend
- *  average_scale, fallback déduit du préfixe de la classe, comme le PDF). */
+/** Barème de la moyenne d'un bulletin — /10 TOUS niveaux (formule école
+ *  Σ notes / Σ coefficients) : donnée backend average_scale, fallback 10. */
 function baremeOf(e: BulletinEleve): number {
-  return e.averageScale ?? (e.classe.toUpperCase().startsWith("CM") ? 20 : 10);
+  return e.averageScale && e.averageScale > 0 ? e.averageScale : 10;
 }
 
 /** Ligne RANG du bulletin (« 1er / 25 » — même suffixe er/ème que le PDF,
