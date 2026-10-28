@@ -13,9 +13,10 @@ import (
 )
 
 // === GradeScales — Barèmes de notation (cahier des charges §3 Module 2) ===
-// Définit le barème max d'une matière pour un niveau donné.
+// Définit le barème d'une matière pour un niveau donné : note minimale
+// (MinScore — plancher) et maximale (MaxScore — plafond).
 // Si SubjectID est NULL → barème par défaut du niveau (toutes matières).
-// Si SubjectID est défini → exception spécifique (ex: Dictée CE à /20).
+// Si SubjectID est défini → exception spécifique (ex: Dictée CE à 2–20).
 //
 // Accès :
 //   - admin : CRUD complet
@@ -64,10 +65,13 @@ func ListGradeScales(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CreateGradeScaleRequest — payload pour créer un barème
+// CreateGradeScaleRequest — payload pour créer / modifier un barème.
+// MinScore est un pointeur : nil = valeur par défaut (0 à la création,
+// inchangé à la modification) — permet de remettre le plancher à 0.
 type CreateGradeScaleRequest struct {
 	Level     string  `json:"level"`      // "CP" | "CE" | "CM"
 	SubjectID *string `json:"subject_id"` // NULL = défaut du niveau
+	MinScore  *int    `json:"min_score"`  // plancher (0 = pas de minimum)
 	MaxScore  int     `json:"max_score"`  // 10, 20, 30, 50...
 }
 
@@ -85,6 +89,18 @@ func CreateGradeScale(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MaxScore <= 0 {
 		middleware.JSONError(w, "max_score doit être > 0", http.StatusBadRequest)
+		return
+	}
+	minScore := 0
+	if req.MinScore != nil {
+		minScore = *req.MinScore
+	}
+	if minScore < 0 {
+		middleware.JSONError(w, "min_score doit être >= 0", http.StatusBadRequest)
+		return
+	}
+	if minScore > req.MaxScore {
+		middleware.JSONError(w, "min_score doit être <= max_score", http.StatusBadRequest)
 		return
 	}
 	// Vérifier que le sujet existe si fourni
@@ -112,6 +128,7 @@ func CreateGradeScale(w http.ResponseWriter, r *http.Request) {
 	gs := models.GradeScale{
 		Level:     req.Level,
 		SubjectID: req.SubjectID,
+		MinScore:  minScore,
 		MaxScore:  req.MaxScore,
 	}
 	if err := database.DB.Create(&gs).Error; err != nil {
@@ -145,6 +162,21 @@ func UpdateGradeScale(w http.ResponseWriter, r *http.Request) {
 	if req.MaxScore > 0 {
 		gs.MaxScore = req.MaxScore
 	}
+	if req.MinScore != nil {
+		if *req.MinScore < 0 {
+			middleware.JSONError(w, "min_score doit être >= 0", http.StatusBadRequest)
+			return
+		}
+		if *req.MinScore > gs.MaxScore {
+			middleware.JSONError(w, "min_score doit être <= max_score", http.StatusBadRequest)
+			return
+		}
+		gs.MinScore = *req.MinScore
+	}
+	if gs.MinScore > gs.MaxScore {
+		middleware.JSONError(w, "min_score doit être <= max_score", http.StatusBadRequest)
+		return
+	}
 	if req.SubjectID != nil {
 		gs.SubjectID = req.SubjectID
 	}
@@ -165,30 +197,37 @@ func DeleteGradeScale(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// === Helper : getMaxScore ===
-// getMaxScore retourne le barème max pour un niveau + matière donné.
-// Logique de lookup :
-//  1. Chercher (level, subjectID) exact → si trouvé, retourner MaxScore
+// === Helper : getGradeScale / getMaxScore ===
+// getGradeScale retourne le barème (plancher, plafond) pour un niveau +
+// matière donné. Logique de lookup :
+//  1. Chercher (level, subjectID) exact → si trouvé, retourner (Min, Max)
 //  2. Sinon chercher (level, NULL) → défaut du niveau
-//  3. Sinon → 20 (sécurité)
+//  3. Sinon → (0, 20) (sécurité)
 //
-// Ex : getMaxScore("CE", "dictée-id") → 20 (exception)
+// Ex : getGradeScale("CE", "dictée-id") → (2, 20) (exception)
 //
-//	getMaxScore("CE", "math-id")   → 30 (défaut CE)
-//	getMaxScore("CP", "math-id")   → 10 (défaut CP)
-func getMaxScore(level, subjectID string) int {
+//	getGradeScale("CE", "math-id")   → (1, 30) (défaut CE)
+//	getGradeScale("CP", "math-id")   → (1, 10) (défaut CP)
+func getGradeScale(level, subjectID string) (int, int) {
 	// 1. Exception spécifique (level + subject_id)
 	if subjectID != "" {
 		var gs models.GradeScale
 		if err := database.DB.Where("level = ? AND subject_id = ?", level, subjectID).First(&gs).Error; err == nil {
-			return gs.MaxScore
+			return gs.MinScore, gs.MaxScore
 		}
 	}
 	// 2. Défaut du niveau (level + subject_id IS NULL)
 	var def models.GradeScale
 	if err := database.DB.Where("level = ? AND subject_id IS NULL", level).First(&def).Error; err == nil {
-		return def.MaxScore
+		return def.MinScore, def.MaxScore
 	}
-	// 3. Sécurité : /20
-	return 20
+	// 3. Sécurité : 0–20
+	return 0, 20
+}
+
+// getMaxScore retourne le plafond du barème pour un niveau + matière donné
+// (conservé pour les appels existants — PDA, computation, palmarès…).
+func getMaxScore(level, subjectID string) int {
+	_, maxScore := getGradeScale(level, subjectID)
+	return maxScore
 }

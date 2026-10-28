@@ -398,15 +398,17 @@ func (e *EvaluationSession) BeforeCreate(tx *gorm.DB) error {
 }
 
 // === Grade (Note) ===
-// Value = note brute (0 à MaxScore, dépendant du barème de la matière+classe)
-// MaxScore est déterminé dynamiquement via la table GradeScale (cahier des charges
-// §3 Module 2 : CP et CE sur /10, CM sur /20, Dictée /20, etc.)
+// Value = note brute (MinScore à MaxScore, dépendant du barème de la
+// matière+classe). MaxScore est déterminé dynamiquement via la table
+// GradeScale (cahier des charges §3 Module 2 : CP et CE sur /10, CM sur /20,
+// Dictée /20, etc.) ; MinScore est la note plancher du barème (ex : CP 1–10,
+// CM 2–50 — une note de 0 n'est plus acceptée).
 type Grade struct {
 	ID        string    `gorm:"primaryKey;type:text" json:"id"`
 	StudentID string    `gorm:"type:text;index" json:"student_id"`
 	SubjectID string    `gorm:"type:text;index" json:"subject_id"`
 	SessionID string    `gorm:"type:text;index" json:"session_id"`
-	Value     float64   `json:"value"` // note brute (sur MaxScore, pas forcément 20)
+	Value     float64   `json:"value"` // note brute (entre MinScore et MaxScore)
 	IsDraft   bool      `gorm:"default:true" json:"is_draft"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -485,14 +487,17 @@ func DefaultSettings() []Setting {
 }
 
 // === GradeScale (Barème de notation) ===
-// Définit le barème max d'une matière pour un niveau donné.
+// Définit le barème d'une matière pour un niveau donné : note minimale
+// (MinScore — plancher) et maximale (MaxScore — plafond).
 // Si SubjectID est NULL → barème par défaut du niveau (toutes matières).
-// Si SubjectID est défini → exception spécifique (ex: Dictée CE à /20 alors que défaut CE est /10).
+// Si SubjectID est défini → exception spécifique (ex: Dictée CE à 2–20
+// alors que défaut CE est 1–30).
 type GradeScale struct {
 	ID          string    `gorm:"primaryKey;type:text" json:"id"`
 	Level       string    `gorm:"type:text;index" json:"level"`                // "CP" | "CE" | "CM"
 	SubjectID   *string   `gorm:"type:text;index" json:"subject_id,omitempty"` // NULL = défaut du niveau
 	SubjectName string    `gorm:"-" json:"subject_name,omitempty"`             // rempli par le handler ( JOIN manuelle)
+	MinScore    int       `gorm:"default:0" json:"min_score"`                  // plancher (0 = pas de minimum)
 	MaxScore    int       `gorm:"default:20" json:"max_score"`                 // 10, 20, 30, 50...
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -505,22 +510,23 @@ func (gs *GradeScale) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// DefaultGradeScales retourne les barèmes par défaut (cahier des charges §3 Module 2).
+// DefaultGradeScales retourne les barèmes par défaut (réinitialisation
+// demandée : « au CP toutes les matières : les notes sont comprises entre
+// 1 et 10 ; au CE : Etude du Milieu, Exploitation de Texte, Mathématiques
+// entre 1 et 30 ; au CM : entre 2 et 50 »).
 // Utilisé au premier seed.
-//   - CP  : toutes matières /10
-//   - CE  : toutes matières /30, sauf Dictée /20 (exception ajoutée au seed via SubjectID)
-//   - CM  : toutes matières /50, sauf Dictée /20 (exception ajoutée au seed via SubjectID)
-//
-// Les exceptions Dictée sont ajoutées dynamiquement dans seedDefaults() car on doit
-// d'abord trouver l'ID du sujet "Dictée" en base.
+//   - CP  : toutes matières 1–10
+//   - CE  : toutes matières 1–30, sauf Dictée 2–20 (exception seedée via SubjectID)
+//   - CM  : toutes matières 2–50, sauf Dictée 2–20 et EPS 5–20 (exceptions
+//     seedées / maintenues en base via SubjectID)
 func DefaultGradeScales() []GradeScale {
 	return []GradeScale{
-		// CP : défaut /10
-		{Level: "CP", SubjectID: nil, MaxScore: 10},
-		// CE : défaut /30
-		{Level: "CE", SubjectID: nil, MaxScore: 30},
-		// CM : défaut /50
-		{Level: "CM", SubjectID: nil, MaxScore: 50},
+		// CP : défaut 1–10 (toutes matières)
+		{Level: "CP", SubjectID: nil, MinScore: 1, MaxScore: 10},
+		// CE : défaut 1–30 (Etude du Milieu, Exploitation de Texte, Mathématiques…)
+		{Level: "CE", SubjectID: nil, MinScore: 1, MaxScore: 30},
+		// CM : défaut 2–50 (Etude du Milieu, Exploitation de Texte, Mathématiques…)
+		{Level: "CM", SubjectID: nil, MinScore: 2, MaxScore: 50},
 	}
 }
 

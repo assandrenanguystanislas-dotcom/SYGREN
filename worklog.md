@@ -5224,3 +5224,32 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - go build + go vet 0 erreur (gofmt ne signale que personnel_lists.go, préexistant, non touché) ; tsc --noEmit 0 erreur ; next build OK.
 - Test fonctionnel SQLite jetable (chaîne réelle chi + handlers réels) 10/10 PASS : ListClasses teacher(cours=CP1) → 1 classe CP1 ; ListStudents teacher → 2 élèves CP1 ; ListStudents director → 4 élèves école ; UpsertGrade teacher son élève 200 / autre classe 403 ; Bulk mixte 403 + 0 note écrite ; director autre classe de son école 200 ; teacher sans school_id JWT → accès session via repli cours 200 ; teacher sans cours → 0/0 ; Bulk sur ses élèves 200.
 - Aucune migration Neon (champs existants users.cours / users.school_id / classes.teacher_id — 100 % lecture).
+
+---
+
+## Task 79 — Réinitialisation des barèmes de notation par niveau (notes plancher + plafond)
+
+**Demande** : « il faut reinitialiser les baremes des classes suivantes: Au CP toutes les matieres : les notes sont comprises entre 1 et 10. Au CE: les notes des matieres Etude du Milieu, Exploitation de Texte, Mathématiques sont comprises entre 1 et 30 et Dictée entre 2 et 20. Au CM les notes des matieres Etude du Milieu, Exploitation de Texte, Mathématiques sont comprises entre 2 et 50 ; Dictée entre 2 et 20 et EPS entre 5 et 20 ».
+
+### Diagnostic (sonde Neon lecture seule)
+- La table `grade_scales` (6 lignes) portait déjà l'architecture « défaut de niveau (subject_id NULL) + exception par matière » : CP défaut /10 ; CE défaut /30 + Dictée /20 ; CM défaut /50 + EPS /20 + Dictée /20. Les matières nommées (Etude du Milieu, Exploitation de Texte, Mathématiques) sont couvertes par les défauts CE 1–30 / CM 2–50 — aucune ligne par matière nécessaire pour elles.
+- Le modèle `GradeScale` n'avait AUCUN champ de note minimale : impossible d'exprimer « comprises entre 1 et 10 » / « entre 2 et 20 » / « entre 5 et 20 ». Par ailleurs la grille de saisie des notes (grades-view.tsx) rejetait côté client TOUTE note > 20 (validation codée en dur « 0 à 20 ») — rendant les barèmes CE /30 et CM /50 inutilisables dans l'UI malgré le contrôle serveur correct.
+
+### Changements
+- Backend (models.go) : `GradeScale.MinScore int` (gorm default:0, json min_score) ; `DefaultGradeScales()` réinitialisée avec planchers (CP 1–10, CE 1–30, CM 2–50). Aucune autre table touchée.
+- Backend (handlers/grade_scales.go) : requête Create/Update accepte `min_score` (pointeur — nil = inchangé à la modification, permet de remettre le plancher à 0) avec validation 0 ≤ min ≤ max ; nouveau helper `getGradeScale(level, subjectID) (min, max)` (même lookup : exception → défaut → sécurité 0–20), `getMaxScore` conservé comme wrapper pour les 9 appels existants (PDA, computation, palmarès…).
+- Backend (handlers/grades.go) : `UpsertGrade` + `BulkUpsertGrades` valident désormais `min ≤ note ≤ max` — messages explicites « la note doit être comprise entre %d et %d (barème %s) ».
+- Backend (database.go) : seed des installations fraîches aligné (Dictée 2–20 CE+CM, EPS 5–20 CM).
+- Frontend (grade-scales-view.tsx, Paramètres) : colonne Barème éditable « plancher – plafond » (2 champs), résumé d'en-tête « CP 1–10 · CE 1–30 (Dictée 2–20) · CM 2–50 (Dictée 2–20, EPS 5–20) », dialogue de création avec note minimale.
+- Frontend (grades-view.tsx) : RECHARGEMENT des barèmes dans la grille + lookup identique au backend (exception matière > défaut niveau > 0–20) ; validation à la frappe contre le PLAFOND (un préfixe de frappe reste ≤ valeur finale) et au BLUR contre le PLANCHER (un préfixe peut être provisoirement sous le minimum — ex « 1 » de « 12 » en CM) ; en-tête de chaque colonne matière affiche le barème réel (ex « coef. 1 · 1–10 », « coef. 1 · 5–20 » pour EPS CM) + tooltip.
+- Neon synchronisé AVANT push (script idempotent rejouable) : `ALTER TABLE grade_scales ADD COLUMN IF NOT EXISTS min_score integer NOT NULL DEFAULT 0` + 6 UPDATE (CP 1–10 ; CE 1–30 ; CE Dictée 2–20 ; CM 2–50 ; CM Dictée 2–20 ; CM EPS 5–20) — vérification ligne à ligne 6/6 conformes, aucune ligne inattendue. AutoMigrate fera la même chose au boot.
+
+### Décisions d'interprétation
+- Les notes EXISTANTES sous le nouveau plancher (ex : 0 ou 1 en CM) restent en base (contrôle à l'écriture seulement) — aucune réécriture d'historique ; toute modification future d'une telle note devra respecter le plancher.
+- Au CE, EPS et les autres matières non citées restent sur le défaut du niveau (1–30, max inchangé) ; idem CM (2–50) sauf Dictée/EPS — la demande ne listant que ces exceptions.
+- Maternelle (PS/MS/GS) hors périmètre (aucun barème défini — repli sécurité 0–20 inchangé).
+
+### Vérifications
+- go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
+- Neon : min_score créée, 6/6 barèmes conformes après commit (script sync_baremes_neon.py, WHERE précis par ligne).
+- Comportement attendu en production : saisie 0 en CP refusée (plancher 1), 25 en CE refusée (plafond 30 dépassé non — 25 ≤ 30 accepté ; 35 refusée), note 15 en CM acceptée, 60 en CM refusée, EPS CM 3 refusée (plancher 5) / 18 acceptée.

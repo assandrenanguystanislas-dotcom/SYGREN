@@ -1166,6 +1166,7 @@ export const gradeScalesApi = {
   create: (data: {
     level: string;
     subject_id?: string | null;
+    min_score?: number;
     max_score: number;
   }) =>
     apiFetch<GradeScaleWithSubject>("/api/grade-scales", {
@@ -1174,7 +1175,12 @@ export const gradeScalesApi = {
     }),
   update: (
     id: string,
-    data: Partial<{ level: string; subject_id: string | null; max_score: number }>,
+    data: Partial<{
+      level: string;
+      subject_id: string | null;
+      min_score: number;
+      max_score: number;
+    }>,
   ) =>
     apiFetch<GradeScaleWithSubject>(`/api/grade-scales/${id}`, {
       method: "PUT",

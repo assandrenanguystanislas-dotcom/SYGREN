@@ -60,6 +60,7 @@ export function GradeScalesPanel() {
   const [form, setForm] = useState({
     level: "CP" as Level,
     subject_id: "__default__",
+    min_score: "1",
     max_score: "10",
   });
   const [deleteTarget, setDeleteTarget] = useState<GradeScaleWithSubject | null>(null);
@@ -69,34 +70,59 @@ export function GradeScalesPanel() {
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
+    const minScore = parseInt(form.min_score, 10);
     const maxScore = parseInt(form.max_score, 10);
     if (isNaN(maxScore) || maxScore <= 0) {
-      toast.error("Max score invalide");
+      toast.error("Note maximale invalide");
+      return;
+    }
+    if (isNaN(minScore) || minScore < 0) {
+      toast.error("Note minimale invalide");
+      return;
+    }
+    if (minScore > maxScore) {
+      toast.error("La note minimale doit être ≤ à la note maximale");
       return;
     }
     try {
       await gradeScalesApi.create({
         level: form.level,
         subject_id: form.subject_id === "__default__" ? null : form.subject_id,
+        min_score: minScore,
         max_score: maxScore,
       });
       toast.success("Barème créé");
       await queryClient.invalidateQueries({ queryKey: ["grade-scales"] });
       setDialogOpen(false);
-      setForm({ level: "CP", subject_id: "__default__", max_score: "10" });
+      setForm({ level: "CP", subject_id: "__default__", min_score: "1", max_score: "10" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erreur";
       toast.error("Création échouée", { description: msg });
     }
   }
 
-  async function onUpdateMaxScore(gs: GradeScaleWithSubject, newMax: string) {
+  async function onUpdateScale(
+    gs: GradeScaleWithSubject,
+    newMin: string,
+    newMax: string,
+  ) {
+    const minScore = parseInt(newMin, 10);
     const maxScore = parseInt(newMax, 10);
     if (isNaN(maxScore) || maxScore <= 0) return;
+    if (isNaN(minScore) || minScore < 0 || minScore > maxScore) {
+      toast.error("Note minimale invalide", {
+        description: "Le plancher doit être compris entre 0 et le plafond.",
+      });
+      return;
+    }
+    if (minScore === gs.min_score && maxScore === gs.max_score) return;
     try {
-      await gradeScalesApi.update(gs.id, { max_score: maxScore });
+      await gradeScalesApi.update(gs.id, {
+        min_score: minScore,
+        max_score: maxScore,
+      });
       toast.success("Barème modifié", {
-        description: `${gs.level} · ${gs.subject_name ?? "Toutes matières"} → /${maxScore}`,
+        description: `${gs.level} · ${gs.subject_name ?? "Toutes matières"} → ${minScore}–${maxScore}`,
       });
       await queryClient.invalidateQueries({ queryKey: ["grade-scales"] });
     } catch (err) {
@@ -167,7 +193,7 @@ export function GradeScalesPanel() {
           <div>
             <h3 className="font-semibold text-base">Barèmes de notation</h3>
             <p className="text-xs text-muted-foreground">
-              {scales.length} barème(s) · CP /10 · CE /30 (Dictée /20) · CM /50 (Dictée /20)
+              {scales.length} barème(s) · CP 1–10 · CE 1–30 (Dictée 2–20) · CM 2–50 (Dictée 2–20, EPS 5–20)
             </p>
           </div>
         </div>
@@ -225,18 +251,37 @@ export function GradeScalesPanel() {
                       </TableCell>
                       <TableCell>
                         {canEdit ? (
-                          <Input
-                            type="number"
-                            defaultValue={gs.max_score}
-                            onBlur={(e) => {
-                              if (parseInt(e.target.value, 10) !== gs.max_score) {
-                                onUpdateMaxScore(gs, e.target.value);
-                              }
-                            }}
-                            className="w-20 h-8 font-mono"
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              type="number"
+                              min="0"
+                              defaultValue={gs.min_score}
+                              onBlur={(e) => {
+                                if (parseInt(e.target.value, 10) !== gs.min_score) {
+                                  onUpdateScale(gs, e.target.value, String(gs.max_score));
+                                }
+                              }}
+                              className="w-16 h-8 font-mono"
+                              title="Note minimale (plancher)"
+                            />
+                            <span className="text-xs text-muted-foreground">–</span>
+                            <Input
+                              type="number"
+                              min="1"
+                              defaultValue={gs.max_score}
+                              onBlur={(e) => {
+                                if (parseInt(e.target.value, 10) !== gs.max_score) {
+                                  onUpdateScale(gs, String(gs.min_score), e.target.value);
+                                }
+                              }}
+                              className="w-16 h-8 font-mono"
+                              title="Note maximale (plafond)"
+                            />
+                          </div>
                         ) : (
-                          <span className="font-mono font-semibold">/{gs.max_score}</span>
+                          <span className="font-mono font-semibold">
+                            {gs.min_score > 0 ? `${gs.min_score} – ` : ""}/{gs.max_score}
+                          </span>
                         )}
                       </TableCell>
                       {canEdit && (
@@ -309,20 +354,37 @@ export function GradeScalesPanel() {
                     Choisir une matière = exception au barème par défaut du niveau.
                   </p>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="max-score">Barème (note maximale)</Label>
-                  <Input
-                    id="max-score"
-                    type="number"
-                    min="1"
-                    value={form.max_score}
-                    onChange={(e) => setForm({ ...form, max_score: e.target.value })}
-                    required
-                    className="font-mono"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Ex: 10 pour /10, 20 pour /20, 30 pour /30, 50 pour /50.
-                  </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="min-score">Note minimale</Label>
+                    <Input
+                      id="min-score"
+                      type="number"
+                      min="0"
+                      value={form.min_score}
+                      onChange={(e) => setForm({ ...form, min_score: e.target.value })}
+                      required
+                      className="font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Plancher (0 = aucun).
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="max-score">Note maximale</Label>
+                    <Input
+                      id="max-score"
+                      type="number"
+                      min="1"
+                      value={form.max_score}
+                      onChange={(e) => setForm({ ...form, max_score: e.target.value })}
+                      required
+                      className="font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Plafond : 10, 20, 30, 50…
+                    </p>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button
@@ -346,7 +408,7 @@ export function GradeScalesPanel() {
         title="Supprimer le barème ?"
         description={
           deleteTarget
-            ? `Supprimer le barème ${deleteTarget.level} /${deleteTarget.max_score} (${deleteTarget.subject_name ?? "défaut"}) ?`
+            ? `Supprimer le barème ${deleteTarget.level} ${deleteTarget.min_score}–${deleteTarget.max_score} (${deleteTarget.subject_name ?? "défaut"}) ?`
             : ""
         }
         confirmLabel="Supprimer"

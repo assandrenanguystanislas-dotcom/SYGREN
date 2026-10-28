@@ -22,6 +22,7 @@ import {
   studentsApi,
   subjectsApi,
   gradesApi,
+  gradeScalesApi,
   schoolsApi,
   classesApi,
 } from "@/lib/api";
@@ -188,6 +189,12 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     queryFn: () => subjectsApi.list(),
     enabled: !!selectedSessionId,
   });
+  // Barèmes de notation (par niveau + exception par matière) — validation
+  // dynamique de la saisie côté client, alignée sur le contrôle serveur.
+  const { data: scalesData } = useQuery({
+    queryKey: ["grade-scales"],
+    queryFn: () => gradeScalesApi.list(),
+  });
   const { data: gradesData, isLoading: gradesLoading } = useQuery({
     queryKey: ["grades", selectedSessionId],
     queryFn: () => gradesApi.list(selectedSessionId!),
@@ -247,6 +254,34 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     ? allSubjects.filter((s) => parseLevels(s.levels).includes(className as never))
     : allSubjects;
 
+  // === Barème du niveau de la classe sélectionnée ===
+  // Lookup identique au backend (getGradeScale) : exception (niveau+matière)
+  // d'abord, sinon barème par défaut du niveau, sinon 0–20 (sécurité).
+  const levelScales = useMemo(() => {
+    const level = selectedClass?.level ?? "";
+    const all = scalesData?.grade_scales ?? [];
+    const def = all.find((s) => s.level === level && !s.subject_id) ?? null;
+    const exceptions = new Map<string, { min: number; max: number }>();
+    for (const s of all) {
+      if (s.level === level && s.subject_id) {
+        exceptions.set(s.subject_id, { min: s.min_score ?? 0, max: s.max_score });
+      }
+    }
+    return { def, exceptions };
+  }, [scalesData, selectedClass?.level]);
+
+  const scaleFor = useCallback(
+    (subjectId: string): { min: number; max: number } => {
+      const exc = levelScales.exceptions.get(subjectId);
+      if (exc) return exc;
+      if (levelScales.def) {
+        return { min: levelScales.def.min_score ?? 0, max: levelScales.def.max_score };
+      }
+      return { min: 0, max: 20 };
+    },
+    [levelScales],
+  );
+
   const sessionStatus = selectedSession?.status;
   // canEdit : la saisie est possible si la session est "open" ou si l'admin
   // force l'édition (sauf si la session est "validated" — verrouillage définitif).
@@ -259,24 +294,55 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     : null;
 
   // Handler de saisie dans une cellule
+  // Validation dynamique selon le barème du niveau + matière (ex : CP 1–10,
+  // CE 1–30 avec Dictée 2–20, CM 2–50 avec Dictée 2–20 et EPS 5–20).
+  // - à la frappe : on contrôle NaN et le PLAFOND (un préfixe de frappe reste
+  //   toujours ≤ à la valeur finale — ex : « 2 » puis « 25 » en CM) ;
+  // - au blur (onBlur) : on contrôle aussi le PLANCHER (un préfixe peut être
+  //   provisoirement sous le minimum — ex : « 1 » en début de « 12 » en CM).
   const handleCellChange = useCallback(
     (studentId: string, subjectId: string, rawValue: string) => {
       if (!canEdit || !selectedSessionId) return;
-      // Valider : nombre entre 0 et 20, ou vide
+      // Valider : nombre ≤ plafond du barème, ou vide
       if (rawValue === "") {
         // Note vide : on ne sauvegarde pas, on laisse la cellule vide
         return;
       }
       const num = parseFloat(rawValue.replace(",", "."));
-      if (isNaN(num) || num < 0 || num > 20) {
+      const scale = scaleFor(subjectId);
+      if (isNaN(num) || num > scale.max) {
         toast.error("Note invalide", {
-          description: "La note doit être comprise entre 0 et 20",
+          description:
+            scale.min > 0
+              ? `La note doit être comprise entre ${scale.min} et ${scale.max} (barème ${selectedClass?.level ?? ""})`
+              : `La note doit être comprise entre 0 et ${scale.max}`,
         });
         return;
       }
       autoSave.updateCell(studentId, subjectId, num);
     },
-    [autoSave, canEdit, selectedSessionId],
+    [autoSave, canEdit, selectedSessionId, scaleFor, selectedClass?.level],
+  );
+
+  // Contrôle du PLANCHER au blur (valeur complète — plus de préfixe de frappe)
+  const handleCellBlur = useCallback(
+    (subjectId: string, rawValue: string) => {
+      if (!canEdit) return;
+      const raw = rawValue.trim();
+      if (raw === "") return;
+      const num = parseFloat(raw.replace(",", "."));
+      if (isNaN(num)) return;
+      const scale = scaleFor(subjectId);
+      if (num < scale.min || num > scale.max) {
+        toast.error("Note invalide", {
+          description:
+            scale.min > 0
+              ? `La note doit être comprise entre ${scale.min} et ${scale.max} (barème ${selectedClass?.level ?? ""})`
+              : `La note doit être comprise entre 0 et ${scale.max}`,
+        });
+      }
+    },
+    [canEdit, scaleFor, selectedClass?.level],
   );
 
   // Handler pour naviguer au clavier (Tab et Entrée)
@@ -554,22 +620,27 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                     <th className="text-left p-3 font-medium text-muted-foreground min-w-[180px] sticky left-0 bg-card z-20 border-r">
                       Élève
                     </th>
-                    {subjects.map((subj: Subject) => (
-                      <th
-                        key={subj.id}
-                        className="text-center p-2 font-medium text-muted-foreground min-w-[90px] border-r last:border-r-0"
-                        title={`${subj.name} (coef. ${subj.coefficient})`}
-                      >
-                        <div className="space-y-0.5">
-                          <p className="text-xs truncate max-w-[80px]">
-                            {subj.name}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground/70">
-                            coef. {subj.coefficient}
-                          </p>
-                        </div>
-                      </th>
-                    ))}
+                    {subjects.map((subj: Subject) => {
+                      const scale = scaleFor(subj.id);
+                      const scaleLabel =
+                        scale.min > 0 ? `${scale.min}–${scale.max}` : `/${scale.max}`;
+                      return (
+                        <th
+                          key={subj.id}
+                          className="text-center p-2 font-medium text-muted-foreground min-w-[90px] border-r last:border-r-0"
+                          title={`${subj.name} (coef. ${subj.coefficient} — barème ${scaleLabel})`}
+                        >
+                          <div className="space-y-0.5">
+                            <p className="text-xs truncate max-w-[80px]">
+                              {subj.name}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground/70">
+                              coef. {subj.coefficient} · {scaleLabel}
+                            </p>
+                          </div>
+                        </th>
+                      );
+                    })}
                     <th className="text-center p-2 font-medium min-w-[90px] bg-muted/30">
                       Moyenne
                     </th>
@@ -624,6 +695,9 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                                 value={displayValue}
                                 onChange={(v) =>
                                   handleCellChange(student.id, subj.id, v)
+                                }
+                                onBlur={(e) =>
+                                  handleCellBlur(subj.id, e.target.value)
                                 }
                                 onKeyDown={(e) =>
                                   handleKeyDown(
@@ -691,6 +765,7 @@ interface GradeInputProps {
   value: number | "";
   onChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   disabled?: boolean;
   isDraft?: boolean;
   isLocked?: boolean; // session validée → verrouillage définitif (gris foncé)
@@ -701,6 +776,7 @@ function GradeInput({
   value,
   onChange,
   onKeyDown,
+  onBlur,
   disabled,
   isDraft,
   isLocked,
@@ -721,6 +797,7 @@ function GradeInput({
       disabled={disabled || isLocked}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
+      onBlur={onBlur}
       onFocus={(e) => e.target.select()}
       placeholder="—"
       className={cn(

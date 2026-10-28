@@ -30,8 +30,8 @@ import (
 //   - admin : tout
 //   - inspector : lecture seule
 //
-// Une note est valide si 0 ≤ value ≤ max_score (déterminé dynamiquement
-// selon le niveau de la classe de l'élève et la matière).
+// Une note est valide si min_score ≤ value ≤ max_score (déterminés
+// dynamiquement selon le niveau de la classe de l'élève et la matière).
 
 // GradeWithDetails — note enrichie
 type GradeWithDetails struct {
@@ -143,7 +143,7 @@ type UpsertGradeRequest struct {
 	StudentID string  `json:"student_id"`
 	SubjectID string  `json:"subject_id"`
 	SessionID string  `json:"session_id"`
-	Value     float64 `json:"value"` // 0 à max_score (dépend du niveau + matière)
+	Value     float64 `json:"value"` // MinScore à MaxScore (dépend du niveau + matière)
 }
 
 // UpsertGrade crée ou met à jour une note (mode brouillon par défaut).
@@ -204,9 +204,9 @@ func UpsertGrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maxScore := getMaxScore(cls.Level, req.SubjectID)
-	if req.Value < 0 || req.Value > float64(maxScore) {
-		middleware.JSONError(w, fmt.Sprintf("la note doit être comprise entre 0 et %d (barème %s)", maxScore, cls.Level), http.StatusBadRequest)
+	minScore, maxScore := getGradeScale(cls.Level, req.SubjectID)
+	if req.Value < float64(minScore) || req.Value > float64(maxScore) {
+		middleware.JSONError(w, fmt.Sprintf("la note doit être comprise entre %d et %d (barème %s)", minScore, maxScore, cls.Level), http.StatusBadRequest)
 		return
 	}
 
@@ -345,9 +345,9 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
 		if ctx.exempted {
 			continue // sera ignoré dans la transaction
 		}
-		maxScore := getMaxScore(ctx.class.Level, g.SubjectID)
-		if g.Value < 0 || g.Value > float64(maxScore) {
-			middleware.JSONError(w, fmt.Sprintf("note invalide : %v (doit être 0-%d, barème %s)", g.Value, maxScore, ctx.class.Level), http.StatusBadRequest)
+		minScore, maxScore := getGradeScale(ctx.class.Level, g.SubjectID)
+		if g.Value < float64(minScore) || g.Value > float64(maxScore) {
+			middleware.JSONError(w, fmt.Sprintf("note invalide : %v (doit être %d-%d, barème %s)", g.Value, minScore, maxScore, ctx.class.Level), http.StatusBadRequest)
 			return
 		}
 	}

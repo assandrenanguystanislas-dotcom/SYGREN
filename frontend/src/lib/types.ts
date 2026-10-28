@@ -431,6 +431,7 @@ export interface GradeScale {
   id: string;
   level: string; // "CP" | "CE" | "CM"
   subject_id?: string | null; // NULL = défaut du niveau
+  min_score: number; // plancher (0 = pas de minimum)
   max_score: number; // 10, 20, 30, 50...
   created_at: string;
   updated_at: string;
