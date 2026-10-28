@@ -295,7 +295,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
 
   // Handler de saisie dans une cellule
   // Validation dynamique selon le barème du niveau + matière (ex : CP 1–10,
-  // CE 1–30 avec Dictée 2–20, CM 2–50 avec Dictée 2–20 et EPS 5–20).
+  // CE 1–30 avec Dictée 1–10, CM 2–50 avec Dictée 2–20 et EPS 5–20).
   // - à la frappe : on contrôle NaN et le PLAFOND (un préfixe de frappe reste
   //   toujours ≤ à la valeur finale — ex : « 2 » puis « 25 » en CM) ;
   // - au blur (onBlur) : on contrôle aussi le PLANCHER (un préfixe peut être

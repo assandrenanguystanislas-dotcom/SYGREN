@@ -337,7 +337,7 @@ export function SubjectsView() {
               </div>
               <p className="text-[11px] text-muted-foreground">
                 Vide = utiliser le coefficient global. Ex : Mathématiques CE 3 · CM 5,
-                Dictée CE 2 · CM 2, EPS CM 2.
+                Dictée CE 1 · CM 2, EPS CM 2.
               </p>
             </div>
             <div className="space-y-2">

@@ -294,8 +294,8 @@ export interface Subject {
   name: string;
   coefficient: number;
   // Coefficients PAR NIVEAU (null = utiliser le coefficient global) —
-  // ex. Mathématiques CP 1 · CE 3 · CM 5, Dictée CP 1 · CE 2 · CM 2,
-  // EPS CM 2 (demande utilisateur coefficients CE/CM).
+  // ex. Mathématiques CP 1 · CE 3 · CM 5, Dictée CP 1 · CE 1 · CM 2,
+  // EPS CM 2 (demandes utilisateur coefficients CE/CM + Dictée CE 1).
   coef_cp?: number | null;
   coef_ce?: number | null;
   coef_cm?: number | null;

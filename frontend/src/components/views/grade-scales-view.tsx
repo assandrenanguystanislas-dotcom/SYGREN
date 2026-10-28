@@ -193,7 +193,7 @@ export function GradeScalesPanel() {
           <div>
             <h3 className="font-semibold text-base">Barèmes de notation</h3>
             <p className="text-xs text-muted-foreground">
-              {scales.length} barème(s) · CP 1–10 · CE 1–30 (Dictée 2–20) · CM 2–50 (Dictée 2–20, EPS 5–20)
+              {scales.length} barème(s) · CP 1–10 · CE 1–30 (Dictée 1–10) · CM 2–50 (Dictée 2–20, EPS 5–20)
             </p>
           </div>
         </div>

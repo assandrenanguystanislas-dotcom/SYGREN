@@ -1,21 +1,21 @@
 package database
 
 import (
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
+        "fmt"
+        "log"
+        "os"
+        "path/filepath"
+        "strings"
+        "time"
 
-	"sygren-api/config"
-	"sygren-api/models"
-	"sygren-api/utils"
+        "sygren-api/config"
+        "sygren-api/models"
+        "sygren-api/utils"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+        "gorm.io/driver/postgres"
+        "gorm.io/driver/sqlite"
+        "gorm.io/gorm"
+        "gorm.io/gorm/logger"
 )
 
 // DB is the global GORM database instance.
@@ -24,209 +24,212 @@ var DB *gorm.DB
 
 // Init opens the database, runs migrations, and seeds initial data.
 func Init(cfg *config.Config) error {
-	gormLogLevel := logger.Warn
-	if cfg.Env == "dev" {
-		gormLogLevel = logger.Info
-	}
+        gormLogLevel := logger.Warn
+        if cfg.Env == "dev" {
+                gormLogLevel = logger.Info
+        }
 
-	var db *gorm.DB
-	var err error
+        var db *gorm.DB
+        var err error
 
-	if cfg.DatabaseURL != "" {
-		// Mode production : PostgreSQL (Neon.tech)
-		//
-		// PreferSimpleProtocol (protocole simple pgx, sans prepared
-		// statements serveur) : l'endpoint POOLER de Neon est un
-		// PgBouncer en mode transaction. Avec le mode par défaut de
-		// pgx (CacheStatement), les statements nommés survivent côté
-		// pooler et, dès qu'AutoMigrate ajoute une colonne, chaque
-		// SELECT * re-préparé échoue avec « cached plan must not
-		// change result type » (SQLSTATE 0A000) → 404 en cascade sur
-		// tous les handlers First-by-id (ex: PUT /api/students/{id}).
-		// Le protocole simple est la parade documentée PgBouncer.
-		db, err = gorm.Open(postgres.New(postgres.Config{
-			DSN:                  cfg.DatabaseURL,
-			PreferSimpleProtocol: true,
-		}), &gorm.Config{
-			Logger: logger.Default.LogMode(gormLogLevel),
-		})
-		if err != nil {
-			return err
-		}
-		log.Println("[DB] Connecté à PostgreSQL (Neon)")
-	} else {
-		// Mode dev : SQLite local
-		// Note : les champs *time.Time du modèle EvaluationSession utilisent
-		// `gorm:"type:timestamp"` (et NON timestamptz) car le driver
-		// mattn/go-sqlite3 ne reconnaît que les types "timestamp"/"datetime"/
-		// "date" pour parser automatiquement les TEXT en time.Time. Avec
-		// timestamptz, il retourne une string → erreur "unsupported Scan".
-		if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0755); err != nil {
-			return err
-		}
-		sqliteDSN := cfg.DBPath + "?_busy_timeout=5000&_journal_mode=WAL"
-		db, err = gorm.Open(sqlite.Open(sqliteDSN), &gorm.Config{
-			Logger: logger.Default.LogMode(gormLogLevel),
-		})
-		if err != nil {
-			return err
-		}
-		log.Println("[DB] Connecté à SQLite :", cfg.DBPath)
-	}
-	DB = db
+        if cfg.DatabaseURL != "" {
+                // Mode production : PostgreSQL (Neon.tech)
+                //
+                // PreferSimpleProtocol (protocole simple pgx, sans prepared
+                // statements serveur) : l'endpoint POOLER de Neon est un
+                // PgBouncer en mode transaction. Avec le mode par défaut de
+                // pgx (CacheStatement), les statements nommés survivent côté
+                // pooler et, dès qu'AutoMigrate ajoute une colonne, chaque
+                // SELECT * re-préparé échoue avec « cached plan must not
+                // change result type » (SQLSTATE 0A000) → 404 en cascade sur
+                // tous les handlers First-by-id (ex: PUT /api/students/{id}).
+                // Le protocole simple est la parade documentée PgBouncer.
+                db, err = gorm.Open(postgres.New(postgres.Config{
+                        DSN:                  cfg.DatabaseURL,
+                        PreferSimpleProtocol: true,
+                }), &gorm.Config{
+                        Logger: logger.Default.LogMode(gormLogLevel),
+                })
+                if err != nil {
+                        return err
+                }
+                log.Println("[DB] Connecté à PostgreSQL (Neon)")
+        } else {
+                // Mode dev : SQLite local
+                // Note : les champs *time.Time du modèle EvaluationSession utilisent
+                // `gorm:"type:timestamp"` (et NON timestamptz) car le driver
+                // mattn/go-sqlite3 ne reconnaît que les types "timestamp"/"datetime"/
+                // "date" pour parser automatiquement les TEXT en time.Time. Avec
+                // timestamptz, il retourne une string → erreur "unsupported Scan".
+                if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0755); err != nil {
+                        return err
+                }
+                sqliteDSN := cfg.DBPath + "?_busy_timeout=5000&_journal_mode=WAL"
+                db, err = gorm.Open(sqlite.Open(sqliteDSN), &gorm.Config{
+                        Logger: logger.Default.LogMode(gormLogLevel),
+                })
+                if err != nil {
+                        return err
+                }
+                log.Println("[DB] Connecté à SQLite :", cfg.DBPath)
+        }
+        DB = db
 
-	// Auto-migrate all models
-	if err := db.AutoMigrate(models.AllModels()...); err != nil {
-		return err
-	}
+        // Auto-migrate all models
+        if err := db.AutoMigrate(models.AllModels()...); err != nil {
+                return err
+        }
 
-	log.Println("[DB] Migrations terminées")
+        log.Println("[DB] Migrations terminées")
 
-	// Backfill PDA — la colonne kind a été introduite avec l'extension
-	// « compositions mensuelles » du plan d'action : les examens créés
-	// avant sont des examens blancs (saisie manuelle). Idempotent.
-	if err := db.Model(&models.PDAExam{}).
-		Where("kind = '' OR kind IS NULL").
-		Update("kind", "blanc").Error; err != nil {
-		log.Println("[DB] backfill pda_exams.kind warning:", err)
-	}
+        // Backfill PDA — la colonne kind a été introduite avec l'extension
+        // « compositions mensuelles » du plan d'action : les examens créés
+        // avant sont des examens blancs (saisie manuelle). Idempotent.
+        if err := db.Model(&models.PDAExam{}).
+                Where("kind = '' OR kind IS NULL").
+                Update("kind", "blanc").Error; err != nil {
+                log.Println("[DB] backfill pda_exams.kind warning:", err)
+        }
 
-	// Seed initial data (super-admin + matières par défaut)
-	if err := seedDefaults(db); err != nil {
-		log.Println("[DB] seed warning:", err)
-	}
+        // Seed initial data (super-admin + matières par défaut)
+        if err := seedDefaults(db); err != nil {
+                log.Println("[DB] seed warning:", err)
+        }
 
-	return nil
+        return nil
 }
 
 // seedDefaults creates the super-admin account and default subjects if DB is empty.
 func seedDefaults(db *gorm.DB) error {
-	// 1. Super-admin (compte racine — cahier des charges §2)
-	var adminCount int64
-	db.Model(&models.User{}).Where("role = ?", models.RoleAdmin).Count(&adminCount)
-	if adminCount == 0 {
-		adminPass, _ := utils.HashPassword("admin123")
-		email := "admin@sygren.ci"
-		admin := models.User{
-			FullName: "Super Administrateur SYGREN",
-			Email:    &email,
-			Password: adminPass,
-			Role:     models.RoleAdmin,
-			Active:   true,
-		}
-		if err := db.Create(&admin).Error; err != nil {
-			return err
-		}
-		log.Println("[DB] Super-admin créé — login: admin@sygren.ci / mot de passe: admin123")
-	}
+        // 1. Super-admin (compte racine — cahier des charges §2)
+        var adminCount int64
+        db.Model(&models.User{}).Where("role = ?", models.RoleAdmin).Count(&adminCount)
+        if adminCount == 0 {
+                adminPass, _ := utils.HashPassword("admin123")
+                email := "admin@sygren.ci"
+                admin := models.User{
+                        FullName: "Super Administrateur SYGREN",
+                        Email:    &email,
+                        Password: adminPass,
+                        Role:     models.RoleAdmin,
+                        Active:   true,
+                }
+                if err := db.Create(&admin).Error; err != nil {
+                        return err
+                }
+                log.Println("[DB] Super-admin créé — login: admin@sygren.ci / mot de passe: admin123")
+        }
 
-	// 2. Matières par défaut pour l'école primaire ivoirienne
-	//    Coefficients PAR NIVEAU alignés sur la demande utilisateur (CE :
-	//    Mathématiques 3 ; CM : Mathématiques 5, EPS 2 — repli global 1 sinon).
-	var subjectCount int64
-	db.Model(&models.Subject{}).Count(&subjectCount)
-	if subjectCount == 0 {
-		coef3, coef5, coef2 := 3.0, 5.0, 2.0
-		defaultSubjects := []models.Subject{
-			{Name: "Français", Coefficient: 1},
-			{Name: "Mathématiques", Coefficient: 1, CoefCE: &coef3, CoefCM: &coef5},
-			{Name: "Histoire-Géographie", Coefficient: 1},
-			{Name: "Sciences", Coefficient: 1},
-			{Name: "Anglais", Coefficient: 1},
-			{Name: "EPS", Coefficient: 1, CoefCM: &coef2},
-			{Name: "Leçon de choses", Coefficient: 1},
-			{Name: "Chant et Dessin", Coefficient: 1},
-		}
-		for _, s := range defaultSubjects {
-			if err := db.Create(&s).Error; err != nil {
-				log.Println("[DB] seed subject:", s.Name, err)
-			}
-		}
-		log.Printf("[DB] %d matières par défaut créées", len(defaultSubjects))
-	}
+        // 2. Matières par défaut pour l'école primaire ivoirienne
+        //    Coefficients PAR NIVEAU alignés sur la demande utilisateur (CE :
+        //    Mathématiques 3 ; CM : Mathématiques 5, EPS 2 — repli global 1 sinon).
+        var subjectCount int64
+        db.Model(&models.Subject{}).Count(&subjectCount)
+        if subjectCount == 0 {
+                coef3, coef5, coef2 := 3.0, 5.0, 2.0
+                defaultSubjects := []models.Subject{
+                        {Name: "Français", Coefficient: 1},
+                        {Name: "Mathématiques", Coefficient: 1, CoefCE: &coef3, CoefCM: &coef5},
+                        {Name: "Histoire-Géographie", Coefficient: 1},
+                        {Name: "Sciences", Coefficient: 1},
+                        {Name: "Anglais", Coefficient: 1},
+                        {Name: "EPS", Coefficient: 1, CoefCM: &coef2},
+                        {Name: "Leçon de choses", Coefficient: 1},
+                        {Name: "Chant et Dessin", Coefficient: 1},
+                }
+                for _, s := range defaultSubjects {
+                        if err := db.Create(&s).Error; err != nil {
+                                log.Println("[DB] seed subject:", s.Name, err)
+                        }
+                }
+                log.Printf("[DB] %d matières par défaut créées", len(defaultSubjects))
+        }
 
-	// 3. Paramètres système par défaut (cahier des charges §3 Module 5)
-	var settingCount int64
-	db.Model(&models.Setting{}).Count(&settingCount)
-	if settingCount == 0 {
-		defaults := models.DefaultSettings()
-		for _, s := range defaults {
-			if err := db.Create(&s).Error; err != nil {
-				log.Println("[DB] seed setting:", s.Key, err)
-			}
-		}
-		log.Printf("[DB] %d paramètres par défaut créés", len(defaults))
-	}
+        // 3. Paramètres système par défaut (cahier des charges §3 Module 5)
+        var settingCount int64
+        db.Model(&models.Setting{}).Count(&settingCount)
+        if settingCount == 0 {
+                defaults := models.DefaultSettings()
+                for _, s := range defaults {
+                        if err := db.Create(&s).Error; err != nil {
+                                log.Println("[DB] seed setting:", s.Key, err)
+                        }
+                }
+                log.Printf("[DB] %d paramètres par défaut créés", len(defaults))
+        }
 
-	// 4. Barèmes de notation par défaut (réinitialisation demandée :
-	//     CP 1–10, CE 1–30 (Dictée 2–20), CM 2–50 (Dictée 2–20, EPS 5–20))
-	var scaleCount int64
-	db.Model(&models.GradeScale{}).Count(&scaleCount)
-	if scaleCount == 0 {
-		// D'abord les barèmes par défaut par niveau (avec note plancher)
-		for _, gs := range models.DefaultGradeScales() {
-			if err := db.Create(&gs).Error; err != nil {
-				log.Println("[DB] seed grade_scale:", gs.Level, err)
-			}
-		}
-		// Puis les exceptions par matière : Dictée 2–20 (CE et CM),
-		// EPS 5–20 (CM uniquement)
-		var dictee, eps models.Subject
-		if err := db.Where("name = ?", "Dictée").First(&dictee).Error; err == nil {
-			for _, level := range []string{"CE", "CM"} {
-				exc := models.GradeScale{
-					Level:     level,
-					SubjectID: &dictee.ID,
-					MinScore:  2,
-					MaxScore:  20,
-				}
-				if err := db.Create(&exc).Error; err != nil {
-					log.Println("[DB] seed grade_scale dictée:", level, err)
-				}
-			}
-			log.Printf("[DB] exceptions Dictée 2–20 créées pour CE et CM")
-		}
-		if err := db.Where("name = ?", "EPS").First(&eps).Error; err == nil {
-			exc := models.GradeScale{
-				Level:     "CM",
-				SubjectID: &eps.ID,
-				MinScore:  5,
-				MaxScore:  20,
-			}
-			if err := db.Create(&exc).Error; err != nil {
-				log.Println("[DB] seed grade_scale EPS:", err)
-			}
-			log.Printf("[DB] exception EPS 5–20 créée pour CM")
-		}
-		log.Printf("[DB] barèmes de notation créés (CP 1–10, CE 1–30, CM 2–50, Dictée CE+CM 2–20, EPS CM 5–20)")
-	}
+        // 4. Barèmes de notation par défaut (réinitialisation demandée :
+        //     CP 1–10, CE 1–30 (Dictée 1–10), CM 2–50 (Dictée 2–20, EPS 5–20))
+        var scaleCount int64
+        db.Model(&models.GradeScale{}).Count(&scaleCount)
+        if scaleCount == 0 {
+                // D'abord les barèmes par défaut par niveau (avec note plancher)
+                for _, gs := range models.DefaultGradeScales() {
+                        if err := db.Create(&gs).Error; err != nil {
+                                log.Println("[DB] seed grade_scale:", gs.Level, err)
+                        }
+                }
+                // Puis les exceptions par matière : Dictée 1–10 (CE — demande
+                // utilisateur « la note de 1 à 10 ») et 2–20 (CM),
+                // EPS 5–20 (CM uniquement)
+                var dictee, eps models.Subject
+                if err := db.Where("name = ?", "Dictée").First(&dictee).Error; err == nil {
+                        dicteeScales := map[string][2]int{"CE": {1, 10}, "CM": {2, 20}}
+                        for _, level := range []string{"CE", "CM"} {
+                                b := dicteeScales[level]
+                                exc := models.GradeScale{
+                                        Level:     level,
+                                        SubjectID: &dictee.ID,
+                                        MinScore:  b[0],
+                                        MaxScore:  b[1],
+                                }
+                                if err := db.Create(&exc).Error; err != nil {
+                                        log.Println("[DB] seed grade_scale dictée:", level, err)
+                                }
+                        }
+                        log.Printf("[DB] exceptions Dictée créées (CE 1–10, CM 2–20)")
+                }
+                if err := db.Where("name = ?", "EPS").First(&eps).Error; err == nil {
+                        exc := models.GradeScale{
+                                Level:     "CM",
+                                SubjectID: &eps.ID,
+                                MinScore:  5,
+                                MaxScore:  20,
+                        }
+                        if err := db.Create(&exc).Error; err != nil {
+                                log.Println("[DB] seed grade_scale EPS:", err)
+                        }
+                        log.Printf("[DB] exception EPS 5–20 créée pour CM")
+                }
+                log.Printf("[DB] barèmes de notation créés (CP 1–10, CE 1–30 avec Dictée 1–10, CM 2–50 avec Dictée 2–20 et EPS 5–20)")
+        }
 
-	// 5. Architecture D — RBAC roles + matrice de permissions
-	if err := seedRBAC(db); err != nil {
-		log.Println("[DB] seed RBAC warning:", err)
-	}
+        // 5. Architecture D — RBAC roles + matrice de permissions
+        if err := seedRBAC(db); err != nil {
+                log.Println("[DB] seed RBAC warning:", err)
+        }
 
-	// 6. v5 (session 26) — SECTEURS D'ECOLES par défaut (demande
-	// utilisateur : COSROU, VIEUX-BADIEN, TOUPAH, OUSROU, LEBOUTOU,
-	// BOUBOURY). Idempotent : uniquement si la table est vide ET qu'une
-	// seule IEP existe (rattachement non ambigu).
-	seedSectors(db)
+        // 6. v5 (session 26) — SECTEURS D'ECOLES par défaut (demande
+        // utilisateur : COSROU, VIEUX-BADIEN, TOUPAH, OUSROU, LEBOUTOU,
+        // BOUBOURY). Idempotent : uniquement si la table est vide ET qu'une
+        // seule IEP existe (rattachement non ambigu).
+        seedSectors(db)
 
-	// 7. Task 55 — FICHIER DU PERSONNEL : pré-remplissage one-shot depuis
-	// les dossiers personnels des directeurs et adjoints au directeur
-	// actifs (l'agent complète ensuite librement dans son module).
-	if err := seedStaffRecords(db); err != nil {
-		log.Println("[DB] seed fichier du personnel warning:", err)
-	}
+        // 7. Task 55 — FICHIER DU PERSONNEL : pré-remplissage one-shot depuis
+        // les dossiers personnels des directeurs et adjoints au directeur
+        // actifs (l'agent complète ensuite librement dans son module).
+        if err := seedStaffRecords(db); err != nil {
+                log.Println("[DB] seed fichier du personnel warning:", err)
+        }
 
-	// 8. Colonne ÉCOLES du fichier du personnel : reprise one-shot de
-	// l'école du dossier de chaque agent déjà présent (lignes créées
-	// avant l'ajout de la colonne). Ne touche qu'aux lignes SANS école.
-	if err := backfillStaffRecordSchools(db); err != nil {
-		log.Println("[DB] backfill écoles fichier du personnel warning:", err)
-	}
+        // 8. Colonne ÉCOLES du fichier du personnel : reprise one-shot de
+        // l'école du dossier de chaque agent déjà présent (lignes créées
+        // avant l'ajout de la colonne). Ne touche qu'aux lignes SANS école.
+        if err := backfillStaffRecordSchools(db); err != nil {
+                log.Println("[DB] backfill écoles fichier du personnel warning:", err)
+        }
 
-	return nil
+        return nil
 }
 
 // seedRBAC peuple les rôles système et la matrice role × module.
@@ -242,132 +245,132 @@ func seedDefaults(db *gorm.DB) error {
 //   - personnalisations ultérieures du Super Admin (via /api/permissions)
 //     préservées : tant que la version ne change pas, rien n'est écrasé.
 func seedRBAC(db *gorm.DB) error {
-	// 5a. Rôles — créer les rôles manquants (v2 ajoute "parent" aux bases
-	// existantes sans toucher aux 4 rôles historiques).
-	var roles []models.Role
-	if err := db.Find(&roles).Error; err != nil {
-		return err
-	}
-	roleByName := make(map[string]string, len(roles))
-	for _, r := range roles {
-		roleByName[r.Name] = r.ID
-	}
-	createdRoles := 0
-	for _, r := range models.DefaultRoles() {
-		if _, ok := roleByName[r.Name]; ok {
-			continue
-		}
-		role := models.Role{
-			Name:        r.Name,
-			Label:       r.Label,
-			Description: r.Description,
-			IsSystem:    r.IsSystem,
-			SortOrder:   r.SortOrder,
-		}
-		if err := db.Create(&role).Error; err != nil {
-			log.Println("[DB] seed role:", r.Name, err)
-			continue
-		}
-		roleByName[r.Name] = role.ID
-		createdRoles++
-	}
-	if createdRoles > 0 {
-		log.Printf("[DB] %d rôle(s) système créé(s)", createdRoles)
-	}
+        // 5a. Rôles — créer les rôles manquants (v2 ajoute "parent" aux bases
+        // existantes sans toucher aux 4 rôles historiques).
+        var roles []models.Role
+        if err := db.Find(&roles).Error; err != nil {
+                return err
+        }
+        roleByName := make(map[string]string, len(roles))
+        for _, r := range roles {
+                roleByName[r.Name] = r.ID
+        }
+        createdRoles := 0
+        for _, r := range models.DefaultRoles() {
+                if _, ok := roleByName[r.Name]; ok {
+                        continue
+                }
+                role := models.Role{
+                        Name:        r.Name,
+                        Label:       r.Label,
+                        Description: r.Description,
+                        IsSystem:    r.IsSystem,
+                        SortOrder:   r.SortOrder,
+                }
+                if err := db.Create(&role).Error; err != nil {
+                        log.Println("[DB] seed role:", r.Name, err)
+                        continue
+                }
+                roleByName[r.Name] = role.ID
+                createdRoles++
+        }
+        if createdRoles > 0 {
+                log.Printf("[DB] %d rôle(s) système créé(s)", createdRoles)
+        }
 
-	// 5b. Matrice role × module — versionnée.
-	applied := 0
-	var marker models.Setting
-	hasMarker := db.Where(models.Setting{Key: models.RbacMatrixVersionKey}).First(&marker).Error == nil
-	if hasMarker {
-		fmt.Sscanf(marker.Value, "%d", &applied)
-	}
+        // 5b. Matrice role × module — versionnée.
+        applied := 0
+        var marker models.Setting
+        hasMarker := db.Where(models.Setting{Key: models.RbacMatrixVersionKey}).First(&marker).Error == nil
+        if hasMarker {
+                fmt.Sscanf(marker.Value, "%d", &applied)
+        }
 
-	if applied >= models.RbacMatrixVersion {
-		// Base à jour : créer uniquement les cellules MANQUANTES (nouveaux
-		// modules ajoutés sans changement de politique).
-		var rmCount int64
-		db.Model(&models.RoleModule{}).Count(&rmCount)
-		if rmCount == 0 {
-			return seedRBACCells(db, roleByName, false)
-		}
-		// Cellules manquantes pour les nouveaux modules/rôles (idempotent).
-		return seedRBACCells(db, roleByName, true)
-	}
+        if applied >= models.RbacMatrixVersion {
+                // Base à jour : créer uniquement les cellules MANQUANTES (nouveaux
+                // modules ajoutés sans changement de politique).
+                var rmCount int64
+                db.Model(&models.RoleModule{}).Count(&rmCount)
+                if rmCount == 0 {
+                        return seedRBACCells(db, roleByName, false)
+                }
+                // Cellules manquantes pour les nouveaux modules/rôles (idempotent).
+                return seedRBACCells(db, roleByName, true)
+        }
 
-	// Migration : appliquer la matrice COMPLÈTE (créer les cellules
-	// manquantes + mettre à jour les existantes aux valeurs par défaut v2).
-	if err := seedRBACCells(db, roleByName, false); err != nil {
-		return err
-	}
-	value := fmt.Sprintf("%d", models.RbacMatrixVersion)
-	if hasMarker {
-		if err := db.Model(&models.Setting{}).Where(models.Setting{Key: models.RbacMatrixVersionKey}).
-			Updates(map[string]interface{}{"value": value, "updated_at": time.Now()}).Error; err != nil {
-			return err
-		}
-	} else {
-		if err := db.Create(&models.Setting{
-			Key:      models.RbacMatrixVersionKey,
-			Value:    value,
-			Category: "system",
-			Label:    "Version de la matrice RBAC appliquée au démarrage",
-		}).Error; err != nil {
-			return err
-		}
-	}
-	log.Printf("[DB] matrice RBAC v%d appliquée (rôles × modules)", models.RbacMatrixVersion)
-	return nil
+        // Migration : appliquer la matrice COMPLÈTE (créer les cellules
+        // manquantes + mettre à jour les existantes aux valeurs par défaut v2).
+        if err := seedRBACCells(db, roleByName, false); err != nil {
+                return err
+        }
+        value := fmt.Sprintf("%d", models.RbacMatrixVersion)
+        if hasMarker {
+                if err := db.Model(&models.Setting{}).Where(models.Setting{Key: models.RbacMatrixVersionKey}).
+                        Updates(map[string]interface{}{"value": value, "updated_at": time.Now()}).Error; err != nil {
+                        return err
+                }
+        } else {
+                if err := db.Create(&models.Setting{
+                        Key:      models.RbacMatrixVersionKey,
+                        Value:    value,
+                        Category: "system",
+                        Label:    "Version de la matrice RBAC appliquée au démarrage",
+                }).Error; err != nil {
+                        return err
+                }
+        }
+        log.Printf("[DB] matrice RBAC v%d appliquée (rôles × modules)", models.RbacMatrixVersion)
+        return nil
 }
 
 // seedRBACCells crée/met à jour les cellules (role × module) depuis la
 // matrice par défaut. force=true → écrase les valeurs existantes ;
 // force=false → crée uniquement les cellules absentes.
 func seedRBACCells(db *gorm.DB, roleByName map[string]string, onlyMissing bool) error {
-	count := 0
-	for _, cell := range models.DefaultRoleModules() {
-		roleID, ok := roleByName[cell.RoleName]
-		if !ok {
-			log.Printf("[DB] seed role_module: rôle %q introuvable, skip", cell.RoleName)
-			continue
-		}
-		var rm models.RoleModule
-		exists := db.Where("role_id = ? AND module_key = ?", roleID, cell.Module).First(&rm).Error == nil
-		if exists && onlyMissing {
-			continue
-		}
-		if exists {
-			if rm.CanRead == cell.CanRead && rm.CanWrite == cell.CanWrite {
-				continue
-			}
-			if err := db.Model(&models.RoleModule{}).Where("id = ?", rm.ID).
-				Updates(map[string]interface{}{
-					"can_read":   cell.CanRead,
-					"can_write":  cell.CanWrite,
-					"updated_at": time.Now(),
-				}).Error; err != nil {
-				log.Printf("[DB] update role_module (%s, %s): %v", cell.RoleName, cell.Module, err)
-				continue
-			}
-			count++
-			continue
-		}
-		rm = models.RoleModule{
-			RoleID:    roleID,
-			ModuleKey: cell.Module,
-			CanRead:   cell.CanRead,
-			CanWrite:  cell.CanWrite,
-		}
-		if err := db.Create(&rm).Error; err != nil {
-			log.Printf("[DB] seed role_module (%s, %s): %v", cell.RoleName, cell.Module, err)
-			continue
-		}
-		count++
-	}
-	if count > 0 {
-		log.Printf("[DB] %d cellules role_module créées/mises à jour", count)
-	}
-	return nil
+        count := 0
+        for _, cell := range models.DefaultRoleModules() {
+                roleID, ok := roleByName[cell.RoleName]
+                if !ok {
+                        log.Printf("[DB] seed role_module: rôle %q introuvable, skip", cell.RoleName)
+                        continue
+                }
+                var rm models.RoleModule
+                exists := db.Where("role_id = ? AND module_key = ?", roleID, cell.Module).First(&rm).Error == nil
+                if exists && onlyMissing {
+                        continue
+                }
+                if exists {
+                        if rm.CanRead == cell.CanRead && rm.CanWrite == cell.CanWrite {
+                                continue
+                        }
+                        if err := db.Model(&models.RoleModule{}).Where("id = ?", rm.ID).
+                                Updates(map[string]interface{}{
+                                        "can_read":   cell.CanRead,
+                                        "can_write":  cell.CanWrite,
+                                        "updated_at": time.Now(),
+                                }).Error; err != nil {
+                                log.Printf("[DB] update role_module (%s, %s): %v", cell.RoleName, cell.Module, err)
+                                continue
+                        }
+                        count++
+                        continue
+                }
+                rm = models.RoleModule{
+                        RoleID:    roleID,
+                        ModuleKey: cell.Module,
+                        CanRead:   cell.CanRead,
+                        CanWrite:  cell.CanWrite,
+                }
+                if err := db.Create(&rm).Error; err != nil {
+                        log.Printf("[DB] seed role_module (%s, %s): %v", cell.RoleName, cell.Module, err)
+                        continue
+                }
+                count++
+        }
+        if count > 0 {
+                log.Printf("[DB] %d cellules role_module créées/mises à jour", count)
+        }
+        return nil
 }
 
 // seedSectors crée les SECTEURS D'ECOLES par défaut (v5, session 26).
@@ -376,30 +379,30 @@ func seedRBACCells(db *gorm.DB, roleByName map[string]string, onlyMissing bool) 
 // contient zéro ou plusieurs, le seed est ignoré — l'administration
 // crée ses secteurs depuis le module Écoles > « Secteurs d'écoles »).
 func seedSectors(db *gorm.DB) {
-	var sectorCount int64
-	db.Model(&models.Sector{}).Count(&sectorCount)
-	if sectorCount > 0 {
-		return
-	}
-	var iepCount int64
-	db.Model(&models.IEP{}).Count(&iepCount)
-	if iepCount != 1 {
-		log.Println("[DB] seed secteurs ignoré : la base doit contenir exactement une IEP")
-		return
-	}
-	var iep models.IEP
-	if err := db.First(&iep).Error; err != nil {
-		return
-	}
-	defaultSectors := []string{"COSROU", "VIEUX-BADIEN", "TOUPAH", "OUSROU", "LEBOUTOU", "BOUBOURY"}
-	for i, name := range defaultSectors {
-		s := models.Sector{IEPID: iep.ID, Name: name, Position: i + 1}
-		if err := db.Create(&s).Error; err != nil {
-			log.Println("[DB] seed sector:", name, err)
-			continue
-		}
-	}
-	log.Printf("[DB] %d secteurs d'écoles par défaut créés dans l'IEP %s", len(defaultSectors), iep.Name)
+        var sectorCount int64
+        db.Model(&models.Sector{}).Count(&sectorCount)
+        if sectorCount > 0 {
+                return
+        }
+        var iepCount int64
+        db.Model(&models.IEP{}).Count(&iepCount)
+        if iepCount != 1 {
+                log.Println("[DB] seed secteurs ignoré : la base doit contenir exactement une IEP")
+                return
+        }
+        var iep models.IEP
+        if err := db.First(&iep).Error; err != nil {
+                return
+        }
+        defaultSectors := []string{"COSROU", "VIEUX-BADIEN", "TOUPAH", "OUSROU", "LEBOUTOU", "BOUBOURY"}
+        for i, name := range defaultSectors {
+                s := models.Sector{IEPID: iep.ID, Name: name, Position: i + 1}
+                if err := db.Create(&s).Error; err != nil {
+                        log.Println("[DB] seed sector:", name, err)
+                        continue
+                }
+        }
+        log.Printf("[DB] %d secteurs d'écoles par défaut créés dans l'IEP %s", len(defaultSectors), iep.Name)
 }
 
 // seedStaffRecords — Task 55 : pré-remplissage ONE-SHOT du « Fichier du
@@ -412,109 +415,109 @@ func seedSectors(db *gorm.DB) {
 // L'effectif repris est celui du cours tenu (total, sinon filles+garçons).
 // L'école (colonne ÉCOLES) est reprise du champ school_id du dossier.
 func seedStaffRecords(db *gorm.DB) error {
-	var marker models.Setting
-	if db.Where(models.Setting{Key: "staff_records.seeded"}).First(&marker).Error == nil {
-		return nil // déjà seedé
-	}
+        var marker models.Setting
+        if db.Where(models.Setting{Key: "staff_records.seeded"}).First(&marker).Error == nil {
+                return nil // déjà seedé
+        }
 
-	type agentRow struct {
-		ID            string
-		FullName      string
-		Phone         *string
-		SectorID      *string
-		SchoolID      *string
-		Matricule     *string
-		Sexe          *string
-		DateNaissance *time.Time
-		LieuNaissance *string
-		Categorie     *string
-		DateEntreeFP  *time.Time
-		Cours         *string
-		Fonction      *string
-		EffectifF     *int
-		EffectifG     *int
-		EffectifT     *int
-	}
-	var agents []agentRow
-	if err := db.Model(&models.User{}).
-		Select("id, full_name, phone, sector_id, school_id, matricule, sexe, date_naissance, lieu_naissance, categorie, date_entree_fp, cours, fonction, effectif_f, effectif_g, effectif_t").
-		Where("role IN ? AND active AND deleted_at IS NULL", []string{models.RoleDirector, models.RoleTeacher}).
-		Order("full_name ASC").
-		Scan(&agents).Error; err != nil {
-		return err
-	}
-	if len(agents) == 0 {
-		// Rien à pré-remplir : on marque quand même pour ne pas
-		// retenter à chaque démarrage.
-		return db.Create(&models.Setting{
-			Key:      "staff_records.seeded",
-			Value:    "1",
-			Category: "system",
-			Label:    "Fichier du personnel pré-rempli (Task 55)",
-		}).Error
-	}
+        type agentRow struct {
+                ID            string
+                FullName      string
+                Phone         *string
+                SectorID      *string
+                SchoolID      *string
+                Matricule     *string
+                Sexe          *string
+                DateNaissance *time.Time
+                LieuNaissance *string
+                Categorie     *string
+                DateEntreeFP  *time.Time
+                Cours         *string
+                Fonction      *string
+                EffectifF     *int
+                EffectifG     *int
+                EffectifT     *int
+        }
+        var agents []agentRow
+        if err := db.Model(&models.User{}).
+                Select("id, full_name, phone, sector_id, school_id, matricule, sexe, date_naissance, lieu_naissance, categorie, date_entree_fp, cours, fonction, effectif_f, effectif_g, effectif_t").
+                Where("role IN ? AND active AND deleted_at IS NULL", []string{models.RoleDirector, models.RoleTeacher}).
+                Order("full_name ASC").
+                Scan(&agents).Error; err != nil {
+                return err
+        }
+        if len(agents) == 0 {
+                // Rien à pré-remplir : on marque quand même pour ne pas
+                // retenter à chaque démarrage.
+                return db.Create(&models.Setting{
+                        Key:      "staff_records.seeded",
+                        Value:    "1",
+                        Category: "system",
+                        Label:    "Fichier du personnel pré-rempli (Task 55)",
+                }).Error
+        }
 
-	// Secteur de chaque école (pour déduire le secteur des agents qui
-	// n'en portent pas eux-mêmes).
-	schoolSector := map[string]*string{}
-	var schools []models.School
-	if err := db.Select("id, sector_id").Find(&schools).Error; err == nil {
-		for _, sc := range schools {
-			schoolSector[sc.ID] = sc.SectorID
-		}
-	}
+        // Secteur de chaque école (pour déduire le secteur des agents qui
+        // n'en portent pas eux-mêmes).
+        schoolSector := map[string]*string{}
+        var schools []models.School
+        if err := db.Select("id, sector_id").Find(&schools).Error; err == nil {
+                for _, sc := range schools {
+                        schoolSector[sc.ID] = sc.SectorID
+                }
+        }
 
-	created := 0
-	for _, a := range agents {
-		sectorID := a.SectorID
-		if sectorID == nil && a.SchoolID != nil {
-			sectorID = schoolSector[*a.SchoolID]
-		}
-		rec := models.StaffRecord{
-			SectorID:      sectorID,
-			SchoolID:      a.SchoolID,
-			FullName:      a.FullName,
-			Sexe:          a.Sexe,
-			DateNaissance: a.DateNaissance,
-			LieuNaissance: a.LieuNaissance,
-			Categorie:     a.Categorie,
-			Matricule:     a.Matricule,
-			DateEntreeFP:  a.DateEntreeFP,
-			Cours:         a.Cours,
-			Fonction:      a.Fonction,
-			Contact:       a.Phone,
-		}
-		// EFFECTIF — total du cours tenu (T), sinon F+G.
-		if a.EffectifT != nil && *a.EffectifT > 0 {
-			rec.Effectif = a.EffectifT
-		} else if a.EffectifF != nil || a.EffectifG != nil {
-			sum := 0
-			if a.EffectifF != nil {
-				sum += *a.EffectifF
-			}
-			if a.EffectifG != nil {
-				sum += *a.EffectifG
-			}
-			if sum > 0 {
-				rec.Effectif = &sum
-			}
-		}
-		if err := db.Create(&rec).Error; err != nil {
-			log.Println("[DB] seed staff_record:", a.FullName, err)
-			continue
-		}
-		created++
-	}
-	if err := db.Create(&models.Setting{
-		Key:      "staff_records.seeded",
-		Value:    "1",
-		Category: "system",
-		Label:    "Fichier du personnel pré-rempli (Task 55)",
-	}).Error; err != nil {
-		return err
-	}
-	log.Printf("[DB] fichier du personnel pré-rempli : %d lignes créées depuis les dossiers des agents", created)
-	return nil
+        created := 0
+        for _, a := range agents {
+                sectorID := a.SectorID
+                if sectorID == nil && a.SchoolID != nil {
+                        sectorID = schoolSector[*a.SchoolID]
+                }
+                rec := models.StaffRecord{
+                        SectorID:      sectorID,
+                        SchoolID:      a.SchoolID,
+                        FullName:      a.FullName,
+                        Sexe:          a.Sexe,
+                        DateNaissance: a.DateNaissance,
+                        LieuNaissance: a.LieuNaissance,
+                        Categorie:     a.Categorie,
+                        Matricule:     a.Matricule,
+                        DateEntreeFP:  a.DateEntreeFP,
+                        Cours:         a.Cours,
+                        Fonction:      a.Fonction,
+                        Contact:       a.Phone,
+                }
+                // EFFECTIF — total du cours tenu (T), sinon F+G.
+                if a.EffectifT != nil && *a.EffectifT > 0 {
+                        rec.Effectif = a.EffectifT
+                } else if a.EffectifF != nil || a.EffectifG != nil {
+                        sum := 0
+                        if a.EffectifF != nil {
+                                sum += *a.EffectifF
+                        }
+                        if a.EffectifG != nil {
+                                sum += *a.EffectifG
+                        }
+                        if sum > 0 {
+                                rec.Effectif = &sum
+                        }
+                }
+                if err := db.Create(&rec).Error; err != nil {
+                        log.Println("[DB] seed staff_record:", a.FullName, err)
+                        continue
+                }
+                created++
+        }
+        if err := db.Create(&models.Setting{
+                Key:      "staff_records.seeded",
+                Value:    "1",
+                Category: "system",
+                Label:    "Fichier du personnel pré-rempli (Task 55)",
+        }).Error; err != nil {
+                return err
+        }
+        log.Printf("[DB] fichier du personnel pré-rempli : %d lignes créées depuis les dossiers des agents", created)
+        return nil
 }
 
 // backfillStaffRecordSchools — colonne ÉCOLES (school_id) ajoutée au
@@ -526,86 +529,86 @@ func seedStaffRecords(db *gorm.DB) error {
 // JAMAIS une ligne qui a déjà une école. Marqué par le setting
 // "staff_records.schools_backfilled" : ne s'exécute jamais deux fois.
 func backfillStaffRecordSchools(db *gorm.DB) error {
-	var marker models.Setting
-	if db.Where(models.Setting{Key: "staff_records.schools_backfilled"}).First(&marker).Error == nil {
-		return nil // déjà repris
-	}
+        var marker models.Setting
+        if db.Where(models.Setting{Key: "staff_records.schools_backfilled"}).First(&marker).Error == nil {
+                return nil // déjà repris
+        }
 
-	// Dossiers éligibles (mêmes critères que le seed) : directeur ou
-	// enseignant actif AVEC une école d'affectation.
-	type userRow struct {
-		FullName  string
-		Matricule *string
-		SchoolID  *string
-	}
-	var users []userRow
-	if err := db.Model(&models.User{}).
-		Select("full_name, matricule, school_id").
-		Where("role IN ? AND active AND deleted_at IS NULL AND school_id IS NOT NULL",
-			[]string{models.RoleDirector, models.RoleTeacher}).
-		Scan(&users).Error; err != nil {
-		return err
-	}
-	byName := map[string][]userRow{}
-	for _, u := range users {
-		k := strings.ToUpper(strings.TrimSpace(u.FullName))
-		byName[k] = append(byName[k], u)
-	}
+        // Dossiers éligibles (mêmes critères que le seed) : directeur ou
+        // enseignant actif AVEC une école d'affectation.
+        type userRow struct {
+                FullName  string
+                Matricule *string
+                SchoolID  *string
+        }
+        var users []userRow
+        if err := db.Model(&models.User{}).
+                Select("full_name, matricule, school_id").
+                Where("role IN ? AND active AND deleted_at IS NULL AND school_id IS NOT NULL",
+                        []string{models.RoleDirector, models.RoleTeacher}).
+                Scan(&users).Error; err != nil {
+                return err
+        }
+        byName := map[string][]userRow{}
+        for _, u := range users {
+                k := strings.ToUpper(strings.TrimSpace(u.FullName))
+                byName[k] = append(byName[k], u)
+        }
 
-	// Lignes du fichier SANS école : reprise quand le dossier est non
-	// ambigu (un seul candidat, ou homonymes tous rattachés à la MÊME
-	// école ; à défaut, un seul candidat au même matricule).
-	var rows []models.StaffRecord
-	if err := db.Where("school_id IS NULL").Find(&rows).Error; err != nil {
-		return err
-	}
-	filled := 0
-	for _, rec := range rows {
-		cands := byName[strings.ToUpper(strings.TrimSpace(rec.FullName))]
-		if len(cands) == 0 {
-			continue
-		}
-		if len(cands) > 1 && rec.Matricule != nil && *rec.Matricule != "" {
-			var m []userRow
-			for _, c := range cands {
-				if c.Matricule != nil && *c.Matricule == *rec.Matricule {
-					m = append(m, c)
-				}
-			}
-			if len(m) == 1 {
-				cands = m
-			}
-		}
-		schoolsSet := map[string]bool{}
-		for _, c := range cands {
-			if c.SchoolID != nil {
-				schoolsSet[*c.SchoolID] = true
-			}
-		}
-		if len(schoolsSet) != 1 {
-			continue // ambigu : on ne devine pas, complétion manuelle
-		}
-		var sid string
-		for s := range schoolsSet {
-			sid = s
-		}
-		if err := db.Model(&models.StaffRecord{}).
-			Where("id = ? AND school_id IS NULL", rec.ID).
-			Update("school_id", sid).Error; err != nil {
-			log.Println("[DB] backfill école staff_record:", rec.FullName, err)
-			continue
-		}
-		filled++
-	}
+        // Lignes du fichier SANS école : reprise quand le dossier est non
+        // ambigu (un seul candidat, ou homonymes tous rattachés à la MÊME
+        // école ; à défaut, un seul candidat au même matricule).
+        var rows []models.StaffRecord
+        if err := db.Where("school_id IS NULL").Find(&rows).Error; err != nil {
+                return err
+        }
+        filled := 0
+        for _, rec := range rows {
+                cands := byName[strings.ToUpper(strings.TrimSpace(rec.FullName))]
+                if len(cands) == 0 {
+                        continue
+                }
+                if len(cands) > 1 && rec.Matricule != nil && *rec.Matricule != "" {
+                        var m []userRow
+                        for _, c := range cands {
+                                if c.Matricule != nil && *c.Matricule == *rec.Matricule {
+                                        m = append(m, c)
+                                }
+                        }
+                        if len(m) == 1 {
+                                cands = m
+                        }
+                }
+                schoolsSet := map[string]bool{}
+                for _, c := range cands {
+                        if c.SchoolID != nil {
+                                schoolsSet[*c.SchoolID] = true
+                        }
+                }
+                if len(schoolsSet) != 1 {
+                        continue // ambigu : on ne devine pas, complétion manuelle
+                }
+                var sid string
+                for s := range schoolsSet {
+                        sid = s
+                }
+                if err := db.Model(&models.StaffRecord{}).
+                        Where("id = ? AND school_id IS NULL", rec.ID).
+                        Update("school_id", sid).Error; err != nil {
+                        log.Println("[DB] backfill école staff_record:", rec.FullName, err)
+                        continue
+                }
+                filled++
+        }
 
-	if err := db.Create(&models.Setting{
-		Key:      "staff_records.schools_backfilled",
-		Value:    fmt.Sprintf("n=%d/%d", filled, len(rows)),
-		Category: "system",
-		Label:    "Fichier du personnel : écoles reprises des dossiers (colonne ÉCOLES)",
-	}).Error; err != nil {
-		return err
-	}
-	log.Printf("[DB] fichier du personnel : écoles reprises pour %d/%d lignes sans école", filled, len(rows))
-	return nil
+        if err := db.Create(&models.Setting{
+                Key:      "staff_records.schools_backfilled",
+                Value:    fmt.Sprintf("n=%d/%d", filled, len(rows)),
+                Category: "system",
+                Label:    "Fichier du personnel : écoles reprises des dossiers (colonne ÉCOLES)",
+        }).Error; err != nil {
+                return err
+        }
+        log.Printf("[DB] fichier du personnel : écoles reprises pour %d/%d lignes sans école", filled, len(rows))
+        return nil
 }

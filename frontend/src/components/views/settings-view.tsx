@@ -279,8 +279,8 @@ export function SettingsView({
         </TabsContent>
 
         {/* Onglet Barèmes : GradeScalesPanel (CRUD barèmes CP/CE/CM +
-            exception Dictée /20). Panneau déjà autonome (loading + erreur
-            + header inline). */}
+            exceptions Dictée CE 1–10, Dictée CM 2–20). Panneau déjà
+            autonome (loading + erreur + header inline). */}
         <TabsContent
           value="baremes"
           className="animate-in fade-in-50 duration-150"
