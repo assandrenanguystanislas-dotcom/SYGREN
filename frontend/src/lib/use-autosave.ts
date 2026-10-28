@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { gradesApi } from "@/lib/api";
@@ -30,8 +31,13 @@ interface UseAutoSaveOptions {
  *
  * Stratégie :
  *   1. L'utilisateur tape dans une cellule → la valeur est stockée en local
+ *      ET exposée via `pending` — la grille calcule la moyenne AU FUR ET À
+ *      MESURE de la saisie (sans attendre la sauvegarde).
  *   2. Un debounce attend la fin de la frappe (800ms par défaut)
- *   3. Toutes les cellules modifiées sont envoyées en une seule requête bulk
+ *   3. Toutes les cellules modifiées sont envoyées en une seule requête bulk ;
+ *      la réponse renvoie les notes TELLES QU'ENREGISTRÉES (avec leurs ID) →
+ *      elles sont fusionnées dans le cache React Query : la moyenne reste
+ *      exacte sans rechargement ni clignotement.
  *   4. En cas d'échec, les modifications restent en attente (retry au prochain cycle)
  */
 export function useAutoSave({ sessionId, debounceMs = 800 }: UseAutoSaveOptions) {
@@ -40,6 +46,7 @@ export function useAutoSave({ sessionId, debounceMs = 800 }: UseAutoSaveOptions)
   const [lastSavedCount, setLastSavedCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSavingRef = useRef(false);
+  const queryClient = useQueryClient();
 
   // Ajoute une modification en attente et programme l'auto-save
   const updateCell = useCallback(
@@ -54,6 +61,53 @@ export function useAutoSave({ sessionId, debounceMs = 800 }: UseAutoSaveOptions)
     [],
   );
 
+  // Retire une modification en attente — « effacer complètement la note »
+  // quand elle n'a pas encore été sauvegardée (cellule vidée avant flush).
+  const discardCell = useCallback((studentId: string, subjectId: string) => {
+    const key = `${studentId}:${subjectId}`;
+    setPending((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  // Vide TOUTES les modifications en attente (après une suppression en masse
+  // côté serveur — les valeurs locales n'ont plus de raison d'exister).
+  const clearPending = useCallback(() => {
+    setPending({});
+    setStatus("idle");
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  // Retour à « à jour » quand il ne reste plus aucune modification en attente
+  useEffect(() => {
+    if (Object.keys(pending).length === 0) {
+      setStatus((s) => (s === "pending" ? "idle" : s));
+    }
+  }, [pending]);
+
+  // Changement de session : les valeurs en attente appartiennent à l'ANCIENNE
+  // session — on les abandonne (la vue tente un flush avant le basculement ;
+  // une valeur non sauvegardée ne doit jamais fuir vers une autre session,
+  // ni dans la moyenne ni dans la prochaine sauvegarde automatique).
+  const prevSessionRef = useRef(sessionId);
+  useEffect(() => {
+    if (prevSessionRef.current !== sessionId) {
+      prevSessionRef.current = sessionId;
+      setPending({});
+      setStatus("idle");
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+  }, [sessionId]);
+
   // Force une sauvegarde immédiate (utile quand l'utilisateur quitte la page)
   const flush = useCallback(async () => {
     if (isSavingRef.current) return;
@@ -64,7 +118,7 @@ export function useAutoSave({ sessionId, debounceMs = 800 }: UseAutoSaveOptions)
     // saveNow est appelé via la fonction ci-dessus
     async function saveNow(current: PendingGrades) {
       const items = Object.values(current);
-      if (items.length === 0) return;
+      if (items.length === 0 || !sessionId) return;
       isSavingRef.current = true;
       setStatus("saving");
       try {
@@ -74,6 +128,36 @@ export function useAutoSave({ sessionId, debounceMs = 800 }: UseAutoSaveOptions)
         });
         setLastSavedCount(result.created + result.updated);
         setStatus("saved");
+
+        // Fusion des notes sauvegardées (ID réels renvoyés par le serveur)
+        // dans le cache React Query — la moyenne de la grille (lecture
+        // pending → cache) reste juste sans refetch ni clignotement.
+        const savedGrades = result.grades ?? [];
+        if (savedGrades.length > 0) {
+          queryClient.setQueryData<{ grades: Grade[]; count: number }>(
+            ["grades", sessionId],
+            (old) => {
+              if (!old) return old;
+              const byId = new Map(old.grades.map((g) => [g.id, g]));
+              for (const g of savedGrades) {
+                // Remplacer l'éventuel doublon (même élève + matière + session,
+                // ex : ligne créée entre-temps) pour éviter les entrées jumelles
+                const dup = old.grades.find(
+                  (o) =>
+                    o.id !== g.id &&
+                    o.student_id === g.student_id &&
+                    o.subject_id === g.subject_id &&
+                    o.session_id === g.session_id,
+                );
+                if (dup) byId.delete(dup.id);
+                byId.set(g.id, g);
+              }
+              const grades = Array.from(byId.values());
+              return { ...old, grades, count: grades.length };
+            },
+          );
+        }
+
         // Vider les modifications envoyées (mais garder celles qui auraient pu
         // être ajoutées pendant la requête)
         setPending((prev) => {
@@ -103,7 +187,7 @@ export function useAutoSave({ sessionId, debounceMs = 800 }: UseAutoSaveOptions)
         isSavingRef.current = false;
       }
     }
-  }, [sessionId]);
+  }, [sessionId, queryClient]);
 
   // Debounce : à chaque modification, on reprogramme le timer
   useEffect(() => {
@@ -128,9 +212,14 @@ export function useAutoSave({ sessionId, debounceMs = 800 }: UseAutoSaveOptions)
 
   return {
     updateCell,
+    discardCell,
+    clearPending,
     flush,
     status,
     pendingCount: Object.keys(pending).length,
+    /** Modifications en attente (frappe en cours) — la grille les fusionne
+     *  avec les notes en base pour une moyenne mise à jour en direct. */
+    pending,
     lastSavedCount,
   };
 }

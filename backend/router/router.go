@@ -303,6 +303,10 @@ func New(cfg *config.Config) http.Handler {
                         r.Use(middleware.RequireModule(models.ModuleGrades, "write"))
                         r.Post("/api/grades", handlers.UpsertGrade)
                         r.Post("/api/grades/bulk", handlers.BulkUpsertGrades)
+                        // Suppression en masse (effacement complet d'une saisie
+                        // erronée : ligne élève, classe ou session entière) —
+                        // segment statique « session » prioritaire sur {id} (chi).
+                        r.Delete("/api/grades/session/{sessionID}", handlers.BulkDeleteGrades)
                         r.Delete("/api/grades/{id}", handlers.DeleteGrade)
                 })
 

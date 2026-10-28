@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ClipboardList,
@@ -14,6 +14,8 @@ import {
   School,
   GraduationCap,
   ShieldOff,
+  Eraser,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,6 +37,7 @@ import type {
   SessionWithDetails,
   ClassWithDetails,
   SchoolWithStats,
+  Grade,
 } from "@/lib/types";
 import { parseLevels, subjectCoefficient } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,11 +53,43 @@ import {
 } from "@/components/ui/select";
 import { SchoolCombobox } from "@/components/school-combobox";
 import { ClassCombobox } from "@/components/class-combobox";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { cn } from "@/lib/utils";
 
 interface GradesGridProps {
   // Session sélectionnée (passée par la vue parent pour le mode "saisie enseignant")
   initialSessionId?: string;
+}
+
+// === Moyenne « au fur et à mesure » — miroir exact de computeSessionResults ===
+// FORMULE ÉCOLE : les notes ne se divisent PAS selon le coefficient.
+//   CP       : Σ notes brutes / Σ coefficients          → /10
+//   CE et CM : Σ notes brutes / (Σ coefficients / 2)    → /20
+//     (« diviser par la MOITIÉ de la somme des coefficients » — ex CM :
+//     45+37+25+15 = 122, coefs 5+5+5+2 = 17 → 122 / 8,5 = 14,35/20)
+// Seules les matières DÉJÀ NOTÉES entrent dans les sommes — la moyenne se
+// recalcule à chaque frappe et converge vers la moyenne finale de la session.
+function liveAverage(
+  studentId: string,
+  level: string,
+  subjects: Subject[],
+  getVal: (studentId: string, subjectId: string) => number | null,
+): { avg: number | null; graded: number; scale: number } {
+  let totalNotes = 0;
+  let totalCoef = 0;
+  let graded = 0;
+  for (const subj of subjects) {
+    const v = getVal(studentId, subj.id);
+    if (v === null) continue;
+    totalNotes += v;
+    totalCoef += subjectCoefficient(subj, level);
+    graded++;
+  }
+  const isCeCm = level === "CE" || level === "CM";
+  const scale = isCeCm ? 20 : 10;
+  if (graded === 0 || totalCoef <= 0) return { avg: null, graded, scale };
+  const avg = isCeCm ? totalNotes / (totalCoef / 2) : totalNotes / totalCoef;
+  return { avg, graded, scale };
 }
 
 export function GradesGrid({ initialSessionId }: GradesGridProps) {
@@ -213,6 +248,31 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     [gradesData],
   );
 
+  // === Effacement complet des notes (demande utilisateur) ===
+  //  - { type: "student" } : toutes les matières d'un élève (icône sur sa ligne)
+  //  - { type: "all" } : toute la saisie (classe sélectionnée, ou toute
+  //    la session si « Toutes les classes ») — bouton « Tout effacer »
+  const [confirmWipe, setConfirmWipe] = useState<
+    | null
+    | { type: "all" }
+    | { type: "student"; student: StudentWithClass }
+  >(null);
+  const [wiping, setWiping] = useState(false);
+
+  // Valeur EFFECTIVE d'une cellule : modification en attente (frappe en cours,
+  // non encore sauvegardée) sinon note en base — la moyenne se met à jour AU
+  // FUR ET À MESURE que les notes sont saisies, sans attendre l'auto-save.
+  const effectiveValue = useCallback(
+    (studentId: string, subjectId: string): number | null => {
+      const key = `${studentId}:${subjectId}`;
+      const p = autoSave.pending[key];
+      if (p) return p.value;
+      const g = gradesMap[key];
+      return g ? g.value : null;
+    },
+    [autoSave.pending, gradesMap],
+  );
+
   // Filtrage des élèves :
   // - 1. Si pas de classFilter : ne garder que les élèves dont la classe
   //   appartient à l'école active (parmi les classes chargées).
@@ -254,6 +314,20 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     ? allSubjects.filter((s) => parseLevels(s.levels).includes(className as never))
     : allSubjects;
 
+  // === Compteur de saisie EN DIRECT (demande utilisateur : « la moyenne au
+  // fur et à mesure que les notes sont saisies ») — notes effectives (en
+  // base + frappe en cours) / notes attendues. ===
+  const expectedCount = visibleStudents.length * subjects.length;
+  const enteredCount = useMemo(() => {
+    let n = 0;
+    for (const st of visibleStudents) {
+      for (const subj of subjects) {
+        if (effectiveValue(st.id, subj.id) !== null) n++;
+      }
+    }
+    return n;
+  }, [visibleStudents, subjects, effectiveValue]);
+
   // === Barème du niveau de la classe sélectionnée ===
   // Lookup identique au backend (getGradeScale) : exception (niveau+matière)
   // d'abord, sinon barème par défaut du niveau, sinon 0–20 (sécurité).
@@ -293,19 +367,54 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
     ? SESSION_STATUS_CONFIG[sessionStatus as keyof typeof SESSION_STATUS_CONFIG]
     : null;
 
+  // Effacement d'une cellule : note en attente → abandon ; note en base →
+  // suppression serveur (DeleteGrade, moyennes recalculées) + retrait du
+  // cache local (la moyenne live retombe immédiatement).
+  const handleCellClear = useCallback(
+    async (studentId: string, subjectId: string) => {
+      const key = `${studentId}:${subjectId}`;
+      const existing = gradesMap[key];
+      autoSave.discardCell(studentId, subjectId);
+      if (!existing) return; // rien en base — abandon de la pending suffit
+      try {
+        await gradesApi.delete(existing.id);
+        // Retrait du cache local (setQueryData — pas de refetch nécessaire)
+        queryClient.setQueryData<{ grades: Grade[]; count: number }>(
+          ["grades", selectedSessionId],
+          (old) =>
+            old
+              ? {
+                  grades: old.grades.filter((g) => g.id !== existing.id),
+                  count: Math.max(0, old.count - 1),
+                }
+              : old,
+        );
+        toast.success("Note effacée");
+      } catch (e) {
+        toast.error("Échec de l'effacement", {
+          description: e instanceof Error ? e.message : "Réessayez…",
+        });
+      }
+    },
+    [autoSave, gradesMap, queryClient, selectedSessionId],
+  );
+
   // Handler de saisie dans une cellule
   // Validation dynamique selon le barème du niveau + matière (ex : CP 1–10,
   // CE 1–30 avec Dictée 1–10, CM 2–50 avec Dictée 2–20 et EPS 5–20).
   // - à la frappe : on contrôle NaN et le PLAFOND (un préfixe de frappe reste
   //   toujours ≤ à la valeur finale — ex : « 2 » puis « 25 » en CM) ;
   // - au blur (onBlur) : on contrôle aussi le PLANCHER (un préfixe peut être
-  //   provisoirement sous le minimum — ex : « 1 » en début de « 12 » en CM).
+  //   provisoirement sous le minimum — ex : « 1 » en début de « 12 » en CM) ;
+  // - cellule VIDÉE : la note est effacée complètement (suppression serveur).
   const handleCellChange = useCallback(
     (studentId: string, subjectId: string, rawValue: string) => {
       if (!canEdit || !selectedSessionId) return;
       // Valider : nombre ≤ plafond du barème, ou vide
       if (rawValue === "") {
-        // Note vide : on ne sauvegarde pas, on laisse la cellule vide
+        // Cellule vidée : « effacer complètement la note quand la saisie est
+        // erronée » — abandon de la valeur en attente + suppression en base.
+        void handleCellClear(studentId, subjectId);
         return;
       }
       const num = parseFloat(rawValue.replace(",", "."));
@@ -321,8 +430,39 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
       }
       autoSave.updateCell(studentId, subjectId, num);
     },
-    [autoSave, canEdit, selectedSessionId, scaleFor, selectedClass?.level],
+    [autoSave, canEdit, selectedSessionId, scaleFor, selectedClass?.level, handleCellClear],
   );
+
+  // Exécution de l'effacement en masse confirmé (ligne élève ou saisie entière)
+  const executeWipe = async () => {
+    if (!confirmWipe || !selectedSessionId) return;
+    setWiping(true);
+    try {
+      const filters =
+        confirmWipe.type === "student"
+          ? { student_id: confirmWipe.student.id }
+          : classFilter !== "all"
+            ? { class_id: classFilter }
+            : undefined; // toute la session (toutes les classes de l'école)
+      const res = await gradesApi.bulkDelete(selectedSessionId, filters);
+      // Purge locale : valeurs en attente + cache (refetch — l'utilisateur
+      // ne saisit pas à cet instant, le rechargement est sans risque)
+      autoSave.clearPending();
+      await queryClient.invalidateQueries({ queryKey: ["grades"] });
+      toast.success(
+        res.deleted > 0
+          ? `${res.deleted} note(s) effacée(s)`
+          : "Aucune note à effacer",
+      );
+      setConfirmWipe(null);
+    } catch (e) {
+      toast.error("Échec de l'effacement", {
+        description: e instanceof Error ? e.message : "Réessayez…",
+      });
+    } finally {
+      setWiping(false);
+    }
+  };
 
   // Contrôle du PLANCHER au blur (valeur complète — plus de préfixe de frappe)
   const handleCellBlur = useCallback(
@@ -431,7 +571,36 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                 </p>
               </div>
             </div>
-            <SaveIndicator status={autoSave.status} pendingCount={autoSave.pendingCount} />
+            <div className="flex items-center gap-2">
+              {/* Compteur de saisie EN DIRECT — se met à jour à chaque frappe */}
+              {selectedSessionId && expectedCount > 0 && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-xs font-medium",
+                    enteredCount >= expectedCount
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-primary/5 text-primary border-primary/20",
+                  )}
+                >
+                  {enteredCount} / {expectedCount} saisies
+                </Badge>
+              )}
+              {/* Effacement complet de la saisie erronée (demande utilisateur) */}
+              {canEdit && selectedSessionId && enteredCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmWipe({ type: "all" })}
+                  disabled={wiping}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Eraser className="w-3.5 h-3.5 mr-1" />
+                  Tout effacer
+                </Button>
+              )}
+              <SaveIndicator status={autoSave.status} pendingCount={autoSave.pendingCount} />
+            </div>
           </div>
 
           {/* === Cascade stricte : École → Classe → Session === */}
@@ -644,29 +813,38 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                         </th>
                       );
                     })}
-                    <th className="text-center p-2 font-medium min-w-[90px] bg-muted/30">
-                      Moyenne
+                    <th className="text-center p-2 font-medium min-w-[100px] bg-muted/30">
+                      <div className="space-y-0.5">
+                        <p className="text-xs">Moyenne</p>
+                        {/* Échelle de la formule école : CP → /10, CE/CM → /20
+                            (Σ notes / Σ coefs — Σ notes / (Σ coefs / 2)) */}
+                        <p className="text-[10px] text-muted-foreground/70">
+                          {selectedClass?.level === "CE" || selectedClass?.level === "CM"
+                            ? "/20 en direct"
+                            : selectedClass?.level === "CP"
+                              ? "/10 en direct"
+                              : "en direct"}
+                        </p>
+                      </div>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleStudents.map((student: StudentWithClass, rowIdx: number) => {
-                    // Calculer la moyenne de l'élève sur les notes saisies
-                    const studentGrades = subjects
-                      .map((subj) => {
-                        const key = `${student.id}:${subj.id}`;
-                        const pending = autoSave.status !== "idle" ? undefined : null;
-                        void pending; // les valeurs en attente sont lues via autoSave
-                        const grade = gradesMap[key];
-                        // Lire aussi les valeurs en attente non encore flushées
-                        return grade?.value;
-                      })
-                      .filter((v): v is number => typeof v === "number");
-                    const avg =
-                      studentGrades.length > 0
-                        ? studentGrades.reduce((a, b) => a + b, 0) /
-                          studentGrades.length
-                        : null;
+                    // Niveau de la classe de l'élève (formule école : CP → /10,
+                    // CE et CM → /20) — chaque ligne utilise SON niveau.
+                    const studentLevel =
+                      classById.get(student.class_id)?.level ?? selectedClass?.level ?? "";
+                    // Moyenne « au fur et à mesure » : notes en base + frappe
+                    // en cours (pending), formule officielle par niveau.
+                    const { avg, graded, scale } = liveAverage(
+                      student.id,
+                      studentLevel,
+                      subjects,
+                      effectiveValue,
+                    );
+                    // La ligne contient au moins une note → effacement possible
+                    const rowHasGrades = graded > 0;
 
                     return (
                       <tr
@@ -718,19 +896,44 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                             </td>
                           );
                         })}
-                        <td className="p-2 text-center bg-muted/30">
-                          {avg !== null ? (
-                            <span
-                              className={cn(
-                                "font-semibold text-sm",
-                                avg >= 10 ? "text-emerald-600" : "text-amber-600",
-                              )}
-                            >
-                              {avg.toFixed(2)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          )}
+                        <td className="p-2 text-center bg-muted/30 group/avg">
+                          <div className="flex items-center justify-center gap-1">
+                            {avg !== null ? (
+                              <span
+                                className={cn(
+                                  "font-semibold text-sm whitespace-nowrap",
+                                  // Seuil de réussite = moitié de l'échelle
+                                  // (5/10 au CP, 10/20 au CE/CM)
+                                  avg >= scale / 2
+                                    ? "text-emerald-600"
+                                    : "text-amber-600",
+                                )}
+                                title={`Moyenne provisoire — ${graded} note(s) saisie(s), formule école ${studentLevel === "CE" || studentLevel === "CM" ? "Σ notes / (Σ coef / 2)" : "Σ notes / Σ coef"}`}
+                              >
+                                {avg.toFixed(2)}
+                                <span className="text-[10px] text-muted-foreground font-normal">
+                                  /{scale}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                            {/* Effacer TOUTES les notes de cet élève (demande
+                                utilisateur : saisie erronée) — visible au survol */}
+                            {rowHasGrades && canEdit && (
+                              <button
+                                type="button"
+                                title={`Effacer toutes les notes de ${student.last_name} ${student.first_name}`}
+                                onClick={() =>
+                                  setConfirmWipe({ type: "student", student })
+                                }
+                                disabled={wiping}
+                                className="opacity-0 group-hover/avg:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -757,8 +960,40 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
             <kbd className="px-1.5 py-0.5 bg-card border rounded text-[10px]">Entrée</kbd>
             <span>ligne suivante</span>
           </span>
+          <span className="flex items-center gap-1.5">
+            <Eraser className="w-3.5 h-3.5 text-primary" />
+            Effacer une note : vider la cellule — survoler la moyenne pour
+            effacer toute la ligne
+          </span>
         </CardContent>
       </Card>
+
+      {/* Confirmation d'effacement en masse (ligne élève / saisie entière) */}
+      <ConfirmDialog
+        open={confirmWipe !== null}
+        onOpenChange={(o) => {
+          if (!o) setConfirmWipe(null);
+        }}
+        title={
+          confirmWipe?.type === "student"
+            ? `Effacer les notes de ${confirmWipe.student.last_name} ${confirmWipe.student.first_name} ?`
+            : classFilter === "all"
+              ? "Effacer TOUTES les notes de la session ?"
+              : "Effacer toutes les notes de cette classe ?"
+        }
+        description={
+          confirmWipe?.type === "student"
+            ? "Toutes les notes saisies pour cet élève dans cette session seront définitivement supprimées. Cette action est irréversible."
+            : classFilter === "all"
+              ? "Toutes les notes de toutes les classes de l'école pour cette session seront définitivement supprimées. Cette action est irréversible."
+              : "Toutes les notes saisies pour cette classe dans cette session seront définitivement supprimées. Cette action est irréversible."
+        }
+        confirmLabel="Effacer"
+        destructive
+        icon={Eraser}
+        loading={wiping}
+        onConfirm={executeWipe}
+      />
     </div>
   );
 }
@@ -785,23 +1020,40 @@ function GradeInput({
   isLocked,
   dataCell,
 }: GradeInputProps) {
-  // État local non contrôlé initialement, pour permettre la frappe sans
-  // re-render à chaque caractère. On synchronise via la prop `key` quand
-  // la valeur externe change (re-mount du composant).
-  // L'utilisateur peut voir la valeur initiale, puis taper librement.
+  // Valeur locale CONTRÔLÉE : la frappe reste fluide (pas de re-mount), et les
+  // mises à jour EXTERNES (fusion du cache après auto-save, suppression d'une
+  // note effacée) ne s'appliquent que lorsque la cellule n'est PAS en cours
+  // d'édition — l'utilisateur ne perd jamais son curseur ni sa saisie, même
+  // s'il efface puis retape pendant l'aller-retour réseau.
+  const [localValue, setLocalValue] = useState(value === "" ? "" : String(value));
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setLocalValue(value === "" ? "" : String(value));
+    }
+  }, [value]);
 
   return (
     <input
       type="text"
       inputMode="decimal"
       data-cell={dataCell}
-      defaultValue={value === "" ? "" : String(value)}
-      key={value} // remount quand la valeur externe change (re-sync)
+      value={localValue}
       disabled={disabled || isLocked}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => {
+        setLocalValue(e.target.value);
+        onChange(e.target.value);
+      }}
       onKeyDown={onKeyDown}
-      onBlur={onBlur}
-      onFocus={(e) => e.target.select()}
+      onBlur={(e) => {
+        focusedRef.current = false;
+        onBlur?.(e);
+      }}
+      onFocus={(e) => {
+        focusedRef.current = true;
+        e.target.select();
+      }}
       placeholder="—"
       className={cn(
         "w-full h-9 text-center text-sm rounded border outline-none transition-colors",

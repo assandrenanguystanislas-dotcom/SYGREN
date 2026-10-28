@@ -268,6 +268,10 @@ type BulkGradeRequest struct {
 // BulkUpsertGrades sauvegarde un lot de notes en une seule transaction.
 // C'est l'endpoint utilisé par l'auto-save de la grille tableur.
 //
+// La réponse inclut les notes TELLES QU'ENREGISTRÉES (avec leurs ID réels) :
+// le frontend les fusionne dans son cache local — la moyenne de la grille
+// reste juste sans rechargement (moyenne « au fur et à mesure » de la saisie).
+//
 // Avec l'Approche A, les élèves peuvent appartenir à différentes classes de
 // l'école (CP1, CP2, CE1, ...). Le barème est déterminé par le niveau de la
 // classe de chaque élève. Les élèves dont la classe est exemptée sont ignorés
@@ -364,6 +368,7 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
         saved := 0
         updated := 0
         skippedExempted := 0
+        affected := make([]models.Grade, 0, len(req.Grades))
 
         for _, g := range req.Grades {
                 ctx := studentCache[g.StudentID]
@@ -394,6 +399,7 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
                                 return
                         }
                         saved++
+                        affected = append(affected, grade)
                 } else {
                         // Mise à jour (uniquement si la valeur a changé)
                         if existing.Value != g.Value {
@@ -407,6 +413,7 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
                                 }
                                 updated++
                         }
+                        affected = append(affected, existing)
                 }
         }
 
@@ -427,6 +434,7 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
                 "updated":          updated,
                 "skipped_exempted": skippedExempted,
                 "skipped":          len(req.Grades) - saved - updated - skippedExempted,
+                "grades":           affected,
         })
 }
 
@@ -457,4 +465,104 @@ func DeleteGrade(w http.ResponseWriter, r *http.Request) {
         // Fix E : recompute la moyenne de l'élève (la note supprimée impacte sa moyenne).
         _ = recomputeStudentSessionResult(grade.StudentID, grade.SessionID)
         jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// BulkDeleteGrades supprime EN MASSE les notes d'une session — « permettre
+// d'effacer complètement les notes quand la saisie est erronée » (demande
+// utilisateur). Complète l'effacement cellule par cellule (DeleteGrade) :
+//
+//   - une ligne entière (toutes les matières d'un élève) ;
+//   - toute une classe ;
+//   - toute la session (toutes les classes de l'école).
+//
+// Filtres optionnels (query params, combinables) :
+//   - class_id   : uniquement les élèves de cette classe
+//   - student_id : uniquement cet élève (efface SA ligne)
+//   - subject_id : uniquement cette matière
+//
+// RBAC : accès session (getSessionForUser) + statut open (ou admin) ;
+// l'enseignant est limité aux élèves de SA classe (teacherClassCondition —
+// même scoping que la saisie). Les moyennes précalculées sont recalculées.
+func BulkDeleteGrades(w http.ResponseWriter, r *http.Request) {
+        defer InvalidateDashboardCache()
+        sessionID := chi.URLParam(r, "sessionID")
+        if sessionID == "" {
+                middleware.JSONError(w, "session_id requis", http.StatusBadRequest)
+                return
+        }
+
+        // Vérifier l'accès + statut open (ou admin)
+        session, err := getSessionForUser(r, sessionID)
+        if err != nil {
+                middleware.JSONError(w, err.Error(), http.StatusForbidden)
+                return
+        }
+        if session.Status != "open" && ctxRole(r) != "admin" {
+                middleware.JSONError(w, "suppression impossible : session "+session.Status, http.StatusForbidden)
+                return
+        }
+
+        query := database.DB.Model(&models.Grade{}).Where("session_id = ?", session.ID)
+
+        // Filtre classe : vérifier qu'elle appartient à l'école de la session
+        if classID := r.URL.Query().Get("class_id"); classID != "" {
+                var cls models.Class
+                if err := database.DB.First(&cls, "id = ?", classID).Error; err != nil {
+                        middleware.JSONError(w, "classe introuvable", http.StatusBadRequest)
+                        return
+                }
+                if cls.SchoolID != session.SchoolID {
+                        middleware.JSONError(w, "la classe n'appartient pas à l'école de la session", http.StatusBadRequest)
+                        return
+                }
+                query = query.Where("student_id IN (SELECT id FROM students WHERE class_id = ?)", classID)
+        }
+
+        // Filtre élève : vérifier qu'il appartient à l'école de la session
+        if studentID := r.URL.Query().Get("student_id"); studentID != "" {
+                var st models.Student
+                if err := database.DB.First(&st, "id = ?", studentID).Error; err != nil {
+                        middleware.JSONError(w, "élève introuvable", http.StatusBadRequest)
+                        return
+                }
+                var cls models.Class
+                if err := database.DB.First(&cls, "id = ?", st.ClassID).Error; err != nil || cls.SchoolID != session.SchoolID {
+                        middleware.JSONError(w, "l'élève n'appartient pas à l'école de la session", http.StatusBadRequest)
+                        return
+                }
+                query = query.Where("student_id = ?", studentID)
+        }
+
+        // Filtre matière
+        if subjectID := r.URL.Query().Get("subject_id"); subjectID != "" {
+                query = query.Where("subject_id = ?", subjectID)
+        }
+
+        // « chaque enseignant donne des notes à SES élèves » : même scoping que
+        // la saisie — l'adjoint(e) au directeur ne peut effacer que les notes des
+        // élèves de SA classe (teacher_id OU cours tenu du dossier). La condition
+        // référence classes.* : JOIN sans alias pour que la clause résolve.
+        if ctxRole(r) == "teacher" {
+                cond, condArgs := teacherClassCondition(ctxUserID(r))
+                args := append([]interface{}{session.SchoolID}, condArgs...)
+                query = query.Where(
+                        "student_id IN (SELECT s.id FROM students s JOIN classes ON s.class_id = classes.id WHERE classes.school_id = ? AND "+cond+")",
+                        args...,
+                )
+        }
+
+        res := query.Delete(&models.Grade{})
+        if res.Error != nil {
+                middleware.JSONError(w, "erreur suppression", http.StatusInternalServerError)
+                return
+        }
+
+        // Les moyennes précalculées changent → recompute pour toute la session
+        // (idempotent — couvre les filtres classe et élève).
+        _ = recomputeSessionResults(sessionID)
+
+        jsonResponse(w, http.StatusOK, map[string]interface{}{
+                "status":  "ok",
+                "deleted": res.RowsAffected,
+        })
 }

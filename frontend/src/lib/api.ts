@@ -1161,6 +1161,9 @@ export const gradesApi = {
       created: number;
       updated: number;
       skipped: number;
+      /** Notes telles qu'enregistrées (avec leurs ID réels) — fusionnées
+       *  dans le cache local pour une moyenne toujours à jour. */
+      grades?: Grade[];
     }>("/api/grades/bulk", {
       method: "POST",
       body: JSON.stringify(data),
@@ -1169,6 +1172,23 @@ export const gradesApi = {
     apiFetch<{ status: string }>(`/api/grades/${id}`, {
       method: "DELETE",
     }),
+  // Suppression en masse — « effacer complètement les notes quand la saisie
+  // est erronée » : ligne d'un élève (student_id), classe (class_id) ou
+  // session entière (aucun filtre). Filtres combinables.
+  bulkDelete: (
+    sessionId: string,
+    filters?: { class_id?: string; student_id?: string; subject_id?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.class_id) params.set("class_id", filters.class_id);
+    if (filters?.student_id) params.set("student_id", filters.student_id);
+    if (filters?.subject_id) params.set("subject_id", filters.subject_id);
+    const qs = params.toString();
+    return apiFetch<{ status: string; deleted: number }>(
+      `/api/grades/session/${sessionId}${qs ? `?${qs}` : ""}`,
+      { method: "DELETE" },
+    );
+  },
 };
 
 // === Barèmes de notation (cahier des charges §3 Module 2) ===
