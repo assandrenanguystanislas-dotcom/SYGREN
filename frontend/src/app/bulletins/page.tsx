@@ -136,8 +136,9 @@ function fmtNum(v: number): string {
 //
 // Réplique EXACTEMENT getGeneralAppreciation du backend
 // (report_cards.go) : mêmes seuils (/20), mêmes textes. La moyenne est
-// normalisée sur /20 avant comparaison — /10 TOUS niveaux depuis la
-// formule école (Σ notes / Σ coefficients), donc moyenne × 2 partout.
+// normalisée sur /20 avant comparaison — échelle 10 (CP) ou 20 (CE/CM)
+// selon la formule école (Σ notes / Σ coefs au CP, Σ notes / (Σ coefs / 2)
+// au CE/CM).
 //
 // Retourne aussi le statut « négatif » : true si moyenne < seuil passant
 // (10/20 normalisés) ou aucune note → le texte s'affiche en ROUGE sur le
@@ -153,7 +154,7 @@ function appreciationFor(
       negative: true, // anomalie — attire l'œil en rouge
     };
   }
-  // Normalisation /20 (échelle /10 pour TOUS les niveaux — formule école).
+  // Normalisation /20 (échelle 10 CP, 20 CE/CM — formule école).
   const avg20 = scale > 0 ? (avg * 20) / scale : avg;
   if (avg20 >= 16)
     return {
@@ -367,8 +368,8 @@ function safeSheetName(base: string): string {
     .slice(0, 31);
 }
 
-/** Barème de la moyenne d'un bulletin — /10 TOUS niveaux (formule école
- *  Σ notes / Σ coefficients) : donnée backend average_scale, fallback 10. */
+/** Barème de la moyenne d'un bulletin — 10 (CP) ou 20 (CE/CM — formule
+ *  école Σ notes / (Σ coefs / 2)) : donnée backend average_scale, fallback 10. */
 function baremeOf(e: BulletinEleve): number {
   return e.averageScale && e.averageScale > 0 ? e.averageScale : 10;
 }

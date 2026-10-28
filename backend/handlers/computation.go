@@ -109,14 +109,17 @@ type SessionResults struct {
 }
 
 // averageScaleForLevel retourne l'échelle de la moyenne pour un niveau donné.
-// FORMULE ÉCOLE (demande utilisateur) : Moyenne = Σ notes / Σ coefficients —
-// les barèmes étant calibrés max = 10 × coef, le résultat est sur /10
-// pour TOUS les niveaux (CP, CE et CM — anciennement CM /20).
+// FORMULE ÉCOLE (demandes utilisateurs) :
+//   - CP       : Moyenne = Σ notes / Σ coefficients        → /10
+//   - CE et CM : Moyenne = Σ notes / (Σ coefficients / 2)  → /20
+//     (« diviser par la MOITIÉ de la somme des coefficients » — ex CM :
+//     45+37+25+15 = 122, coefs 5+5+5+2 = 17 → 122 / 8,5 = 14,35/20 ;
+//     barèmes calibrés max = 10 × coef ⇒ plafond 170 / 8,5 = 20)
 func averageScaleForLevel(level string) float64 {
         switch level {
-        case "CP", "CE", "CM":
-                return 10.0
-        default:
+        case "CE", "CM":
+                return 20.0
+        default: // CP (et maternelle, non notée)
                 return 10.0
         }
 }
@@ -124,8 +127,9 @@ func averageScaleForLevel(level string) float64 {
 // getMention détermine la mention selon la moyenne et le niveau.
 // Les seuils sont lus depuis Settings (configurés sur /20) puis convertis
 // proportionnellement selon l'échelle du niveau :
-//   - CP/CE/CM (moyenne /10) : seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2
-//     ex: Très Bien ≥ 16/20 → ≥ 8/10 (identique pour tous les niveaux)
+//   - CP (moyenne /10) : seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2
+//     ex: Très Bien ≥ 16/20 → ≥ 8/10
+//   - CE/CM (moyenne /20 — Σ notes / (Σ coefs / 2)) : seuils tels quels
 func getMention(avg float64, level string) (label, color string) {
         tresBien, bien, assezBien, passable, faible, insuffisant := GetMentionThresholds()
         scale := averageScaleForLevel(level)
@@ -319,8 +323,12 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                                 if g.IsDraft {
                                         hasDrafts = true
                                 }
-                                // FORMULE OFFICIELLE (demande utilisateur) :
-                                //   Moyenne = Σ notes totales (brutes) / Σ coefficients
+                                // FORMULE OFFICIELLE (demandes utilisateurs) :
+                                //   CP       : Moyenne = Σ notes / Σ coefficients
+                                //   CE et CM : Moyenne = Σ notes / (Σ coefficients / 2)
+                                //   Les notes ne se divisent PAS par le coefficient :
+                                //   on somme les notes BRUTES, seule la somme des
+                                //   coefficients entre au dénominateur (moitié au CE/CM).
                                 totalNotes += g.Value
                                 totalCoef += sg.Coefficient
                                 gradedCount++
@@ -331,8 +339,14 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 sr.GradedCount = gradedCount
                 sr.HasDrafts = hasDrafts
                 if totalCoef > 0 && gradedCount > 0 {
-                        // Moyenne = Σ notes totales / Σ coefficients (formule école)
-                        sr.Average = totalNotes / totalCoef
+                        // FORMULE ÉCOLE : CP → Σ notes / Σ coefs (/10) ;
+                        // CE et CM → Σ notes / (Σ coefs / 2) (/20 — « la moitié
+                        // de la somme des coefficients », ex CM 122 / 8,5 = 14,35)
+                        if cls.Level == "CE" || cls.Level == "CM" {
+                                sr.Average = totalNotes / (totalCoef / 2)
+                        } else {
+                                sr.Average = totalNotes / totalCoef
+                        }
                         sr.HasAverage = true
                         // getMention prend le niveau pour convertir les seuils proportionnellement
                         sr.Mention, sr.MentionColor = getMention(sr.Average, cls.Level)
@@ -402,15 +416,16 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
         }
 
         // 8. Statistiques agrégées au niveau de l'école (toutes classes confondues).
-        // Échelle unique /10 (formule école) — les seuils Settings /20 sont
-        // convertis ×10/20 = ÷2, identiquement pour tous les niveaux.
+        // Échelle agrégée /20 (CE et CM — la majorité des moyennes ; le CP /10
+        // est affiché par élève via son average_scale) : les seuils Settings
+        // /20 entrent tels quels.
         stats := computeClassStatistics(results, "CM")
 
         return &SessionResults{
                 SessionID:    session.ID,
                 ClassName:    "", // multi-classes
                 ClassLevel:   "", // multi-niveaux
-                AverageScale: 10, // échelle unique /10 (formule école Σ notes / Σ coefs)
+                AverageScale: 20, // échelle agrégée école /20 (CE/CM ; CP /10 par élève)
                 SchoolName:   school.Name,
                 Month:        session.Month,
                 Year:         session.Year,
@@ -422,8 +437,8 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 
 // computeClassStatistics calcule les statistiques agrégées de la classe.
 // level est utilisé pour convertir proportionnellement les seuils de réussite/distinction
-// (configurés sur /20 dans Settings) selon l'échelle du niveau — /10 partout
-// depuis la formule école (Σ notes / Σ coefficients).
+// (configurés sur /20 dans Settings) selon l'échelle du niveau — CP /10 (÷2),
+// CE/CM /20 (seuils tels quels).
 func computeClassStatistics(results []StudentResult, level string) ClassStatistics {
         stats := ClassStatistics{
                 StudentCount:        len(results),
@@ -754,8 +769,9 @@ func recomputeSessionResults(sessionID string) error {
 }
 
 // BackfillStudentSessionResults reconstruit la table student_session_results
-// au démarrage si elle est vide. Itère toutes les sessions validées/closed et
-// recalcule les moyennes de leurs élèves (batch par session).
+// au démarrage si elle est vide. Itère toutes les sessions avec notes valides
+// (closed/validated/open ET archived — les notes archivées restent valides
+// pour le palmarès et le bilan) et recalcule les moyennes de leurs élèves.
 func BackfillStudentSessionResults() {
         var count int64
         database.DB.Model(&models.StudentSessionResult{}).Count(&count)
@@ -764,9 +780,10 @@ func BackfillStudentSessionResults() {
                 return
         }
         var sessions []models.EvaluationSession
-        // On backfill les sessions qui ont des notes (status closed/validated,
-        // pas draft/cancelled/archived qui n'ont pas de notes valides).
-        database.DB.Where("status IN ?", []string{"closed", "validated", "open"}).
+        // Sessions recalculées : closed/validated/open + ARCHIVED (notes valides,
+        // consommées par le palmarès — palmaresStatuses inclut archived — et le
+        // bilan annuel). Exclues : draft (brouillons) / cancelled.
+        database.DB.Where("status IN ?", []string{"closed", "validated", "open", "archived"}).
                 Find(&sessions)
         log.Println("[backfill] démarrage : ", len(sessions), " sessions à recalculer")
         for _, s := range sessions {

@@ -790,7 +790,7 @@ export interface StudentResult {
   class_name?: string;
   class_id?: string;
   class_level?: string; // CP | CE | CM
-  average_scale?: number; // 10 (CP/CE) ou 20 (CM) — par élève
+  average_scale?: number; // 10 (CP) ou 20 (CE/CM) — par élève
   subject_grades: SubjectGrade[];
   average: number;
   has_average: boolean;
@@ -823,7 +823,7 @@ export interface SessionResults {
   // niveau, barème) est dans chaque StudentResult.
   class_name: string;
   class_level: string; // "" (multi-niveaux)
-  average_scale: number; // 20 (défaut CM, pour compat stats agrégées)
+  average_scale: number; // 20 (échelle agrégée école CE/CM — CP /10 par élève)
   school_name: string;
   month: number;
   year: number;
@@ -843,7 +843,7 @@ export interface PalmaresEntry {
   sector: string;
   full_name: string; // NOM + prénoms
   average: number;
-  average_scale: number; // 10 (CP1..CE2) ou 20 (CM1/CM2)
+  average_scale: number; // 10 (CP1/CP2) ou 20 (CE1..CM2)
 }
 
 export interface PalmaresLevel {

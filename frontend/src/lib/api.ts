@@ -1415,7 +1415,7 @@ export const reportsApi = {
         }>;
         total: number; // somme des notes brutes
         average: number; // moyenne sur l'échelle du niveau
-        average_scale: number; // 10 (CP/CE) ou 20 (CM)
+        average_scale: number; // 10 (CP) ou 20 (CE/CM)
         has_average: boolean;
         observation: string; // "A" (Admis) | "R" (Refusé)
       }>;

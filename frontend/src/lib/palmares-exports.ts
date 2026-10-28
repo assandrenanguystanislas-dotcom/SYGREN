@@ -278,7 +278,7 @@ const PALMARES_HEADERS = [
 
 /** Barème dominant d'un niveau (pour le bandeau : « NIVEAU CP1 — BARÈME /10 »). */
 function levelScale(lv: PalmaresLevel): number {
-  return lv.filles[0]?.average_scale ?? lv.garcons[0]?.average_scale ?? (["CP1", "CP2", "CE1", "CE2"].includes(lv.level) ? 10 : 20);
+  return lv.filles[0]?.average_scale ?? lv.garcons[0]?.average_scale ?? (lv.level === "CP1" || lv.level === "CP2" ? 10 : 20);
 }
 
 function addPalmaresSheet(

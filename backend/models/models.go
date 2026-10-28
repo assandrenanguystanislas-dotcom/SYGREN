@@ -596,7 +596,7 @@ type StudentSessionResult struct {
         ClassID      string    `gorm:"type:text" json:"class_id"`
         ClassLevel   string    `gorm:"type:text" json:"class_level"`  // CP|CE|CM
         Average      float64   `gorm:"type:numeric" json:"average"`   // moyenne pondérée (sur average_scale)
-        AverageScale int       `gorm:"type:int" json:"average_scale"` // 10 (CP/CE) ou 20 (CM)
+        AverageScale int       `gorm:"type:int" json:"average_scale"` // 10 (CP) ou 20 (CE/CM)
         HasAverage   bool      `gorm:"type:boolean" json:"has_average"`
         CreatedAt    time.Time `json:"created_at"`
 }

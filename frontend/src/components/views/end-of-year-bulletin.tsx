@@ -240,8 +240,8 @@ function MoyRow({
   );
 }
 
-/** Barème des moyennes du bulletin — /10 TOUS niveaux (formule école
- *  Σ notes / Σ coefficients) : donnée backend (average_scale) sinon 10. */
+/** Barème des moyennes du bulletin — 10 (CP) ou 20 (CE/CM — formule école
+ *  Σ notes / (Σ coefs / 2)) : donnée backend (average_scale) sinon 10. */
 function scaleOf(data: EndOfYearSheet, row: EndOfYearRow): number {
   if (row.average_scale && row.average_scale > 0) return row.average_scale;
   return 10;
