@@ -16,6 +16,7 @@ import {
   ShieldOff,
   Eraser,
   Trash2,
+  Sigma,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -74,7 +75,12 @@ function liveAverage(
   level: string,
   subjects: Subject[],
   getVal: (studentId: string, subjectId: string) => number | null,
-): { avg: number | null; graded: number; scale: number } {
+): {
+  avg: number | null;
+  graded: number;
+  scale: number;
+  total: number; // Σ notes brutes — colonne « Total des points » en direct
+} {
   let totalNotes = 0;
   let totalCoef = 0;
   let graded = 0;
@@ -87,9 +93,17 @@ function liveAverage(
   }
   const isCeCm = level === "CE" || level === "CM";
   const scale = isCeCm ? 20 : 10;
-  if (graded === 0 || totalCoef <= 0) return { avg: null, graded, scale };
+  if (graded === 0 || totalCoef <= 0)
+    return { avg: null, graded, scale, total: totalNotes };
   const avg = isCeCm ? totalNotes / (totalCoef / 2) : totalNotes / totalCoef;
-  return { avg, graded, scale };
+  return { avg, graded, scale, total: totalNotes };
+}
+
+// Formatage du total des points : entier sans décimales, sinon 2 décimales
+// maximum sans zéro superflu (122 → « 122 », 122,5 → « 122.5 »).
+function fmtPoints(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(2).replace(/\.?0+$/, "");
 }
 
 export function GradesGrid({ initialSessionId }: GradesGridProps) {
@@ -813,7 +827,21 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                         </th>
                       );
                     })}
-                    <th className="text-center p-2 font-medium min-w-[100px] bg-muted/30">
+                    {/* Total des points EN DIRECT (demande utilisateur) —
+                        somme des notes brutes saisies, recalculée à chaque
+                        frappe (même source liveAverage que la moyenne). */}
+                    <th
+                      className="text-center p-2 font-medium min-w-[80px] bg-muted/30"
+                      title="Total des points — somme des notes saisies, mise à jour à chaque frappe"
+                    >
+                      <div className="space-y-0.5">
+                        <p className="text-xs">Total</p>
+                        <p className="text-[10px] text-muted-foreground/70">
+                          points en direct
+                        </p>
+                      </div>
+                    </th>
+                    <th className="text-center p-2 font-medium min-w-[100px] bg-muted/30 border-l">
                       <div className="space-y-0.5">
                         <p className="text-xs">Moyenne</p>
                         {/* Échelle de la formule école : CP → /10, CE/CM → /20
@@ -837,7 +865,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                       classById.get(student.class_id)?.level ?? selectedClass?.level ?? "";
                     // Moyenne « au fur et à mesure » : notes en base + frappe
                     // en cours (pending), formule officielle par niveau.
-                    const { avg, graded, scale } = liveAverage(
+                    const { avg, graded, scale, total } = liveAverage(
                       student.id,
                       studentLevel,
                       subjects,
@@ -896,7 +924,20 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                             </td>
                           );
                         })}
-                        <td className="p-2 text-center bg-muted/30 group/avg">
+                        {/* Total des points en direct — Σ notes brutes saisies */}
+                        <td
+                          className="p-2 text-center bg-muted/30"
+                          title={`Σ notes brutes — ${graded} note(s) saisie(s)`}
+                        >
+                          {graded > 0 ? (
+                            <span className="text-sm font-medium tabular-nums whitespace-nowrap">
+                              {fmtPoints(total)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="p-2 text-center bg-muted/30 border-l">
                           <div className="flex items-center justify-center gap-1">
                             {avg !== null ? (
                               <span
@@ -919,7 +960,8 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                               <span className="text-muted-foreground text-xs">—</span>
                             )}
                             {/* Effacer TOUTES les notes de cet élève (demande
-                                utilisateur : saisie erronée) — visible au survol */}
+                                utilisateur : saisie erronée) — TOUJOURS
+                                VISIBLE (pas seulement au survol) */}
                             {rowHasGrades && canEdit && (
                               <button
                                 type="button"
@@ -928,7 +970,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                                   setConfirmWipe({ type: "student", student })
                                 }
                                 disabled={wiping}
-                                className="opacity-0 group-hover/avg:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                className="text-muted-foreground/70 hover:text-destructive transition-colors shrink-0"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -961,9 +1003,13 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
             <span>ligne suivante</span>
           </span>
           <span className="flex items-center gap-1.5">
+            <Sigma className="w-3.5 h-3.5 text-primary" />
+            Colonne Total : somme des points saisis, en direct
+          </span>
+          <span className="flex items-center gap-1.5">
             <Eraser className="w-3.5 h-3.5 text-primary" />
-            Effacer une note : vider la cellule — survoler la moyenne pour
-            effacer toute la ligne
+            Effacer une note : vider la cellule — corbeille en fin de ligne :
+            effacer toutes les notes de l&apos;élève
           </span>
         </CardContent>
       </Card>
