@@ -21,12 +21,18 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 interface FormData {
   name: string;
   coefficient: string;
+  coef_cp: string; // coefficients PAR NIVEAU optionnels ("" = repli global)
+  coef_ce: string;
+  coef_cm: string;
   levels: SubjectClass[]; // classes cochées (CP1, CP2, CE1, CE2, CM1, CM2)
 }
 
 const EMPTY: FormData = {
   name: "",
   coefficient: "1",
+  coef_cp: "",
+  coef_ce: "",
+  coef_cm: "",
   levels: [...ALL_CLASSES], // toutes les classes par défaut
 };
 
@@ -52,8 +58,17 @@ export function SubjectsView() {
     actionLabel: "Création",
   });
   const updateMut = useCrudMutation(
-    (id: string, data: { name: string; coefficient: number; levels: string }) =>
-      subjectsApi.update(id, data),
+    (
+      id: string,
+      data: {
+        name: string;
+        coefficient: number;
+        levels: string;
+        coef_cp?: number;
+        coef_ce?: number;
+        coef_cm?: number;
+      },
+    ) => subjectsApi.update(id, data),
     {
       invalidateKeys: [["subjects"]],
       successMessage: "Matière modifiée avec succès",
@@ -75,6 +90,9 @@ export function SubjectsView() {
     setForm({
       name: s.name,
       coefficient: String(s.coefficient),
+      coef_cp: s.coef_cp != null ? String(s.coef_cp) : "",
+      coef_ce: s.coef_ce != null ? String(s.coef_ce) : "",
+      coef_cm: s.coef_cm != null ? String(s.coef_cm) : "",
       levels: parseLevels(s.levels),
     });
     setEditing(s);
@@ -84,15 +102,29 @@ export function SubjectsView() {
     e.preventDefault();
     const coef = parseFloat(form.coefficient) || 1;
     const levelsStr = form.levels.length === 0 ? "CP,CE,CM" : form.levels.join(",");
+    // Coefficients par niveau optionnels : vide/invalide = non envoyé
+    // (backend : nil = inchangé à la mise à jour, repli global à la création)
+    const optCoef = (v: string): number | undefined => {
+      if (v.trim() === "") return undefined;
+      const n = parseFloat(v);
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
+    const perLevel: { coef_cp?: number; coef_ce?: number; coef_cm?: number } = {};
+    const cp = optCoef(form.coef_cp);
+    const ce = optCoef(form.coef_ce);
+    const cm = optCoef(form.coef_cm);
+    if (cp !== undefined) perLevel.coef_cp = cp;
+    if (ce !== undefined) perLevel.coef_ce = ce;
+    if (cm !== undefined) perLevel.coef_cm = cm;
     try {
       if (editing) {
         await updateMut.mutateAsync([
           editing.id,
-          { name: form.name, coefficient: coef, levels: levelsStr },
+          { name: form.name, coefficient: coef, levels: levelsStr, ...perLevel },
         ]);
       } else {
         await createMut.mutateAsync([
-          { name: form.name, coefficient: coef, levels: levelsStr },
+          { name: form.name, coefficient: coef, levels: levelsStr, ...perLevel },
         ]);
       }
       setDialogOpen(false);
@@ -200,6 +232,9 @@ export function SubjectsView() {
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="font-mono">
                     coef. {subject.coefficient}
+                    {subject.coef_cp != null && ` · CP ${subject.coef_cp}`}
+                    {subject.coef_ce != null && ` · CE ${subject.coef_ce}`}
+                    {subject.coef_cm != null && ` · CM ${subject.coef_cm}`}
                   </Badge>
                   {canEdit && (
                     <div className="flex items-center gap-1">
@@ -267,6 +302,42 @@ export function SubjectsView() {
               />
               <p className="text-[11px] text-muted-foreground">
                 Coefficient par défaut = 1 pour les compositions mensuelles
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Coefficients par niveau (optionnels)</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  placeholder="CP"
+                  aria-label="Coefficient CP"
+                  value={form.coef_cp}
+                  onChange={(e) => setForm({ ...form, coef_cp: e.target.value })}
+                />
+                <Input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  placeholder="CE"
+                  aria-label="Coefficient CE"
+                  value={form.coef_ce}
+                  onChange={(e) => setForm({ ...form, coef_ce: e.target.value })}
+                />
+                <Input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  placeholder="CM"
+                  aria-label="Coefficient CM"
+                  value={form.coef_cm}
+                  onChange={(e) => setForm({ ...form, coef_cm: e.target.value })}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Vide = utiliser le coefficient global. Ex : Mathématiques CE 3 · CM 5,
+                Dictée CE 2 · CM 2, EPS CM 2.
               </p>
             </div>
             <div className="space-y-2">

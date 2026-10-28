@@ -281,12 +281,29 @@ export const subjectsApi = {
     const q = params?.level ? `?level=${params.level}` : "";
     return apiFetch<{ subjects: Subject[]; count: number }>(`/api/subjects${q}`);
   },
-  create: (data: { name: string; coefficient?: number; levels?: string }) =>
+  create: (data: {
+    name: string;
+    coefficient?: number;
+    coef_cp?: number;
+    coef_ce?: number;
+    coef_cm?: number;
+    levels?: string;
+  }) =>
     apiFetch<Subject>("/api/subjects", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  update: (id: string, data: Partial<{ name: string; coefficient: number; levels: string }>) =>
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      coefficient: number;
+      coef_cp: number;
+      coef_ce: number;
+      coef_cm: number;
+      levels: string;
+    }>,
+  ) =>
     apiFetch<Subject>(`/api/subjects/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),

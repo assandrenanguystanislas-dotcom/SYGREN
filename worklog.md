@@ -5253,3 +5253,26 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
 - Neon : min_score créée, 6/6 barèmes conformes après commit (script sync_baremes_neon.py, WHERE précis par ligne).
 - Comportement attendu en production : saisie 0 en CP refusée (plancher 1), 25 en CE refusée (plafond 30 dépassé non — 25 ≤ 30 accepté ; 35 refusée), note 15 en CM acceptée, 60 en CM refusée, EPS CM 3 refusée (plancher 5) / 18 acceptée.
+
+## Task 80 — Coefficients PAR NIVEAU (CE/CM) : Mathématiques etc. 3/5, Dictée 2, EPS 2
+
+**Demande** : « les coefficients des classes de CE changent. Étude du Milieu, Exploitation de Texte, Mathématiques = coefficient 3; Dictée = 2. CM Étude du Milieu, Exploitation de Texte, Mathématiques = coefficient 5; Dictée = 2 , EPS=2 ».
+
+### Diagnostic (sonde Neon lecture seule)
+- 12 matières en base, TOUTES coefficient global = 1. Le champ `subjects.coefficient` est GLOBAL par matière : impossible d'y exprimer Mathématiques CP 1 · CE 3 · CM 5 ni Dictée CP 1 · CE 2 · CM 2 (matières trans-niveaux CP,CE,CM) — un simple UPDATE du coefficient global aurait changé le CP aussi, hors périmètre de la demande.
+- Périmètre exact : au CE les 4 matières existantes (Etude du Milieu, Exploitation de Texte, Mathématiques, Dictée) sont toutes nommées ; au CM les 5 existantes (+ EPS, exam blanc CM2 uniquement) également. CP et maternelle hors périmètre → restent au coefficient global 1.
+- Consommation du coefficient : backend computation.go UNIQUEMENT (moyenne pondérée `totalWeighted += NormalizedValue × coef`, réutilisée par end_of_year/palmarès) ; affichages frontend grades-view (en-tête « coef. N ») et student-detail-dialog (via SubjectGrade.Coefficient renvoyé par le backend, donc résolu côté serveur).
+
+### Changements
+- **Model Subject** (models.go) : 3 colonnes nullable `coef_cp` / `coef_ce` / `coef_cm` (*float64 — NULL = utiliser le coefficient global) + méthode `Subject.CoefficientFor(level)` — priorité coef par niveau (>0) > coefficient global (>0) > 1 ; maternelle PS/MS/GS → repli global.
+- **computeSessionResults** (computation.go) : `Coefficient: subj.CoefficientFor(cls.Level)` — la moyenne pondérée et le total de coefficients utilisent désormais le coefficient EFFECTIF du niveau de la classe (`sg.Coefficient` résolu une seule fois). end_of_year/palmarès héritent automatiquement (réutilisation de computeSessionResults).
+- **CRUD matières** (subjects.go) : CreateSubjectRequest enrichi `coef_cp/coef_ce/coef_cm` (*float64, nil = inchangé à la mise à jour) ; Create/Update les propagent ; ListSubjects renvoie les nouveaux champs (JSON `coef_cp` etc.).
+- **Seed installations fraîches** (database.go) : Mathématiques `CoefCE: 3, CoefCM: 5`, EPS `CoefCM: 2` (Dictée / Etude du Milieu / Exploitation de Texte absentes du seed — sans objet).
+- **Frontend types.ts** : `Subject.coef_cp/coef_ce/coef_cm?: number | null` + helper `subjectCoefficient(s, level)` miroir exact du backend.
+- **Grille de notes** (grades-view.tsx) : en-tête de colonne matière affiche le coefficient RÉEL du niveau de la classe sélectionnée (« coef. 3 » pour Mathématiques en CE1/CE2, « coef. 5 » en CM1/CM2, « coef. 1 » en CP) + tooltip.
+- **Paramètres matières** (subjects-view.tsx) : badge liste « coef. 1 · CE 3 · CM 5 » ; formulaire avec 3 champs optionnels CP/CE/CM (vide = repli global, non envoyé si vide) ; api.ts payloads typés.
+- **Neon synchronisé AVANT push** (script coef_per_level_15.py, mode dry/run idempotent) : ALTER TABLE subjects ADD COLUMN coef_cp/coef_ce/coef_cm DOUBLE PRECISION + 5 UPDATE — vérification 100 % conforme : Etude du Milieu / Exploitation de Texte / Mathématiques CE 3 · CM 5, Dictée CE 2 · CM 2, EPS CM 2, toutes les autres NULL (repli global 1, CP inchangé). AutoMigrate complètera au boot.
+
+### Vérifications
+- go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
+- Comportement attendu : moyenne CE1 Mathématiques pondérée ×3, CM1 ×5, CP1 ×1 ; Dictée ×2 en CE/CM, ×1 en CP ; EPS ×2 à l'exam blanc CM2 ; affichage en-tête grille cohérent par niveau.

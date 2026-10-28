@@ -36,7 +36,7 @@ import type {
   ClassWithDetails,
   SchoolWithStats,
 } from "@/lib/types";
-import { parseLevels } from "@/lib/types";
+import { parseLevels, subjectCoefficient } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -624,18 +624,21 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                       const scale = scaleFor(subj.id);
                       const scaleLabel =
                         scale.min > 0 ? `${scale.min}–${scale.max}` : `/${scale.max}`;
+                      // Coefficient EFFECTIF du niveau de la classe sélectionnée
+                      // (Mathématiques CP 1 · CE 3 · CM 5 — miroir du backend)
+                      const coef = subjectCoefficient(subj, selectedClass?.level);
                       return (
                         <th
                           key={subj.id}
                           className="text-center p-2 font-medium text-muted-foreground min-w-[90px] border-r last:border-r-0"
-                          title={`${subj.name} (coef. ${subj.coefficient} — barème ${scaleLabel})`}
+                          title={`${subj.name} (coef. ${coef} — barème ${scaleLabel})`}
                         >
                           <div className="space-y-0.5">
                             <p className="text-xs truncate max-w-[80px]">
                               {subj.name}
                             </p>
                             <p className="text-[10px] text-muted-foreground/70">
-                              coef. {subj.coefficient} · {scaleLabel}
+                              coef. {coef} · {scaleLabel}
                             </p>
                           </div>
                         </th>

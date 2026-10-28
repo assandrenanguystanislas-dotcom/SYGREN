@@ -302,7 +302,9 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 			sg := SubjectGrade{
 				SubjectID:   subj.ID,
 				SubjectName: subj.Name,
-				Coefficient: subj.Coefficient,
+				// Coefficient EFFECTIF du niveau (coef par niveau > global —
+				// ex. Mathématiques CP 1 · CE 3 · CM 5, Dictée CP 1 · CE/CM 2)
+				Coefficient: subj.CoefficientFor(cls.Level),
 				Grade:       -1,
 				MaxScore:    maxScore,
 			}
@@ -317,8 +319,8 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
 				if g.IsDraft {
 					hasDrafts = true
 				}
-				totalWeighted += sg.NormalizedValue * subj.Coefficient
-				totalCoef += subj.Coefficient
+				totalWeighted += sg.NormalizedValue * sg.Coefficient
+				totalCoef += sg.Coefficient
 				gradedCount++
 			}
 			sr.SubjectGrades = append(sr.SubjectGrades, sg)

@@ -121,16 +121,19 @@ func seedDefaults(db *gorm.DB) error {
 	}
 
 	// 2. Matières par défaut pour l'école primaire ivoirienne
+	//    Coefficients PAR NIVEAU alignés sur la demande utilisateur (CE :
+	//    Mathématiques 3 ; CM : Mathématiques 5, EPS 2 — repli global 1 sinon).
 	var subjectCount int64
 	db.Model(&models.Subject{}).Count(&subjectCount)
 	if subjectCount == 0 {
+		coef3, coef5, coef2 := 3.0, 5.0, 2.0
 		defaultSubjects := []models.Subject{
 			{Name: "Français", Coefficient: 1},
-			{Name: "Mathématiques", Coefficient: 1},
+			{Name: "Mathématiques", Coefficient: 1, CoefCE: &coef3, CoefCM: &coef5},
 			{Name: "Histoire-Géographie", Coefficient: 1},
 			{Name: "Sciences", Coefficient: 1},
 			{Name: "Anglais", Coefficient: 1},
-			{Name: "EPS", Coefficient: 1},
+			{Name: "EPS", Coefficient: 1, CoefCM: &coef2},
 			{Name: "Leçon de choses", Coefficient: 1},
 			{Name: "Chant et Dessin", Coefficient: 1},
 		}

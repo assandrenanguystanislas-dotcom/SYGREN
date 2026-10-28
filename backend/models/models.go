@@ -321,12 +321,44 @@ func (s *Student) BeforeCreate(tx *gorm.DB) error {
 // Coefficient par défaut = 1 pour les compositions mensuelles (cahier des charges §3)
 // Levels : niveaux où la matière est enseignée (CP, CE, CM) — string séparée par virgules.
 // Ex: "CP,CE,CM" = tous niveaux ; "CP" = CP uniquement (CP1+CP2).
+//
+// Coefficients PAR NIVEAU (demande utilisateur : « les coefficients des
+// classes de CE changent — Etude du Milieu, Exploitation de Texte,
+// Mathématiques = 3, Dictée = 2 ; CM — mêmes matières = 5, Dictée = 2,
+// EPS = 2 ») : une même matière trans-niveaux (ex. Mathématiques CP,CE,CM)
+// peut avoir un coefficient différent selon le niveau (CP 1 · CE 3 · CM 5).
+// NULL = utiliser le coefficient global (repli) — CP non concerné reste 1.
 type Subject struct {
 	ID          string    `gorm:"primaryKey;type:text" json:"id"`
 	Name        string    `gorm:"uniqueIndex;type:text" json:"name"`
 	Coefficient float64   `gorm:"default:1" json:"coefficient"`
+	CoefCP      *float64  `gorm:"column:coef_cp;type:double precision" json:"coef_cp"`
+	CoefCE      *float64  `gorm:"column:coef_ce;type:double precision" json:"coef_ce"`
+	CoefCM      *float64  `gorm:"column:coef_cm;type:double precision" json:"coef_cm"`
 	Levels      string    `gorm:"type:text;default:CP,CE,CM" json:"levels"` // "CP,CE,CM" | "CP" | "CP,CE" etc.
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// CoefficientFor — coefficient EFFECTIF de la matière pour le niveau d'une
+// classe (cls.Level : "CP"/"CE"/"CM" ; maternelle PS/MS/GS → repli global).
+// Priorité : coef par niveau (> 0) > coefficient global (> 0) > 1.
+func (s Subject) CoefficientFor(level string) float64 {
+	var per *float64
+	switch level {
+	case "CP":
+		per = s.CoefCP
+	case "CE":
+		per = s.CoefCE
+	case "CM":
+		per = s.CoefCM
+	}
+	if per != nil && *per > 0 {
+		return *per
+	}
+	if s.Coefficient > 0 {
+		return s.Coefficient
+	}
+	return 1
 }
 
 func (s *Subject) BeforeCreate(tx *gorm.DB) error {

@@ -84,11 +84,19 @@ func ListSubjects(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CreateSubjectRequest — payload pour créer une matière
+// CreateSubjectRequest — payload pour créer / modifier une matière.
+// CoefCP/CoefCE/CoefCM — coefficients PAR NIVEAU optionnels (nil = inchangé
+// à la mise à jour ; à la création, nil = repli sur le coefficient global).
+// Demande utilisateur : CE — Etude du Milieu / Exploitation de Texte /
+// Mathématiques = 3, Dictée = 2 ; CM — mêmes matières = 5, Dictée = 2,
+// EPS = 2 (CP hors périmètre, coefficient global 1 conservé).
 type CreateSubjectRequest struct {
-	Name        string  `json:"name"`
-	Coefficient float64 `json:"coefficient"`
-	Levels      string  `json:"levels"` // "CP1,CP2,CE1,CE2,CM1,CM2" | "CM2" | "CP1,CM2" etc.
+	Name        string   `json:"name"`
+	Coefficient float64  `json:"coefficient"`
+	CoefCP      *float64 `json:"coef_cp"`
+	CoefCE      *float64 `json:"coef_ce"`
+	CoefCM      *float64 `json:"coef_cm"`
+	Levels      string   `json:"levels"` // "CP1,CP2,CE1,CE2,CM1,CM2" | "CM2" | "CP1,CM2" etc.
 }
 
 // CreateSubject creates a new subject (admin/director only).
@@ -110,6 +118,9 @@ func CreateSubject(w http.ResponseWriter, r *http.Request) {
 	subject := models.Subject{
 		Name:        req.Name,
 		Coefficient: req.Coefficient,
+		CoefCP:      req.CoefCP,
+		CoefCE:      req.CoefCE,
+		CoefCM:      req.CoefCM,
 		Levels:      levels,
 	}
 	if err := database.DB.Create(&subject).Error; err != nil {
@@ -137,6 +148,15 @@ func UpdateSubject(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Coefficient > 0 {
 		subject.Coefficient = req.Coefficient
+	}
+	if req.CoefCP != nil {
+		subject.CoefCP = req.CoefCP
+	}
+	if req.CoefCE != nil {
+		subject.CoefCE = req.CoefCE
+	}
+	if req.CoefCM != nil {
+		subject.CoefCM = req.CoefCM
 	}
 	if req.Levels != "" {
 		subject.Levels = normalizeClasses(req.Levels)

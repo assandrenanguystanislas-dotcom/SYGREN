@@ -293,6 +293,12 @@ export interface Subject {
   id: string;
   name: string;
   coefficient: number;
+  // Coefficients PAR NIVEAU (null = utiliser le coefficient global) —
+  // ex. Mathématiques CP 1 · CE 3 · CM 5, Dictée CP 1 · CE 2 · CM 2,
+  // EPS CM 2 (demande utilisateur coefficients CE/CM).
+  coef_cp?: number | null;
+  coef_ce?: number | null;
+  coef_cm?: number | null;
   levels: string; // "CP1,CP2,CE1,CE2,CM1,CM2" | "CM2" | "CP1,CM2" etc.
   created_at: string;
 }
@@ -339,6 +345,22 @@ export function parseLevels(levels: string | undefined | null): SubjectClass[] {
 // Formate un array de classes en string "CP1,CP2,CM2"
 export function formatLevels(levels: SubjectClass[]): string {
   return levels.length === 0 ? "CP1,CP2,CE1,CE2,CM1,CM2" : levels.join(",");
+}
+
+// Coefficient EFFECTIF d'une matière pour le niveau d'une classe
+// (level = cls.level "CP"/"CE"/"CM" ; maternelle → repli global) —
+// miroir exact de Subject.CoefficientFor côté backend :
+// coef par niveau (> 0) > coefficient global (> 0) > 1.
+export function subjectCoefficient(
+  s: Subject,
+  level: string | undefined | null,
+): number {
+  const per =
+    level === "CP" ? s.coef_cp :
+    level === "CE" ? s.coef_ce :
+    level === "CM" ? s.coef_cm : null;
+  if (per != null && per > 0) return per;
+  return s.coefficient > 0 ? s.coefficient : 1;
 }
 
 // Statuts d'une session de saisie.
