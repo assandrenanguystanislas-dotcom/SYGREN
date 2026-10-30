@@ -42,9 +42,10 @@ export const SESSION_STATUS_CONFIG = {
     description: "Les adjoint(e)s au directeur peuvent saisir les notes",
   },
   closed: {
-    label: "Saisie fermée",
+    label: "Clôturée",
     color: "bg-amber-100 text-amber-700 border-amber-200",
-    description: "Saisie close, en attente de validation",
+    description:
+      "Saisie clôturée — les notes restent modifiables jusqu'à la validation",
   },
   validated: {
     label: "Validée",
@@ -80,7 +81,7 @@ export function nextStatus(status: string): {
     case "draft":
       return { status: "open", label: "Ouvrir la saisie" };
     case "open":
-      return { status: "closed", label: "Fermer la saisie" };
+      return { status: "closed", label: "Clôturer la saisie" };
     case "closed":
       return { status: "validated", label: "Valider les notes" };
     // "validated" : la transition suivante est l'archivage, gérée par un

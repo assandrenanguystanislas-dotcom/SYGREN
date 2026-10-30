@@ -175,11 +175,12 @@ export default function BulletinsA5Landscape({
             {pair.map((eleve, idx) => {
               const classUpper = eleve.classe.toUpperCase();
               // Barème de la moyenne : priorité à la donnée backend
-              // (average_scale : 10 pour CP, 20 pour CE/CM — formule école
-              // Σ notes / (Σ coefs / 2) au CE/CM). Fallback : déduit du préfixe.
+              // (average_scale : 10 pour CP/CE, 20 pour CM — formule école :
+              // Σ notes / Σ coefs au CP/CE (/10), Σ notes / (Σ coefs / 2)
+              // au CM (/20)). Fallback : déduit du préfixe.
               const bareme =
                 eleve.averageScale ??
-                (classUpper.startsWith("CE") || classUpper.startsWith("CM") ? 20 : 10);
+                (classUpper.startsWith("CM") ? 20 : 10);
               const baremeMoyenne = `/${bareme}`;
 
               return (

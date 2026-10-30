@@ -276,9 +276,11 @@ const PALMARES_HEADERS = [
   "RANG",
 ];
 
-/** Barème dominant d'un niveau (pour le bandeau : « NIVEAU CP1 — BARÈME /10 »). */
+/** Barème dominant d'un niveau (pour le bandeau : « NIVEAU CP1 — BARÈME /10 »).
+ *  Fallback : CP/CE → /10, CM → /20 (formule école — Σ notes / Σ coefs au
+ *  CP/CE, Σ notes / (Σ coefs / 2) au CM). */
 function levelScale(lv: PalmaresLevel): number {
-  return lv.filles[0]?.average_scale ?? lv.garcons[0]?.average_scale ?? (lv.level === "CP1" || lv.level === "CP2" ? 10 : 20);
+  return lv.filles[0]?.average_scale ?? lv.garcons[0]?.average_scale ?? (lv.level.startsWith("CM") ? 20 : 10);
 }
 
 function addPalmaresSheet(

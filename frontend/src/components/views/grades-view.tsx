@@ -64,8 +64,10 @@ interface GradesGridProps {
 
 // === Moyenne « au fur et à mesure » — miroir exact de computeSessionResults ===
 // FORMULE ÉCOLE : les notes ne se divisent PAS selon le coefficient.
-//   CP       : Σ notes brutes / Σ coefficients          → /10
-//   CE et CM : Σ notes brutes / (Σ coefficients / 2)    → /20
+//   CP et CE : Σ notes brutes / Σ coefficients          → /10
+//     (« la somme des notes divisée par la somme des coefficients » — le CE
+//     est ramené à l'échelle /10, demande utilisateur)
+//   CM       : Σ notes brutes / (Σ coefficients / 2)    → /20
 //     (« diviser par la MOITIÉ de la somme des coefficients » — ex CM :
 //     45+37+25+15 = 122, coefs 5+5+5+2 = 17 → 122 / 8,5 = 14,35/20)
 // Seules les matières DÉJÀ NOTÉES entrent dans les sommes — la moyenne se
@@ -91,11 +93,11 @@ function liveAverage(
     totalCoef += subjectCoefficient(subj, level);
     graded++;
   }
-  const isCeCm = level === "CE" || level === "CM";
-  const scale = isCeCm ? 20 : 10;
+  const isCm = level === "CM";
+  const scale = isCm ? 20 : 10;
   if (graded === 0 || totalCoef <= 0)
     return { avg: null, graded, scale, total: totalNotes };
-  const avg = isCeCm ? totalNotes / (totalCoef / 2) : totalNotes / totalCoef;
+  const avg = isCm ? totalNotes / (totalCoef / 2) : totalNotes / totalCoef;
   return { avg, graded, scale, total: totalNotes };
 }
 
@@ -371,12 +373,13 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
   );
 
   const sessionStatus = selectedSession?.status;
-  // canEdit : la saisie est possible si la session est "open" ou si l'admin
-  // force l'édition (sauf si la session est "validated" — verrouillage définitif).
+  // canEdit : « la saisie des notes soit fermée qu'après validation »
+  // (demande utilisateur) — open ET closed restent modifiables ; seul le
+  // statut "validated" verrouille définitivement (draft = pas encore ouverte).
   // isLocked : quand la session est "validated", les notes sont verrouillées
   // définitivement — aucun utilisateur (même admin) ne peut les modifier.
   const isLocked = sessionStatus === "validated";
-  const canEdit = !isLocked && (sessionStatus === "open" || user?.role === "admin");
+  const canEdit = !isLocked && (sessionStatus === "open" || sessionStatus === "closed");
   const cfg = sessionStatus
     ? SESSION_STATUS_CONFIG[sessionStatus as keyof typeof SESSION_STATUS_CONFIG]
     : null;
@@ -763,7 +766,7 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
             <Lock className={cn("w-4 h-4 shrink-0", isLocked ? "text-rose-600" : "text-amber-600")} />
             <p className={cn("text-sm", isLocked ? "text-rose-800" : "text-amber-800")}>
               {sessionStatus === "closed" &&
-                "La saisie est fermée. Les modifications sont bloquées en attente de validation."}
+                "Saisie clôturée — les notes restent modifiables jusqu'à la validation de la session."}
               {sessionStatus === "validated" &&
                 "Session validée — les notes sont verrouillées définitivement. Aucune modification n'est possible (y compris pour l'administrateur)."}
               {sessionStatus === "draft" &&
@@ -844,12 +847,12 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                     <th className="text-center p-2 font-medium min-w-[100px] bg-muted/30 border-l">
                       <div className="space-y-0.5">
                         <p className="text-xs">Moyenne</p>
-                        {/* Échelle de la formule école : CP → /10, CE/CM → /20
+                        {/* Échelle de la formule école : CP/CE → /10, CM → /20
                             (Σ notes / Σ coefs — Σ notes / (Σ coefs / 2)) */}
                         <p className="text-[10px] text-muted-foreground/70">
-                          {selectedClass?.level === "CE" || selectedClass?.level === "CM"
+                          {selectedClass?.level === "CM"
                             ? "/20 en direct"
-                            : selectedClass?.level === "CP"
+                            : selectedClass?.level === "CP" || selectedClass?.level === "CE"
                               ? "/10 en direct"
                               : "en direct"}
                         </p>
@@ -944,12 +947,12 @@ export function GradesGrid({ initialSessionId }: GradesGridProps) {
                                 className={cn(
                                   "font-semibold text-sm whitespace-nowrap",
                                   // Seuil de réussite = moitié de l'échelle
-                                  // (5/10 au CP, 10/20 au CE/CM)
+                                  // (5/10 au CP/CE, 10/20 au CM)
                                   avg >= scale / 2
                                     ? "text-emerald-600"
                                     : "text-amber-600",
                                 )}
-                                title={`Moyenne provisoire — ${graded} note(s) saisie(s), formule école ${studentLevel === "CE" || studentLevel === "CM" ? "Σ notes / (Σ coef / 2)" : "Σ notes / Σ coef"}`}
+                                title={`Moyenne provisoire — ${graded} note(s) saisie(s), formule école ${studentLevel === "CM" ? "Σ notes / (Σ coef / 2)" : "Σ notes / Σ coef"}`}
                               >
                                 {avg.toFixed(2)}
                                 <span className="text-[10px] text-muted-foreground font-normal">

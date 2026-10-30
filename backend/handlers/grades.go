@@ -162,13 +162,14 @@ func UpsertGrade(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // Vérifier l'accès à la session + que la saisie est ouverte
+        // Vérifier l'accès à la session + que la saisie est possible (open ou
+        // closed — verrou définitif uniquement à la validation)
         session, err := getSessionForUser(r, req.SessionID)
         if err != nil {
                 middleware.JSONError(w, err.Error(), http.StatusForbidden)
                 return
         }
-        if session.Status != "open" && ctxRole(r) != "admin" {
+        if !sessionWritable(session.Status) {
                 middleware.JSONError(w, "saisie fermée : statut session = "+session.Status, http.StatusForbidden)
                 return
         }
@@ -288,13 +289,14 @@ func BulkUpsertGrades(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // Vérifier l'accès + statut open
+        // Vérifier l'accès + saisie possible (open ou closed — verrou à la
+        // validation uniquement)
         session, err := getSessionForUser(r, req.SessionID)
         if err != nil {
                 middleware.JSONError(w, err.Error(), http.StatusForbidden)
                 return
         }
-        if session.Status != "open" && ctxRole(r) != "admin" {
+        if !sessionWritable(session.Status) {
                 middleware.JSONError(w, "saisie fermée : statut = "+session.Status, http.StatusForbidden)
                 return
         }
@@ -452,9 +454,10 @@ func DeleteGrade(w http.ResponseWriter, r *http.Request) {
                 middleware.JSONError(w, err.Error(), http.StatusForbidden)
                 return
         }
-        // Vérifier le statut de la session
+        // Vérifier le statut de la session (open ou closed — verrou à la
+        // validation uniquement)
         session, _ := getSessionForUser(r, grade.SessionID)
-        if session.Status != "open" && ctxRole(r) != "admin" {
+        if !sessionWritable(session.Status) {
                 middleware.JSONError(w, "suppression impossible : session "+session.Status, http.StatusForbidden)
                 return
         }
@@ -480,9 +483,10 @@ func DeleteGrade(w http.ResponseWriter, r *http.Request) {
 //   - student_id : uniquement cet élève (efface SA ligne)
 //   - subject_id : uniquement cette matière
 //
-// RBAC : accès session (getSessionForUser) + statut open (ou admin) ;
-// l'enseignant est limité aux élèves de SA classe (teacherClassCondition —
-// même scoping que la saisie). Les moyennes précalculées sont recalculées.
+// RBAC : accès session (getSessionForUser) + saisie possible (open ou closed —
+// verrou définitif à la validation) ; l'enseignant est limité aux élèves de SA
+// classe (teacherClassCondition — même scoping que la saisie). Les moyennes
+// précalculées sont recalculées.
 func BulkDeleteGrades(w http.ResponseWriter, r *http.Request) {
         defer InvalidateDashboardCache()
         sessionID := chi.URLParam(r, "sessionID")
@@ -491,13 +495,14 @@ func BulkDeleteGrades(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // Vérifier l'accès + statut open (ou admin)
+        // Vérifier l'accès + saisie possible (open ou closed — verrou à la
+        // validation uniquement)
         session, err := getSessionForUser(r, sessionID)
         if err != nil {
                 middleware.JSONError(w, err.Error(), http.StatusForbidden)
                 return
         }
-        if session.Status != "open" && ctxRole(r) != "admin" {
+        if !sessionWritable(session.Status) {
                 middleware.JSONError(w, "suppression impossible : session "+session.Status, http.StatusForbidden)
                 return
         }

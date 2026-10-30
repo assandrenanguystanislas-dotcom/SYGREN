@@ -244,7 +244,7 @@ export function SessionsView() {
     mutationFn: ({ id, status }: { id: string; status: "open" | "closed" | "validated" }) =>
       sessionsApi.updateStatus(id, status),
     onSuccess: async (_, vars) => {
-      const labels = { open: "Saisie ouverte", closed: "Saisie fermée", validated: "Session validée" };
+      const labels = { open: "Saisie ouverte", closed: "Saisie clôturée", validated: "Session validée" };
       toast.success(labels[vars.status]);
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
@@ -1000,7 +1000,7 @@ export function SessionsView() {
               (nextStatus(statusTarget.status).status === "validated"
                 ? "Cette action verrouillera définitivement les notes. Plus aucune modification ne sera possible."
                 : nextStatus(statusTarget.status).status === "closed"
-                  ? "La saisie sera fermée. Les enseignants ne pourront plus modifier les notes."
+                  ? "La saisie sera clôturée — les notes restent modifiables jusqu'à la validation."
                   : "La saisie sera ouverte. Les enseignants pourront saisir leurs notes.")
             : ""
         }

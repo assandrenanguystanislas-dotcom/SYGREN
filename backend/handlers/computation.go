@@ -110,16 +110,18 @@ type SessionResults struct {
 
 // averageScaleForLevel retourne l'échelle de la moyenne pour un niveau donné.
 // FORMULE ÉCOLE (demandes utilisateurs) :
-//   - CP       : Moyenne = Σ notes / Σ coefficients        → /10
-//   - CE et CM : Moyenne = Σ notes / (Σ coefficients / 2)  → /20
+//   - CP et CE : Moyenne = Σ notes / Σ coefficients        → /10
+//     (« la somme des notes divisée par la somme des coefficients » — le CE
+//     revient à l'échelle /10, demande utilisateur)
+//   - CM       : Moyenne = Σ notes / (Σ coefficients / 2)  → /20
 //     (« diviser par la MOITIÉ de la somme des coefficients » — ex CM :
 //     45+37+25+15 = 122, coefs 5+5+5+2 = 17 → 122 / 8,5 = 14,35/20 ;
 //     barèmes calibrés max = 10 × coef ⇒ plafond 170 / 8,5 = 20)
 func averageScaleForLevel(level string) float64 {
         switch level {
-        case "CE", "CM":
+        case "CM":
                 return 20.0
-        default: // CP (et maternelle, non notée)
+        default: // CP, CE (et maternelle, non notée)
                 return 10.0
         }
 }
@@ -127,9 +129,9 @@ func averageScaleForLevel(level string) float64 {
 // getMention détermine la mention selon la moyenne et le niveau.
 // Les seuils sont lus depuis Settings (configurés sur /20) puis convertis
 // proportionnellement selon l'échelle du niveau :
-//   - CP (moyenne /10) : seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2
+//   - CP/CE (moyenne /10) : seuil_effectif = seuil_settings × 10 / 20 = seuil_settings / 2
 //     ex: Très Bien ≥ 16/20 → ≥ 8/10
-//   - CE/CM (moyenne /20 — Σ notes / (Σ coefs / 2)) : seuils tels quels
+//   - CM (moyenne /20 — Σ notes / (Σ coefs / 2)) : seuils tels quels
 func getMention(avg float64, level string) (label, color string) {
         tresBien, bien, assezBien, passable, faible, insuffisant := GetMentionThresholds()
         scale := averageScaleForLevel(level)
@@ -324,11 +326,11 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                                         hasDrafts = true
                                 }
                                 // FORMULE OFFICIELLE (demandes utilisateurs) :
-                                //   CP       : Moyenne = Σ notes / Σ coefficients
-                                //   CE et CM : Moyenne = Σ notes / (Σ coefficients / 2)
+                                //   CP et CE : Moyenne = Σ notes / Σ coefficients
+                                //   CM       : Moyenne = Σ notes / (Σ coefficients / 2)
                                 //   Les notes ne se divisent PAS par le coefficient :
                                 //   on somme les notes BRUTES, seule la somme des
-                                //   coefficients entre au dénominateur (moitié au CE/CM).
+                                //   coefficients entre au dénominateur (moitié au CM).
                                 totalNotes += g.Value
                                 totalCoef += sg.Coefficient
                                 gradedCount++
@@ -339,10 +341,13 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 sr.GradedCount = gradedCount
                 sr.HasDrafts = hasDrafts
                 if totalCoef > 0 && gradedCount > 0 {
-                        // FORMULE ÉCOLE : CP → Σ notes / Σ coefs (/10) ;
-                        // CE et CM → Σ notes / (Σ coefs / 2) (/20 — « la moitié
-                        // de la somme des coefficients », ex CM 122 / 8,5 = 14,35)
-                        if cls.Level == "CE" || cls.Level == "CM" {
+                        // FORMULE ÉCOLE : CP et CE → Σ notes / Σ coefs (/10 —
+                        // « la somme des notes divisée par la somme des
+                        // coefficients », le CE ramené à /10 — demande
+                        // utilisateur) ; CM → Σ notes / (Σ coefs / 2) (/20 —
+                        // « la moitié de la somme des coefficients »,
+                        // ex CM 122 / 8,5 = 14,35)
+                        if cls.Level == "CM" {
                                 sr.Average = totalNotes / (totalCoef / 2)
                         } else {
                                 sr.Average = totalNotes / totalCoef
@@ -415,17 +420,17 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
                 prevAvg = results[i].Average
         }
 
-        // 8. Statistiques agrégées au niveau de l'école (toutes classes confondues).
-        // Échelle agrégée /20 (CE et CM — la majorité des moyennes ; le CP /10
-        // est affiché par élève via son average_scale) : les seuils Settings
-        // /20 entrent tels quels.
-        stats := computeClassStatistics(results, "CM")
+        // 8. Statistiques agrégées au niveau de l'école (toutes classes
+        // confondues). Les moyennes étant sur l'échelle de LEUR niveau
+        // (CP/CE /10, CM /20), computeClassStatistics les normalise en /20
+        // avant agrégation — les seuils Settings /20 entrent tels quels.
+        stats := computeClassStatistics(results)
 
         return &SessionResults{
                 SessionID:    session.ID,
                 ClassName:    "", // multi-classes
                 ClassLevel:   "", // multi-niveaux
-                AverageScale: 20, // échelle agrégée école /20 (CE/CM ; CP /10 par élève)
+                AverageScale: 20, // échelle agrégée école /20 (moyennes normalisées ; échelle réelle par élève via average_scale)
                 SchoolName:   school.Name,
                 Month:        session.Month,
                 Year:         session.Year,
@@ -435,21 +440,28 @@ func computeSessionResults(sessionID string) (*SessionResults, error) {
         }, nil
 }
 
-// computeClassStatistics calcule les statistiques agrégées de la classe.
-// level est utilisé pour convertir proportionnellement les seuils de réussite/distinction
-// (configurés sur /20 dans Settings) selon l'échelle du niveau — CP /10 (÷2),
-// CE/CM /20 (seuils tels quels).
-func computeClassStatistics(results []StudentResult, level string) ClassStatistics {
+// computeClassStatistics calcule les statistiques agrégées (niveau ÉCOLE —
+// toutes classes confondues). Les moyennes étant exprimées sur l'échelle de
+// LEUR niveau (CP/CE /10, CM /20), chacune est normalisée en /20 avant
+// agrégation : les seuils de réussite/distinction (configurés sur /20 dans
+// Settings) entrent tels quels.
+func computeClassStatistics(results []StudentResult) ClassStatistics {
         stats := ClassStatistics{
                 StudentCount:        len(results),
                 MentionDistribution: make(map[string]int),
         }
 
-        // Collecter les moyennes valides
+        // Collecter les moyennes valides, NORMALISÉES /20 (l'échelle réelle
+        // du niveau — CP/CE /10, CM /20 — est préservée par élève via
+        // average_scale ; l'agrégat école compare des pommes de même taille)
         averages := make([]float64, 0, len(results))
         for _, r := range results {
                 if r.HasAverage {
-                        averages = append(averages, r.Average)
+                        avg := r.Average
+                        if scale := averageScaleForLevel(r.ClassLevel); scale > 0 && scale != 20 {
+                                avg = avg * 20.0 / scale
+                        }
+                        averages = append(averages, avg)
                         stats.MentionDistribution[r.Mention]++
                 }
         }
@@ -463,11 +475,8 @@ func computeClassStatistics(results []StudentResult, level string) ClassStatisti
         sort.Float64s(sorted)
 
         // Seuils dynamiques depuis les Settings (configurables via Paramètres)
-        // Conversion proportionnelle selon l'échelle du niveau
+        // Moyennes normalisées /20 : les seuils Settings /20 entrent tels quels
         _, passThreshold, distinctionThreshold := GetSystemSettings()
-        ratio := averageScaleForLevel(level) / 20.0
-        passThreshold *= ratio
-        distinctionThreshold *= ratio
 
         sum := 0.0
         passCount := 0
