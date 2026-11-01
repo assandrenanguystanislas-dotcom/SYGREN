@@ -3,10 +3,12 @@
 // === Module « Fichier du personnel » (Task 55) ===
 //
 // Fichier administratif EXCEL à compléter à tout moment dans SYGREN :
-// chaque ligne porte les 15 colonnes demandées — N° (ordre du fichier),
+// chaque ligne porte les 16 colonnes demandées — N° (ordre du fichier),
 // SECTEUR, ÉCOLES, NOM ET PRÉNOM, SEXE, DATE DE NAISSANCE, LIEU DE
 // NAISSANCE, CATÉGORIE, MATRICULE, DATE D'ENTREE FP, ANCIENNETÉ, COURS,
-// FONCTION, CONTACT, EFFECTIF — et s'exporte en classeur Excel (exceljs).
+// FONCTION, CONTACT, EMAIL, EFFECTIF — et s'exporte en classeur Excel
+// (exceljs). EMAIL = Task 75 : colonne insérée APRÈS CONTACT, alimentée
+// depuis l'annuaire des emails (affectation par secteur).
 //
 // Le fichier est PRÉ-REMPLI (seed backend) depuis les dossiers
 // personnels des directeurs et adjoints au directeur actifs ; il reste
@@ -150,6 +152,7 @@ interface FormData {
   cours: string; // UNSET = non renseigné
   fonction: string; // UNSET = non renseigné
   contact: string;
+  email: string; // Task 75 — colonne EMAIL après CONTACT
   effectif: string; // "" = non renseigné
 }
 
@@ -167,6 +170,7 @@ const EMPTY: FormData = {
   cours: UNSET,
   fonction: UNSET,
   contact: "",
+  email: "",
   effectif: "",
 };
 
@@ -443,6 +447,7 @@ export function StaffDataView() {
       cours: rec.cours ?? UNSET,
       fonction: rec.fonction ?? UNSET,
       contact: rec.contact ?? "",
+      email: rec.email ?? "",
       effectif: typeof rec.effectif === "number" ? String(rec.effectif) : "",
     });
     setDialogOpen(true);
@@ -527,8 +532,9 @@ export function StaffDataView() {
 
   // Nombre de colonnes du tableau (colSpan des bandeaux de groupe) —
   // Task 72 : +1 pour la colonne de cases à cocher, +1 pour Actions
-  // (les deux n'existent que pour les rôles de gestion).
-  const colCount = 15 + (canManage ? 2 : 0);
+  // (les deux n'existent que pour les rôles de gestion). Task 75 :
+  // 16 colonnes de données (EMAIL insérée après CONTACT).
+  const colCount = 16 + (canManage ? 2 : 0);
 
   // Task 72 — aperçu des noms cochés (confirmation de suppression en
   // masse) : les 3 premiers, par ordre d'affichage.
@@ -633,7 +639,7 @@ export function StaffDataView() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher (nom, matricule, contact, lieu de naissance)…"
+                placeholder="Rechercher (nom, matricule, contact, email, lieu de naissance)…"
                 className="pl-8"
               />
             </div>
@@ -814,6 +820,9 @@ export function StaffDataView() {
                     <TableHead className="text-center">Cours</TableHead>
                     <TableHead>Fonction</TableHead>
                     <TableHead>Contact</TableHead>
+                    {/* Task 75 — EMAIL : colonne insérée APRÈS Contact
+                        (demande utilisateur), avant Effectif. */}
+                    <TableHead>Email</TableHead>
                     <TableHead className="text-center">Effectif</TableHead>
                     {canManage && (
                       <TableHead className="w-[92px] text-center">
@@ -916,6 +925,20 @@ export function StaffDataView() {
                         </TableCell>
                         <TableCell className="text-xs">
                           {rec.contact || "—"}
+                        </TableCell>
+                        {/* Task 75 — EMAIL : adresse normalisée
+                            minuscules (backend) ; lien cliquable. */}
+                        <TableCell className="text-xs">
+                          {rec.email ? (
+                            <a
+                              href={`mailto:${rec.email}`}
+                              className="lowercase underline-offset-2 hover:underline"
+                            >
+                              {rec.email}
+                            </a>
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="text-center text-xs font-medium">
                           {typeof rec.effectif === "number" ? rec.effectif : "—"}
@@ -1032,7 +1055,7 @@ export function StaffDataView() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={editing ? "Modifier la ligne du fichier" : "Nouvel agent"}
-        description="Les 15 colonnes du fichier du personnel — completables à tout moment."
+        description="Les 16 colonnes du fichier du personnel — completables à tout moment."
         icon={IdCard}
         loading={busy}
         maxWidth="sm:max-w-2xl"
@@ -1270,6 +1293,19 @@ export function StaffDataView() {
                   placeholder="Ex : 0700000000"
                 />
               </div>
+              {/* Task 75 — EMAIL : champ placé APRÈS Contact. */}
+              <div className="space-y-1.5">
+                <Label htmlFor="staff-email">Email</Label>
+                <Input
+                  id="staff-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                  placeholder="Ex : nom@gmail.com"
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="staff-effectif">Effectif</Label>
                 <Input
@@ -1373,11 +1409,12 @@ function formToPayload(form: FormData) {
     fonction:
       form.fonction !== UNSET && form.fonction !== "" ? form.fonction : null,
     contact: form.contact.trim() || null,
+    email: form.email.trim().toLowerCase() || null,
     effectif: form.effectif !== "" ? Number(form.effectif) : null,
   };
 }
 
-// === Export Excel (exceljs) — les 15 colonnes du fichier ===
+// === Export Excel (exceljs) — les 16 colonnes du fichier ===
 
 async function exportExcelAsync(
   records: StaffRecord[],
@@ -1411,7 +1448,8 @@ async function exportExcelAsync(
     },
   });
 
-  // 15 colonnes — dans l'ordre exact demandé.
+  // 16 colonnes — dans l'ordre exact demandé (EMAIL = Task 75,
+  // insérée APRÈS CONTACT).
   ws.columns = [
     { width: 5 }, // N°
     { width: 22 }, // SECTEUR
@@ -1427,6 +1465,7 @@ async function exportExcelAsync(
     { width: 9 }, // COURS
     { width: 13 }, // FONCTION
     { width: 15 }, // CONTACT
+    { width: 26 }, // EMAIL
     { width: 10 }, // EFFECTIF
   ];
 
@@ -1469,6 +1508,7 @@ async function exportExcelAsync(
     "COURS",
     "FONCTION",
     "CONTACT",
+    "EMAIL",
     "EFFECTIF",
   ];
 
@@ -1479,13 +1519,13 @@ async function exportExcelAsync(
   ).padStart(2, "0")}/${today.getFullYear()}`;
 
   let row = 1;
-  ws.mergeCells(row, 1, row, 15);
+  ws.mergeCells(row, 1, row, 16);
   let c = ws.getCell(row, 1);
   c.value = "FICHIER DU PERSONNEL";
   c.font = font(14, true);
   c.alignment = { horizontal: "center", vertical: "middle" };
   row += 1;
-  ws.mergeCells(row, 1, row, 15);
+  ws.mergeCells(row, 1, row, 16);
   c = ws.getCell(row, 1);
   c.value = `${records.length} agent(s)${
     filenameSuffix ? " — SÉLECTION" : ""
@@ -1535,7 +1575,7 @@ async function exportExcelAsync(
       blockIdx += 1;
       prevKey = sectorKey;
       const bannerRow = ws.getRow(rIdx);
-      ws.mergeCells(rIdx, 1, rIdx, 15);
+      ws.mergeCells(rIdx, 1, rIdx, 16);
       const bannerCell = ws.getCell(rIdx, 1);
       const label = rec.sector_id
         ? (sectorNames?.get(rec.sector_id) ?? "SECTEUR").toUpperCase()
@@ -1543,7 +1583,7 @@ async function exportExcelAsync(
       bannerCell.value = label;
       bannerCell.font = font(10, true, BANNER_TEXT.argb);
       bannerCell.alignment = { horizontal: "left", vertical: "middle" };
-      for (let col = 1; col <= 15; col++) {
+      for (let col = 1; col <= 16; col++) {
         const c = ws.getCell(rIdx, col);
         c.border = BOX;
         c.fill = { type: "pattern", pattern: "solid", fgColor: BANNER_BG };
@@ -1573,7 +1613,7 @@ async function exportExcelAsync(
           st && st.effectif > 0 ? ` · effectif ${st.effectif}` : ""
         }`;
         const subRow = ws.getRow(rIdx);
-        ws.mergeCells(rIdx, 1, rIdx, 15);
+        ws.mergeCells(rIdx, 1, rIdx, 16);
         const subCell = ws.getCell(rIdx, 1);
         subCell.value = {
           richText: [
@@ -1588,14 +1628,14 @@ async function exportExcelAsync(
           ],
         };
         subCell.alignment = { horizontal: "left", vertical: "middle" };
-        for (let col = 1; col <= 15; col++) {
+        for (let col = 1; col <= 16; col++) {
           const c = ws.getCell(rIdx, col);
           c.fill = { type: "pattern", pattern: "solid", fgColor: SUB_BG };
           c.border = {
             top: border,
             bottom: border,
             ...(col === 1 ? { left: SUB_LEFT } : {}),
-            ...(col === 15 ? { right: border } : {}),
+            ...(col === 16 ? { right: border } : {}),
           };
         }
         subRow.height = 18;
@@ -1621,6 +1661,7 @@ async function exportExcelAsync(
       rec.cours ?? "",
       rec.fonction ?? "",
       rec.contact ?? "",
+      rec.email ?? "",
       typeof rec.effectif === "number" ? rec.effectif : "",
     ];
     dataRow.eachCell({ includeEmpty: true }, (cell, col) => {
@@ -1648,16 +1689,16 @@ async function exportExcelAsync(
 
   // Ligne TOTAL (effectif).
   const totalRowIdx = rIdx;
-  ws.mergeCells(totalRowIdx, 1, totalRowIdx, 14);
+  ws.mergeCells(totalRowIdx, 1, totalRowIdx, 15);
   const totalCell = ws.getCell(totalRowIdx, 1);
   totalCell.value = "TOTAL EFFECTIF";
   totalCell.font = font(10, true);
   totalCell.alignment = { horizontal: "right", vertical: "middle" };
-  const totalVal = ws.getCell(totalRowIdx, 15);
+  const totalVal = ws.getCell(totalRowIdx, 16);
   totalVal.value = totalEffectif;
   totalVal.font = font(10, true);
   totalVal.alignment = { horizontal: "center", vertical: "middle" };
-  for (let col = 1; col <= 15; col++) {
+  for (let col = 1; col <= 16; col++) {
     ws.getCell(totalRowIdx, col).border = BOX;
   }
 

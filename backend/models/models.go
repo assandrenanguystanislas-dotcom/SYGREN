@@ -879,8 +879,12 @@ type StaffRecord struct {
         // (DIRECTEUR | ADJOINT(E)) — mêmes codes que le dossier personnel.
         Cours    *string `gorm:"type:text" json:"cours,omitempty"`
         Fonction *string `gorm:"type:text" json:"fonction,omitempty"`
-        // CONTACT (téléphone) et EFFECTIF (effectif de la classe/du cours).
+        // CONTACT (téléphone), EMAIL et EFFECTIF (effectif de la
+        // classe/du cours). EMAIL = Task 75 — colonne insérée APRÈS
+        // Contact (demande : « ajouter une colonne après contact
+        // dénommée EMAIL ») ; adresse normalisée minuscules.
         Contact   *string        `gorm:"type:text" json:"contact,omitempty"`
+        Email     *string        `gorm:"type:text" json:"email,omitempty"`
         Effectif  *int           `json:"effectif,omitempty"`
         CreatedAt time.Time      `json:"created_at"`
         UpdatedAt time.Time      `json:"updated_at"`

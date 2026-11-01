@@ -139,6 +139,9 @@ export interface StaffRecord {
   cours?: CoursCode | null;
   fonction?: FonctionCode | null;
   contact?: string | null;
+  /** EMAIL — Task 75 : colonne insérée APRÈS contact (demande
+   *  utilisateur), alimentée depuis l'annuaire des emails. */
+  email?: string | null;
   effectif?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -160,6 +163,8 @@ export interface StaffRecordInput {
   cours?: string | null;
   fonction?: string | null;
   contact?: string | null;
+  /** EMAIL — Task 75 : chaîne vide = valeur effacée. */
+  email?: string | null;
   effectif?: number | null;
 }
 
