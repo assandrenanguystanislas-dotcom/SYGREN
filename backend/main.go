@@ -72,6 +72,16 @@ func main() {
 	//      inter-annuelle).
 	go startSessionScheduler()
 
+	// Goroutine : keep-alive — le plan gratuit Render suspend l'instance
+	// après ~15 min sans trafic entrant ; le premier visiteur paie alors un
+	// réveil de 30–60 s (« Failed to fetch » côté navigateur). Toutes les
+	// 10 minutes, tous les jours de 07:00 à 22:00 (GMT+0), l'API
+	// s'auto-ping sur son URL publique (/api/health) — trafic qui remet le
+	// compteur d'inactivité à zéro. Hors fenêtre (la nuit) :
+	// aucune requête émise, le service dort (heures du forfait gratuit
+	// économisées). En local (RENDER_EXTERNAL_URL absente) : désactivé.
+	go startKeepAlive()
+
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("[FATAL] Serveur: %v", err)
 	}
