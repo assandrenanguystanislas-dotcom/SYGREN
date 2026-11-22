@@ -163,60 +163,10 @@ func (i *IEP) BeforeCreate(tx *gorm.DB) error {
 // « PLAN D'ACTION PLURIANNUEL DE L'IEPP » : la colonne CENTRES D'EXAMENS
 // groupe les lignes écoles). Rattaché à une IEP ; l'ordre d'affichage
 // (Position) respecte le classement de l'inspection dans ses documents.
-// === Task 83 — FICHIERS CM2 PAR SECTEUR (module Résultats) ===
-//
-// Demande : « les fichiers concernent uniquement les élèves de CM2 ; ces
-// fichiers doivent être dans le module Résultats de sorte que les élèves
-// soient notés à l'ouverture d'une session ».
-//
-// Cm2Session — session d'examen CM2 À L'ÉCHELLE DE L'IEP (une seule session
-// couvre toutes les écoles — les EvaluationSession du module Notes restent
-// par école). Même cycle de vie : draft → open → closed → validated ; la
-// saisie des notes n'est possible qu'en open/closed (sessionWritable) —
-// « notés à l'ouverture d'une session ».
-//
-// Cm2Result — notes des 4 matières du fichier pour UN élève CM2 et UNE
-// session : exploitation (Exploitation de Texte), eveil (Etude du Milieu),
-// orthographe (Dictée), math (Mathématiques). Table dédiée (précédent :
-// PDAResult des examens blancs) — les notes du fichier CM2 n'alimentent ni
-// les compositions ni les moyennes de classes.
-type Cm2Session struct {
-    ID        string     `gorm:"primaryKey;type:text" json:"id"`
-    Year      int        `gorm:"index" json:"year"`
-    Number    int        `json:"number"`                                  // Session N°1, 2, 3…
-    Status    string     `gorm:"type:text;default:draft" json:"status"` // draft|open|closed|validated
-    OpenAt    *time.Time `gorm:"type:timestamp" json:"open_at,omitempty"` // posé au passage draft→open
-    CreatedAt time.Time  `json:"created_at"`
-    UpdatedAt time.Time  `json:"updated_at"`
-}
-
-func (s *Cm2Session) BeforeCreate(tx *gorm.DB) error {
-    if s.ID == "" {
-        s.ID = uuid.NewString()
-    }
-    return nil
-}
-
-type Cm2Result struct {
-    ID        string `gorm:"primaryKey;type:text" json:"id"`
-    SessionID string `gorm:"type:text;uniqueIndex:idx_cm2_results_session_student" json:"session_id"`
-    StudentID string `gorm:"type:text;uniqueIndex:idx_cm2_results_session_student" json:"student_id"`
-    // Les 4 notes du fichier (NULL = pas encore noté / absent). Barèmes CM
-    // réels (getGradeScale) : exploitation/eveil/math 2–50, orthographe 2–20.
-    NoteExploitation *float64  `gorm:"type:numeric" json:"note_exploitation,omitempty"`
-    NoteEveil        *float64  `gorm:"type:numeric" json:"note_eveil,omitempty"`
-    NoteOrthographe  *float64  `gorm:"type:numeric" json:"note_orthographe,omitempty"`
-    NoteMath         *float64  `gorm:"type:numeric" json:"note_math,omitempty"`
-    CreatedAt        time.Time `json:"created_at"`
-    UpdatedAt        time.Time `json:"updated_at"`
-}
-
-func (cr *Cm2Result) BeforeCreate(tx *gorm.DB) error {
-    if cr.ID == "" {
-        cr.ID = uuid.NewString()
-    }
-    return nil
-}
+// === Task 84 — Fichiers CM2 (module Résultats) : notes GÉNÉRÉES depuis
+// le module Évaluations — plus de tables dédiées (cm2_sessions /
+// cm2_results de la Task 83 supprimées) : le fichier CM2 agrège les
+// grades des compositions (EvaluationSession) en lecture seule.
 
 type ExamCenter struct {
         ID        string    `gorm:"primaryKey;type:text" json:"id"`
@@ -975,8 +925,5 @@ func AllModels() []interface{} {
                 &StaffLevelReport{},
                 // Task 55 — Fichier du personnel (fichier Excel à compléter)
                 &StaffRecord{},
-                // Task 83 — Fichiers CM2 par secteur (module Résultats)
-                &Cm2Session{},
-                &Cm2Result{},
         }
 }

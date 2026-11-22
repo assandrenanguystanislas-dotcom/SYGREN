@@ -1,40 +1,51 @@
 package handlers
 
-// === Task 83 — FICHIERS CM2 PAR SECTEUR (module Résultats) ===
+// === Task 84 — FICHIERS CM2 PAR SECTEUR : NOTES GÉNÉRÉES DEPUIS LE MODULE ÉVALUATIONS ===
 //
-// Demande : « les fichiers concernent uniquement les élèves de CM2 ; ces
-// fichiers doivent être dans le module Résultats de sorte que les élèves
-// soient notés à l'ouverture d'une session » — libellés de colonnes
-// demandés : matricule, nom, prenoms, libecole, codeecole, libiep, iep,
-// exploitation, eveil, orthographe, math, Total, C1 avec iep = 000045,
+// Demande (Task 83) : « les fichiers concernent uniquement les élèves de
+// CM2 ; ces fichiers doivent être dans le module Résultats » — libellés de
+// colonnes demandés : matricule, nom, prenoms, libecole, codeecole, libiep,
+// iep, exploitation, eveil, orthographe, math, Total, C1 avec iep = 000045,
 // libiep = DABOU 1 et C1 = (exploitation + eveil + orthographe + math)/8,5.
 //
-// Architecture :
-//   - Cm2Session : session d'examen CM2 à l'ÉCHELLE DE L'IEP (une seule
-//     session couvre toutes les écoles — les EvaluationSession du module
-//     Notes restent par école). Cycle de vie identique : draft → open →
-//     closed → validated ; la saisie n'est possible qu'en open/closed
-//     (sessionWritable) — « notés à l'ouverture d'une session ».
-//   - Cm2Result : les 4 notes par élève CM2 (table dédiée — précédent :
-//     PDAResult des examens blancs).
+// Précision utilisateur (Task 84) : « le fichier CM2 du module résultat
+// n'est pas différent de celui de l'évaluation — ils ont les mêmes
+// caractéristiques mais dans le fichier CM2 du module résultat, les notes
+// NE SONT PAS SAISIES : les notes du module évaluations sont GÉNÉRÉES
+// DIRECTEMENT dans le module résultat ».
+//
+// Architecture Task 84 :
+//   - PLUS AUCUNE SAISIE : les tables dédiées cm2_sessions / cm2_results
+//     (Task 83) sont supprimées. Le fichier CM2 est une vue LECTURE SEULE
+//     qui agrège les notes déjà saisies dans le MODULE ÉVALUATIONS
+//     (grades des compositions) — les directeurs/enseignants continuent de
+//     noter dans leur module habituel, le module Résultats se met à jour
+//     automatiquement.
+//   - Les « sessions » du fichier CM2 sont les ROUNDS DE COMPOSITION
+//     détectés automatiquement : (year, eval_number) DISTINCT des
+//     EvaluationSession éligibles du module Évaluations (ouvertes, closes
+//     ou archivées — jamais les brouillons, jamais les annulées). Les
+//     écoles font la même composition à des mois différents : le round
+//     (2026, N°1) couvre sept./oct./nov. d'un même mouvement.
+//   - Note d'un élève pour une matière = sa note pour ce round prise dans
+//     la session d'évaluation la plus RÉCENTE de son école (mois, création,
+//     mise à jour) — en cas de session re-créée, la dernière gagne.
 //   - Les 4 matières sont rapprochées par NOM normalisé (précédent PDA) :
 //     exploitation → Exploitation de Texte, eveil → Etude du Milieu,
-//     orthographe → Dictée, math → Mathématiques. Les barèmes appliqués à
-//     la saisie sont les barèmes CM RÉELS (getGradeScale : 2–50, Dictée
-//     2–20) ; Σ max = 170 et 170/20 = 8,5 → C1 est la moyenne sur /20.
-//   - RBAC : lecture = admin/inspector (tout), conseiller (son secteur —
-//     liste blanche ConseillerScope étendue), director (son école),
-//     teacher (SES classes CM2) ; écriture des notes = RequireModule
-//     grades:write avec le même périmètre ; gestion des sessions
-//     (création/statut/suppression) = Super Admin + Admin IEP UNIQUEMENT
-//     (session IEP — les directeurs gardent leurs EvaluationSession) ;
-//     le parent est refusé explicitement (403).
+//     orthographe → Dictée, math → Mathématiques. Barèmes CM réels
+//     (getGradeScale : 2–50, Dictée 2–20) ; Σ max = 170 et 170/20 = 8,5 →
+//     C1 est la moyenne sur /20.
+//   - RBAC lecture inchangé : admin/inspector (tout), conseiller (son
+//     secteur — liste blanche ConseillerScope), director (son école),
+//     teacher (SES classes CM2 via teacherClassCondition), parent 403.
+//   - Export Excel par secteur (Super Admin) inchangé — notes péremplies
+//     depuis les évaluations.
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
+	"sort"
+	"strconv"
 	"time"
 
 	"sygren-api/database"
@@ -42,7 +53,6 @@ import (
 	"sygren-api/models"
 
 	"github.com/go-chi/chi/v5"
-	"gorm.io/gorm"
 )
 
 // cm2C1Divisor — diviseur de la formule C1 DEMANDÉE par l'utilisateur :
@@ -60,6 +70,18 @@ var cm2SubjectAliases = [4][]string{
 	{"dictee", "dictee d'orthographe", "orthographe"},
 	{"mathematiques", "maths"},
 }
+
+// cm2RoundStatuses — statuts d'EvaluationSession dont les notes alimentent
+// le fichier : composition réellement saisie (ouverte, clôturée ou
+// archivée). Les brouillons (aucune note possible) et les annulées
+// (cancelled_at) sont exclus ; les notes en cours de saisie (is_draft des
+// grades) restent visibles : le fichier suit le module Évaluations en live.
+const cm2RoundStatuses = "('open','closed','archived')"
+
+// cm2RoundFilter — filtre commun des rounds de composition (années +
+// statuts + non annulées + compositions uniquement).
+const cm2RoundFilter = "es.eval_number >= 1 AND es.status IN " + cm2RoundStatuses +
+	" AND es.cancelled_at IS NULL AND es.eval_type = 'composition'"
 
 // cm2SubjectInfo — état d'une matière du fichier (barème CM réel).
 type cm2SubjectInfo struct {
@@ -114,14 +136,6 @@ func cm2SubjectInfos(resolved map[string]*models.Subject) []cm2SubjectInfo {
 	return infos
 }
 
-// cm2ManageAllowed — gestion des sessions CM2 (créer/ouvrir/clôturer/
-// valider/supprimer) réservée au Super Admin et à l'Admin IEP : la session
-// couvre TOUTE l'IEP (les directeurs gèrent leurs EvaluationSession).
-func cm2ManageAllowed(r *http.Request) bool {
-	role := ctxRole(r)
-	return role == models.RoleAdmin || role == models.RoleInspector
-}
-
 // cm2ReadAllowed — lecture du fichier : tout le personnel ; le parent est
 // explicitement refusé (documents de travail IEP).
 func cm2ReadAllowed(r *http.Request) bool {
@@ -133,169 +147,107 @@ func cm2ReadAllowed(r *http.Request) bool {
 	return false
 }
 
-// === Lister les sessions CM2 — GET /api/cm2/sessions ===
-func ListCm2Sessions(w http.ResponseWriter, r *http.Request) {
+// cm2RoundRef — round de composition (année, N°) alimentant le fichier.
+type cm2RoundRef struct {
+	Year   int `json:"year"`
+	Number int `json:"number"` // N° de composition (eval_number du module Évaluations)
+}
+
+// cm2RoundRow — ligne de GET /api/cm2/rounds.
+type cm2RoundRow struct {
+	Year    int   `gorm:"column:year" json:"year"`
+	Number  int   `gorm:"column:number" json:"number"`
+	Notated int64 `gorm:"column:notated" json:"notated"` // élèves CM2 avec ≥1 note
+}
+
+// === Lister les compositions détectées — GET /api/cm2/rounds ===
+// Les « sessions » du fichier CM2 ne se créent plus : elles sont DÉDUITES
+// des EvaluationSession du module Évaluations. Un round apparaît dès qu'une
+// école ouvre sa composition ; « notated » = élèves CM2 déjà notés (au
+// moins 1 matière), mis à jour en continu.
+func ListCm2Rounds(w http.ResponseWriter, r *http.Request) {
 	if !cm2ReadAllowed(r) {
 		middleware.JSONError(w, "accès refusé : les fichiers CM2 sont réservés au personnel de l'IEP", http.StatusForbidden)
 		return
 	}
-	var sessions []models.Cm2Session
-	if err := database.DB.Order("year DESC, number DESC, created_at DESC").Find(&sessions).Error; err != nil {
-		middleware.JSONError(w, "erreur récupération des sessions CM2", http.StatusInternalServerError)
+	// DEUX requêtes simples fusionnées en mémoire : un CTE + LEFT JOIN avec
+	// COUNT(DISTINCT) multiplie les lignes sous certains plans SQLite (bug
+	// constaté au test fonctionnel Task 84) — séparées, elles restent
+	// portables PostgreSQL (Neon) / SQLite (tests).
+	var roundsRaw []cm2RoundRow
+	if err := database.DB.Raw(`SELECT DISTINCT es.year, es.eval_number AS number
+FROM evaluation_sessions es
+WHERE ` + cm2RoundFilter).Scan(&roundsRaw).Error; err != nil {
+		middleware.JSONError(w, "erreur récupération des compositions", http.StatusInternalServerError)
 		return
 	}
-	type sessionWithCount struct {
-		models.Cm2Session
-		ResultsCount int64 `json:"results_count"` // élèves déjà notés (au moins 1 note)
-	}
-	out := make([]sessionWithCount, 0, len(sessions))
-	for _, s := range sessions {
-		var cnt int64
-		database.DB.Model(&models.Cm2Result{}).
-			Where("session_id = ?", s.ID).
-			Where("note_exploitation IS NOT NULL OR note_eveil IS NOT NULL OR note_orthographe IS NOT NULL OR note_math IS NOT NULL").
-			Count(&cnt)
-		out = append(out, sessionWithCount{Cm2Session: s, ResultsCount: cnt})
-	}
-	jsonResponse(w, http.StatusOK, map[string]interface{}{"sessions": out, "count": len(out)})
-}
-
-// === Créer une session CM2 (statut draft) — POST /api/cm2/sessions ===
-// Unicité (année, numéro) — même convention que les EvaluationSession.
-func CreateCm2Session(w http.ResponseWriter, r *http.Request) {
-	if !cm2ManageAllowed(r) {
-		middleware.JSONError(w, "seul le Super Admin et l'Admin IEP gèrent les sessions CM2 (session à l'échelle de l'IEP)", http.StatusForbidden)
+	var notatedRaw []cm2RoundRow
+	if err := database.DB.Raw(`SELECT es.year, es.eval_number AS number, count(DISTINCT st.id) AS notated
+FROM evaluation_sessions es
+JOIN grades g ON g.session_id = es.id
+JOIN students st ON st.id = g.student_id
+JOIN classes c ON c.id = st.class_id AND c.active = TRUE AND UPPER(TRIM(c.name)) = 'CM2'
+WHERE ` + cm2RoundFilter + `
+GROUP BY es.year, es.eval_number`).Scan(&notatedRaw).Error; err != nil {
+		middleware.JSONError(w, "erreur récupération des compositions", http.StatusInternalServerError)
 		return
 	}
-	var req struct {
-		Year   int `json:"year"`
-		Number int `json:"number"`
+	notMap := map[[2]int]int64{} // [year, number] → élèves notés
+	for _, n := range notatedRaw {
+		notMap[[2]int{n.Year, n.Number}] = n.Notated
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
-		return
+	rounds := make([]cm2RoundRow, 0, len(roundsRaw))
+	for _, rd := range roundsRaw {
+		rounds = append(rounds, cm2RoundRow{Year: rd.Year, Number: rd.Number, Notated: notMap[[2]int{rd.Year, rd.Number}]})
 	}
-	if req.Year < 2000 || req.Year > 2100 {
-		middleware.JSONError(w, "année invalide (2000-2100)", http.StatusBadRequest)
-		return
-	}
-	if req.Number < 1 {
-		req.Number = 1
-	}
-	var count int64
-	database.DB.Model(&models.Cm2Session{}).
-		Where("year = ? AND number = ?", req.Year, req.Number).
-		Count(&count)
-	if count > 0 {
-		middleware.JSONError(w, fmt.Sprintf("une session CM2 N°%d existe déjà pour l'année %d", req.Number, req.Year), http.StatusConflict)
-		return
-	}
-	session := models.Cm2Session{Year: req.Year, Number: req.Number, Status: "draft"}
-	if err := database.DB.Create(&session).Error; err != nil {
-		middleware.JSONError(w, "erreur création session CM2", http.StatusInternalServerError)
-		return
-	}
-	jsonResponse(w, http.StatusCreated, session)
-}
-
-// === Changer le statut d'une session CM2 — PUT /api/cm2/sessions/{id}/status ===
-// Transitions identiques aux EvaluationSession : draft→open, open→closed,
-// closed→validated. La validation est irréversible (notes verrouillées).
-func UpdateCm2SessionStatus(w http.ResponseWriter, r *http.Request) {
-	if !cm2ManageAllowed(r) {
-		middleware.JSONError(w, "seul le Super Admin et l'Admin IEP gèrent les sessions CM2", http.StatusForbidden)
-		return
-	}
-	id := chi.URLParam(r, "id")
-	var req struct {
-		Status string `json:"status"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
-		return
-	}
-	var session models.Cm2Session
-	if err := database.DB.First(&session, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "session CM2 introuvable", http.StatusNotFound)
-		return
-	}
-	validNext := map[string]string{
-		"draft":  "open",
-		"open":   "closed",
-		"closed": "validated",
-	}
-	expected, canTransition := validNext[session.Status]
-	if !canTransition {
-		middleware.JSONError(w, "session CM2 déjà validée, modification impossible", http.StatusConflict)
-		return
-	}
-	if req.Status != expected {
-		middleware.JSONError(w, "transition invalide : "+session.Status+" → "+req.Status+" (attendu : "+expected+")", http.StatusBadRequest)
-		return
-	}
-	session.Status = req.Status
-	session.UpdatedAt = time.Now()
-	if req.Status == "open" {
-		now := time.Now()
-		session.OpenAt = &now
-	}
-	if err := database.DB.Save(&session).Error; err != nil {
-		middleware.JSONError(w, "erreur mise à jour", http.StatusInternalServerError)
-		return
-	}
-	jsonResponse(w, http.StatusOK, session)
-}
-
-// === Supprimer une session CM2 et ses notes — DELETE /api/cm2/sessions/{id} ===
-// Interdit après validation (statut terminal — cohérent avec les sessions
-// de notes dont la validation verrouille l'historique).
-func DeleteCm2Session(w http.ResponseWriter, r *http.Request) {
-	if !cm2ManageAllowed(r) {
-		middleware.JSONError(w, "seul le Super Admin et l'Admin IEP gèrent les sessions CM2", http.StatusForbidden)
-		return
-	}
-	id := chi.URLParam(r, "id")
-	var session models.Cm2Session
-	if err := database.DB.First(&session, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "session CM2 introuvable", http.StatusNotFound)
-		return
-	}
-	if session.Status == "validated" {
-		middleware.JSONError(w, "session CM2 validée — suppression impossible (statut terminal)", http.StatusConflict)
-		return
-	}
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("session_id = ?", session.ID).Delete(&models.Cm2Result{}).Error; err != nil {
-			return err
+	sort.Slice(rounds, func(i, j int) bool {
+		if rounds[i].Year != rounds[j].Year {
+			return rounds[i].Year > rounds[j].Year
 		}
-		return tx.Delete(&session).Error
-	}); err != nil {
-		middleware.JSONError(w, "erreur suppression session CM2", http.StatusInternalServerError)
-		return
-	}
-	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+		return rounds[i].Number > rounds[j].Number
+	})
+	jsonResponse(w, http.StatusOK, map[string]interface{}{"rounds": rounds, "count": len(rounds)})
 }
 
-// cm2DBRow — ligne brute du fichier (élève CM2 + école + secteur + notes).
+// cm2DBRow — ligne brute du fichier (élève CM2 + école + secteur).
 type cm2DBRow struct {
-	StudentID       string   `gorm:"column:student_id"`
-	Matricule       *string  `gorm:"column:matricule"`
-	Nom             string   `gorm:"column:nom"`
-	Prenoms         string   `gorm:"column:prenoms"`
-	ClassName       string   `gorm:"column:class_name"`
-	SchoolID        string   `gorm:"column:school_id"`
-	SchoolName      string   `gorm:"column:school_name"`
-	SchoolCode      string   `gorm:"column:school_code"`
-	SecteurID       *string  `gorm:"column:secteur_id"`
-	SecteurName     *string  `gorm:"column:secteur_name"`
-	SecteurPosition *int     `gorm:"column:secteur_position"`
-	NoteExploitation *float64 `gorm:"column:note_exploitation"`
-	NoteEveil        *float64 `gorm:"column:note_eveil"`
-	NoteOrthographe  *float64 `gorm:"column:note_orthographe"`
-	NoteMath         *float64 `gorm:"column:note_math"`
+	StudentID       string  `gorm:"column:student_id"`
+	Matricule       *string `gorm:"column:matricule"`
+	Nom             string  `gorm:"column:nom"`
+	Prenoms         string  `gorm:"column:prenoms"`
+	ClassName       string  `gorm:"column:class_name"`
+	SchoolID        string  `gorm:"column:school_id"`
+	SchoolName      string  `gorm:"column:school_name"`
+	SchoolCode      string  `gorm:"column:school_code"`
+	SecteurID       *string `gorm:"column:secteur_id"`
+	SecteurName     *string `gorm:"column:secteur_name"`
+	SecteurPosition *int    `gorm:"column:secteur_position"`
 }
 
-// cm2Student — élève du fichier (payload JSON de GET .../file).
+// cm2GradeRow — note CM2 du round (agrégation des sessions éligibles).
+type cm2GradeRow struct {
+	StudentID        string    `gorm:"column:student_id"`
+	SubjectID        string    `gorm:"column:subject_id"`
+	Value            float64   `gorm:"column:value"`
+	Month            int       `gorm:"column:month"`
+	SessionCreatedAt time.Time `gorm:"column:session_created_at"`
+	UpdatedAt        time.Time `gorm:"column:updated_at"`
+}
+
+// cm2GradeNewer — b est-elle plus récente que a ? (mois de la session, puis
+// création de la session, puis mise à jour de la note — la composition
+// re-faite/remplie plus tard remplace l'ancienne).
+func cm2GradeNewer(a, b cm2GradeRow) bool {
+	if a.Month != b.Month {
+		return b.Month > a.Month
+	}
+	if !b.SessionCreatedAt.Equal(a.SessionCreatedAt) {
+		return b.SessionCreatedAt.After(a.SessionCreatedAt)
+	}
+	return b.UpdatedAt.After(a.UpdatedAt)
+}
+
+// cm2Student — élève du fichier (payload JSON de GET .../files/...).
 type cm2Student struct {
 	StudentID        string   `json:"student_id"`
 	Matricule        *string  `json:"matricule"` // NULL = non renseigné (cellule vide dans le fichier)
@@ -327,13 +279,10 @@ type cm2SectorGroup struct {
 }
 
 type cm2Permissions struct {
-	CanGrade  bool `json:"can_grade"`  // rôle autorisé à saisir (admin/inspector/director/teacher)
-	Writable  bool `json:"writable"`   // session en open/closed (saisie possible)
-	CanManage bool `json:"can_manage"` // admin/inspector : créer/ouvrir/clôturer/valider/supprimer
 	CanExport bool `json:"can_export"` // Super Admin : production de fichiers (politique anti-fuite)
 }
 
-// cm2TotalC1 — Total = Σ notes dès qu'au moins une est saisie ; C1 =
+// cm2TotalC1 — Total = Σ notes dès qu'au moins une est présente ; C1 =
 // Σ / 8,5 dès que les 4 notes sont présentes (mêmes règles que les
 // formules Excel des fichiers par secteur : =IF(COUNT(...)=4,SUM/8.5,"")).
 func cm2TotalC1(exp, eveil, orth, math *float64) (*float64, *float64) {
@@ -357,20 +306,58 @@ func cm2TotalC1(exp, eveil, orth, math *float64) (*float64, *float64) {
 	return total, c1
 }
 
-// === Le fichier CM2 complet — GET /api/cm2/sessions/{id}/file ===
+// === Le fichier CM2 d'une composition — GET /api/cm2/files/{year}/{number} ===
 // Tous les élèves de CM2 actifs du périmètre du rôle, groupés secteur →
-// école, avec leurs notes de la session (LEFT JOIN cm2_results). L'ordre
-// SQL (position secteur, nom école, nom élève) est conservé tel quel.
+// école, avec leurs notes DU MODULE ÉVALUATIONS pour la composition
+// (année, N°). L'ordre SQL (position secteur, nom école, nom élève) est
+// conservé tel quel.
 func GetCm2File(w http.ResponseWriter, r *http.Request) {
 	if !cm2ReadAllowed(r) {
 		middleware.JSONError(w, "accès refusé : les fichiers CM2 sont réservés au personnel de l'IEP", http.StatusForbidden)
 		return
 	}
-	id := chi.URLParam(r, "id")
-	var session models.Cm2Session
-	if err := database.DB.First(&session, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "session CM2 introuvable", http.StatusNotFound)
+	year, errY := strconv.Atoi(chi.URLParam(r, "year"))
+	number, errN := strconv.Atoi(chi.URLParam(r, "number"))
+	if errY != nil || errN != nil || year < 2000 || year > 2100 || number < 1 || number > 20 {
+		middleware.JSONError(w, "composition invalide (année 2000-2100, numéro 1-20)", http.StatusBadRequest)
 		return
+	}
+	round := cm2RoundRef{Year: year, Number: number}
+
+	// La composition doit exister dans le module Évaluations (source unique
+	// des notes — pas de fichier fantôme sans session).
+	var found int64
+	database.DB.Raw(`SELECT count(*) FROM evaluation_sessions es
+WHERE es.year = ? AND es.eval_number = ? AND `+cm2RoundFilter, year, number).Scan(&found)
+	if found == 0 {
+		middleware.JSONError(w, fmt.Sprintf("aucune composition N°%d pour l'année %d dans le module Évaluations", number, year), http.StatusNotFound)
+		return
+	}
+
+	// Notes du round : toutes les notes CM2 des sessions éligibles, la plus
+	// récente par matière gagne (cm2GradeNewer). Une seule requête, dédoublonnage
+	// en mémoire (portable PostgreSQL/SQLite — pas de DISTINCT ON).
+	var grades []cm2GradeRow
+	if err := database.DB.Raw(`SELECT g.student_id, g.subject_id, g.value, es.month,
+       es.created_at AS session_created_at, g.updated_at
+FROM grades g
+JOIN evaluation_sessions es ON es.id = g.session_id
+JOIN students st ON st.id = g.student_id
+JOIN classes c ON c.id = st.class_id AND c.active = TRUE AND UPPER(TRIM(c.name)) = 'CM2'
+WHERE es.year = ? AND es.eval_number = ? AND `+cm2RoundFilter, year, number).Scan(&grades).Error; err != nil {
+		middleware.JSONError(w, "erreur récupération des notes du module Évaluations", http.StatusInternalServerError)
+		return
+	}
+	best := map[string]map[string]cm2GradeRow{} // student_id → subject_id → note retenue
+	for _, g := range grades {
+		m, ok := best[g.StudentID]
+		if !ok {
+			m = map[string]cm2GradeRow{}
+			best[g.StudentID] = m
+		}
+		if cur, ok := m[g.SubjectID]; !ok || cm2GradeNewer(cur, g) {
+			m[g.SubjectID] = g
+		}
 	}
 
 	// Périmètre selon le rôle (mêmes règles que le module Notes / Task 78) :
@@ -378,37 +365,22 @@ func GetCm2File(w http.ResponseWriter, r *http.Request) {
 	// director = son école ; teacher = SES classes CM2 (titulaire ou cours
 	// tenu — teacherClassCondition).
 	role := ctxRole(r)
-	args := []interface{}{session.ID}
+	scopeSQL := "1 = 1"
+	var scopeArgs []interface{}
 	switch role {
 	case models.RoleAdmin, models.RoleInspector:
 		// tout le périmètre IEP
 	case models.RoleConseiller:
-		args = append(args, conseillerSectorSchoolIDs(r))
+		scopeSQL = "sc.id IN ?"
+		scopeArgs = append(scopeArgs, conseillerSectorSchoolIDs(r))
 	case models.RoleDirector:
-		args = append(args, ctxSchoolID(r))
+		scopeSQL = "sc.id = ?"
+		scopeArgs = append(scopeArgs, ctxSchoolID(r))
 	case models.RoleTeacher:
 		cond, cargs := teacherClassCondition(ctxUserID(r))
-		args = append(args, cargs...)
-		query := `SELECT s.id AS student_id, s.matricule AS matricule,
-       s.last_name AS nom, s.first_name AS prenoms,
-       c.name AS class_name,
-       sc.id AS school_id, sc.name AS school_name, sc.code AS school_code,
-       sec.id AS secteur_id, sec.name AS secteur_name, sec.position AS secteur_position,
-       r.note_exploitation, r.note_eveil, r.note_orthographe, r.note_math
-FROM students s
-JOIN classes c  ON c.id = s.class_id AND c.active = TRUE AND UPPER(TRIM(c.name)) = 'CM2'
-JOIN schools sc ON sc.id = c.school_id
-LEFT JOIN sectors sec ON sec.id = sc.sector_id
-LEFT JOIN cm2_results r ON r.student_id = s.id AND r.session_id = ?
-WHERE s.class_id IN (SELECT id FROM classes WHERE ` + cond + ` AND active = TRUE AND UPPER(TRIM(name)) = 'CM2')
-ORDER BY sec.position NULLS LAST, sec.name NULLS LAST, sc.name, s.last_name, s.first_name`
-		var rows []cm2DBRow
-		if err := database.DB.Raw(query, args...).Scan(&rows).Error; err != nil {
-			middleware.JSONError(w, "erreur récupération du fichier CM2", http.StatusInternalServerError)
-			return
-		}
-		jsonResponse(w, http.StatusOK, cm2FileResponse(session, rows, role))
-		return
+		scopeSQL = "s.class_id IN (SELECT id FROM classes WHERE " + cond +
+			" AND active = TRUE AND UPPER(TRIM(name)) = 'CM2')"
+		scopeArgs = append(scopeArgs, cargs...)
 	default:
 		middleware.JSONError(w, "accès refusé : les fichiers CM2 sont réservés au personnel de l'IEP", http.StatusForbidden)
 		return
@@ -418,44 +390,25 @@ ORDER BY sec.position NULLS LAST, sec.name NULLS LAST, sc.name, s.last_name, s.f
        s.last_name AS nom, s.first_name AS prenoms,
        c.name AS class_name,
        sc.id AS school_id, sc.name AS school_name, sc.code AS school_code,
-       sec.id AS secteur_id, sec.name AS secteur_name, sec.position AS secteur_position,
-       r.note_exploitation, r.note_eveil, r.note_orthographe, r.note_math
+       sec.id AS secteur_id, sec.name AS secteur_name, sec.position AS secteur_position
 FROM students s
 JOIN classes c  ON c.id = s.class_id AND c.active = TRUE AND UPPER(TRIM(c.name)) = 'CM2'
 JOIN schools sc ON sc.id = c.school_id
 LEFT JOIN sectors sec ON sec.id = sc.sector_id
-LEFT JOIN cm2_results r ON r.student_id = s.id AND r.session_id = ?
-` + "WHERE sc.id IN ?" /* remplacé ci-dessous selon le rôle */ + `
+WHERE ` + scopeSQL + `
 ORDER BY sec.position NULLS LAST, sec.name NULLS LAST, sc.name, s.last_name, s.first_name`
-
-	// Adapter le WHERE au rôle (admin/inspector : aucun filtre).
-	switch role {
-	case models.RoleConseiller:
-		// args déjà [sessionID, schoolIDs] — WHERE sc.id IN ?
-	case models.RoleDirector:
-		// args déjà [sessionID, schoolID] — WHERE sc.id = ?
-		query = replaceCm2Where(query, "sc.id = ?")
-	case models.RoleAdmin, models.RoleInspector:
-		query = replaceCm2Where(query, "1 = 1")
-		args = args[:1]
-	}
-
 	var rows []cm2DBRow
-	if err := database.DB.Raw(query, args...).Scan(&rows).Error; err != nil {
+	if err := database.DB.Raw(query, scopeArgs...).Scan(&rows).Error; err != nil {
 		middleware.JSONError(w, "erreur récupération du fichier CM2", http.StatusInternalServerError)
 		return
 	}
-	jsonResponse(w, http.StatusOK, cm2FileResponse(session, rows, role))
+	jsonResponse(w, http.StatusOK, cm2FileResponse(round, rows, best, role))
 }
 
-// replaceCm2Where — remplace le fragment WHERE par défaut du fichier CM2
-// par la condition du rôle (petit utilitaire pour garder la requête unique).
-func replaceCm2Where(query, cond string) string {
-	return strings.Replace(query, "WHERE sc.id IN ?", "WHERE "+cond, 1)
-}
-
-// cm2FileResponse — assemble la réponse du fichier (groupes + permissions).
-func cm2FileResponse(session models.Cm2Session, rows []cm2DBRow, role string) map[string]interface{} {
+// cm2FileResponse — assemble la réponse du fichier (groupes + notes du
+// module Évaluations + permissions).
+func cm2FileResponse(round cm2RoundRef, rows []cm2DBRow, best map[string]map[string]cm2GradeRow, role string) map[string]interface{} {
+	resolved := cm2ResolveSubjects()
 	groups := []*cm2SectorGroup{}
 	groupByKey := map[string]*cm2SectorGroup{}
 	schoolByKey := map[string]*cm2SchoolGroup{}
@@ -487,7 +440,19 @@ func cm2FileResponse(session models.Cm2Session, rows []cm2DBRow, role string) ma
 			sch = &g.Schools[len(g.Schools)-1]
 			schoolByKey[skey] = sch
 		}
-		total, c1 := cm2TotalC1(row.NoteExploitation, row.NoteEveil, row.NoteOrthographe, row.NoteMath)
+		// Notes du module Évaluations (round courant) → les 4 colonnes.
+		var notes [4]*float64
+		if m, ok := best[row.StudentID]; ok {
+			for i, skey := range cm2SubjectKeys {
+				if subj, ok := resolved[skey]; ok {
+					if gr, ok := m[subj.ID]; ok {
+						v := gr.Value
+						notes[i] = &v
+					}
+				}
+			}
+		}
+		total, c1 := cm2TotalC1(notes[0], notes[1], notes[2], notes[3])
 		sch.Students = append(sch.Students, cm2Student{
 			StudentID:        row.StudentID,
 			Matricule:        row.Matricule,
@@ -497,219 +462,23 @@ func cm2FileResponse(session models.Cm2Session, rows []cm2DBRow, role string) ma
 			SchoolID:         row.SchoolID,
 			SchoolName:       row.SchoolName,
 			SchoolCode:       row.SchoolCode,
-			NoteExploitation: row.NoteExploitation,
-			NoteEveil:        row.NoteEveil,
-			NoteOrthographe:  row.NoteOrthographe,
-			NoteMath:         row.NoteMath,
+			NoteExploitation: notes[0],
+			NoteEveil:        notes[1],
+			NoteOrthographe:  notes[2],
+			NoteMath:         notes[3],
 			Total:            total,
 			C1:               c1,
 		})
 		totalStudents++
 	}
 
-	role0 := role
-	perms := cm2Permissions{
-		CanGrade: role0 == models.RoleAdmin || role0 == models.RoleInspector ||
-			role0 == models.RoleDirector || role0 == models.RoleTeacher,
-		Writable:  sessionWritable(session.Status),
-		CanManage: cm2ManageAllowedFromRole(role0),
-		CanExport: role0 == models.RoleAdmin,
-	}
-
-	resolved := cm2ResolveSubjects()
+	perms := cm2Permissions{CanExport: role == models.RoleAdmin}
 	return map[string]interface{}{
-		"session":    session,
-		"subjects":   cm2SubjectInfos(resolved),
-		"c1_divisor": cm2C1Divisor,
-		"groups":     groups,
-		"count":      totalStudents,
+		"round":       round,
+		"subjects":    cm2SubjectInfos(resolved),
+		"c1_divisor":  cm2C1Divisor,
+		"groups":      groups,
+		"count":       totalStudents,
 		"permissions": perms,
 	}
-}
-
-// cm2ManageAllowedFromRole — variante sans requête (réponse déjà en main).
-func cm2ManageAllowedFromRole(role string) bool {
-	return role == models.RoleAdmin || role == models.RoleInspector
-}
-
-// === Enregistrer les notes d'un lot d'élèves — POST /api/cm2/sessions/{id}/results ===
-// Saisie possible en open ET closed (sessionWritable — mêmes règles que le
-// module Notes : clôturée = modifiable jusqu'à la validation), verrouillée
-// en draft (pas encore ouverte) et en validated. Le payload porte l'ÉTAT
-// COMPLET de chaque ligne (4 champs, NULL = note effacée/absente).
-func SaveCm2Results(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var session models.Cm2Session
-	if err := database.DB.First(&session, "id = ?", id).Error; err != nil {
-		middleware.JSONError(w, "session CM2 introuvable", http.StatusNotFound)
-		return
-	}
-	if !sessionWritable(session.Status) {
-		if session.Status == "draft" {
-			middleware.JSONError(w, "la session CM2 n'est pas encore ouverte — les notes sont verrouillées jusqu'à l'ouverture", http.StatusConflict)
-			return
-		}
-		middleware.JSONError(w, "session CM2 validée — les notes sont verrouillées définitivement", http.StatusConflict)
-		return
-	}
-	var req struct {
-		Results []struct {
-			StudentID        string   `json:"student_id"`
-			NoteExploitation *float64 `json:"note_exploitation"`
-			NoteEveil        *float64 `json:"note_eveil"`
-			NoteOrthographe  *float64 `json:"note_orthographe"`
-			NoteMath         *float64 `json:"note_math"`
-		} `json:"results"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.JSONError(w, "payload invalide", http.StatusBadRequest)
-		return
-	}
-	if len(req.Results) == 0 {
-		middleware.JSONError(w, "results est requis", http.StatusBadRequest)
-		return
-	}
-	// Pas de doublon d'élève dans le lot (0 note partielle).
-	seen := map[string]bool{}
-	ids := make([]string, 0, len(req.Results))
-	for _, it := range req.Results {
-		if it.StudentID == "" || seen[it.StudentID] {
-			middleware.JSONError(w, "student_id vide ou dupliqué dans results", http.StatusBadRequest)
-			return
-		}
-		seen[it.StudentID] = true
-		ids = append(ids, it.StudentID)
-	}
-
-	// Les élèves doivent exister et être des CM2 actifs.
-	type studRef struct {
-		ID       string `gorm:"column:id"`
-		ClassID  string `gorm:"column:class_id"`
-		SchoolID string `gorm:"column:school_id"`
-		Active   bool   `gorm:"column:active"`
-		Name     string `gorm:"column:name"`
-	}
-	var studs []studRef
-	if err := database.DB.Raw(
-		`SELECT s.id, s.class_id, c.school_id, c.active, c.name
-FROM students s JOIN classes c ON c.id = s.class_id WHERE s.id IN ?`, ids).Scan(&studs).Error; err != nil {
-		middleware.JSONError(w, "erreur vérification des élèves", http.StatusInternalServerError)
-		return
-	}
-	studMap := map[string]studRef{}
-	for _, s := range studs {
-		studMap[s.ID] = s
-	}
-	for _, sid := range ids {
-		s, ok := studMap[sid]
-		if !ok || !s.Active || !strings.EqualFold(strings.TrimSpace(s.Name), "CM2") {
-			middleware.JSONError(w, "un ou plusieurs élèves sont introuvables ou ne sont pas des CM2", http.StatusBadRequest)
-			return
-		}
-	}
-
-	// Périmètre de saisie selon le rôle.
-	role := ctxRole(r)
-	switch role {
-	case models.RoleAdmin, models.RoleInspector:
-		// tout périmètre
-	case models.RoleDirector:
-		schoolID := ctxSchoolID(r)
-		if schoolID == "" {
-			middleware.JSONError(w, "aucune école rattachée à votre compte", http.StatusForbidden)
-			return
-		}
-		for _, sid := range ids {
-			if studMap[sid].SchoolID != schoolID {
-				middleware.JSONError(w, "vous ne saisissez que les notes des élèves de votre école", http.StatusForbidden)
-				return
-			}
-		}
-	case models.RoleTeacher:
-		cond, cargs := teacherClassCondition(ctxUserID(r))
-		var classes []models.Class
-		if err := database.DB.Where("active = TRUE AND UPPER(TRIM(name)) = 'CM2' AND "+cond, cargs...).Find(&classes).Error; err != nil {
-			middleware.JSONError(w, "erreur vérification de vos classes", http.StatusInternalServerError)
-			return
-		}
-		allowed := map[string]bool{}
-		for _, c := range classes {
-			allowed[c.ID] = true
-		}
-		for _, sid := range ids {
-			if !allowed[studMap[sid].ClassID] {
-				middleware.JSONError(w, "vous ne saisissez que les notes des élèves de votre classe", http.StatusForbidden)
-				return
-			}
-		}
-	default:
-		middleware.JSONError(w, "accès refusé : saisie des notes CM2 non autorisée pour votre rôle", http.StatusForbidden)
-		return
-	}
-
-	// Barèmes : chaque note fournie est contrôlée contre le barème CM réel
-	// (exception Dictée → orthographe 2–20, défaut CM 2–50 pour le reste).
-	resolved := cm2ResolveSubjects()
-	for _, it := range req.Results {
-		checks := []struct {
-			key string
-			n   *float64
-		}{
-			{"exploitation", it.NoteExploitation},
-			{"eveil", it.NoteEveil},
-			{"orthographe", it.NoteOrthographe},
-			{"math", it.NoteMath},
-		}
-		for _, c := range checks {
-			if c.n == nil {
-				continue
-			}
-			subj, ok := resolved[c.key]
-			if !ok {
-				middleware.JSONError(w, fmt.Sprintf("matière %s introuvable dans la configuration des matières — vérifiez le module Matières", c.key), http.StatusBadRequest)
-				return
-			}
-			mn, mx := getGradeScale("CM", subj.ID)
-			if *c.n < float64(mn) || *c.n > float64(mx) {
-				middleware.JSONError(w, fmt.Sprintf("note %s invalide : attendu entre %d et %d (barème CM)", c.key, mn, mx), http.StatusBadRequest)
-				return
-			}
-		}
-	}
-
-	// Upsert état complet (transaction — tout ou rien).
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		for _, it := range req.Results {
-			var existing models.Cm2Result
-			err := tx.Where("session_id = ? AND student_id = ?", id, it.StudentID).First(&existing).Error
-			if err == gorm.ErrRecordNotFound {
-				nr := models.Cm2Result{
-					SessionID:        id,
-					StudentID:        it.StudentID,
-					NoteExploitation: it.NoteExploitation,
-					NoteEveil:        it.NoteEveil,
-					NoteOrthographe:  it.NoteOrthographe,
-					NoteMath:         it.NoteMath,
-				}
-				if err := tx.Create(&nr).Error; err != nil {
-					return err
-				}
-			} else if err != nil {
-				return err
-			} else {
-				existing.NoteExploitation = it.NoteExploitation
-				existing.NoteEveil = it.NoteEveil
-				existing.NoteOrthographe = it.NoteOrthographe
-				existing.NoteMath = it.NoteMath
-				if err := tx.Save(&existing).Error; err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}); err != nil {
-		middleware.JSONError(w, "erreur enregistrement des notes", http.StatusInternalServerError)
-		return
-	}
-	jsonResponse(w, http.StatusOK, map[string]interface{}{"status": "saved", "count": len(req.Results)})
 }

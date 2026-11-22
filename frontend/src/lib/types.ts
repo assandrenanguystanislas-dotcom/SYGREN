@@ -772,20 +772,16 @@ export interface SessionWithDetails extends EvaluationSession {
   completion_rate: number;
 }
 
-// === Task 83 — Fichiers CM2 par secteur (module Résultats) ===
-// Session d'examen CM2 à l'échelle de l'IEP (une session couvre toutes les
-// écoles). Les élèves sont notés à l'OUVERTURE de la session (saisie
-// possible en open/closed, verrouillée en draft et après validation).
+// === Task 84 — Fichiers CM2 par secteur (module Résultats) ===
+// Notes GÉNÉRÉES depuis le module Évaluations : aucune saisie ici. Les
+// « sessions » du fichier sont les ROUNDS de composition (année, N°)
+// détectés automatiquement dans les EvaluationSession du module
+// Évaluations — le fichier se met à jour au fil des saisies des écoles.
 
-export interface Cm2Session {
-  id: string;
+export interface Cm2Round {
   year: number;
-  number: number;
-  status: SessionStatus;
-  open_at?: string | null;
-  created_at: string;
-  updated_at: string;
-  results_count?: number; // élèves déjà notés (au moins 1 note)
+  number: number; // N° de composition (eval_number du module Évaluations)
+  notated: number; // élèves CM2 déjà notés (au moins 1 matière)
 }
 
 export interface Cm2SubjectInfo {
@@ -829,27 +825,16 @@ export interface Cm2SectorGroup {
 }
 
 export interface Cm2Permissions {
-  can_grade: boolean;
-  writable: boolean;
-  can_manage: boolean;
-  can_export: boolean;
+  can_export: boolean; // Super Admin : production de fichiers (anti-fuite)
 }
 
 export interface Cm2FileData {
-  session: Cm2Session;
+  round: Cm2Round;
   subjects: Cm2SubjectInfo[];
   c1_divisor: number;
   groups: Cm2SectorGroup[];
   count: number;
   permissions: Cm2Permissions;
-}
-
-export interface Cm2ResultInput {
-  student_id: string;
-  note_exploitation: number | null;
-  note_eveil: number | null;
-  note_orthographe: number | null;
-  note_math: number | null;
 }
 
 // === Module 3 — Résultats de calcul (moyennes, classement, mentions) ===

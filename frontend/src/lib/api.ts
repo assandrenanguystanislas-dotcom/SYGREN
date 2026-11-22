@@ -37,9 +37,8 @@ import type {
   LevelReportInput,
   EvaluationSession,
   SessionWithDetails,
-  Cm2Session,
   Cm2FileData,
-  Cm2ResultInput,
+  Cm2Round,
   SessionExemption,
   SessionExemptionWithDetails,
   Grade,
@@ -1675,34 +1674,14 @@ export const pdaApi = {
   },
 };
 
-// === Task 83 — Fichiers CM2 par secteur (module Résultats) ===
-// Session d'examen CM2 à l'échelle de l'IEP : les élèves de CM2 sont notés
-// à l'ouverture de la session (saisie open/closed), fichier groupé
-// secteur → école avec Total et C1 = Σ notes / 8,5.
+// === Task 84 — Fichiers CM2 par secteur (module Résultats) ===
+// Notes GÉNÉRÉES depuis le module Évaluations (lecture seule) : les rounds
+// (année, N° de composition) sont détectés automatiquement.
 export const cm2Api = {
-  listSessions: () =>
-    apiFetch<{ sessions: Cm2Session[]; count: number }>("/api/cm2/sessions"),
-  createSession: (data: { year: number; number: number }) =>
-    apiFetch<Cm2Session>("/api/cm2/sessions", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  updateStatus: (id: string, status: string) =>
-    apiFetch<Cm2Session>(`/api/cm2/sessions/${id}/status`, {
-      method: "PUT",
-      body: JSON.stringify({ status }),
-    }),
-  deleteSession: (id: string) =>
-    apiFetch<{ status: string }>(`/api/cm2/sessions/${id}`, {
-      method: "DELETE",
-    }),
-  getFile: (id: string) =>
-    apiFetch<Cm2FileData>(`/api/cm2/sessions/${id}/file`),
-  saveResults: (id: string, results: Cm2ResultInput[]) =>
-    apiFetch<{ status: string; count: number }>(
-      `/api/cm2/sessions/${id}/results`,
-      { method: "POST", body: JSON.stringify({ results }) },
-    ),
+  listRounds: () =>
+    apiFetch<{ rounds: Cm2Round[]; count: number }>("/api/cm2/rounds"),
+  getFile: (year: number, number: number) =>
+    apiFetch<Cm2FileData>(`/api/cm2/files/${year}/${number}`),
 };
 
 // Barrel agrégé pour rétro-compat

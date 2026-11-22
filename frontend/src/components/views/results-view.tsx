@@ -902,10 +902,10 @@ function ErrorState({ message }: { message: string }) {
 // « Fin d'année » : document officiel « RESULTATS DE FIN D'ANNEE » — âge,
 //   scolarités, moyennes (compositions / composition de passage / annuelle),
 //   décision du conseil des maîtres + tableau récapitulatif G/F/T.
-// « Fichiers CM2 » (Task 83) : fichiers par secteur des élèves de CM2 —
-//   notation des 4 matières (exploitation, eveil, orthographe, math) à
-//   l'OUVERTURE d'une session CM2 de l'IEP ; Total et C1 (= Σ/8,5) en
-//   direct ; export Excel par secteur (13 colonnes exactes).
+// « Fichiers CM2 » (Task 84) : fichiers par secteur des élèves de CM2 —
+//   notes GÉNÉRÉES depuis le module Évaluations (compositions), aucune
+//   saisie ici ; Total et C1 (= Σ/8,5) calculés serveur ; export Excel par
+//   secteur (13 colonnes exactes).
 // « Palmarès » (Task 70) : TOP 10 par niveau (CP1..CM2) et par sexe
 //   (1 tableau FILLES + 1 tableau GARÇONS) après chaque composition et
 //   examen blanc — moyennes précalculées, classement inter-écoles du

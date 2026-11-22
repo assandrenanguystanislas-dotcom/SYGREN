@@ -1,29 +1,29 @@
 "use client";
 
-// === Export Excel du FICHIER CM2 PAR SECTEUR (module Résultats — Task 83) ===
+// === Export Excel du FICHIER CM2 PAR SECTEUR (module Résultats — Task 84) ===
 //
 // Demande : « les fichiers concernent uniquement les élèves de CM2 ; ces
-// fichiers doivent être dans le module Résultats de sorte que les élèves
-// soient notés à l'ouverture d'une session » — libellés de colonnes EXACTS :
-// matricule, nom, prenoms, libecole, codeecole, libiep, iep, exploitation,
-// eveil, orthographe, math, Total, C1 avec :
+// fichiers doivent être dans le module Résultats » — libellés de colonnes
+// EXACTS : matricule, nom, prenoms, libecole, codeecole, libiep, iep,
+// exploitation, eveil, orthographe, math, Total, C1 avec :
 //   - libecole  = nom de l'école, codeecole = code de l'école ;
 //   - iep = 000045, libiep = DABOU 1 (constantes de la demande) ;
 //   - C1 = (exploitation + eveil + orthographe + math) / 8,5.
 //
-// Structure reprise À L'IDENTIQUE des fichiers par secteur CP (Task 82) :
-// 3 lignes de titres fusionnées A:M, ligne d'en-têtes sombre, bandeau gris
-// par école « ECOLE : … — CODE : … — n élève(s) », Total = SOMME dès 1 note,
-// C1 = Σ/8,5 dès les 4 notes (formules live), A4 paysage échelle 68 %,
-// marges 0,3", en-têtes répétés (4:4), volets figés sous les en-têtes,
-// zoom 85 %. Différence : les notes sont PÉREMPLIES depuis la session CM2
-// (saisies dans le module) au lieu de colonnes vides.
+// Task 84 : les notes NE SONT PAS SAISIES dans le module Résultats — elles
+// sont GÉNÉRÉES depuis le module Évaluations (compositions) et exportées
+// PÉREMPLIES. Structure reprise À L'IDENTIQUE des fichiers par secteur CP
+// (Task 82) : 3 lignes de titres fusionnées A:M, ligne d'en-têtes sombre,
+// bandeau gris par école « ECOLE : … — CODE : … — n élève(s) », Total =
+// SOMME dès 1 note, C1 = Σ/8,5 dès les 4 notes (formules live), A4 paysage
+// échelle 68 %, marges 0,3", en-têtes répétés (4:4), volets figés sous les
+// en-têtes, zoom 85 %.
 //
 // Politique d'accès : production de fichiers réservée au Super Admin
 // (canExportFiles — même règle anti-fuite que les autres exports).
 
 import { saveBlob, XLSX_MIME } from "@/lib/doc-export";
-import type { Cm2SchoolGroup, Cm2Session, Cm2StudentRow } from "@/lib/types";
+import type { Cm2Round, Cm2SchoolGroup, Cm2StudentRow } from "@/lib/types";
 
 // Les 13 libellés EXACTS demandés (ordre et casse respectés)
 const HEADERS = [
@@ -58,13 +58,13 @@ function sanitize(name: string): string {
   return name.trim().replace(/\s+/g, "-").replace(/\//g, "-");
 }
 
-/** Base du nom de fichier : FICHIER-CM2-{SECTEUR}-S{numéro}-{année}.xlsx */
-export function cm2SecteurFileBase(session: Cm2Session, secteurName: string): string {
-  return `FICHIER-CM2-${sanitize(secteurName)}-S${session.number}-${session.year}`;
+/** Base du nom de fichier : FICHIER-CM2-{SECTEUR}-S{composition}-{année}.xlsx */
+export function cm2SecteurFileBase(round: Cm2Round, secteurName: string): string {
+  return `FICHIER-CM2-${sanitize(secteurName)}-S${round.number}-${round.year}`;
 }
 
 export interface Cm2ExportInput {
-  session: Cm2Session;
+  round: Cm2Round;
   secteurName: string;
   schools: Cm2SchoolGroup[];
 }
@@ -98,11 +98,11 @@ export async function exportCm2SecteurExcel(
       size: 14, bold: true, color: undefined as string | undefined, italic: false,
     },
     {
-      text: `IEP ${IEP_LIB} — CODE IEP : ${IEP_CODE} — ANNÉE SCOLAIRE ${input.session.year}-${input.session.year + 1}`,
+      text: `IEP ${IEP_LIB} — CODE IEP : ${IEP_CODE} — ANNÉE SCOLAIRE ${input.round.year}-${input.round.year + 1}`,
       size: 11, bold: true, color: "FF00734A", italic: false,
     },
     {
-      text: `SESSION CM2 N°${input.session.number} — C1 = (exploitation + eveil + orthographe + math) / 8,5 — Total et C1 se calculent automatiquement`,
+      text: `COMPOSITION N°${input.round.number} — notes issues du module Évaluations — C1 = (exploitation + eveil + orthographe + math) / 8,5`,
       size: 10, bold: false, color: "FF555555", italic: true,
     },
   ];
