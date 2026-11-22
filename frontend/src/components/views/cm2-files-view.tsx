@@ -22,6 +22,10 @@
 //     calculés par le serveur, rafraîchis en continu ;
 //   - Périmètre par rôle : admin/inspector = tout, conseiller = son
 //     secteur, director = son école, teacher = ses classes CM2 ;
+//   - Table écran : entête EXACTEMENT celle de la demande (13 colonnes,
+//     mêmes libellés et même ordre que l'export Excel) — matricule, nom,
+//     prenoms, libecole, codeecole, libiep, iep, exploitation, eveil,
+//     orthographe, math, Total, C1 ; iep = 000045, libiep = DABOU 1 ;
 //   - Export Excel PAR SECTEUR (Super Admin) — les 13 colonnes exactes de
 //     la demande (lib/cm2-export.ts), notes péremplies + formules.
 
@@ -41,7 +45,12 @@ import { toast } from "sonner";
 
 import { cm2Api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { cm2SecteurFileBase, exportCm2SecteurExcel } from "@/lib/cm2-export";
+import {
+  cm2SecteurFileBase,
+  CM2_IEP_CODE,
+  CM2_IEP_LIB,
+  exportCm2SecteurExcel,
+} from "@/lib/cm2-export";
 import type { Cm2StudentRow, Cm2SubjectInfo } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -418,10 +427,15 @@ function SectorCard({ group, subjects }: SectorCardProps) {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
+                      {/* Entête = les 13 libellés EXACTS de la demande, dans
+                          l'ordre demandé (identique à l'export Excel) */}
                       <TableHead className="h-8 w-[110px]">matricule</TableHead>
-                      <TableHead className="h-8 min-w-[140px]">nom</TableHead>
-                      <TableHead className="h-8 min-w-[140px]">prenoms</TableHead>
-                      <TableHead className="h-8 w-[70px]">classe</TableHead>
+                      <TableHead className="h-8 min-w-[130px]">nom</TableHead>
+                      <TableHead className="h-8 min-w-[130px]">prenoms</TableHead>
+                      <TableHead className="h-8 min-w-[150px]">libecole</TableHead>
+                      <TableHead className="h-8 text-center w-[80px]">codeecole</TableHead>
+                      <TableHead className="h-8 text-center w-[90px]">libiep</TableHead>
+                      <TableHead className="h-8 text-center w-[80px]">iep</TableHead>
                       {NOTE_KEYS.map((k) => {
                         const subj = subjects.find((s) => s.key === k);
                         return (
@@ -456,7 +470,9 @@ function SectorCard({ group, subjects }: SectorCardProps) {
   );
 }
 
-// === Ligne élève (mémoïsée — lecture seule, notes du module Évaluations) ===
+// === Ligne élève (mémoïsée — lecture seule, notes du module Évaluations).
+// Les 13 colonnes de la demande : identité + libecole/codeecole (école de
+// l'élève), libiep/iep (constantes 000045 / DABOU 1), 4 notes, Total, C1 ===
 const Cm2Row = memo(function Cm2Row({ row }: { row: Cm2StudentRow }) {
   return (
     <TableRow>
@@ -465,10 +481,13 @@ const Cm2Row = memo(function Cm2Row({ row }: { row: Cm2StudentRow }) {
       </TableCell>
       <TableCell className="py-1.5 font-medium text-sm">{row.nom}</TableCell>
       <TableCell className="py-1.5 text-sm">{row.prenoms}</TableCell>
-      <TableCell className="py-1.5">
-        <Badge variant="outline" className="text-[10px] px-1.5">
-          {row.class_name}
-        </Badge>
+      <TableCell className="py-1.5 text-sm">{row.school_name}</TableCell>
+      <TableCell className="py-1.5 text-center font-mono text-xs">
+        {row.school_code}
+      </TableCell>
+      <TableCell className="py-1.5 text-center text-sm">{CM2_IEP_LIB}</TableCell>
+      <TableCell className="py-1.5 text-center font-mono text-xs">
+        {CM2_IEP_CODE}
       </TableCell>
       {NOTE_KEYS.map((k) => (
         <TableCell key={k} className="py-1.5 text-center text-sm font-medium">

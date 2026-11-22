@@ -34,8 +34,13 @@ const HEADERS = [
 const WIDTHS = [12, 34, 35, 34, 10, 11, 10, 11, 9, 11, 9, 9, 9];
 const CENTERED = new Set([0, 4, 5, 6, 7, 8, 9, 10, 11, 12]); // tout sauf nom/prenoms/libecole
 
-const IEP_LIB = "DABOU 1";
-const IEP_CODE = "000045";
+// Constantes IEP de la demande — partagées avec la vue écran (cm2-files-view.tsx)
+// pour que le fichier Excel et le tableau à l'écran aient EXACTEMENT les
+// mêmes libellés de colonnes (13 colonnes de la demande).
+export const CM2_IEP_LIB = "DABOU 1";
+export const CM2_IEP_CODE = "000045";
+const IEP_LIB = CM2_IEP_LIB;
+const IEP_CODE = CM2_IEP_CODE;
 
 const BOX = {
   top: { style: "thin" as const, color: { argb: "FFB0B0B0" } },
