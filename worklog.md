@@ -5321,7 +5321,7 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 **Demande** : « les fichiers concernent uniquement les élèves de cm2. ces fichiers doivent etre dans le modules resultats de sorte que les eleves soient notés a l'ouverture d'une session » — poursuite directe de la Task 82 (fichiers CP par secteur, livrables Excel hors application) : cette fois les fichiers CM2 vivent DANS l'application, avec saisie des notes.
 
 ### Conception (sondes Neon)
-- 2 045 élèves de CM2 actifs dans 66 écoles — 6 secteurs (BADIA 316, BOUBOURY 156, COSROU 367, LEBOUTOU 293, OUSROU 246, TOUPAH 128) + HORS SECTEUR (254, 7 écoles — EPC/EPV/EPPI sans secteur) ; 2 secteurs préscolaires sans CM2.
+- 2 045 élèves de CM2 actifs dans 66 écoles — 7 secteurs (BADIA 316/8 écoles, BOUBOURY 156/6, COSROU 367/11, LEBOUTOU 293/10, OUSROU 246/9, TOUPAH 128/5, VIEUX-BADIEN 285/10) + HORS SECTEUR (254, 7 écoles — EPC/EPV/EPPI sans secteur) ; 2 secteurs préscolaires sans CM2.
 - Les 4 matières du fichier rapprochées des matières configurées par NOM normalisé (précédent PDA) : exploitation → Exploitation de Texte, eveil → Etude du Milieu, orthographe → Dictée, math → Mathématiques.
 - DIVISEUR 8,5 DÉCHIFFRÉ : barèmes CM réels (Task 79) = 50 (Exploitation) + 50 (Etude du Milieu) + 20 (Dictée) + 50 (Mathématiques) = 170 ; 170/20 = 8,5 → C1 = Σ/8,5 est EXACTEMENT la moyenne sur /20. Le libellé « orthographe » s'applique donc au barème Dictée 2–20, les trois autres au défaut CM 2–50 (getGradeScale — exception matière > défaut niveau).
 
