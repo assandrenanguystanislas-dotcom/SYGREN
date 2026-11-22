@@ -5296,3 +5296,22 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 ### Vérifications
 - go build + go vet 0 erreur ; tsc --noEmit 0 erreur ; next build OK.
 - Exemple CM : notes 40/50 + 35/50 + 38/50 + 15/20 → Total 128, Σ coef 17, Moyenne 7,53/**10** (affichée /20 = 15,06 avant) ; CP/CE inchangés.
+
+## Task 82 — Fichiers par secteur : élèves de CP, IEP DABOU 1 (000045), Total + C1 en formules
+
+**Demande** : « DANS LE MODULE ECOLE, ETABLIR DES FICHIERS PAR SECTEUR INCLUANT LES ECOLES AVEC POUR LIBELLÉ : matricule, nom, prenoms, libecole, codeecole, libiep, iep, exploitation, eveil, orthographe, math, Total, C1 — libecole = nom de l'école, codeecole = code de l'école, iep = 000045, libiep = DABOU 1, C1 = calcul des moyennes (somme (exploitation + eveil + orthographe + math) / 8,5) ».
+
+### Choix confirmés par l'utilisateur (sondes)
+- Tous les élèves de CP (CP1 + CP2) ; 1 fichier Excel par secteur ; colonnes de notes VIDES (saisie manuelle) avec Total et C1 en formules live ; élèves sans matricule gardés (cellule vide) ; bandeau gris par école ; tri école → classe → nom.
+
+### Réalisation (livrables — aucun changement d'application)
+- Script `scripts/build_fichiers_secteur_cp.py` (hors repo) : requête Neon (students ⋈ classes CP ⋈ schools ⋈ sectors), un .xlsx par secteur dans `download/`.
+- 7 fichiers : FICHIER-BADIA (424 élèves, 6 écoles), FICHIER-BOUBOURY (51, 3), FICHIER-COSROU (257, 8), FICHIER-OUSROU (68, 1), FICHIER-TOUPAH (62, 2), FICHIER-VIEUX-BADIEN (329, 6), FICHIER-HORS-SECTEUR (51, 1 — EPV LES ENFANTS D'ABRAHAM E0ABRAH, école sans secteur en base) — 1 242 élèves, 27 écoles ; les 2 secteurs préscolaires (sans CP) et LEBOUTOU (sans CP) n'ont pas de fichier.
+- Structure exacte : 13 colonnes aux libellés DEMANDÉS (casse respectée) ; libiep = « DABOU 1 » et iep = « 000045 » sur chaque ligne (format texte @ pour préserver les zéros initiaux) ; bandeau par école « ECOLE : {nom} — CODE : {code} — n élève(s) » ; titre + ligne IEP + rappel de la formule C1.
+- Formules : Total = `=IF(COUNT(Hr:Kr)=0,"",SUM(Hr:Kr))` (somme dès 1 note) ; C1 = `=IF(COUNT(Hr:Kr)=4,SUM(Hr:Kr)/8.5,"")` (moyenne dès les 4 notes, format 0.00) — C1 = Σ/8,5 exactement comme demandé.
+- Mise en page : A4 paysage, échelle fixe 68 %, marges 0,3" (jamais fitToPage), en-têtes répétés sur chaque page (print_title_rows 4:4), volets figés A5, zoom 85 % ; largeurs de colonnes calées sur les longueurs MAX mesurées en base (nom 33, prenoms 34, libecole 33 — aucune identité ne passe à la ligne).
+
+### Vérifications
+- Réouverture openpyxl : en-têtes = les 13 libellés exacts, comptes élèves/bandeaux conformes aux requêtes SQL, formules Total/C1 présentes, iep/libiep corrects — 7/7 PASS.
+- Recalcul LibreOffice avec notes de test : 12+15+14+18 → Total 59, C1 6.94 (59/8,5) ; 2 notes seules → Total 27, C1 vide (attend les 4 notes) ; aucune erreur de formule.
+- Rendu PDF de tous les fichiers (pdftoppm) : 13 colonnes tiennent sur une largeur de page (première génération à 75 % débordait C1 sur des pages séparées — corrigé), bandeaux et répétition d'en-têtes OK, dernière page propre.
