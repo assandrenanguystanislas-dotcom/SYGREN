@@ -5375,3 +5375,18 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - Test fonctionnel SQLite jetable (supprimé après run — routeur minimal + handlers RÉELS) : PASS complet — rounds déduits (2 rounds, draft/annulée/non-CM2 exclus, ordre année DESC), agrégation multi-mois (note de novembre gagne sur septembre), Total 57/135 exacts, C1 = 135/8,5 exact et nil à 2 notes, matières résolues avec barèmes réels (Exploitation 2–50, Dictée 2–20), RBAC teacher (sa classe) / director (son école) / conseiller (son secteur, can_export=false) / parent 403, N°99 → 400, N°4 + année 2030 → 404, « abc » → 400.
 - Production TRIPLE VÉRIFICATION après push : (1) Render dep-dc1m7buc commit d318b21 status=live ; (2) scripts/verify_cm2_prod.py 17 PASS / 0 FAIL — login, rounds (N°2-2026 0 noté, N°1-2026 69 notés), fichier 2026/1 (2045 élèves, 8 secteurs, c1_divisor 8,5, 4 matières, barèmes réels), Total/C1 d'un élève complet (AKA Henriette Delphine Aliké, EPP DABOU BADIA 1 : 19+40+2+24=85, C1=10), notated API = fichier = requête Neon équivalente (69=69) ; (3) scripts/verify_cm2_vercel.py — marqueurs nouveaux présents (« Notes générées automatiquement depuis le module Évaluations », « Composition (module Évaluations) », « Source : module Évaluations »), marqueurs de l'ancienne saisie absents (« Notation à l'ouverture de la session », « saisie possible en open ET closed », « Nouvelle session »).
 - Comportement attendu : les directeurs/enseignants notent leurs compositions dans le MODULE ÉVALUATIONS comme d'habitude ; le fichier CM2 du module Résultats se remplit automatiquement, secteur par secteur, avec Total et C1 ; l'admin exporte l'Excel d'un secteur (13 colonnes, notes péremplies) quand il le souhaite.
+
+## Task 85 — 2026-11-23 — Entête CM2 EXACTE à l'écran (13 colonnes de la demande)
+
+**Demande utilisateur** : « dans le fichier CM2 du module resultat on doit avoir l'entete suivant matricule, nom, prenoms, libecole, codeecole, libiep, iep, exploitation, eveil, orthographe, math, Total, C1 — libecole = mettre le nom de l'école, codeecole = mettre le code de l'école, iep = mettre le code 000045, libiep = mettre DABOU 1 ».
+
+**Constat** : l'entête exacte n'était garantie que sur l'EXPORT Excel (Task 84) ; la table ÉCRAN affichait « classe » (absente de la demande) et omettait libecole, codeecole, libiep, iep.
+
+**Fix (commit 93438e2, frontend seul — backend inchangé)** :
+- `cm2-files-view.tsx` : entête de la table écran = EXACTEMENT les 13 libellés demandés dans l'ordre demandé — « classe » supprimée (100% redondante : le fichier ne contient que des CM2), libecole = `row.school_name`, codeecole = `row.school_code`, libiep = DABOU 1, iep = 000045 ; ligne élève alignée (7 colonnes d'identité → 4 notes → Total → C1).
+- `cm2-export.ts` : constantes `CM2_IEP_LIB`/`CM2_IEP_CODE` EXPORTÉES et réutilisées par la vue écran — un seul point de vérité, l'écran et l'Excel ne peuvent plus diverger.
+
+**Vérifications** :
+- `tsc --noEmit` + `next build` : 0 erreur.
+- `scripts/verify_cm2_header.py` : PASS colonne par colonne — Excel = demande (13/13, même ordre), écran = demande (13/13, même ordre), ordre des 7 colonnes d'identité de la ligne élève OK, formule C1 `SUM(H:K)/8,5` OK, constantes IEP OK.
+- Production : Render health 200 ; `/api/cm2/rounds` 200 — 2 rounds (2026 N°2 : 0 noté, 2026 N°1 : 70 notés — notes GÉNÉRÉES depuis les compositions du module Évaluations) ; live Render = 73cb6a6 (backend identique, 93438e2 ne touche que le frontend) ; Vercel : 15 chunks scannés, marqueurs « libiep », « codeecole », « DABOU 1 », « 000045 » PRÉSENTS, ancien TableHead « classe » ABSENT → nouveau frontend bien déployé.
