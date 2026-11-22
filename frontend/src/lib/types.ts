@@ -772,6 +772,86 @@ export interface SessionWithDetails extends EvaluationSession {
   completion_rate: number;
 }
 
+// === Task 83 — Fichiers CM2 par secteur (module Résultats) ===
+// Session d'examen CM2 à l'échelle de l'IEP (une session couvre toutes les
+// écoles). Les élèves sont notés à l'OUVERTURE de la session (saisie
+// possible en open/closed, verrouillée en draft et après validation).
+
+export interface Cm2Session {
+  id: string;
+  year: number;
+  number: number;
+  status: SessionStatus;
+  open_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  results_count?: number; // élèves déjà notés (au moins 1 note)
+}
+
+export interface Cm2SubjectInfo {
+  key: "exploitation" | "eveil" | "orthographe" | "math";
+  label: string;
+  matched: boolean;
+  subject_id?: string;
+  subject_name?: string;
+  min_score: number;
+  max_score: number;
+}
+
+export interface Cm2StudentRow {
+  student_id: string;
+  matricule: string | null;
+  nom: string;
+  prenoms: string;
+  class_name: string;
+  school_id: string;
+  school_name: string; // libecole
+  school_code: string; // codeecole
+  note_exploitation: number | null;
+  note_eveil: number | null;
+  note_orthographe: number | null;
+  note_math: number | null;
+  total: number | null;
+  c1: number | null;
+}
+
+export interface Cm2SchoolGroup {
+  school_id: string;
+  school_name: string;
+  school_code: string;
+  students: Cm2StudentRow[];
+}
+
+export interface Cm2SectorGroup {
+  secteur_id: string | null;
+  secteur_name: string;
+  schools: Cm2SchoolGroup[];
+}
+
+export interface Cm2Permissions {
+  can_grade: boolean;
+  writable: boolean;
+  can_manage: boolean;
+  can_export: boolean;
+}
+
+export interface Cm2FileData {
+  session: Cm2Session;
+  subjects: Cm2SubjectInfo[];
+  c1_divisor: number;
+  groups: Cm2SectorGroup[];
+  count: number;
+  permissions: Cm2Permissions;
+}
+
+export interface Cm2ResultInput {
+  student_id: string;
+  note_exploitation: number | null;
+  note_eveil: number | null;
+  note_orthographe: number | null;
+  note_math: number | null;
+}
+
 // === Module 3 — Résultats de calcul (moyennes, classement, mentions) ===
 
 export interface SubjectGrade {

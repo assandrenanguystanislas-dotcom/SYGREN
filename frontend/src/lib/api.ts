@@ -37,6 +37,9 @@ import type {
   LevelReportInput,
   EvaluationSession,
   SessionWithDetails,
+  Cm2Session,
+  Cm2FileData,
+  Cm2ResultInput,
   SessionExemption,
   SessionExemptionWithDetails,
   Grade,
@@ -1672,6 +1675,36 @@ export const pdaApi = {
   },
 };
 
+// === Task 83 — Fichiers CM2 par secteur (module Résultats) ===
+// Session d'examen CM2 à l'échelle de l'IEP : les élèves de CM2 sont notés
+// à l'ouverture de la session (saisie open/closed), fichier groupé
+// secteur → école avec Total et C1 = Σ notes / 8,5.
+export const cm2Api = {
+  listSessions: () =>
+    apiFetch<{ sessions: Cm2Session[]; count: number }>("/api/cm2/sessions"),
+  createSession: (data: { year: number; number: number }) =>
+    apiFetch<Cm2Session>("/api/cm2/sessions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateStatus: (id: string, status: string) =>
+    apiFetch<Cm2Session>(`/api/cm2/sessions/${id}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    }),
+  deleteSession: (id: string) =>
+    apiFetch<{ status: string }>(`/api/cm2/sessions/${id}`, {
+      method: "DELETE",
+    }),
+  getFile: (id: string) =>
+    apiFetch<Cm2FileData>(`/api/cm2/sessions/${id}/file`),
+  saveResults: (id: string, results: Cm2ResultInput[]) =>
+    apiFetch<{ status: string; count: number }>(
+      `/api/cm2/sessions/${id}/results`,
+      { method: "POST", body: JSON.stringify({ results }) },
+    ),
+};
+
 // Barrel agrégé pour rétro-compat
 export const api = {
   auth: authApi,
@@ -1695,6 +1728,7 @@ export const api = {
   audit: auditApi,
   usersAdmin: usersAdminApi,
   pda: pdaApi,
+  cm2: cm2Api,
   examCenters: examCentersApi,
   // v5 (session 26) — Secteurs d'écoles & Conseillers
   sectors: sectorsApi,

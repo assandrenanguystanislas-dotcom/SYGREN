@@ -456,6 +456,24 @@ func New(cfg *config.Config) http.Handler {
                         r.Get("/api/parent/end-of-year", handlers.GetParentEndOfYear)
                         r.Get("/api/parent/period-bulletin", handlers.GetParentPeriodBulletin)
                 })
+
+                // === Task 83 — Fichiers CM2 par secteur (module Résultats) ===
+                // Une session CM2 à l'échelle de l'IEP ; les élèves sont
+                // notés à l'OUVERTURE de la session (saisie open/closed,
+                // verrouillée en draft et après validation). Lecture :
+                // personnel (parent refusé) ; saisie des notes : même module
+                // que les notes (grades:write) avec périmètre par rôle dans
+                // le handler ; gestion des sessions : admin + inspector.
+                r.Get("/api/cm2/sessions", handlers.ListCm2Sessions)
+                r.Get("/api/cm2/sessions/{id}/file", handlers.GetCm2File)
+                r.With(middleware.RequireModule(models.ModuleGrades, "write")).
+                        Post("/api/cm2/sessions/{id}/results", handlers.SaveCm2Results)
+                r.With(middleware.RequireModule(models.ModuleSessions, "write")).
+                        Post("/api/cm2/sessions", handlers.CreateCm2Session)
+                r.With(middleware.RequireModule(models.ModuleSessions, "write")).
+                        Put("/api/cm2/sessions/{id}/status", handlers.UpdateCm2SessionStatus)
+                r.With(middleware.RequireModule(models.ModuleSessions, "write")).
+                        Delete("/api/cm2/sessions/{id}", handlers.DeleteCm2Session)
         })
 
         return r

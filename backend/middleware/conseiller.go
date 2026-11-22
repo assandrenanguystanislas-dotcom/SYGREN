@@ -87,7 +87,11 @@ func ConseillerScope(next http.Handler) http.Handler {
 					strings.HasPrefix(p, "/api/students/") ||
 					strings.HasPrefix(p, "/api/computation/") ||
 					strings.HasPrefix(p, "/api/reports/") ||
-					strings.HasPrefix(p, "/api/pda/")
+					strings.HasPrefix(p, "/api/pda/") ||
+					// Task 83 — consultation du fichier CM2 de son secteur
+					// (périmètre sectoriel appliqué dans les handlers ; la
+					// saisie reste bloquée par RequireModule grades:write).
+					strings.HasPrefix(p, "/api/cm2/")
 			if !allowed {
 				JSONError(w, "accès refusé : le conseiller accède uniquement à sa vue « Mon Secteur », à la consultation des documents de son secteur et à la correction des inscriptions de son secteur", http.StatusForbidden)
 				return

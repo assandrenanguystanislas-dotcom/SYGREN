@@ -76,6 +76,7 @@ import { PdaView } from "./pda-view";
 import { PdaTimelineView } from "./pda-timeline-view";
 import { EndOfYearView } from "./end-of-year-view";
 import { PalmaresView } from "./palmares-view";
+import { Cm2FilesView } from "./cm2-files-view";
 
 function ResultsRankingView() {
   const user = useAuthStore((s) => s.user);
@@ -901,12 +902,17 @@ function ErrorState({ message }: { message: string }) {
 // « Fin d'année » : document officiel « RESULTATS DE FIN D'ANNEE » — âge,
 //   scolarités, moyennes (compositions / composition de passage / annuelle),
 //   décision du conseil des maîtres + tableau récapitulatif G/F/T.
+// « Fichiers CM2 » (Task 83) : fichiers par secteur des élèves de CM2 —
+//   notation des 4 matières (exploitation, eveil, orthographe, math) à
+//   l'OUVERTURE d'une session CM2 de l'IEP ; Total et C1 (= Σ/8,5) en
+//   direct ; export Excel par secteur (13 colonnes exactes).
 // « Palmarès » (Task 70) : TOP 10 par niveau (CP1..CM2) et par sexe
 //   (1 tableau FILLES + 1 tableau GARÇONS) après chaque composition et
 //   examen blanc — moyennes précalculées, classement inter-écoles du
 //   périmètre, exports PDF + Excel.
 type ResultsTab =
   | "classement"
+  | "cm2"
   | "palmares"
   | "pda"
   | "timeline"
@@ -933,6 +939,10 @@ export function ResultsView({
           <Trophy className="w-3.5 h-3.5" />
           Classement
         </TabsTrigger>
+        <TabsTrigger value="cm2" className="gap-1.5">
+          <FileSpreadsheet className="w-3.5 h-3.5" />
+          Fichiers CM2
+        </TabsTrigger>
         <TabsTrigger value="palmares" className="gap-1.5">
           <Medal className="w-3.5 h-3.5" />
           Palmarès
@@ -952,6 +962,9 @@ export function ResultsView({
       </TabsList>
       <TabsContent value="classement" className="space-y-4">
         <ResultsRankingView />
+      </TabsContent>
+      <TabsContent value="cm2" className="space-y-4">
+        <Cm2FilesView />
       </TabsContent>
       <TabsContent value="palmares" className="space-y-4">
         <PalmaresView />
