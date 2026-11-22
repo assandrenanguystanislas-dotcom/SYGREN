@@ -722,6 +722,39 @@
   }
 }
 
+/* === FICHIER CM2 PAR SECTEUR — Print CSS (A4 PAYSAGE multipage) ===
+ * Route dédiée /cm2-file-doc (son print.css pose le @page par défaut
+ * 297mm×210mm, marge 6mm). Même technique d'isolement que les autres
+ * documents : la règle commune body * { visibility: hidden } masque TOUT
+ * à l'impression — SANS cette contre-règle le document s'imprimerait en
+ * pages BLANCHES (bug déjà vu sur #liste-candidats-doc et
+ * #resultats-fin-annee-doc). Document en flux naturel (PAS de
+ * position:absolute) : l'entête 13 colonnes (thead display:table-header-
+ * group) se répète sur chaque page, lignes élèves insécables. */
+@media print {
+  #cm2-file-doc,
+  #cm2-file-doc * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  #cm2-file-doc {
+    background: white !important;
+    position: static !important;
+    width: auto !important;
+    min-height: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  #cm2-file-doc tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
 /* === VERROU D'IMPRESSION DES DOCUMENTS OFFICIELS (v2) ===
  * Politique : les documents imprimables des modules « Résultats » et
  * « Bulletins » ne peuvent être imprimés que par l'Admin IEP et le Super

@@ -1,0 +1,15 @@
+/* === /cm2-file-doc — format d'impression du FICHIER CM2 PAR SECTEUR
+ * === (module Résultats — Task 86 : PDF + Word imprimables) ===
+ * @page PAR DÉFAUT de la route dédiée : A4 paysage, marge 6mm (13 colonnes
+ * — exige la largeur paysage, comme la LISTE DES CANDIDATS).
+ * PAS de page nommée (même raison que /personnel-doc) : le changement de
+ * contexte de page après le document génère une page blanche finale.
+ * La route est dédiée au document : le @page par défaut ne fuit sur
+ * aucune autre vue. Importé par layout.tsx (après globals.css → gagne
+ * la cascade). */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+}

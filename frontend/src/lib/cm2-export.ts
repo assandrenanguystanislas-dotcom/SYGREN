@@ -25,11 +25,14 @@
 import { saveBlob, XLSX_MIME } from "@/lib/doc-export";
 import type { Cm2Round, Cm2SchoolGroup, Cm2StudentRow } from "@/lib/types";
 
-// Les 13 libellés EXACTS demandés (ordre et casse respectés)
+// Les 13 libellés EXACTS demandés (ordre et casse respectés) — EXPORTÉS
+// pour le document imprimable PDF/Word (cm2-file-document.tsx) : l'écran,
+// l'Excel et les documents PDF/Word partagent la MÊME entête.
 const HEADERS = [
   "matricule", "nom", "prenoms", "libecole", "codeecole", "libiep", "iep",
   "exploitation", "eveil", "orthographe", "math", "Total", "C1",
 ];
+export const CM2_HEADERS = HEADERS;
 // Largeurs (caractères) identiques aux fichiers CP Task 82
 const WIDTHS = [12, 34, 35, 34, 10, 11, 10, 11, 9, 11, 9, 9, 9];
 const CENTERED = new Set([0, 4, 5, 6, 7, 8, 9, 10, 11, 12]); // tout sauf nom/prenoms/libecole

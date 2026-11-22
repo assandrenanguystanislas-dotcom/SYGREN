@@ -27,7 +27,10 @@
 //     prenoms, libecole, codeecole, libiep, iep, exploitation, eveil,
 //     orthographe, math, Total, C1 ; iep = 000045, libiep = DABOU 1 ;
 //   - Export Excel PAR SECTEUR (Super Admin) — les 13 colonnes exactes de
-//     la demande (lib/cm2-export.ts), notes péremplies + formules.
+//     la demande (lib/cm2-export.ts), notes péremplies + formules ;
+//   - PDF / WORD imprimables (Task 86) — route dédiée /cm2-file-doc
+//     ouverte dans un nouvel onglet (admin + Admin IEP ; Word réservé au
+//     Super Admin côté route, print-guard + doc-export).
 
 import { memo, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +41,7 @@ import {
   FileDown,
   FileSpreadsheet,
   Loader2,
+  Printer,
   School,
   Users,
 } from "lucide-react";
@@ -51,6 +55,7 @@ import {
   CM2_IEP_LIB,
   exportCm2SecteurExcel,
 } from "@/lib/cm2-export";
+import { canPrintInternal } from "@/lib/print-guard";
 import type { Cm2StudentRow, Cm2SubjectInfo } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,6 +91,10 @@ export function Cm2FilesView() {
   // Export fichiers = Super Admin — déduit du RÔLE (pas de la réponse du
   // fichier) : le bouton doit être visible AVANT le premier chargement.
   const canExport = user?.role === "admin";
+  // PDF / Word imprimables (Task 86) : impression papier = admin + Admin
+  // IEP (print-guard) — la route /cm2-file-doc applique la politique
+  // complète (Word réservé au Super Admin).
+  const canPrint = canPrintInternal(user?.role);
   const [roundKey, setRoundKey] = useState<string>(""); // « année-N° »
   const [secteurFilter, setSecteurFilter] = useState<string>("all");
   const [exporting, setExporting] = useState(false);
@@ -130,6 +139,23 @@ export function Cm2FilesView() {
   // === Export Excel par secteur ===
   const selectedSectorName =
     secteurFilter === "all" ? null : secteurFilter === "hors" ? "HORS SECTEUR" : secteurFilter;
+
+  // === Version PDF / Word imprimable (Task 86) — route dédiée
+  // /cm2-file-doc ouverte dans un nouvel onglet avec le token, même
+  // pattern que les autres documents officiels (students-view). ===
+  function openCm2Doc() {
+    if (!year || !number || !selectedSectorName) return;
+    let token = "";
+    try {
+      const raw = localStorage.getItem("sygren-auth");
+      if (raw) token = JSON.parse(raw)?.state?.token ?? "";
+    } catch {
+      /* token absent — l'API refusera, la page l'affichera */
+    }
+    const url = `${window.location.origin}/cm2-file-doc?year=${year}&number=${number}` +
+      `&secteur=${encodeURIComponent(secteurFilter)}&t=${encodeURIComponent(token)}`;
+    window.open(url, "_blank");
+  }
   const handleExport = async () => {
     if (!file || !selectedSectorName) return;
     const group =
@@ -259,6 +285,27 @@ export function Cm2FilesView() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* PDF / Word imprimables (admin + Admin IEP — la route
+                applique la politique complète : Word = Super Admin) */}
+            {canPrint && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!selectedSectorName || !file}
+                onClick={openCm2Doc}
+                title={
+                  selectedSectorName
+                    ? "Ouvrir la version imprimable (PDF / Word) du fichier du secteur"
+                    : "Choisissez un secteur pour ouvrir sa version imprimable"
+                }
+              >
+                <Printer className="w-4 h-4 mr-1.5" />
+                {selectedSectorName
+                  ? `Imprimer / PDF / Word — ${selectedSectorName}`
+                  : "Imprimer / PDF / Word (choisir un secteur)"}
+              </Button>
+            )}
 
             {/* Export Excel par secteur (Super Admin) */}
             {canExport && (
