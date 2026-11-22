@@ -5390,3 +5390,20 @@ Les effectifs/redoublants du document « ÉTAT NOMINATIF DU PERSONNEL » vivent 
 - `tsc --noEmit` + `next build` : 0 erreur.
 - `scripts/verify_cm2_header.py` : PASS colonne par colonne — Excel = demande (13/13, même ordre), écran = demande (13/13, même ordre), ordre des 7 colonnes d'identité de la ligne élève OK, formule C1 `SUM(H:K)/8,5` OK, constantes IEP OK.
 - Production : Render health 200 ; `/api/cm2/rounds` 200 — 2 rounds (2026 N°2 : 0 noté, 2026 N°1 : 70 notés — notes GÉNÉRÉES depuis les compositions du module Évaluations) ; live Render = 73cb6a6 (backend identique, 93438e2 ne touche que le frontend) ; Vercel : 15 chunks scannés, marqueurs « libiep », « codeecole », « DABOU 1 », « 000045 » PRÉSENTS, ancien TableHead « classe » ABSENT → nouveau frontend bien déployé.
+
+## Task 86 — 2026-11-23 — Fichier CM2 : version PDF et Word imprimables
+
+**Demande utilisateur** : « mettre aussi en version pdf et word imprimable ».
+
+**Implémentation (commit 6c6ab1a, frontend seul — backend inchangé)** — pattern maison des 3 modèles :
+- **Route dédiée `/cm2-file-doc`** (page + layout + print.css A4 PAYSAGE marge 6mm, query params year/number/secteur/t) ouverte dans un nouvel onglet par le bouton « Imprimer / PDF / Word — {secteur} » de `cm2-files-view.tsx` (admin + Admin IEP — print-guard ; Word réservé au Super Admin côté route — doc-export Task 71 anti-fuite).
+- **`cm2-file-document.tsx`** : document FIDÈLE à l'export Excel validé — 3 lignes de titres (FICHIER SECTEUR X / IEP DABOU 1 — CODE IEP : 000045 — ANNÉE SCOLAIRE / COMPOSITION N°X — notes issues du module Évaluations — C1 = Σ/8,5), bandeau gris par école, entête EXACTEMENT les 13 libellés demandés (**CM2_HEADERS exporté** de cm2-export.ts : un seul point de vérité écran/Excel/PDF/Word), libecole/codeecole/libiep=DABOU 1/iep=000045 sur CHAQUE ligne, Total/C1 serveur (C1 2 décimales) ; une table par école avec bandeau+entête DANS le thead (display:table-header-group) → répétés à chaque page, tr break-inside:avoid.
+- **PDF** = window.print (impression navigateur) + contre-règle `#cm2-file-doc` dans globals.css (fix pages blanches du pattern d'isolement).
+- **Word** = .doc HTML MSO via buildWordShell A4 paysage (WordSection1 297mm×210mm, thead.rep) — même rendu que le PDF.
+- **Excel** = exportCm2SecteurExcel inchangé, accessible dans la même barre.
+
+**Vérifications** :
+- tsc + next build 0 erreur (route /cm2-file-doc générée).
+- `scripts/test_cm2_word_template.js` 18/18 PASS : paysage, WordSection1, bandeaux ×2, thead.rep ×2, entêtes exactes, largeurs 13 colonnes, échappements (&, <, >), IEP 000045, année scolaire, C1 arrondi 16.65 (pas de valeur brute), libiep/iep sur chaque ligne, Total/C1 vides pour non noté ; .doc de test converti par LibreOffice → rendu conforme.
+- **Production (agent-browser, token admin réel)** : page `/cm2-file-doc?year=2026&number=1&secteur=<BADIA>` rendue — 8 écoles / 8 tables / 316 lignes, entête 13 colonnes exacte, boutons PDF/Word/Excel/Fermer ; ligne notée vérifiée : AKA Henriette Delphine Aliké — EPP DABOU BADIA 1 — E001121 — DABOU 1 — 000045 — 19/40/2/24 — Total 85 — C1 10.00 (= 85/8,5) ; **Word téléchargé** (FICHIER-CM2-BADIA-S1-2026.doc, 600 Ko) → LibreOffice : multi-pages, bandeau+entête répétés par école ; **PDF d'impression headless** → A4 paysage, toolbar masquée, 3 titres, entête 13 colonnes répétée à chaque page (p.1 et p.4 vérifiées), lignes insécables.
+- Déploiement : Render health 200 (backend inchangé) ; Vercel route `/cm2-file-doc` 200, marqueurs bundles OK (FICHIER SECTEUR, DABOU 1, 000045, Format : A4 paysage, notes issues du module…), bouton « Imprimer / PDF / Word » présent dans la vue Résultats.
