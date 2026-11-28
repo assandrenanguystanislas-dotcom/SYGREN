@@ -2,16 +2,24 @@ package main
 
 // KEEP-ALIVE — maintien en éveil de l'API sur le plan gratuit Render.
 //
-// Le plan gratuit suspend l'instance après ~15 minutes sans trafic entrant ;
-// le visiteur suivant paie alors un réveil de 30–60 s, pendant lequel le
-// navigateur affiche « Failed to fetch » (demande utilisateur : maintenir
-// l'API éveillée tous les jours, de 07:00 à 22:00).
+// STATUT : NEUTRALISÉ PAR DÉFAUT depuis le 28/11/2026 (demande utilisateur
+// « il faut neutraliser le keep alive »). Cause : le maintien en éveil
+// permanent de l'instance Render (auto-ping 07:00–22:00, ~15 h/jour) garde le
+// pool de connexions Neon actif jour et nuit → heures de calcul du forfait
+// gratuit Neon épuisées avant la fin du mois → « Your account or project has
+// exceeded the quota » → log.Fatalf au boot → boucle de crash, connexion
+// impossible sur sygren.vercel.app.
 //
-// Principe : toutes les 10 minutes (marge de sécurité sous les 15 min de
-// suspension), l'API s'appelle ELLE-MÊME sur son URL publique Render
-// (RENDER_EXTERNAL_URL, fournie automatiquement par la plateforme) +
-// /api/health. La requête transite par le proxy Render : elle compte comme
-// du trafic entrant et remet le compteur d'inactivité à zéro.
+// RÉACTIVATION (volontaire) : variable d'environnement KEEPALIVE_ENABLED=true
+// sur Render — uniquement APRÈS un passage au plan Neon Launch, sinon le
+// quota saute à nouveau. main.go n'appelle startKeepAlive() que si cette
+// variable vaut « true » (insensible à la casse).
+//
+// Fonctionnement (inchangé quand activé) : toutes les 10 minutes (marge de
+// sécurité sous les 15 min de suspension), l'API s'appelle ELLE-MÊME sur son
+// URL publique Render (RENDER_EXTERNAL_URL, fournie automatiquement par la
+// plateforme) + /api/health. La requête transite par le proxy Render : elle
+// compte comme du trafic entrant et remet le compteur d'inactivité à zéro.
 //
 // Fenêtre : TOUS LES JOURS 07:00–22:00, heure Côte d'Ivoire (GMT+0 toute
 // l'année — FixedZone, aucun changement d'heure). Hors fenêtre (la nuit) :

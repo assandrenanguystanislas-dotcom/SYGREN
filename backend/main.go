@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"sygren-api/config"
@@ -72,15 +74,23 @@ func main() {
 	//      inter-annuelle).
 	go startSessionScheduler()
 
-	// Goroutine : keep-alive — le plan gratuit Render suspend l'instance
-	// après ~15 min sans trafic entrant ; le premier visiteur paie alors un
-	// réveil de 30–60 s (« Failed to fetch » côté navigateur). Toutes les
-	// 10 minutes, tous les jours de 07:00 à 22:00 (GMT+0), l'API
-	// s'auto-ping sur son URL publique (/api/health) — trafic qui remet le
-	// compteur d'inactivité à zéro. Hors fenêtre (la nuit) :
-	// aucune requête émise, le service dort (heures du forfait gratuit
-	// économisées). En local (RENDER_EXTERNAL_URL absente) : désactivé.
-	go startKeepAlive()
+	// Goroutine : keep-alive — NEUTRALISÉ PAR DÉFAUT (demande utilisateur
+	// « il faut neutraliser le keep alive »). Le maintien en éveil permanent de
+	// l'instance Render (auto-ping 07:00–22:00, ~15 h/jour) garde le pool de
+	// connexions Neon actif jour et nuit → heures de calcul du forfait gratuit
+	// Neon épuisées avant la fin du mois → « quota exceeded » → log.Fatalf au
+	// boot (initialisation DB) → boucle de crash, connexion impossible. La
+	// goroutine ne démarre donc QUE si KEEPALIVE_ENABLED=true — réactivation
+	// VOLONTAIRE, à ne faire qu'après un passage au plan Neon Launch (sinon le
+	// quota saute à nouveau). Sans cette variable : aucun auto-ping — l'instance
+	// Render peut dormir après ~15 min sans trafic (réveil 30–60 s au premier
+	// visiteur) et Neon suspend son compute après 5 min d'inactivité : heures
+	// économisées.
+	if strings.EqualFold(os.Getenv("KEEPALIVE_ENABLED"), "true") {
+		go startKeepAlive()
+	} else {
+		log.Println("[KEEPALIVE] Neutralisé — KEEPALIVE_ENABLED != true (économie du quota Neon)")
+	}
 
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("[FATAL] Serveur: %v", err)

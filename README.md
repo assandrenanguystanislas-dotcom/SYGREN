@@ -75,6 +75,7 @@ bun run dev:all
 ```bash
 export DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"
 export JWT_SECRET="votre-secret-jwt"
+export KEEPALIVE_ENABLED="true"  # optionnel — réactive le keep-alive Render (NEUTRALISÉ par défaut : économie du quota Neon ; ne réactiver qu'après passage au plan Neon Launch)
 ```
 
 **Fichiers (Cloudflare R2 en production)** — optionnel : sans ces variables, les
